@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "slice": "SLICE-1",
-  "observedAt": "2026-08-14T22:02:50+04:00",
+  "observedAt": "2026-08-14T22:31:31+04:00",
   "environment": {
     "scope": "LOCAL_SYNTHETIC_ONLY",
     "postgresql": "18.1",
@@ -70,12 +70,22 @@
       "method": "Independent corrected-runner reproduction and cross-stack AC001-AC022 trace, evidence, pending-state, and preservation reconciliation",
       "auditedArtifact": "scripts/validate-slice1-local.mjs",
       "auditedSha256": "C80E92E86D54B5F741F007BCCB16C743965811D8E8B165CF0FD63276303BBF5E"
+    },
+    {
+      "id": "S1-AUDIT-HOSTED-LICENSE-CORRECTION",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "method": "Independent bounded reproduction of hosted Ubuntu license failure, exact package-and-version review, adversarial policy tests, full local runner, port cleanup, and protected-state verification",
+      "auditedArtifact": "scripts/license-policy.mjs",
+      "auditedSha256": "7ACA5561135C4202B1AE20C5233C2D742D4233B72615F0C41F1D24EE1909DC6F"
     }
   ],
   "rootGate": {
     "command": "pnpm slice1:validate:local",
     "status": "PASS",
-    "durationSeconds": 170.337,
+    "durationSeconds": 195.7,
     "testCounts": {
       "dashboard": 14,
       "artifactIndexer": 8,
@@ -87,7 +97,7 @@
       "webUiAccessibility": 7,
       "apiPostgresql": 4,
       "applicationLifecycle": 4,
-      "rootPolicy": 34,
+      "rootPolicy": 36,
       "browser": 14,
       "failed": 0,
       "skipped": 0
@@ -243,6 +253,16 @@
       "id": "S1-LOCAL-VALIDATOR",
       "path": "scripts/validate-slice1-local.mjs",
       "sha256": "C80E92E86D54B5F741F007BCCB16C743965811D8E8B165CF0FD63276303BBF5E"
+    },
+    {
+      "id": "S1-LICENSE-POLICY",
+      "path": "scripts/license-policy.mjs",
+      "sha256": "7ACA5561135C4202B1AE20C5233C2D742D4233B72615F0C41F1D24EE1909DC6F"
+    },
+    {
+      "id": "S1-LICENSE-POLICY-TEST",
+      "path": "test/license-policy.test.mjs",
+      "sha256": "C61E2797A064D5EDF4B079211460C4E9231718E97C0C9A65B2B875FE9334FE07"
     }
   ],
   "acceptance": [
@@ -397,7 +417,9 @@
         "S1-CI",
         "S1-PROTECTED",
         "S1-HISTORY-SCAN",
-        "S1-LOCAL-VALIDATOR"
+        "S1-LOCAL-VALIDATOR",
+        "S1-LICENSE-POLICY",
+        "S1-LICENSE-POLICY-TEST"
       ]
     },
     {

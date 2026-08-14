@@ -51,6 +51,25 @@ test("rejects traversal and weak source evidence before verification", () => {
     /outside allowlisted roots/,
   );
   assert.throws(
+    () =>
+      validateSourceReferenceShape(
+        { ...valid, path: `${root}\\nested\\..\\..\\outside.json` },
+        [root],
+      ),
+    /outside allowlisted roots/,
+  );
+  assert.throws(
+    () =>
+      validateSourceReferenceShape(
+        {
+          ...valid,
+          path: "C:\\INNOBASE\\MatchBASE\\allowed-prefix\\file.json",
+        },
+        [root],
+      ),
+    /outside allowlisted roots/,
+  );
+  assert.throws(
     () => validateSourceReferenceShape({ ...valid, sha256: undefined }, [root]),
     /invalid source hash/,
   );

@@ -123,6 +123,7 @@ function evidenceState(value) {
       "COMPLETED",
       "CLOSED_BY_OWNER",
       "SUPERSEDED",
+      "CLOSED",
     ].includes(normalized)
   )
     return "PASS";
@@ -142,6 +143,8 @@ function evidenceState(value) {
       "LOCAL_ONLY",
       "BOOTSTRAP_IN_PROGRESS",
       "INITIAL_PUSH_COMPLETE",
+      "NOT_STARTED",
+      "NOT_APPLICABLE",
       "PUSHED_PRIVATE",
       "OPEN",
     ].includes(normalized)
@@ -191,6 +194,9 @@ function record(item, sourceRef, index, prefix, catalog) {
     status,
     ...(typeof item.owner === "string" ? { owner: item.owner } : {}),
     facts: {
+      ...(typeof item.status === "string"
+        ? { lifecycleStatus: item.status }
+        : {}),
       ...Object.fromEntries(
         Object.entries(item)
           .filter(

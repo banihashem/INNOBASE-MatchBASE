@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-14T15:28:04.0357204+04:00",
+  "updatedAt": "2026-08-14T16:22:15+04:00",
   "gates": [
     {
       "id": "AG0",
@@ -17,12 +17,16 @@
     {
       "id": "AG1",
       "name": "Repository bootstrap",
-      "status": "PASS",
+      "status": "ACTIVE",
       "owner": "Repository safety",
       "evidence": [
-        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md"
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_HOSTED_CI_CORRECTION_VALIDATION_PO_001_SLICE_0.md"
       ],
-      "commitUrl": "https://github.com/banihashem/INNOBASE-MatchBASE/commit/518ff98aa4c4b719460bca020894782fc660ce21",
+      "commitUrl": "https://github.com/banihashem/INNOBASE-MatchBASE/commit/f8759e82d5fd7dff173d1df566c993711bd7fb82",
+      "hostedRunId": 31799934218,
+      "hostedJobId": 94765297132,
+      "lastHostedConclusion": "success",
+      "currentClosureHostedStatus": "PENDING_SUCCESSOR_RUN",
       "traceabilityIds": ["TRACE-S0-001"]
     },
     {

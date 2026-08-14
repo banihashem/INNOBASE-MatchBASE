@@ -250,3 +250,22 @@ test("maps an open risk to ACTIVE rather than UNKNOWN", () => {
   const record = buildSemanticViews(fixtureDocuments()).risks.records[0];
   assert.equal(record.status, "ACTIVE");
 });
+
+test("maps explicit non-deployment states to ACTIVE rather than UNKNOWN", () => {
+  const documents = fixtureDocuments();
+  documents.registers.value.deployments = [
+    {
+      id: "DEPLOY-LOCAL",
+      status: "NOT_APPLICABLE",
+      summary: "Local-only slice.",
+    },
+  ];
+  const records = buildSemanticViews(documents).deployments.records;
+  const external = records.find(({ id }) => id === "EXT-DEPLOYMENT");
+  assert.equal(external.status, "ACTIVE");
+  assert.equal(external.facts.lifecycleStatus, "NOT_STARTED");
+
+  const local = records.find(({ id }) => id === "DEPLOY-LOCAL");
+  assert.equal(local.status, "ACTIVE");
+  assert.equal(local.facts.lifecycleStatus, "NOT_APPLICABLE");
+});

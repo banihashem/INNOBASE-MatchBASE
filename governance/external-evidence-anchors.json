@@ -4,10 +4,10 @@
   "limitation": "A clean hosted CI runner cannot access the local governed management tree. CI verifies committed path/hash/method/result consistency only; local validation and independent audit verify the actual file bytes.",
   "surfaces": {
     "github": {
-      "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
-      "sha256": "16297E5BC152B389DD8526769422932379FB5075342A959698617E8070611D0D",
-      "method": "Git push, git ls-remote, GitHub repository search and canonical commit fetch recorded in the workspace register",
-      "result": "PRIVATE_MAIN_INITIAL_PUSH_VERIFIED"
+      "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_HOSTED_CI_CORRECTION_VALIDATION_PO_001_SLICE_0.md",
+      "sha256": "D9934EE44E5ED74A2346C7EF86DD5C0B6C16CA1B40B402117507CAFF0F187EBD",
+      "method": "Authenticated GitHub Actions API observation of the immutable commit-scoped run and job after three recorded correction loops",
+      "result": "LAST_GREEN_F8759E82_RUN_31799934218_JOB_94765297132_SUCCESS_CURRENT_CLOSURE_PENDING"
     },
     "gcp": {
       "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",

@@ -37,6 +37,9 @@
       "status": "PASS",
       "summary": "Formatting, lint, governance, schema, boundaries, two secret scanners, dependency/license, type, unit, component, accessibility, adversarial and build checks exit zero.",
       "command": "pnpm test:ci",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_HOSTED_CI_CORRECTION_VALIDATION_PO_001_SLICE_0.md"
+      ],
       "traceabilityIds": [
         "TRACE-S0-001",
         "TRACE-S0-002",
@@ -84,7 +87,28 @@
       "traceabilityIds": ["TRACE-S1-001"]
     }
   ],
-  "defects": [],
+  "defects": [
+    {
+      "id": "DEFECT-S0-CI-001",
+      "title": "Invalid immutable checkout pin",
+      "status": "CLOSED",
+      "summary": "Hosted run 31798940130 failed before checkout because the recorded commit did not exist; the pin was replaced with the verified official v4 commit and later hosted checkout succeeded.",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_HOSTED_CI_CORRECTION_VALIDATION_PO_001_SLICE_0.md"
+      ],
+      "traceabilityIds": ["TRACE-S0-001"]
+    },
+    {
+      "id": "DEFECT-S0-CI-002",
+      "title": "Hosted Linux parity defects",
+      "status": "CLOSED",
+      "summary": "Runs 31799365400 and 31799664367 exposed Windows-path handling and expected snapshot-fallback diagnostics; both were corrected and run 31799934218 succeeded.",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_HOSTED_CI_CORRECTION_VALIDATION_PO_001_SLICE_0.md"
+      ],
+      "traceabilityIds": ["TRACE-S0-001", "TRACE-S1-001", "TRACE-S1-002"]
+    }
+  ],
   "deployments": [
     {
       "id": "DEPLOY-S0-LOCAL",
@@ -111,7 +135,7 @@
   "loops": [
     {
       "id": "PO-001-R3-S0",
-      "status": "READY_FOR_ROLE2",
+      "status": "IN_PROGRESS",
       "critical": 0,
       "major": 0,
       "minor": 0

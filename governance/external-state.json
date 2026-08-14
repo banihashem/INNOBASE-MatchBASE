@@ -1,18 +1,24 @@
 {
   "schemaVersion": 1,
-  "observedAt": "2026-08-14T15:28:04.0357204+04:00",
+  "observedAt": "2026-08-14T16:22:15+04:00",
   "github": {
     "repository": "banihashem/INNOBASE-MatchBASE",
     "visibility": "private",
     "refs": 1,
-    "status": "INITIAL_PUSH_COMPLETE",
+    "status": "ACTIVE",
     "initialCommit": "518ff98aa4c4b719460bca020894782fc660ce21",
+    "currentRef": "refs/heads/main",
+    "lastHostedValidatedCommit": "f8759e82d5fd7dff173d1df566c993711bd7fb82",
+    "lastHostedValidatedRunId": 31799934218,
+    "lastHostedValidatedJobId": 94765297132,
+    "lastHostedValidatedConclusion": "success",
+    "currentClosureHostedStatus": "PENDING_SUCCESSOR_RUN",
     "evidenceRefs": [
       {
-        "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
-        "sha256": "16297E5BC152B389DD8526769422932379FB5075342A959698617E8070611D0D",
-        "method": "Git push, git ls-remote, GitHub repository search and canonical commit fetch recorded in the workspace register",
-        "result": "PRIVATE_MAIN_INITIAL_PUSH_VERIFIED"
+        "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_HOSTED_CI_CORRECTION_VALIDATION_PO_001_SLICE_0.md",
+        "sha256": "D9934EE44E5ED74A2346C7EF86DD5C0B6C16CA1B40B402117507CAFF0F187EBD",
+        "method": "Authenticated GitHub Actions API observation of the immutable commit-scoped run and job after three recorded correction loops",
+        "result": "LAST_GREEN_F8759E82_RUN_31799934218_JOB_94765297132_SUCCESS_CURRENT_CLOSURE_PENDING"
       }
     ]
   },

@@ -121,6 +121,19 @@ function bindClosureIdentityToSource(value, sourceText, anchorOnly) {
       throw new Error(`Successor closure ${key} does not match its source.`);
 }
 
+function rejectAnchoredIdentityDivergence(value) {
+  if (
+    value.source?.sha256 === ANCHORED_VALIDATION_SHA256 &&
+    (value.commit !== ANCHORED_COMMIT ||
+      value.tree !== ANCHORED_TREE ||
+      value.runId !== ANCHORED_RUN_ID ||
+      value.jobId !== ANCHORED_JOB_ID)
+  )
+    throw new Error(
+      "Historical closure source cannot attest another identity.",
+    );
+}
+
 export function validateExternalClosure(
   value,
   {
@@ -175,6 +188,7 @@ export function validateExternalClosure(
     Number.isNaN(Date.parse(value.observedAt))
   )
     throw new Error("External closure observation time is invalid.");
+  rejectAnchoredIdentityDivergence(value);
   const closureSourceText = validateEvidenceSource(value.source, {
     anchorOnly,
     managementRoot,

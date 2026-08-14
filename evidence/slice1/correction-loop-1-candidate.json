@@ -3,7 +3,7 @@
   "candidateId": "PO-001-SLICE-1-LOOP-1",
   "algorithm": "SHA256(PATH_NUL_SHA256_LF)",
   "fileCount": 41,
-  "aggregateSha256": "934EE77771B263D705EDD71D0F8118C15206BF839BC1E073BF94FAE21E141103",
+  "aggregateSha256": "FE93DEB608EE3BC4AFB062E9CC9541FB7F1EFD9BFD25036BCBA4741F39F54412",
   "files": [
     {
       "path": "apps/web/package.json",
@@ -111,7 +111,7 @@
     },
     {
       "path": "scripts/lib/external-closure-policy.mjs",
-      "sha256": "C1A3296F04B2E3C4B08A11C524D483C0E6FF82BD5EC71217B26413A96D04147A"
+      "sha256": "EC73B3B7CA253DC2F77381C1C0C78EEF5C80BA471D48B3E7A7E2BF1ED89C31AF"
     },
     {
       "path": "scripts/lib/protected-management-history.mjs",

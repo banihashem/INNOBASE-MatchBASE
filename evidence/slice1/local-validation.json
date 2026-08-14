@@ -91,8 +91,8 @@
       "major": 0,
       "minor": 0,
       "candidateManifestPath": "evidence/slice1/correction-loop-1-candidate.json",
-      "candidateManifestSha256": "24759A219E39898A9FCD8F12EAC56ABE578B4FB6D1B901C8E37B8AD4836B2C2B",
-      "candidateAggregateSha256": "934EE77771B263D705EDD71D0F8118C15206BF839BC1E073BF94FAE21E141103"
+      "candidateManifestSha256": "23042BC6807DCB310953E9EAF20C5E7A6F57354F23C0A8A94AB0DBC2BB1814C6",
+      "candidateAggregateSha256": "FE93DEB608EE3BC4AFB062E9CC9541FB7F1EFD9BFD25036BCBA4741F39F54412"
     },
     {
       "id": "S1-L1-AUDIT-QA-ACCESSIBILITY",
@@ -102,8 +102,8 @@
       "major": 0,
       "minor": 0,
       "candidateManifestPath": "evidence/slice1/correction-loop-1-candidate.json",
-      "candidateManifestSha256": "24759A219E39898A9FCD8F12EAC56ABE578B4FB6D1B901C8E37B8AD4836B2C2B",
-      "candidateAggregateSha256": "934EE77771B263D705EDD71D0F8118C15206BF839BC1E073BF94FAE21E141103"
+      "candidateManifestSha256": "23042BC6807DCB310953E9EAF20C5E7A6F57354F23C0A8A94AB0DBC2BB1814C6",
+      "candidateAggregateSha256": "FE93DEB608EE3BC4AFB062E9CC9541FB7F1EFD9BFD25036BCBA4741F39F54412"
     },
     {
       "id": "S1-L1-AUDIT-SRE-COST",
@@ -113,8 +113,8 @@
       "major": 0,
       "minor": 0,
       "candidateManifestPath": "evidence/slice1/correction-loop-1-candidate.json",
-      "candidateManifestSha256": "24759A219E39898A9FCD8F12EAC56ABE578B4FB6D1B901C8E37B8AD4836B2C2B",
-      "candidateAggregateSha256": "934EE77771B263D705EDD71D0F8118C15206BF839BC1E073BF94FAE21E141103"
+      "candidateManifestSha256": "23042BC6807DCB310953E9EAF20C5E7A6F57354F23C0A8A94AB0DBC2BB1814C6",
+      "candidateAggregateSha256": "FE93DEB608EE3BC4AFB062E9CC9541FB7F1EFD9BFD25036BCBA4741F39F54412"
     },
     {
       "id": "S1-L1-AUDIT-AI-EVIDENCE",
@@ -124,8 +124,8 @@
       "major": 0,
       "minor": 0,
       "candidateManifestPath": "evidence/slice1/correction-loop-1-candidate.json",
-      "candidateManifestSha256": "24759A219E39898A9FCD8F12EAC56ABE578B4FB6D1B901C8E37B8AD4836B2C2B",
-      "candidateAggregateSha256": "934EE77771B263D705EDD71D0F8118C15206BF839BC1E073BF94FAE21E141103"
+      "candidateManifestSha256": "23042BC6807DCB310953E9EAF20C5E7A6F57354F23C0A8A94AB0DBC2BB1814C6",
+      "candidateAggregateSha256": "FE93DEB608EE3BC4AFB062E9CC9541FB7F1EFD9BFD25036BCBA4741F39F54412"
     },
     {
       "id": "S1-L1-AUDIT-REPOSITORY-SAFETY",
@@ -135,8 +135,8 @@
       "major": 0,
       "minor": 0,
       "candidateManifestPath": "evidence/slice1/correction-loop-1-candidate.json",
-      "candidateManifestSha256": "24759A219E39898A9FCD8F12EAC56ABE578B4FB6D1B901C8E37B8AD4836B2C2B",
-      "candidateAggregateSha256": "934EE77771B263D705EDD71D0F8118C15206BF839BC1E073BF94FAE21E141103"
+      "candidateManifestSha256": "23042BC6807DCB310953E9EAF20C5E7A6F57354F23C0A8A94AB0DBC2BB1814C6",
+      "candidateAggregateSha256": "FE93DEB608EE3BC4AFB062E9CC9541FB7F1EFD9BFD25036BCBA4741F39F54412"
     },
     {
       "id": "S1-L1-AUDIT-INTEGRATION-CRITIC",
@@ -146,14 +146,14 @@
       "major": 0,
       "minor": 0,
       "candidateManifestPath": "evidence/slice1/correction-loop-1-candidate.json",
-      "candidateManifestSha256": "24759A219E39898A9FCD8F12EAC56ABE578B4FB6D1B901C8E37B8AD4836B2C2B",
-      "candidateAggregateSha256": "934EE77771B263D705EDD71D0F8118C15206BF839BC1E073BF94FAE21E141103"
+      "candidateManifestSha256": "23042BC6807DCB310953E9EAF20C5E7A6F57354F23C0A8A94AB0DBC2BB1814C6",
+      "candidateAggregateSha256": "FE93DEB608EE3BC4AFB062E9CC9541FB7F1EFD9BFD25036BCBA4741F39F54412"
     }
   ],
   "rootGate": {
     "command": "pnpm slice1:validate:local",
     "status": "PASS",
-    "durationSeconds": 209.0,
+    "durationSeconds": 218.0,
     "testCounts": {
       "dashboard": 14,
       "artifactIndexer": 8,
@@ -365,7 +365,7 @@
     {
       "id": "S1-EXTERNAL-CLOSURE-POLICY",
       "path": "scripts/lib/external-closure-policy.mjs",
-      "sha256": "C1A3296F04B2E3C4B08A11C524D483C0E6FF82BD5EC71217B26413A96D04147A"
+      "sha256": "EC73B3B7CA253DC2F77381C1C0C78EEF5C80BA471D48B3E7A7E2BF1ED89C31AF"
     },
     {
       "id": "S1-DASHBOARD-CI-GENERATOR",
@@ -390,7 +390,7 @@
     {
       "id": "S1-CORRECTION-CANDIDATE",
       "path": "evidence/slice1/correction-loop-1-candidate.json",
-      "sha256": "24759A219E39898A9FCD8F12EAC56ABE578B4FB6D1B901C8E37B8AD4836B2C2B"
+      "sha256": "23042BC6807DCB310953E9EAF20C5E7A6F57354F23C0A8A94AB0DBC2BB1814C6"
     },
     {
       "id": "S1-CORRECTION-CANDIDATE-POLICY",
@@ -636,6 +636,15 @@
         "conclusion": "failure",
         "failedStep": "pnpm test:ci",
         "cause": "POSIX absolute source path was misclassified as a Windows path"
+      },
+      {
+        "commit": "23c932c4b731e02976e86cf23f25f49a0653b242",
+        "tree": "8895e2b6aefb1bb2c1bbf1cf157a74cbeb8e9e57",
+        "runId": 31841980355,
+        "jobId": 94900624954,
+        "conclusion": "failure",
+        "failedStep": "pnpm test:ci",
+        "cause": "External-closure identity regression attempted local Windows source access before rejecting anchored identity divergence on hosted Linux"
       }
     ],
     "baseClosure": {

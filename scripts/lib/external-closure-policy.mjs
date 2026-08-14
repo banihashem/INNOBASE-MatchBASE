@@ -2,18 +2,62 @@ import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { resolve, win32 } from "node:path";
 import { isPathWithinRoot } from "./dashboard-source-policy.mjs";
+import {
+  assertExactPredecessorHistory,
+  validatePredecessorAttestation,
+  validatePredecessorFailures,
+  validatePredecessorReasons,
+} from "./predecessor-failure-policy.mjs";
 
-export const EXTERNAL_CLOSURE_SCHEMA = "matchbase.external-closure/v1";
+export const EXTERNAL_CLOSURE_SCHEMA = "matchbase.external-closure/v2";
 export const EXPECTED_REPOSITORY = "banihashem/INNOBASE-MatchBASE";
 export const MANAGEMENT_ROOT = "C:\\INNOBASE\\MatchBASE\\01_Product_Management";
+export const REPOSITORY_ROOT =
+  "C:\\INNOBASE\\MatchBASE\\03_Implementation\\INNOBASE-MatchBASE";
 const ANCHORED_VALIDATION_SHA256 =
-  "C515E7E9F97D869404ED2D9C7AB3A5150D68B692261E7A2DE33B4BFE5976C4D3";
+  "6DCF84EAEF0AE0723DF427795AF39ED22145534136DA21958D4ED47E65FF9EB8";
 const ANCHORED_ROLE2_AUDIT_SHA256 =
-  "4AAD383752ACA2FB51EA4A5CA5BCDE6FC4B8BAC7A7B2AA39C035DE0A04D9745E";
-const ANCHORED_COMMIT = "dcfc44b0eb5ffaa5fc3af9b64f1cb9f2df2460ad";
-const ANCHORED_TREE = "1a58415215dfae7c318f31a83d479ed579936a56";
-const ANCHORED_RUN_ID = 31829362742;
-const ANCHORED_JOB_ID = 94861065649;
+  "5BADF31B4BF8A6E84EF73F2162EC6C03F0DDB3EBC9F6AF49AD7A52E13D729362";
+const ANCHORED_PREDECESSOR_SOURCE_SHA256 =
+  "65AEDCBC6C21CDE9A42F49682F1A8511C5DEFAE3A66707F4F72719D536AAFE15";
+const ANCHORED_PREDECESSOR_SOURCE = Object.freeze({
+  kind: "repository_artifact",
+  path: `${REPOSITORY_ROOT}\\governance\\predecessor-failures-v1.json`,
+  method:
+    "Versioned repository attestation of exact authenticated failed workflow identities",
+});
+const ANCHORED_COMMIT = "20045ee79c9ee8474a7570ac9b530ec3ab28743b";
+const ANCHORED_TREE = "2652ab2f78aea8adfe86319780cef9d49a7c0506";
+const ANCHORED_RUN_ID = 31843338726;
+const ANCHORED_JOB_ID = 94904668210;
+const ANCHORED_PREDECESSOR_FAILURES = [
+  {
+    runId: 31828022521,
+    jobId: 94856743504,
+    commit: "edd721df00fa14d048e36d76bbe5366841a6a672",
+    conclusion: "failure",
+  },
+  {
+    runId: 31839133155,
+    jobId: 94891988899,
+    commit: "9ba20d0e60992b844d036a32d8e1bae8934f291c",
+    conclusion: "failure",
+  },
+  {
+    runId: 31841980355,
+    jobId: 94900624954,
+    commit: "23c932c4b731e02976e86cf23f25f49a0653b242",
+    conclusion: "failure",
+  },
+];
+const ANCHORED_PREDECESSOR_REASONS = [
+  { runId: 31828022521, reasonCode: "UNREVIEWED_LGPL_LICENSE_POLICY" },
+  { runId: 31839133155, reasonCode: "POSIX_SOURCE_PATH_MISCLASSIFICATION" },
+  {
+    runId: 31841980355,
+    reasonCode: "EXTERNAL_CLOSURE_IDENTITY_REJECTION_ORDER",
+  },
+];
 
 const sha256Pattern = /^[A-F0-9]{64}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
@@ -30,14 +74,17 @@ function positiveInteger(value, label) {
     throw new Error(`${label} must be a positive integer.`);
 }
 
-function validateEvidenceSource(source, { anchorOnly, managementRoot }) {
+function validateEvidenceSource(
+  source,
+  { anchorOnly, managementRoot, repositoryRoot },
+) {
   assertClosedObject(
     source,
     new Set(["kind", "path", "sha256", "method"]),
     "External closure source",
   );
   if (
-    source.kind !== "management_artifact" ||
+    !["management_artifact", "repository_artifact"].includes(source.kind) ||
     typeof source.path !== "string" ||
     !win32.isAbsolute(source.path) ||
     !sha256Pattern.test(source.sha256) ||
@@ -47,14 +94,16 @@ function validateEvidenceSource(source, { anchorOnly, managementRoot }) {
     throw new Error("External closure source is incomplete or unverified.");
   }
   if (anchorOnly) return null;
-  const root = realpathSync(managementRoot);
+  const root = realpathSync(
+    source.kind === "management_artifact" ? managementRoot : repositoryRoot,
+  );
   const path = resolve(source.path);
   const stat = lstatSync(path);
   if (stat.isSymbolicLink() || !stat.isFile())
     throw new Error("External closure source must be a regular file.");
   const realPath = realpathSync(path);
   if (!isPathWithinRoot(root, realPath))
-    throw new Error("External closure source escapes the management root.");
+    throw new Error("External closure source escapes its configured root.");
   const bytes = readFileSync(realPath);
   const actual = createHash("sha256").update(bytes).digest("hex").toUpperCase();
   if (actual !== source.sha256)
@@ -82,7 +131,7 @@ function bindClosureIdentityToSource(value, sourceText, anchorOnly) {
     );
   const marker = sourceText
     .split(/\r?\n/u)
-    .find((line) => line.startsWith("MATCHBASE_EXTERNAL_CLOSURE_V1: "));
+    .find((line) => line.startsWith("MATCHBASE_EXTERNAL_CLOSURE_V2: "));
   if (!marker)
     throw new Error(
       "Successor closure source lacks its machine-readable identity.",
@@ -90,7 +139,7 @@ function bindClosureIdentityToSource(value, sourceText, anchorOnly) {
   let attestation;
   try {
     attestation = JSON.parse(
-      marker.slice("MATCHBASE_EXTERNAL_CLOSURE_V1: ".length),
+      marker.slice("MATCHBASE_EXTERNAL_CLOSURE_V2: ".length),
     );
   } catch {
     throw new Error("Successor closure identity attestation is invalid JSON.");
@@ -105,6 +154,8 @@ function bindClosureIdentityToSource(value, sourceText, anchorOnly) {
       "runId",
       "jobId",
       "conclusion",
+      "predecessorFailures",
+      "predecessorFailureReasons",
     ]),
     "Successor closure identity attestation",
   );
@@ -119,6 +170,81 @@ function bindClosureIdentityToSource(value, sourceText, anchorOnly) {
   ])
     if (attestation[key] !== value[key])
       throw new Error(`Successor closure ${key} does not match its source.`);
+  validatePredecessorFailures(attestation.predecessorFailures, {
+    currentRunId: value.runId,
+    currentJobId: value.jobId,
+    currentCommit: value.commit,
+  });
+  validatePredecessorReasons(
+    attestation.predecessorFailureReasons,
+    attestation.predecessorFailures,
+  );
+  assertExactPredecessorHistory(
+    attestation.predecessorFailures,
+    attestation.predecessorFailureReasons,
+    value.predecessorFailures,
+    value.predecessorFailureReasons,
+  );
+}
+
+function bindPredecessorHistoryToSource(value, sourceText, anchorOnly) {
+  if (anchorOnly) {
+    for (const key of ["kind", "path", "method"])
+      if (value.predecessorSource[key] !== ANCHORED_PREDECESSOR_SOURCE[key])
+        throw new Error(`Hosted predecessor history anchor ${key} mismatch.`);
+    if (value.predecessorSource.sha256 !== ANCHORED_PREDECESSOR_SOURCE_SHA256)
+      throw new Error("Hosted predecessor history anchor hash mismatch.");
+    assertExactPredecessorHistory(
+      value.predecessorFailures,
+      value.predecessorFailureReasons,
+      ANCHORED_PREDECESSOR_FAILURES,
+      ANCHORED_PREDECESSOR_REASONS,
+    );
+    return;
+  }
+  if (typeof sourceText !== "string")
+    throw new Error("Predecessor history source is unavailable.");
+  let attestation;
+  try {
+    if (value.predecessorSource.kind === "repository_artifact") {
+      attestation = validatePredecessorAttestation(JSON.parse(sourceText), {
+        currentRunId: value.runId,
+        currentJobId: value.jobId,
+        currentCommit: value.commit,
+      });
+      assertExactPredecessorHistory(
+        attestation.failures,
+        attestation.reasons,
+        value.predecessorFailures,
+        value.predecessorFailureReasons,
+      );
+      return;
+    }
+    const marker = sourceText
+      .split(/\r?\n/u)
+      .find((line) => line.startsWith("MATCHBASE_EXTERNAL_CLOSURE_V2: "));
+    if (!marker) throw new Error("missing marker");
+    attestation = JSON.parse(
+      marker.slice("MATCHBASE_EXTERNAL_CLOSURE_V2: ".length),
+    );
+  } catch {
+    throw new Error("Predecessor history attestation is invalid.");
+  }
+  validatePredecessorFailures(attestation.predecessorFailures, {
+    currentRunId: value.runId,
+    currentJobId: value.jobId,
+    currentCommit: value.commit,
+  });
+  validatePredecessorReasons(
+    attestation.predecessorFailureReasons,
+    attestation.predecessorFailures,
+  );
+  assertExactPredecessorHistory(
+    attestation.predecessorFailures,
+    attestation.predecessorFailureReasons,
+    value.predecessorFailures,
+    value.predecessorFailureReasons,
+  );
 }
 
 function rejectAnchoredIdentityDivergence(value) {
@@ -139,6 +265,7 @@ export function validateExternalClosure(
   {
     anchorOnly = false,
     managementRoot = MANAGEMENT_ROOT,
+    repositoryRoot = REPOSITORY_ROOT,
     expectedRepository = EXPECTED_REPOSITORY,
   } = {},
 ) {
@@ -155,7 +282,9 @@ export function validateExternalClosure(
       "conclusion",
       "observedAt",
       "source",
+      "predecessorSource",
       "predecessorFailures",
+      "predecessorFailureReasons",
       "role2",
       "closureStatus",
       "role2Status",
@@ -189,39 +318,31 @@ export function validateExternalClosure(
   )
     throw new Error("External closure observation time is invalid.");
   rejectAnchoredIdentityDivergence(value);
+  if (value.source?.kind !== "management_artifact")
+    throw new Error("External closure identity requires management evidence.");
   const closureSourceText = validateEvidenceSource(value.source, {
     anchorOnly,
     managementRoot,
+    repositoryRoot,
   });
   bindClosureIdentityToSource(value, closureSourceText, anchorOnly);
   if (anchorOnly && value.source.sha256 !== ANCHORED_VALIDATION_SHA256)
     throw new Error("Hosted closure validation anchor hash mismatch.");
 
-  if (
-    !Array.isArray(value.predecessorFailures) ||
-    value.predecessorFailures.length === 0
-  )
-    throw new Error("External closure must preserve predecessor failures.");
-  const predecessorIds = new Set();
-  for (const failure of value.predecessorFailures) {
-    assertClosedObject(
-      failure,
-      new Set(["runId", "jobId", "conclusion", "commit"]),
-      "Predecessor failure",
-    );
-    positiveInteger(failure.runId, "Predecessor runId");
-    positiveInteger(failure.jobId, "Predecessor jobId");
-    if (
-      failure.conclusion !== "failure" ||
-      !commitPattern.test(failure.commit) ||
-      failure.commit === value.commit
-    )
-      throw new Error("Predecessor failure identity is invalid.");
-    const key = `${failure.runId}:${failure.jobId}`;
-    if (predecessorIds.has(key))
-      throw new Error("Duplicate predecessor failure.");
-    predecessorIds.add(key);
-  }
+  validatePredecessorFailures(value.predecessorFailures, {
+    currentRunId: value.runId,
+    currentJobId: value.jobId,
+    currentCommit: value.commit,
+  });
+  validatePredecessorReasons(
+    value.predecessorFailureReasons,
+    value.predecessorFailures,
+  );
+  const predecessorSourceText = validateEvidenceSource(
+    value.predecessorSource,
+    { anchorOnly, managementRoot, repositoryRoot },
+  );
+  bindPredecessorHistoryToSource(value, predecessorSourceText, anchorOnly);
 
   assertClosedObject(
     value.role2,
@@ -243,7 +364,7 @@ export function validateExternalClosure(
     !win32.isAbsolute(value.role2.auditPath) ||
     !sha256Pattern.test(value.role2.auditSha256) ||
     value.role2.critical !== 0 ||
-    value.role2.major !== 3 ||
+    value.role2.major !== 1 ||
     value.role2.minor !== 0 ||
     !Array.isArray(value.role2.defects) ||
     value.role2.defects.length !== 3
@@ -256,14 +377,14 @@ export function validateExternalClosure(
       sha256: value.role2.auditSha256,
       method: "Independent Role 2 correction-loop audit",
     },
-    { anchorOnly, managementRoot },
+    { anchorOnly, managementRoot, repositoryRoot },
   );
   if (anchorOnly && value.role2.auditSha256 !== ANCHORED_ROLE2_AUDIT_SHA256)
     throw new Error("Role 2 audit anchor hash mismatch.");
   const defectIds = value.role2.defects.map(({ id }) => id);
   if (
     new Set(defectIds).size !== 3 ||
-    !["S1-L1-D001", "S1-L1-D002", "S1-L1-D003"].every((id) =>
+    !["S1-L1-D001", "S1-L1-D003", "S1-L1-RD002"].every((id) =>
       defectIds.includes(id),
     )
   )
@@ -276,12 +397,25 @@ export function validateExternalClosure(
     );
     if (
       defect.severity !== "major" ||
-      !["OPEN", "CORRECTED_PENDING_ROLE2"].includes(defect.status) ||
+      !["OPEN", "CORRECTED_PENDING_ROLE2", "CLOSED_BY_ROLE2"].includes(
+        defect.status,
+      ) ||
       typeof defect.title !== "string" ||
       !defect.title.trim()
     )
       throw new Error("Role 2 defect state is invalid.");
   }
+  const defectStatus = new Map(
+    value.role2.defects.map(({ id, status }) => [id, status]),
+  );
+  if (
+    defectStatus.get("S1-L1-D001") !== "CLOSED_BY_ROLE2" ||
+    defectStatus.get("S1-L1-D003") !== "CLOSED_BY_ROLE2" ||
+    !["OPEN", "CORRECTED_PENDING_ROLE2"].includes(
+      defectStatus.get("S1-L1-RD002"),
+    )
+  )
+    throw new Error("Role 2 defect closure states are inconsistent.");
   if (
     value.closureStatus !== "HOSTED_VERIFIED" ||
     value.role2Status !== "PENDING_ROLE2"
@@ -317,6 +451,15 @@ export function externalClosureRole2SourceRef(value) {
     sourceId: "matchbase://external-closure/role2-audit",
     path: value.role2.auditPath,
     sha256: value.role2.auditSha256,
+    observedAt: value.observedAt,
+  };
+}
+
+export function externalClosurePredecessorSourceRef(value) {
+  return {
+    sourceId: "matchbase://external-closure/predecessor-failures",
+    path: value.predecessorSource.path,
+    sha256: value.predecessorSource.sha256,
     observedAt: value.observedAt,
   };
 }

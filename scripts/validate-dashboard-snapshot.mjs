@@ -13,7 +13,10 @@ import {
   validateSourceReferenceShape,
 } from "./lib/dashboard-source-policy.mjs";
 
-import { validateExternalClosure } from "./lib/external-closure-policy.mjs";
+import {
+  externalClosurePredecessorSourceRef,
+  validateExternalClosure,
+} from "./lib/external-closure-policy.mjs";
 
 const actual = !process.argv.includes("--bootstrap");
 const snapshotPath = resolve(
@@ -138,7 +141,18 @@ if (actual) {
     JSON.parse(readFileSync(closurePath, "utf8")),
     { anchorOnly },
   );
-  validateDashboardClosure(snapshot.views, closure);
+  const predecessorSourceRef = anchorOnly
+    ? {
+        sourceId:
+          "matchbase://ci-snapshot/governance/predecessor-failures-v1.json",
+        path: resolve("governance/predecessor-failures-v1.json"),
+        sha256: closure.predecessorSource.sha256,
+        observedAt: closure.observedAt,
+      }
+    : externalClosurePredecessorSourceRef(closure);
+  validateDashboardClosure(snapshot.views, closure, {
+    predecessorSourceRef,
+  });
   if (requireSources && verifiedSources === 0)
     throw new Error("Current dashboard source verification was vacuous.");
 }

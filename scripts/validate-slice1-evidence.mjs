@@ -10,12 +10,29 @@ const correctionManifestPath = resolve(
   root,
   "evidence/slice1/correction-loop-1-candidate.json",
 );
-const correctionManifest = validateCorrectionCandidate(
-  JSON.parse(readFileSync(correctionManifestPath, "utf8")),
-  { repoRoot: root },
+const correctionManifest = JSON.parse(
+  readFileSync(correctionManifestPath, "utf8"),
 );
 const correctionManifestSha256 = createHash("sha256")
   .update(readFileSync(correctionManifestPath))
+  .digest("hex")
+  .toUpperCase();
+if (
+  correctionManifestSha256 !==
+    "23042BC6807DCB310953E9EAF20C5E7A6F57354F23C0A8A94AB0DBC2BB1814C6" ||
+  correctionManifest.candidateId !== "PO-001-SLICE-1-LOOP-1"
+)
+  throw new Error("Historical Loop 1 candidate manifest changed.");
+const correctionLoop2ManifestPath = resolve(
+  root,
+  "evidence/slice1/correction-loop-2-candidate.json",
+);
+const correctionLoop2Manifest = validateCorrectionCandidate(
+  JSON.parse(readFileSync(correctionLoop2ManifestPath, "utf8")),
+  { repoRoot: root },
+);
+const correctionLoop2ManifestSha256 = createHash("sha256")
+  .update(readFileSync(correctionLoop2ManifestPath))
   .digest("hex")
   .toUpperCase();
 const expectedIds = Array.from(
@@ -94,6 +111,30 @@ for (const audit of correctionAudits) {
       );
   } else if (audit.status !== "PENDING") {
     throw new Error(`${audit.id} has an invalid correction-audit status.`);
+  }
+}
+
+const correctionLoop2Audits = evidence.correctionLoop2Audits ?? [];
+if (correctionLoop2Audits.length !== 6)
+  throw new Error(
+    "Slice 1 correction Loop 2 must expose six discipline audits.",
+  );
+for (const audit of correctionLoop2Audits) {
+  if (audit.status === "PASS") {
+    if (
+      audit.critical !== 0 ||
+      audit.major !== 0 ||
+      audit.minor !== 0 ||
+      audit.candidateManifestPath !==
+        "evidence/slice1/correction-loop-2-candidate.json" ||
+      audit.candidateManifestSha256 !== correctionLoop2ManifestSha256 ||
+      audit.candidateAggregateSha256 !== correctionLoop2Manifest.aggregateSha256
+    )
+      throw new Error(
+        `${audit.id} is not bound to the exact Loop 2 correction candidate.`,
+      );
+  } else if (audit.status !== "PENDING") {
+    throw new Error(`${audit.id} has an invalid Loop 2 audit status.`);
   }
 }
 

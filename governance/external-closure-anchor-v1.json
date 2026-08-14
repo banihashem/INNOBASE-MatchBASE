@@ -1,18 +1,24 @@
 {
-  "schemaVersion": "matchbase.external-closure/v1",
+  "schemaVersion": "matchbase.external-closure/v2",
   "repository": "banihashem/INNOBASE-MatchBASE",
-  "commit": "dcfc44b0eb5ffaa5fc3af9b64f1cb9f2df2460ad",
-  "tree": "1a58415215dfae7c318f31a83d479ed579936a56",
+  "commit": "20045ee79c9ee8474a7570ac9b530ec3ab28743b",
+  "tree": "2652ab2f78aea8adfe86319780cef9d49a7c0506",
   "workflow": "ci",
-  "runId": 31829362742,
-  "jobId": 94861065649,
+  "runId": 31843338726,
+  "jobId": 94904668210,
   "conclusion": "success",
-  "observedAt": "2026-08-14T18:39:15.000Z",
+  "observedAt": "2026-08-14T21:43:04.000Z",
   "source": {
     "kind": "management_artifact",
-    "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_IMPLEMENTATION_VALIDATION_PO_001_SLICE_1.md",
-    "sha256": "C515E7E9F97D869404ED2D9C7AB3A5150D68B692261E7A2DE33B4BFE5976C4D3",
-    "method": "Authenticated GitHub connector observation recorded in the immutable Role 3 Slice 1 validation"
+    "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_CORRECTION_VALIDATION_PO_001_SLICE_1_LOOP_1.md",
+    "sha256": "6DCF84EAEF0AE0723DF427795AF39ED22145534136DA21958D4ED47E65FF9EB8",
+    "method": "Authenticated GitHub connector observation recorded in the immutable Role 3 Slice 1 Loop 1 correction validation"
+  },
+  "predecessorSource": {
+    "kind": "repository_artifact",
+    "path": "C:\\INNOBASE\\MatchBASE\\03_Implementation\\INNOBASE-MatchBASE\\governance\\predecessor-failures-v1.json",
+    "sha256": "65AEDCBC6C21CDE9A42F49682F1A8511C5DEFAE3A66707F4F72719D536AAFE15",
+    "method": "Versioned repository attestation of exact authenticated failed workflow identities"
   },
   "predecessorFailures": [
     {
@@ -20,34 +26,60 @@
       "jobId": 94856743504,
       "conclusion": "failure",
       "commit": "edd721df00fa14d048e36d76bbe5366841a6a672"
+    },
+    {
+      "runId": 31839133155,
+      "jobId": 94891988899,
+      "conclusion": "failure",
+      "commit": "9ba20d0e60992b844d036a32d8e1bae8934f291c"
+    },
+    {
+      "runId": 31841980355,
+      "jobId": 94900624954,
+      "conclusion": "failure",
+      "commit": "23c932c4b731e02976e86cf23f25f49a0653b242"
+    }
+  ],
+  "predecessorFailureReasons": [
+    {
+      "runId": 31828022521,
+      "reasonCode": "UNREVIEWED_LGPL_LICENSE_POLICY"
+    },
+    {
+      "runId": 31839133155,
+      "reasonCode": "POSIX_SOURCE_PATH_MISCLASSIFICATION"
+    },
+    {
+      "runId": 31841980355,
+      "reasonCode": "EXTERNAL_CLOSURE_IDENTITY_REJECTION_ORDER"
     }
   ],
   "role2": {
     "status": "FAIL",
     "disposition": "PENDING_ROLE2_CORRECTION_REAUDIT",
-    "auditPath": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_1_LOOP_1.md",
-    "auditSha256": "4AAD383752ACA2FB51EA4A5CA5BCDE6FC4B8BAC7A7B2AA39C035DE0A04D9745E",
+    "auditPath": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_REAUDIT_PO_001_SLICE_1_LOOP_1.md",
+    "auditSha256": "5BADF31B4BF8A6E84EF73F2162EC6C03F0DDB3EBC9F6AF49AD7A52E13D729362",
     "critical": 0,
-    "major": 3,
+    "major": 1,
     "minor": 0,
     "defects": [
       {
         "id": "S1-L1-D001",
         "severity": "major",
-        "status": "OPEN",
+        "status": "CLOSED_BY_ROLE2",
         "title": "Canonical Admin authorization namespace and complete endpoint matrix"
-      },
-      {
-        "id": "S1-L1-D002",
-        "severity": "major",
-        "status": "OPEN",
-        "title": "Current dashboard closure and decisive snapshot validation"
       },
       {
         "id": "S1-L1-D003",
         "severity": "major",
-        "status": "OPEN",
+        "status": "CLOSED_BY_ROLE2",
         "title": "Append-safe protected management-history manifest"
+      },
+      {
+        "id": "S1-L1-RD002",
+        "severity": "major",
+        "status": "OPEN",
+        "title": "Predecessor failure history is count-only and unbound"
       }
     ]
   },

@@ -355,7 +355,7 @@
           "outputHashes": [
             {
               "path": "test/browser/dashboard.spec.mjs",
-              "sha256": "F857DB27A9DF33E89B825F0EEF8082F51800AD8064758D405F3D643348A1AC6B"
+              "sha256": "4ECA91FA0CCC17895D088DD25EF04E8C5D040461C85430120866A531A1F05A5F"
             }
           ]
         }
@@ -493,7 +493,7 @@
           "outputHashes": [
             {
               "path": "evidence/slice1/local-validation.json",
-              "sha256": "DA0940F5A3BF1E472C20830FEF1D418626E273D772775A9ABB602A7EC649A53E"
+              "sha256": "A841187CB8115EDBFFEA9FCB330FD565FB55C51C149DD17EC8D889745BDFF1B0"
             }
           ]
         }
@@ -506,7 +506,7 @@
           "evidenceRefs": [
             {
               "path": "evidence/slice1/local-validation.json",
-              "sha256": "DA0940F5A3BF1E472C20830FEF1D418626E273D772775A9ABB602A7EC649A53E"
+              "sha256": "A841187CB8115EDBFFEA9FCB330FD565FB55C51C149DD17EC8D889745BDFF1B0"
             }
           ]
         }
@@ -518,7 +518,7 @@
         "evidenceRefs": [
           {
             "path": "evidence/slice1/local-validation.json",
-            "sha256": "DA0940F5A3BF1E472C20830FEF1D418626E273D772775A9ABB602A7EC649A53E"
+            "sha256": "A841187CB8115EDBFFEA9FCB330FD565FB55C51C149DD17EC8D889745BDFF1B0"
           }
         ]
       }
@@ -552,7 +552,7 @@
           "evidenceRefs": [
             {
               "path": "evidence/slice1/local-validation.json",
-              "sha256": "DA0940F5A3BF1E472C20830FEF1D418626E273D772775A9ABB602A7EC649A53E"
+              "sha256": "A841187CB8115EDBFFEA9FCB330FD565FB55C51C149DD17EC8D889745BDFF1B0"
             }
           ]
         }
@@ -564,7 +564,7 @@
         "evidenceRefs": [
           {
             "path": "evidence/slice1/local-validation.json",
-            "sha256": "DA0940F5A3BF1E472C20830FEF1D418626E273D772775A9ABB602A7EC649A53E"
+            "sha256": "A841187CB8115EDBFFEA9FCB330FD565FB55C51C149DD17EC8D889745BDFF1B0"
           }
         ]
       }
@@ -608,7 +608,7 @@
           "evidenceRefs": [
             {
               "path": "evidence/slice1/local-validation.json",
-              "sha256": "DA0940F5A3BF1E472C20830FEF1D418626E273D772775A9ABB602A7EC649A53E"
+              "sha256": "A841187CB8115EDBFFEA9FCB330FD565FB55C51C149DD17EC8D889745BDFF1B0"
             }
           ]
         }
@@ -620,7 +620,7 @@
         "evidenceRefs": [
           {
             "path": "evidence/slice1/local-validation.json",
-            "sha256": "DA0940F5A3BF1E472C20830FEF1D418626E273D772775A9ABB602A7EC649A53E"
+            "sha256": "A841187CB8115EDBFFEA9FCB330FD565FB55C51C149DD17EC8D889745BDFF1B0"
           }
         ]
       }
@@ -654,7 +654,7 @@
           "evidenceRefs": [
             {
               "path": "evidence/slice1/local-validation.json",
-              "sha256": "DA0940F5A3BF1E472C20830FEF1D418626E273D772775A9ABB602A7EC649A53E"
+              "sha256": "A841187CB8115EDBFFEA9FCB330FD565FB55C51C149DD17EC8D889745BDFF1B0"
             }
           ]
         }
@@ -666,7 +666,7 @@
         "evidenceRefs": [
           {
             "path": "evidence/slice1/local-validation.json",
-            "sha256": "DA0940F5A3BF1E472C20830FEF1D418626E273D772775A9ABB602A7EC649A53E"
+            "sha256": "A841187CB8115EDBFFEA9FCB330FD565FB55C51C149DD17EC8D889745BDFF1B0"
           }
         ]
       }
@@ -710,7 +710,7 @@
           "evidenceRefs": [
             {
               "path": "evidence/slice1/local-validation.json",
-              "sha256": "DA0940F5A3BF1E472C20830FEF1D418626E273D772775A9ABB602A7EC649A53E"
+              "sha256": "A841187CB8115EDBFFEA9FCB330FD565FB55C51C149DD17EC8D889745BDFF1B0"
             }
           ]
         }
@@ -722,7 +722,7 @@
         "evidenceRefs": [
           {
             "path": "evidence/slice1/local-validation.json",
-            "sha256": "DA0940F5A3BF1E472C20830FEF1D418626E273D772775A9ABB602A7EC649A53E"
+            "sha256": "A841187CB8115EDBFFEA9FCB330FD565FB55C51C149DD17EC8D889745BDFF1B0"
           }
         ]
       }
@@ -769,7 +769,7 @@
           "evidenceRefs": [
             {
               "path": "evidence/slice1/local-validation.json",
-              "sha256": "DA0940F5A3BF1E472C20830FEF1D418626E273D772775A9ABB602A7EC649A53E"
+              "sha256": "A841187CB8115EDBFFEA9FCB330FD565FB55C51C149DD17EC8D889745BDFF1B0"
             }
           ]
         }
@@ -781,7 +781,7 @@
         "evidenceRefs": [
           {
             "path": "evidence/slice1/local-validation.json",
-            "sha256": "DA0940F5A3BF1E472C20830FEF1D418626E273D772775A9ABB602A7EC649A53E"
+            "sha256": "A841187CB8115EDBFFEA9FCB330FD565FB55C51C149DD17EC8D889745BDFF1B0"
           }
         ]
       }

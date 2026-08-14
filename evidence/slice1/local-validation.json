@@ -150,10 +150,78 @@
       "candidateAggregateSha256": "FE93DEB608EE3BC4AFB062E9CC9541FB7F1EFD9BFD25036BCBA4741F39F54412"
     }
   ],
+  "correctionLoop2Audits": [
+    {
+      "id": "S1-L2-AUDIT-SECURITY",
+      "status": "PASS",
+      "reasoningEffort": "high",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestPath": "evidence/slice1/correction-loop-2-candidate.json",
+      "candidateManifestSha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1",
+      "candidateAggregateSha256": "265B0F42F0D2B20AFFB5C18E32D5E5D1239C437F0612DBD24072CA9EC6E51002"
+    },
+    {
+      "id": "S1-L2-AUDIT-QA-ACCESSIBILITY",
+      "status": "PASS",
+      "reasoningEffort": "high",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestPath": "evidence/slice1/correction-loop-2-candidate.json",
+      "candidateManifestSha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1",
+      "candidateAggregateSha256": "265B0F42F0D2B20AFFB5C18E32D5E5D1239C437F0612DBD24072CA9EC6E51002"
+    },
+    {
+      "id": "S1-L2-AUDIT-SRE-COST",
+      "status": "PASS",
+      "reasoningEffort": "high",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestPath": "evidence/slice1/correction-loop-2-candidate.json",
+      "candidateManifestSha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1",
+      "candidateAggregateSha256": "265B0F42F0D2B20AFFB5C18E32D5E5D1239C437F0612DBD24072CA9EC6E51002"
+    },
+    {
+      "id": "S1-L2-AUDIT-AI-EVIDENCE",
+      "status": "PASS",
+      "reasoningEffort": "high",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestPath": "evidence/slice1/correction-loop-2-candidate.json",
+      "candidateManifestSha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1",
+      "candidateAggregateSha256": "265B0F42F0D2B20AFFB5C18E32D5E5D1239C437F0612DBD24072CA9EC6E51002"
+    },
+    {
+      "id": "S1-L2-AUDIT-REPOSITORY-SAFETY",
+      "status": "PASS",
+      "reasoningEffort": "high",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestPath": "evidence/slice1/correction-loop-2-candidate.json",
+      "candidateManifestSha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1",
+      "candidateAggregateSha256": "265B0F42F0D2B20AFFB5C18E32D5E5D1239C437F0612DBD24072CA9EC6E51002"
+    },
+    {
+      "id": "S1-L2-AUDIT-INTEGRATION-CRITIC",
+      "status": "PASS",
+      "reasoningEffort": "high",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestPath": "evidence/slice1/correction-loop-2-candidate.json",
+      "candidateManifestSha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1",
+      "candidateAggregateSha256": "265B0F42F0D2B20AFFB5C18E32D5E5D1239C437F0612DBD24072CA9EC6E51002"
+    }
+  ],
   "rootGate": {
     "command": "pnpm slice1:validate:local",
     "status": "PASS",
-    "durationSeconds": 218.0,
+    "durationSeconds": 205.4,
     "testCounts": {
       "dashboard": 14,
       "artifactIndexer": 8,
@@ -165,8 +233,8 @@
       "webUiAccessibility": 14,
       "apiPostgresql": 4,
       "applicationLifecycle": 4,
-      "rootPolicy": 73,
-      "browser": 14,
+      "rootPolicy": 99,
+      "browser": 15,
       "failed": 0,
       "skipped": 0
     }
@@ -355,27 +423,27 @@
     {
       "id": "S1-EXTERNAL-CLOSURE-ANCHOR",
       "path": "governance/external-closure-anchor-v1.json",
-      "sha256": "1E50E9F302D34B0C078B53B5C05DF2AFDBCC925B1AAC9B99744678643D89A21F"
+      "sha256": "4E021BC1973D895C13904C8AB1B72FFA69020B14FFB42F84C435BA595954F755"
     },
     {
       "id": "S1-DASHBOARD-CLOSURE-POLICY",
       "path": "scripts/lib/dashboard-closure-policy.mjs",
-      "sha256": "DB44952AC2392CE3C1832263D19DCA35774353864DE7BFBD5AED831B9AEAB4CE"
+      "sha256": "C19C6CEA5DE75920B0C236B0DE2C917E75CE573BB773AE1448611B1B9435D90C"
     },
     {
       "id": "S1-EXTERNAL-CLOSURE-POLICY",
       "path": "scripts/lib/external-closure-policy.mjs",
-      "sha256": "EC73B3B7CA253DC2F77381C1C0C78EEF5C80BA471D48B3E7A7E2BF1ED89C31AF"
+      "sha256": "F7DDA11EA8377A6ACFA113EB8282B39E8F267BDC9604CE168344278B7BBC3402"
     },
     {
       "id": "S1-DASHBOARD-CI-GENERATOR",
       "path": "scripts/generate-dashboard-ci-snapshot.mjs",
-      "sha256": "DA5A6352AB80DD9D3FFADF3135F387448DDFEBF4883781C3066CA1A7908862FC"
+      "sha256": "620859D13930F584B46239693234900B2B05B4F8350D6DCE532C2438E9E73E10"
     },
     {
       "id": "S1-DASHBOARD-VALIDATOR",
       "path": "scripts/validate-dashboard-snapshot.mjs",
-      "sha256": "20E730CCE1B4C49D811D3F2794F9FC03A24F61C1E21A87BB8FA1A8F0F64E5B54"
+      "sha256": "094CB83E24D8137282773DF86D373DC423863B3D336C9100E3BC2A7C4D46582C"
     },
     {
       "id": "S1-PROTECTED-HISTORY-MANIFEST",
@@ -395,17 +463,17 @@
     {
       "id": "S1-CORRECTION-CANDIDATE-POLICY",
       "path": "scripts/lib/correction-candidate-policy.mjs",
-      "sha256": "49EF15B212D62C19F272AF1C66563C26B815E53892ED7CAFC1A724537840BBFC"
+      "sha256": "11449D1BBBDBBCF5510A113FDAB64C80947AB98149E159A3365298956B7427AE"
     },
     {
       "id": "S1-CORRECTION-CANDIDATE-TEST",
       "path": "test/correction-candidate-policy.test.mjs",
-      "sha256": "5B7EFC6D7409D26420DCEFF9A5A62D176EEF9FA5EE896A87E4F42451B61A30AB"
+      "sha256": "F1B953D8620BAC06925F52F88062EBB2E5B730C2B2918629377AC3F101B60B05"
     },
     {
       "id": "S1-EVIDENCE-VALIDATOR",
       "path": "scripts/validate-slice1-evidence.mjs",
-      "sha256": "5EB69F5F89BA23C14413057EBB690C8B8F1B8245CE4BF0C740826810C7DC8E87"
+      "sha256": "AB12CCFB3DB1A5F9C0D1187BEFBE15D017867D1BD01B107F8733C85F0EEB5EAB"
     },
     {
       "id": "S1-API-INTEGRATION-TEST",
@@ -421,6 +489,51 @@
       "id": "S1-DASHBOARD-SOURCE-POLICY-TEST",
       "path": "test/snapshot-path-policy.test.mjs",
       "sha256": "C86D016BD3ACD5889F48067EEBABF7F9808B75909D3851ABB0EE35C0F571B6CA"
+    },
+    {
+      "id": "S1-L2-CORRECTION-CANDIDATE",
+      "path": "evidence/slice1/correction-loop-2-candidate.json",
+      "sha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1"
+    },
+    {
+      "id": "S1-L2-PREDECESSOR-REGISTRY",
+      "path": "governance/predecessor-failures-v1.json",
+      "sha256": "65AEDCBC6C21CDE9A42F49682F1A8511C5DEFAE3A66707F4F72719D536AAFE15"
+    },
+    {
+      "id": "S1-L2-PREDECESSOR-POLICY",
+      "path": "scripts/lib/predecessor-failure-policy.mjs",
+      "sha256": "4261C3801376434BFF3395F7456EB95DBE2EBDAFAF9214AEF02EA5D316BD75EC"
+    },
+    {
+      "id": "S1-L2-PREDECESSOR-TEST",
+      "path": "test/predecessor-failure-policy.test.mjs",
+      "sha256": "65077A71414247D4240BE1D22052DB8E0C2840300CADCC5FF9F14A59A4A5D691"
+    },
+    {
+      "id": "S1-L2-SEMANTIC-PROJECTION",
+      "path": "scripts/lib/semantic-dashboard.mjs",
+      "sha256": "4D39D14D0644B69E5D8B9950690629245CEB0FB3FA91E009E64E5B538D78D77D"
+    },
+    {
+      "id": "S1-L2-DASHBOARD-CLOSURE-TEST",
+      "path": "test/dashboard-closure-policy.test.mjs",
+      "sha256": "EB2007675EEE916602B2859D2E88CCAAF81A46444DBA20E199354A4E5098B1E4"
+    },
+    {
+      "id": "S1-L2-EXTERNAL-CLOSURE-TEST",
+      "path": "test/external-closure-policy.test.mjs",
+      "sha256": "C5B0CA5F9416F0175C06D0789580CA8A336B9A5418E91D3B9AF8A396C8BEB049"
+    },
+    {
+      "id": "S1-L2-DASHBOARD-BROWSER",
+      "path": "test/browser/dashboard.spec.mjs",
+      "sha256": "4ECA91FA0CCC17895D088DD25EF04E8C5D040461C85430120866A531A1F05A5F"
+    },
+    {
+      "id": "S1-L2-LOCAL-SNAPSHOT-GENERATOR",
+      "path": "scripts/generate-dashboard-snapshot.mjs",
+      "sha256": "5067D298CF03B5B997588DF6B4741A3A97393CC5D5EA9DE5803682BB44A66C21"
     }
   ],
   "acceptance": [
@@ -592,7 +705,15 @@
         "S1-EXTERNAL-CLOSURE-POLICY",
         "S1-DASHBOARD-CLOSURE-POLICY",
         "S1-DASHBOARD-CI-GENERATOR",
-        "S1-DASHBOARD-VALIDATOR"
+        "S1-DASHBOARD-VALIDATOR",
+        "S1-L2-PREDECESSOR-REGISTRY",
+        "S1-L2-PREDECESSOR-POLICY",
+        "S1-L2-PREDECESSOR-TEST",
+        "S1-L2-SEMANTIC-PROJECTION",
+        "S1-L2-DASHBOARD-CLOSURE-TEST",
+        "S1-L2-EXTERNAL-CLOSURE-TEST",
+        "S1-L2-DASHBOARD-BROWSER",
+        "S1-L2-LOCAL-SNAPSHOT-GENERATOR"
       ]
     },
     {
@@ -614,20 +735,39 @@
         "S1-EVIDENCE-VALIDATOR",
         "S1-API-INTEGRATION-TEST",
         "S1-DASHBOARD-SOURCE-POLICY",
-        "S1-DASHBOARD-SOURCE-POLICY-TEST"
+        "S1-DASHBOARD-SOURCE-POLICY-TEST",
+        "S1-L2-CORRECTION-CANDIDATE"
       ]
     },
     {
       "id": "S1-AC-022",
       "status": "PENDING",
       "command": "independent same-byte audits, commit/push parity, and exact hosted CI",
-      "artifactIds": ["S1-PLAN", "S1-EXTERNAL-CLOSURE-ANCHOR"]
+      "artifactIds": [
+        "S1-PLAN",
+        "S1-EXTERNAL-CLOSURE-ANCHOR",
+        "S1-L2-CORRECTION-CANDIDATE",
+        "S1-L2-PREDECESSOR-REGISTRY",
+        "S1-L2-PREDECESSOR-POLICY",
+        "S1-L2-SEMANTIC-PROJECTION",
+        "S1-L2-DASHBOARD-CLOSURE-TEST",
+        "S1-L2-EXTERNAL-CLOSURE-TEST",
+        "S1-L2-DASHBOARD-BROWSER"
+      ]
     }
   ],
   "defects": { "critical": 0, "major": 0, "minor": 0 },
   "hostedCi": {
     "status": "PENDING_CORRECTION_SUCCESSOR",
     "failedCorrectionRuns": [
+      {
+        "commit": "edd721df00fa14d048e36d76bbe5366841a6a672",
+        "runId": 31828022521,
+        "jobId": 94856743504,
+        "conclusion": "failure",
+        "failedStep": "pnpm test:ci",
+        "cause": "Unreviewed LGPL-3.0-or-later dependency license"
+      },
       {
         "commit": "9ba20d0e60992b844d036a32d8e1bae8934f291c",
         "tree": "1f0f2cced38f319f40a9be6a77ab61ffc8b1f40f",
@@ -648,10 +788,10 @@
       }
     ],
     "baseClosure": {
-      "commit": "dcfc44b0eb5ffaa5fc3af9b64f1cb9f2df2460ad",
-      "tree": "1a58415215dfae7c318f31a83d479ed579936a56",
-      "runId": 31829362742,
-      "jobId": 94861065649,
+      "commit": "20045ee79c9ee8474a7570ac9b530ec3ab28743b",
+      "tree": "2652ab2f78aea8adfe86319780cef9d49a7c0506",
+      "runId": 31843338726,
+      "jobId": 94904668210,
       "conclusion": "success"
     }
   },

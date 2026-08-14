@@ -5,6 +5,7 @@ import { replaceRegularFileTransactionally } from "./lib/replace-regular-file.mj
 import { validateAgentRoster } from "./lib/agent-policy.mjs";
 import { buildSemanticViews } from "./lib/semantic-dashboard.mjs";
 import {
+  externalClosurePredecessorSourceRef,
   externalClosureRole2SourceRef,
   externalClosureSourceRef,
   validateExternalClosure,
@@ -47,6 +48,8 @@ const externalClosureValue = validateExternalClosure(
 const externalClosureDocument = {
   value: externalClosureValue,
   sourceRef: externalClosureSourceRef(externalClosureValue),
+  predecessorSourceRef:
+    externalClosurePredecessorSourceRef(externalClosureValue),
 };
 const rootMap = new Map(
   config.roots.map((root) => [root.id, root.absolutePath]),
@@ -148,6 +151,7 @@ const trustedAgentEvidenceRefs = agentsDocument.value.agents.flatMap((agent) =>
 );
 trustedAgentEvidenceRefs.push(
   externalClosureDocument.sourceRef,
+  externalClosureDocument.predecessorSourceRef,
   externalClosureRole2SourceRef(externalClosureValue),
 );
 

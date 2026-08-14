@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
@@ -6,14 +7,28 @@ import {
   validateCorrectionCandidate,
 } from "../scripts/lib/correction-candidate-policy.mjs";
 
-const manifest = JSON.parse(
+const loop1Manifest = JSON.parse(
   readFileSync("evidence/slice1/correction-loop-1-candidate.json", "utf8"),
 );
+const loop2Manifest = JSON.parse(
+  readFileSync("evidence/slice1/correction-loop-2-candidate.json", "utf8"),
+);
 
-test("binds the correction disciplines to one exact candidate manifest", () => {
+test("preserves the exact Loop 1 candidate manifest", () => {
   assert.equal(
-    validateCorrectionCandidate(structuredClone(manifest)).fileCount,
-    41,
+    createHash("sha256")
+      .update(readFileSync("evidence/slice1/correction-loop-1-candidate.json"))
+      .digest("hex")
+      .toUpperCase(),
+    "23042BC6807DCB310953E9EAF20C5E7A6F57354F23C0A8A94AB0DBC2BB1814C6",
+  );
+  assert.equal(loop1Manifest.fileCount, 41);
+});
+
+test("binds Loop 2 disciplines to one exact candidate manifest", () => {
+  assert.equal(
+    validateCorrectionCandidate(structuredClone(loop2Manifest)).fileCount,
+    17,
   );
 });
 
@@ -47,7 +62,7 @@ for (const [name, mutate] of [
   ["unknown entry field", (value) => (value.files[0].authority = "forged")],
 ]) {
   test(`rejects a ${name}`, () => {
-    const value = structuredClone(manifest);
+    const value = structuredClone(loop2Manifest);
     mutate(value);
     assert.throws(() => validateCorrectionCandidate(value));
   });

@@ -5,6 +5,10 @@ import {
   externalClosureSourceRef,
   validateExternalClosure,
 } from "./lib/external-closure-policy.mjs";
+import {
+  assertExactPredecessorHistory,
+  validatePredecessorAttestation,
+} from "./lib/predecessor-failure-policy.mjs";
 import { replaceRegularFileTransactionally } from "./lib/replace-regular-file.mjs";
 import {
   REPOSITORY_ROOT,
@@ -54,16 +58,39 @@ const closure = validateExternalClosure(closureDocument.value, {
 });
 observationTime = closure.observedAt;
 closureDocument.sourceRef.observedAt = observationTime;
-const [slices, gates, backlog, decisions, registers, agents, artifactIndex] =
-  await Promise.all([
-    document("governance/slices.json"),
-    document("governance/gates.json"),
-    document("governance/backlog.json"),
-    document("governance/decisions.json"),
-    document("governance/registers.json"),
-    document("governance/agents.json"),
-    document("governance/artifact-index.json"),
-  ]);
+const [
+  slices,
+  gates,
+  backlog,
+  decisions,
+  registers,
+  agents,
+  artifactIndex,
+  predecessorHistory,
+] = await Promise.all([
+  document("governance/slices.json"),
+  document("governance/gates.json"),
+  document("governance/backlog.json"),
+  document("governance/decisions.json"),
+  document("governance/registers.json"),
+  document("governance/agents.json"),
+  document("governance/artifact-index.json"),
+  document("governance/predecessor-failures-v1.json"),
+]);
+const predecessorAttestation = validatePredecessorAttestation(
+  predecessorHistory.value,
+  {
+    currentRunId: closure.runId,
+    currentJobId: closure.jobId,
+    currentCommit: closure.commit,
+  },
+);
+assertExactPredecessorHistory(
+  predecessorAttestation.failures,
+  predecessorAttestation.reasons,
+  closure.predecessorFailures,
+  closure.predecessorFailureReasons,
+);
 
 function state(status) {
   if (["FAIL", "BLOCKED", "OPEN"].includes(status)) return "BLOCKED";
@@ -141,9 +168,22 @@ const closureDeployment = {
   ...closureRecord("EXT-GITHUB-CLOSURE", "GitHub hosted Slice 1 closure"),
   facts: {
     ...closureRecord("unused", "unused").facts,
-    predecessorFailures: closure.predecessorFailures.length,
+    predecessorFailureCount: closure.predecessorFailures.length,
   },
 };
+const predecessorFailureRecords = closure.predecessorFailures.map(
+  (failure, index) => ({
+    id: `EXT-GITHUB-FAILURE-${failure.runId}`,
+    title: `Failed GitHub workflow run ${failure.runId}`,
+    summary: `Run ${failure.runId}; job ${failure.jobId}; commit ${failure.commit}; failure; ${closure.predecessorFailureReasons[index].reasonCode}.`,
+    status: "ACTIVE",
+    facts: {
+      ...failure,
+      reasonCode: closure.predecessorFailureReasons[index].reasonCode,
+    },
+    sourceRefs: [predecessorHistory.sourceRef],
+  }),
+);
 const closureEvidence = closureRecord(
   "EVIDENCE-S1-EXTERNAL-CLOSURE",
   "Authenticated hosted Slice 1 closure",
@@ -152,9 +192,9 @@ const defectRecords = closure.role2.defects.map((defect) => ({
   id: defect.id,
   title: defect.title,
   summary: `${defect.title}; correction status ${defect.status}; independent Role 2 re-audit pending.`,
-  status: "ACTIVE",
+  status: defect.status === "CLOSED_BY_ROLE2" ? "PASS" : "ACTIVE",
   facts: {
-    lifecycleStatus: "OPEN",
+    lifecycleStatus: defect.status,
     severity: defect.severity,
     correctionStatus: defect.status,
     role2AuditStatus: closure.role2.status,
@@ -163,10 +203,10 @@ const defectRecords = closure.role2.defects.map((defect) => ({
   sourceRefs: [closureDocument.sourceRef],
 }));
 const role2Loop = {
-  id: "PO-001-R2-S1-L1",
-  title: "Role 2 Slice 1 correction audit Loop 1",
+  id: "PO-001-R2-S1-L2",
+  title: "Role 2 Slice 1 correction audit Loop 2",
   summary:
-    "Role 2 reported FAIL with three major defects; correction re-audit is pending.",
+    "Role 2 reported one residual major defect; correction re-audit is pending.",
   status: "BLOCKED",
   facts: {
     critical: closure.role2.critical,
@@ -209,6 +249,7 @@ const collections = {
       record(item, registers.sourceRef, "DEPLOY", index),
     ),
     closureDeployment,
+    ...predecessorFailureRecords,
   ],
   costs: registers.value.costs.map((item, index) =>
     record(item, registers.sourceRef, "COST", index),

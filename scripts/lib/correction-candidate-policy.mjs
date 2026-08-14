@@ -5,11 +5,12 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 const shaPattern = /^[A-F0-9]{64}$/u;
 const excluded = new Set([
   "evidence/slice1/correction-loop-1-candidate.json",
+  "evidence/slice1/correction-loop-2-candidate.json",
   "evidence/slice1/local-validation.json",
   "governance/agents.json",
   "governance/artifact-index.json",
 ]);
-const expectedPaths = [
+const loop1ExpectedPaths = [
   "apps/web/package.json",
   "apps/web/src/authorization-matrix.postgres.test.ts",
   "apps/web/src/fetch-runtime.ts",
@@ -52,6 +53,29 @@ const expectedPaths = [
   "test/slice1/api/application-postgres.test.mjs",
   "test/snapshot-path-policy.test.mjs",
 ];
+const loop2ExpectedPaths = [
+  "governance/external-closure-anchor-v1.json",
+  "governance/predecessor-failures-v1.json",
+  "scripts/generate-dashboard-ci-snapshot.mjs",
+  "scripts/generate-dashboard-snapshot.mjs",
+  "scripts/lib/correction-candidate-policy.mjs",
+  "scripts/lib/dashboard-closure-policy.mjs",
+  "scripts/lib/external-closure-policy.mjs",
+  "scripts/lib/predecessor-failure-policy.mjs",
+  "scripts/lib/semantic-dashboard.mjs",
+  "scripts/validate-dashboard-snapshot.mjs",
+  "scripts/validate-slice1-evidence.mjs",
+  "test/browser/dashboard.spec.mjs",
+  "test/correction-candidate-policy.test.mjs",
+  "test/dashboard-closure-policy.test.mjs",
+  "test/external-closure-policy.test.mjs",
+  "test/predecessor-failure-policy.test.mjs",
+  "test/semantic-dashboard.test.mjs",
+];
+const expectedPathsByCandidate = new Map([
+  ["PO-001-SLICE-1-LOOP-1", loop1ExpectedPaths],
+  ["PO-001-SLICE-1-LOOP-2", loop2ExpectedPaths],
+]);
 
 function hasExactKeys(value, keys) {
   return (
@@ -79,6 +103,7 @@ export function correctionCandidateAggregate(entries) {
 
 export function validateCorrectionCandidate(value, { repoRoot = "." } = {}) {
   const root = realpathSync(repoRoot);
+  const expectedPaths = expectedPathsByCandidate.get(value?.candidateId);
   if (
     !hasExactKeys(value, [
       "schemaVersion",
@@ -89,7 +114,7 @@ export function validateCorrectionCandidate(value, { repoRoot = "." } = {}) {
       "files",
     ]) ||
     value?.schemaVersion !== 1 ||
-    value?.candidateId !== "PO-001-SLICE-1-LOOP-1" ||
+    !expectedPaths ||
     value?.algorithm !== "SHA256(PATH_NUL_SHA256_LF)" ||
     value.fileCount !== expectedPaths.length ||
     !Array.isArray(value.files) ||

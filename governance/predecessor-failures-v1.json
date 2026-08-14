@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "matchbase.predecessor-failures/v1",
+  "failures": [
+    {
+      "runId": 31828022521,
+      "jobId": 94856743504,
+      "commit": "edd721df00fa14d048e36d76bbe5366841a6a672",
+      "conclusion": "failure"
+    },
+    {
+      "runId": 31839133155,
+      "jobId": 94891988899,
+      "commit": "9ba20d0e60992b844d036a32d8e1bae8934f291c",
+      "conclusion": "failure"
+    },
+    {
+      "runId": 31841980355,
+      "jobId": 94900624954,
+      "commit": "23c932c4b731e02976e86cf23f25f49a0653b242",
+      "conclusion": "failure"
+    }
+  ],
+  "reasons": [
+    {
+      "runId": 31828022521,
+      "reasonCode": "UNREVIEWED_LGPL_LICENSE_POLICY"
+    },
+    {
+      "runId": 31839133155,
+      "reasonCode": "POSIX_SOURCE_PATH_MISCLASSIFICATION"
+    },
+    {
+      "runId": 31841980355,
+      "reasonCode": "EXTERNAL_CLOSURE_IDENTITY_REJECTION_ORDER"
+    }
+  ]
+}

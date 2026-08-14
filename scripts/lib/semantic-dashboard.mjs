@@ -39,6 +39,8 @@ function sourceCatalog(documents) {
   );
   for (const value of Object.values(documents)) {
     if (exactSourceRef(value?.sourceRef)) references.push(value.sourceRef);
+    if (exactSourceRef(value?.predecessorSourceRef))
+      references.push(value.predecessorSourceRef);
   }
   for (const record of [
     ...(documents.artifactRecords ?? []),
@@ -124,6 +126,7 @@ function evidenceState(value) {
       "CLOSED_BY_OWNER",
       "SUPERSEDED",
       "CLOSED",
+      "CLOSED_BY_ROLE2",
     ].includes(normalized)
   )
     return "PASS";
@@ -315,6 +318,14 @@ export function buildSemanticViews(documents) {
         },
       ]
     : [];
+  const predecessorEvidence = closure
+    ? [
+        {
+          path: documents.externalClosure.predecessorSourceRef.path,
+          sha256: documents.externalClosure.predecessorSourceRef.sha256,
+        },
+      ]
+    : [];
   const closureGate = (item) =>
     closure
       ? {
@@ -374,9 +385,20 @@ export function buildSemanticViews(documents) {
             conclusion: closure.conclusion,
             closureStatus: closure.closureStatus,
             role2Status: closure.role2Status,
-            predecessorFailures: closure.predecessorFailures.length,
+            predecessorFailureCount: closure.predecessorFailures.length,
             evidenceRefs: closureEvidence,
+            _sourceRef: documents.externalClosure.sourceRef,
           },
+          ...closure.predecessorFailures.map((failure, index) => ({
+            id: `EXT-GITHUB-FAILURE-${failure.runId}`,
+            title: `Failed GitHub workflow run ${failure.runId}`,
+            status: "ACTIVE",
+            summary: `Run ${failure.runId}; job ${failure.jobId}; commit ${failure.commit}; failure; ${closure.predecessorFailureReasons[index].reasonCode}.`,
+            ...failure,
+            reasonCode: closure.predecessorFailureReasons[index].reasonCode,
+            evidenceRefs: predecessorEvidence,
+            _sourceRef: documents.externalClosure.predecessorSourceRef,
+          })),
         ]
       : []),
     {
@@ -400,7 +422,13 @@ export function buildSemanticViews(documents) {
       summary: "No MatchBASE deployment has started in the current slice.",
     },
   ].map((item, index) =>
-    record(item, documents.externalState.sourceRef, index, "EXTERNAL", catalog),
+    record(
+      item,
+      item._sourceRef ?? documents.externalState.sourceRef,
+      index,
+      "EXTERNAL",
+      catalog,
+    ),
   );
   const collections = {
     portfolio: (documents.slices.value.slices ?? []).map((item, index) =>
@@ -452,7 +480,7 @@ export function buildSemanticViews(documents) {
         record(
           {
             ...item,
-            summary: `${item.title}; Role 2 Loop 1 status ${item.status}.`,
+            summary: `${item.title}; Role 2 correction re-audit status ${item.status}.`,
             role2AuditStatus: closure.role2.status,
             role2Disposition: closure.role2.disposition,
             evidenceRefs: closureEvidence,
@@ -493,8 +521,8 @@ export function buildSemanticViews(documents) {
         ? [
             record(
               {
-                id: "PO-001-R2-S1-L1",
-                title: "Role 2 Slice 1 correction audit Loop 1",
+                id: "PO-001-R2-S1-L2",
+                title: "Role 2 Slice 1 correction audit Loop 2",
                 status: closure.role2.status,
                 summary: `Role 2 FAIL with ${closure.role2.critical} critical, ${closure.role2.major} major, and ${closure.role2.minor} minor defects; correction re-audit pending.`,
                 critical: closure.role2.critical,

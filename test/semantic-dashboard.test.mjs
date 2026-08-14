@@ -278,7 +278,18 @@ test("projects hosted closure without converting pending Role 2 into PASS", () =
     path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_AUDIT.md",
     sha256: "D".repeat(64),
   };
-  documents.trustedEvidenceRefs = [exactEvidenceRef, managementRef, auditRef];
+  const predecessorRef = {
+    ...managementRef,
+    sourceId: "matchbase://external-closure/predecessor-failures",
+    path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\PREDECESSORS.json",
+    sha256: "E".repeat(64),
+  };
+  documents.trustedEvidenceRefs = [
+    exactEvidenceRef,
+    managementRef,
+    auditRef,
+    predecessorRef,
+  ];
   documents.gates.value.gates.push({
     id: "AG6",
     status: "ACTIVE",
@@ -290,6 +301,7 @@ test("projects hosted closure without converting pending Role 2 into PASS", () =
   });
   documents.externalClosure = {
     sourceRef: managementRef,
+    predecessorSourceRef: predecessorRef,
     value: {
       repository: "banihashem/INNOBASE-MatchBASE",
       commit: "a".repeat(40),
@@ -299,33 +311,43 @@ test("projects hosted closure without converting pending Role 2 into PASS", () =
       conclusion: "success",
       closureStatus: "HOSTED_VERIFIED",
       role2Status: "PENDING_ROLE2",
-      predecessorFailures: [{ runId: 100, jobId: 200 }],
+      predecessorFailures: [
+        {
+          runId: 100,
+          jobId: 200,
+          commit: "c".repeat(40),
+          conclusion: "failure",
+        },
+      ],
+      predecessorFailureReasons: [
+        { runId: 100, reasonCode: "ESTABLISHED_FAILURE" },
+      ],
       role2: {
         status: "FAIL",
         disposition: "PENDING_ROLE2_CORRECTION_REAUDIT",
         auditPath: auditRef.path,
         auditSha256: auditRef.sha256,
         critical: 0,
-        major: 3,
+        major: 1,
         minor: 0,
         defects: [
           {
             id: "S1-L1-D001",
             severity: "major",
-            status: "OPEN",
+            status: "CLOSED_BY_ROLE2",
             title: "D001",
-          },
-          {
-            id: "S1-L1-D002",
-            severity: "major",
-            status: "OPEN",
-            title: "D002",
           },
           {
             id: "S1-L1-D003",
             severity: "major",
-            status: "OPEN",
+            status: "CLOSED_BY_ROLE2",
             title: "D003",
+          },
+          {
+            id: "S1-L1-RD002",
+            severity: "major",
+            status: "CORRECTED_PENDING_ROLE2",
+            title: "RD002",
           },
         ],
       },
@@ -343,12 +365,32 @@ test("projects hosted closure without converting pending Role 2 into PASS", () =
   assert.equal(acceptance.status, "ACTIVE");
   assert.equal(acceptance.facts.runId, 123);
   assert.equal(closure.facts.jobId, 456);
+  const failure = views.deployments.records.find(
+    ({ id }) => id === "EXT-GITHUB-FAILURE-100",
+  );
+  assert.deepEqual(
+    {
+      runId: failure.facts.runId,
+      jobId: failure.facts.jobId,
+      commit: failure.facts.commit,
+      conclusion: failure.facts.conclusion,
+      reasonCode: failure.facts.reasonCode,
+    },
+    {
+      runId: 100,
+      jobId: 200,
+      commit: "c".repeat(40),
+      conclusion: "failure",
+      reasonCode: "ESTABLISHED_FAILURE",
+    },
+  );
+  assert.deepEqual(failure.sourceRefs, [predecessorRef]);
   assert.equal(
-    views.defects.records.filter(({ id }) => id.startsWith("S1-L1-D")).length,
+    views.defects.records.filter(({ id }) => id.startsWith("S1-L1-")).length,
     3,
   );
   assert.equal(
-    views.loops.records.find(({ id }) => id === "PO-001-R2-S1-L1").status,
+    views.loops.records.find(({ id }) => id === "PO-001-R2-S1-L2").status,
     "BLOCKED",
   );
 });

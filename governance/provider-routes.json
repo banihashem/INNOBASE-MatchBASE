@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "NOT_IMPLEMENTED",
+  "status": "LOCAL_FIXTURE_ONLY",
   "rules": {
     "directProvidersAllowed": true,
     "openRouterAllowed": true,
@@ -8,7 +8,39 @@
     "realDataRequiresPaidVerifiedRoute": true,
     "credentialsInRepositoryAllowed": false
   },
-  "routes": [],
-  "promptVersions": [],
-  "modelVersions": []
+  "routes": [
+    {
+      "id": "rt-synthetic-fixture-v1",
+      "provider": "synthetic_fixture",
+      "model": "deterministic-fixture-v1",
+      "enabled": true,
+      "realData": false,
+      "billingPath": "NOT_APPLICABLE",
+      "dataHandlingEvidenceRefs": ["matchbase://slice1/synthetic-fixture"]
+    },
+    {
+      "id": "rt-gemini-direct-contract-v1",
+      "provider": "gemini_direct",
+      "model": "gemini-contract-fixture-v1",
+      "enabled": false,
+      "realData": false,
+      "billingPath": "NOT_APPLICABLE",
+      "dataHandlingEvidenceRefs": []
+    },
+    {
+      "id": "rt-openrouter-contract-v1",
+      "provider": "openrouter",
+      "model": "openrouter-contract-fixture-v1",
+      "enabled": false,
+      "realData": false,
+      "billingPath": "NOT_APPLICABLE",
+      "dataHandlingEvidenceRefs": []
+    }
+  ],
+  "promptVersions": ["canonicalization-v1", "fixture-research-v1"],
+  "modelVersions": [
+    "deterministic-fixture-v1",
+    "gemini-contract-fixture-v1",
+    "openrouter-contract-fixture-v1"
+  ]
 }

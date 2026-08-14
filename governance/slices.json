@@ -23,9 +23,25 @@
     },
     {
       "id": "SLICE-1",
-      "name": "Product workflow foundation",
-      "status": "BLOCKED",
-      "blockedBy": ["independent Role 2 PASS for SLICE-0"]
+      "name": "Authenticated Demo reference path",
+      "status": "IN_PROGRESS",
+      "scope": [
+        "local fail-closed authentication contracts and simulator",
+        "PostgreSQL 18 persistence, quota, leases and immutable audit",
+        "fixture-only provider-neutral evidence path",
+        "strict Demo projection and responsive product UI",
+        "local and hosted deterministic validation"
+      ],
+      "exclusions": [
+        "GCP mutation",
+        "Cloudflare mutation",
+        "live OAuth",
+        "live providers",
+        "production deployment",
+        "real user data"
+      ],
+      "terminal": "READY_FOR_ROLE2",
+      "blockedBy": ["exact pushed-commit hosted CI"]
     }
   ]
 }

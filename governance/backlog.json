@@ -88,6 +88,21 @@
         "TRACE-S1-001",
         "TRACE-S1-002"
       ]
+    },
+    {
+      "id": "S1-001",
+      "slice": "SLICE-1",
+      "title": "Authenticated Demo reference path",
+      "status": "IN_PROGRESS",
+      "owner": "Role 3 and Slice 1 discipline agents",
+      "priority": "MUST",
+      "dependencies": ["S0-005"],
+      "requirementIds": ["REQ-S1-003"],
+      "riskIds": ["RISK-S1-001"],
+      "acceptanceTestIds": ["TEST-S1-LOCAL-ACCEPTANCE"],
+      "gateIds": ["AG4", "AG5", "AG6"],
+      "deploymentId": "DEPLOY-S1-LOCAL",
+      "traceabilityIds": ["TRACE-S1-003"]
     }
   ]
 }

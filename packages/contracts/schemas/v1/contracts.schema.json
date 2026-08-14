@@ -1,0 +1,732 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "bundleVersion": "matchbase-contracts.v1",
+  "schemas": {
+    "canonicalRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "requestId",
+        "canonicalVersionId",
+        "version",
+        "canonicalLanguage",
+        "canonicalText",
+        "language",
+        "fields",
+        "protectedSpans",
+        "provenance",
+        "originalTextDigest",
+        "readiness",
+        "contradictionIds"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "enum": ["canonical-request.v1"]
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "canonicalVersionId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "canonicalLanguage": {
+          "type": "string",
+          "enum": ["en"]
+        },
+        "canonicalText": {
+          "type": "string"
+        },
+        "language": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bcp47", "confidence", "detectorId", "detectorVersion"],
+          "properties": {
+            "bcp47": {
+              "type": "string"
+            },
+            "confidence": {
+              "type": "number"
+            },
+            "detectorId": {
+              "type": "string"
+            },
+            "detectorVersion": {
+              "type": "string"
+            }
+          }
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fieldId",
+              "path",
+              "valueState",
+              "languageOrigin",
+              "canonicalValue"
+            ],
+            "properties": {
+              "fieldId": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "valueState": {
+                "type": "string",
+                "enum": ["provided", "explicitly_unknown", "not_asked"]
+              },
+              "languageOrigin": {
+                "type": "string",
+                "enum": [
+                  "entered_in_english",
+                  "translated",
+                  "protected_span",
+                  "derived_deterministic"
+                ]
+              },
+              "canonicalValue": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "protectedSpans": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "placeholder",
+              "category",
+              "canonicalValue",
+              "sourceByteLength"
+            ],
+            "properties": {
+              "placeholder": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string",
+                "enum": ["identifier", "model", "quantity_unit", "code_enum"]
+              },
+              "canonicalValue": {
+                "type": "string"
+              },
+              "sourceByteLength": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "provenance": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attemptId",
+              "capabilityId",
+              "providerId",
+              "routeId",
+              "modelId",
+              "promptVersion",
+              "configVersion",
+              "retentionPosture",
+              "startedAt",
+              "completedAt",
+              "outcome"
+            ],
+            "properties": {
+              "attemptId": {
+                "type": "string"
+              },
+              "capabilityId": {
+                "type": "string"
+              },
+              "providerId": {
+                "type": "string"
+              },
+              "routeId": {
+                "type": "string"
+              },
+              "modelId": {
+                "type": "string"
+              },
+              "promptVersion": {
+                "type": "string"
+              },
+              "configVersion": {
+                "type": "string"
+              },
+              "retentionPosture": {
+                "type": "string",
+                "enum": ["zdr", "no_training_30d_logs", "not_applicable"]
+              },
+              "startedAt": {
+                "type": "string"
+              },
+              "completedAt": {
+                "type": "string"
+              },
+              "outcome": {
+                "type": "string",
+                "enum": ["ok", "failed", "timed_out"]
+              }
+            }
+          }
+        },
+        "originalTextDigest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "algorithm",
+            "keyId",
+            "rawDigest",
+            "normalizedDigest",
+            "byteLength"
+          ],
+          "properties": {
+            "algorithm": {
+              "type": "string",
+              "enum": ["HMAC-SHA-256"]
+            },
+            "keyId": {
+              "type": "string"
+            },
+            "rawDigest": {
+              "type": "string"
+            },
+            "normalizedDigest": {
+              "type": "string"
+            },
+            "byteLength": {
+              "type": "integer"
+            }
+          }
+        },
+        "readiness": {
+          "type": "string",
+          "enum": ["ready", "partially_ready", "not_ready"]
+        },
+        "contradictionIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "providerRegistry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "registryVersion",
+        "environment",
+        "realData",
+        "routes"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "enum": ["provider-registry.v1"]
+        },
+        "registryVersion": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "string",
+          "enum": ["local", "test", "staging", "production"]
+        },
+        "realData": {
+          "type": "boolean"
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "routeId",
+              "providerId",
+              "modelId",
+              "enabled",
+              "environment",
+              "realData",
+              "billingPath",
+              "retentionPosture",
+              "dataHandlingEvidenceRefs",
+              "timeoutMs",
+              "retry",
+              "requireParameters",
+              "allowFallbacks",
+              "capabilities"
+            ],
+            "properties": {
+              "routeId": {
+                "type": "string"
+              },
+              "providerId": {
+                "type": "string",
+                "enum": ["gemini_direct", "openrouter", "synthetic_fixture"]
+              },
+              "modelId": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "environment": {
+                "type": "string",
+                "enum": ["local", "test", "staging", "production"]
+              },
+              "realData": {
+                "type": "boolean"
+              },
+              "billingPath": {
+                "type": "string",
+                "enum": ["paid_verified", "not_applicable"]
+              },
+              "retentionPosture": {
+                "type": "string",
+                "enum": [
+                  "zdr",
+                  "no_training_30d_logs",
+                  "unknown",
+                  "not_applicable"
+                ]
+              },
+              "dataHandlingEvidenceRefs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "timeoutMs": {
+                "type": "integer"
+              },
+              "retry": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["maxAttempts", "backoffMs"],
+                "properties": {
+                  "maxAttempts": {
+                    "type": "integer"
+                  },
+                  "backoffMs": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "requireParameters": {
+                "type": "boolean"
+              },
+              "allowFallbacks": {
+                "type": "boolean"
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "evidenceGraph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "runId",
+        "candidates",
+        "claims",
+        "evidence",
+        "eligibleCandidateIds",
+        "gateEvaluationCompletedAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "enum": ["evidence-graph.v1"]
+        },
+        "runId": {
+          "type": "string"
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "candidateId",
+              "displayName",
+              "countryCode",
+              "rationaleShort",
+              "rationaleClaimIds",
+              "compatibilityScore",
+              "fitBand",
+              "bandCeiling",
+              "displayedBand",
+              "dimensionScores",
+              "citations",
+              "verificationStatus",
+              "mandatoryConstraintsSatisfied",
+              "failedConstraintIds",
+              "deterministicRankKey"
+            ],
+            "properties": {
+              "candidateId": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string"
+              },
+              "countryCode": {
+                "type": "string"
+              },
+              "rationaleShort": {
+                "type": "string"
+              },
+              "rationaleClaimIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "compatibilityScore": {
+                "type": "number"
+              },
+              "fitBand": {
+                "type": "string"
+              },
+              "bandCeiling": {
+                "type": "string"
+              },
+              "displayedBand": {
+                "type": "string"
+              },
+              "dimensionScores": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              },
+              "citations": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "verificationStatus": {
+                "type": "string",
+                "enum": [
+                  "claimed",
+                  "externally_verified",
+                  "inferred",
+                  "stale",
+                  "conflicting",
+                  "unknown",
+                  "synthetic"
+                ]
+              },
+              "mandatoryConstraintsSatisfied": {
+                "type": "boolean"
+              },
+              "failedConstraintIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "deterministicRankKey": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "claimId",
+              "candidateId",
+              "text",
+              "decisionBearing",
+              "verificationStatus",
+              "evidenceConfidence",
+              "evidenceIds"
+            ],
+            "properties": {
+              "claimId": {
+                "type": "string"
+              },
+              "candidateId": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "decisionBearing": {
+                "type": "boolean"
+              },
+              "verificationStatus": {
+                "type": "string",
+                "enum": [
+                  "claimed",
+                  "externally_verified",
+                  "inferred",
+                  "stale",
+                  "conflicting",
+                  "unknown",
+                  "synthetic"
+                ]
+              },
+              "evidenceConfidence": {
+                "type": "string",
+                "enum": ["high", "medium", "low"]
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "evidenceId",
+              "sourceKind",
+              "url",
+              "title",
+              "publisher",
+              "publisherDomain",
+              "retrievedAt",
+              "contentSha256",
+              "extract",
+              "verificationDisposition",
+              "exclusionReason"
+            ],
+            "properties": {
+              "evidenceId": {
+                "type": "string"
+              },
+              "sourceKind": {
+                "type": "string",
+                "enum": ["synthetic_fixture", "reserved_url", "local_fixture"]
+              },
+              "url": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "publisher": {
+                "type": "string"
+              },
+              "publisherDomain": {
+                "type": "string"
+              },
+              "retrievedAt": {
+                "type": "string"
+              },
+              "contentSha256": {
+                "type": "string"
+              },
+              "extract": {
+                "type": "string"
+              },
+              "verificationDisposition": {
+                "type": "string",
+                "enum": ["accepted", "excluded"]
+              },
+              "exclusionReason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "eligibleCandidateIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "gateEvaluationCompletedAt": {
+          "type": "string"
+        }
+      }
+    },
+    "demoProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "run_id",
+        "outcome",
+        "scarcity",
+        "candidates",
+        "unmet_mandatory_constraints",
+        "limitations_notice",
+        "projection_version"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": ["demo-projection.v1"]
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["matched", "no_responsible_match"]
+        },
+        "scarcity": {
+          "type": "string",
+          "enum": ["none", "limited", "zero"]
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["display_name", "country_code", "rationale_short"],
+            "properties": {
+              "display_name": {
+                "type": "string"
+              },
+              "country_code": {
+                "type": "string"
+              },
+              "rationale_short": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "unmet_mandatory_constraints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "limitations_notice": {
+          "type": "string"
+        },
+        "projection_version": {
+          "type": "integer",
+          "enum": [1]
+        }
+      }
+    },
+    "costEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "costEventId",
+        "attemptId",
+        "runId",
+        "userId",
+        "accountId",
+        "capabilityId",
+        "providerId",
+        "modelId",
+        "environment",
+        "quantity",
+        "unit",
+        "amount",
+        "currency",
+        "pricingBasis",
+        "pricingVersion",
+        "measurement",
+        "occurredAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "enum": ["cost-event.v1"]
+        },
+        "costEventId": {
+          "type": "string"
+        },
+        "attemptId": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "capabilityId": {
+          "type": "string"
+        },
+        "providerId": {
+          "type": "string"
+        },
+        "modelId": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["unknown"]
+            }
+          ]
+        },
+        "currency": {
+          "type": "string"
+        },
+        "pricingBasis": {
+          "type": "string"
+        },
+        "pricingVersion": {
+          "type": "string"
+        },
+        "measurement": {
+          "type": "string",
+          "enum": ["provider_reported", "estimated", "explicit_fixture_zero"]
+        },
+        "occurredAt": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "1.0",
+  "algorithm": "SHA256(sorted(relativePath + NUL + uppercaseFileSha256 + LF))",
+  "capturedAt": "2026-08-14T18:52:00+04:00",
+  "roots": [
+    {
+      "id": "authoritative",
+      "path": "C:\\INNOBASE\\MatchBASE\\00_Authoritative_Sources",
+      "fileCount": 14,
+      "aggregateSha256": "20BE6AEB62DC40B7E89D3D185EF6301323BAF73BF69382FE35AB79874E0BED45"
+    },
+    {
+      "id": "planning",
+      "path": "C:\\INNOBASE\\MatchBASE\\02_Product_Research_and_Planning",
+      "fileCount": 67,
+      "aggregateSha256": "6F381C781147330DD16656116A20325D0A3C24B15F79F2E1058BCA9D1749CDF1"
+    },
+    {
+      "id": "managementHistory",
+      "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management",
+      "fileCount": 36,
+      "aggregateSha256": "BE407DA2BB59084F208AE6247B0CFFB0391CEEA021F480B64A9392F066F64803",
+      "excludedFiles": [
+        "PRODUCT_MANAGEMENT_LOOP_LOG.md",
+        "ROLE3_IMPLEMENTATION_VALIDATION_PO_001_SLICE_1.md"
+      ]
+    }
+  ],
+  "appendOnlyLog": {
+    "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\PRODUCT_MANAGEMENT_LOOP_LOG.md",
+    "prefixBytes": 136319,
+    "prefixSha256": "77770676DBF1D4223FAFAC1026FC116FD97617529CED753CD02932020C518133"
+  }
+}

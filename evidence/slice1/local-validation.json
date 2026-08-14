@@ -1,0 +1,413 @@
+{
+  "schemaVersion": 1,
+  "slice": "SLICE-1",
+  "observedAt": "2026-08-14T22:02:50+04:00",
+  "environment": {
+    "scope": "LOCAL_SYNTHETIC_ONLY",
+    "postgresql": "18.1",
+    "database": "DISPOSABLE_LOCAL",
+    "providerNetworkCalls": 0,
+    "liveOauthCalls": 0,
+    "externalMutations": 0
+  },
+  "independentAudits": [
+    {
+      "id": "S1-AUDIT-SECURITY-PRIVACY",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "method": "Independent same-byte auth, session, authorization, privacy, tenant-isolation, secret-history, and protected-state audit",
+      "auditedArtifact": "packages/application/src/service.ts",
+      "auditedSha256": "1C59CFDCC92581FEAE18E71299D38C22C1FA83CF95D95720ED1B05C7275A45BB"
+    },
+    {
+      "id": "S1-AUDIT-QA-ACCESSIBILITY",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "method": "Independent same-byte PostgreSQL, API, standalone, real-browser, keyboard, focus, axe, reduced-motion, and responsive audit",
+      "auditedArtifact": "test/browser/product-live-reference-path.spec.mjs",
+      "auditedSha256": "2BA093BD62342316BE945C3F89F3115C4CA9A6A32C1EC38BE79B667F73E5530D"
+    },
+    {
+      "id": "S1-AUDIT-SRE-COST",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "method": "Independent same-byte repeat-build, cold-start, worker-readiness, PostgreSQL cost-ledger, operations, and cleanup audit",
+      "auditedArtifact": "scripts/package-next-standalone.mjs",
+      "auditedSha256": "F6F1266CF2ECC80B56096083C6B7A4E53874C027AD56114C6835577391897157"
+    },
+    {
+      "id": "S1-AUDIT-AI-EVIDENCE",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "method": "Independent same-byte provider routing, retry telemetry, evidence integrity, projection, and full-dimension cost reconciliation audit",
+      "auditedArtifact": "packages/ai-evidence/src/cost/reconcile.ts",
+      "auditedSha256": "783788F80862CDFCD2FC9F6CFB9E99F394679805B91BAB41B37E2E465EDA4595"
+    },
+    {
+      "id": "S1-AUDIT-REPOSITORY-RELEASE",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "method": "Independent exact-candidate clean-install, diff, dependency, license, CI, private-remote, generated-file, PII, and preservation audit",
+      "auditedArtifact": "pnpm-lock.yaml",
+      "auditedSha256": "2A9D99AEDE5BD4900F180DDF20F7E150F3D72407736D5D862719A2D73B753B65"
+    },
+    {
+      "id": "S1-AUDIT-INTEGRATION-CRITIC",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "method": "Independent corrected-runner reproduction and cross-stack AC001-AC022 trace, evidence, pending-state, and preservation reconciliation",
+      "auditedArtifact": "scripts/validate-slice1-local.mjs",
+      "auditedSha256": "C80E92E86D54B5F741F007BCCB16C743965811D8E8B165CF0FD63276303BBF5E"
+    }
+  ],
+  "rootGate": {
+    "command": "pnpm slice1:validate:local",
+    "status": "PASS",
+    "durationSeconds": 170.337,
+    "testCounts": {
+      "dashboard": 14,
+      "artifactIndexer": 8,
+      "auth": 8,
+      "contracts": 2,
+      "dataPostgresql": 10,
+      "aiEvidence": 24,
+      "securityPrivacy": 4,
+      "webUiAccessibility": 7,
+      "apiPostgresql": 4,
+      "applicationLifecycle": 4,
+      "rootPolicy": 34,
+      "browser": 14,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "artifacts": [
+    {
+      "id": "S1-PLAN",
+      "path": "docs/SLICE_1_IMPLEMENTATION_PLAN.md",
+      "sha256": "7DA700B8D723855129775F05497275264F16717ECB1E335682F035E0602DF217"
+    },
+    {
+      "id": "S1-ADR",
+      "path": "docs/adr/0001-slice-1-runtime-and-dependencies.md",
+      "sha256": "F397B44EF7C1FD85DC7CE3AB770850342B36991E4772EAB2050CAEECDF67A13B"
+    },
+    {
+      "id": "S1-BOOTSTRAP",
+      "path": "docs/LOCAL_BOOTSTRAP.md",
+      "sha256": "A486482DE7E8596A0BE552000A40425DE8C56E936A8368AF31C32810491F4812"
+    },
+    {
+      "id": "S1-RUNBOOK",
+      "path": "docs/LOCAL_OPERATIONS_RUNBOOK.md",
+      "sha256": "D6FCC06F422BAA299D3D728603540321397BB46E68751FB2EB4F34D7D3E01DD9"
+    },
+    {
+      "id": "S1-AUTH",
+      "path": "packages/auth/src/index.ts",
+      "sha256": "F49A6780B41D9FD781B553FF315FE6BD48B0D8890D70A8E058FD0795097BD822"
+    },
+    {
+      "id": "S1-DATA",
+      "path": "packages/data/migrations/0001_slice_1_foundation.up.sql",
+      "sha256": "E47E3E706EA00ABF57EED0A7AD21ADFB9ED8CD46266208015E9476B0B3EA048D"
+    },
+    {
+      "id": "S1-APPLICATION",
+      "path": "packages/application/src/service.ts",
+      "sha256": "1C59CFDCC92581FEAE18E71299D38C22C1FA83CF95D95720ED1B05C7275A45BB"
+    },
+    {
+      "id": "S1-AI",
+      "path": "packages/ai-evidence/src/index.ts",
+      "sha256": "2EFDD7FA16B03BC6CD775D9463F7694490014EF54BDF4B31563E2315A82F5D14"
+    },
+    {
+      "id": "S1-AI-ROUTE-POLICY",
+      "path": "packages/ai-evidence/src/route-policy.ts",
+      "sha256": "1B16CB042C6B6088A307B8519C2AA2EFD2309C0E23F23A08B34741B97455A942"
+    },
+    {
+      "id": "S1-AI-TRANSPORT",
+      "path": "packages/ai-evidence/src/transport.ts",
+      "sha256": "93ED82DBF1321D0131304F102FA1349AD4E178FF4A8D21DF71A9CF1508F9B2EB"
+    },
+    {
+      "id": "S1-AI-GEMINI-ADAPTER",
+      "path": "packages/ai-evidence/src/adapters/gemini-direct.ts",
+      "sha256": "DB97EDBC91507D250D6D735294BDA4F789F85584A467BD9430BAF44594866FDB"
+    },
+    {
+      "id": "S1-AI-OPENROUTER-ADAPTER",
+      "path": "packages/ai-evidence/src/adapters/openrouter.ts",
+      "sha256": "FE94EAAAB320DE73CA9E3BDDA3F6CE58D7699AE88C33B4C1B28D8DE1FDF2D673"
+    },
+    {
+      "id": "S1-AI-COST-RECONCILER",
+      "path": "packages/ai-evidence/src/cost/reconcile.ts",
+      "sha256": "783788F80862CDFCD2FC9F6CFB9E99F394679805B91BAB41B37E2E465EDA4595"
+    },
+    {
+      "id": "S1-PROVIDER-CONFIG",
+      "path": "config/slice1/capability-registry.fixture.v1.json",
+      "sha256": "17505D8675531C8179A5A074268D3CF224B934D206B818DBFF4F00CF1E659D2C"
+    },
+    {
+      "id": "S1-SECURITY",
+      "path": "packages/security/src/index.ts",
+      "sha256": "EA4B0D062C4DFA5B44F81ED0F93BF80409116A3B2C96E91F26B9254E41F0423B"
+    },
+    {
+      "id": "S1-UI",
+      "path": "apps/web/components/ProductFlow.tsx",
+      "sha256": "EC5BECABCE8B58E053199E002E18F04227848925652AC1EDD303E5FEABC61ACE"
+    },
+    {
+      "id": "S1-BROWSER",
+      "path": "test/browser/product-reference-path.spec.mjs",
+      "sha256": "CEB81376FA69B12BBDBBBF34BDD78904DA6CF9C57B72EBC817800E0AD9178E8D"
+    },
+    {
+      "id": "S1-CI",
+      "path": ".github/workflows/ci.yml",
+      "sha256": "9DFB7C0C6C8CFEC4C3BA80AE66E4C5F5F0894929CAF89A837EAFB6AB4CC02E07"
+    },
+    {
+      "id": "S1-COMPOSE",
+      "path": "compose.yaml",
+      "sha256": "91D1806A814782297314E99D83D6925E3205C86C8A705C81EF8E61D05D585046"
+    },
+    {
+      "id": "S1-BROWSER-LIVE",
+      "path": "test/browser/product-live-reference-path.spec.mjs",
+      "sha256": "2BA093BD62342316BE945C3F89F3115C4CA9A6A32C1EC38BE79B667F73E5530D"
+    },
+    {
+      "id": "S1-WORKER",
+      "path": "packages/application/src/synthetic-worker.ts",
+      "sha256": "2629DB003DC73ADD8992EA49AD1BB41E5A2959AA314086F29DA1A48A569BE2B1"
+    },
+    {
+      "id": "S1-SEED",
+      "path": "packages/data/src/seed-local.ts",
+      "sha256": "9C3FF996D53E90F131095D139F7CE5152E14C93F47F728E711447F2403D8B22E"
+    },
+    {
+      "id": "S1-PROTECTED",
+      "path": "evidence/slice1/protected-baseline.json",
+      "sha256": "F5589AF9AF9128FD869910E3D48400EAF4FFB72F3F63740537FC430150F6DF5B"
+    },
+    {
+      "id": "S1-HISTORY-SCAN",
+      "path": "scripts/secret-history-scan.mjs",
+      "sha256": "54FF1B8FEC1803FADB102BCA31CCA71D1BFB9BDF9B0D81430B07722FE497AFD0"
+    },
+    {
+      "id": "S1-RUNTIME-SCAN",
+      "path": "scripts/scan-slice1-runtime-artifacts.mjs",
+      "sha256": "4F5F5133C25B89D998F1665193003C3F0C8EA7D065EC58461B8050391A904A8C"
+    },
+    {
+      "id": "S1-STANDALONE-PACKAGER",
+      "path": "scripts/package-next-standalone.mjs",
+      "sha256": "F6F1266CF2ECC80B56096083C6B7A4E53874C027AD56114C6835577391897157"
+    },
+    {
+      "id": "S1-STANDALONE-STARTER",
+      "path": "scripts/start-next-standalone.mjs",
+      "sha256": "45C7AFDCF12ED8084F75EE106D64AB49911779539049906B68B1C4156FCC1927"
+    },
+    {
+      "id": "S1-STANDALONE-COLD-TEST",
+      "path": "test/slice1/runtime/standalone-cold-start.test.mjs",
+      "sha256": "96CD3964B2440E9FF9E33FE6E84E16831D115B35A9D216706CD1727BA4CE0F56"
+    },
+    {
+      "id": "S1-STANDALONE-REPEAT-TEST",
+      "path": "test/slice1/runtime/standalone-repeat-build.test.mjs",
+      "sha256": "A32D10D83CD585E74F9B40B6A013FC297A42BDDBF987AA4E546A03E9C8C6F4BA"
+    },
+    {
+      "id": "S1-LOCAL-VALIDATOR",
+      "path": "scripts/validate-slice1-local.mjs",
+      "sha256": "C80E92E86D54B5F741F007BCCB16C743965811D8E8B165CF0FD63276303BBF5E"
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "S1-AC-001",
+      "status": "PASS",
+      "command": "pnpm slice1:validate:local",
+      "artifactIds": [
+        "S1-BOOTSTRAP",
+        "S1-COMPOSE",
+        "S1-CI",
+        "S1-SEED",
+        "S1-STANDALONE-PACKAGER",
+        "S1-STANDALONE-STARTER",
+        "S1-STANDALONE-COLD-TEST",
+        "S1-STANDALONE-REPEAT-TEST",
+        "S1-LOCAL-VALIDATOR"
+      ]
+    },
+    {
+      "id": "S1-AC-002",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/auth test",
+      "artifactIds": ["S1-AUTH"]
+    },
+    {
+      "id": "S1-AC-003",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/auth test && pnpm --filter @matchbase/web test",
+      "artifactIds": ["S1-AUTH", "S1-UI"]
+    },
+    {
+      "id": "S1-AC-004",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/auth test",
+      "artifactIds": ["S1-AUTH"]
+    },
+    {
+      "id": "S1-AC-005",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/security test && pnpm test:slice1:api && pnpm test:browser",
+      "artifactIds": ["S1-SECURITY", "S1-RUNTIME-SCAN"]
+    },
+    {
+      "id": "S1-AC-006",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test && pnpm test:slice1:api",
+      "artifactIds": ["S1-AI", "S1-APPLICATION"]
+    },
+    {
+      "id": "S1-AC-007",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test && pnpm test:slice1:api",
+      "artifactIds": ["S1-AI", "S1-APPLICATION"]
+    },
+    {
+      "id": "S1-AC-008",
+      "status": "PASS",
+      "command": "pnpm test:slice1:api",
+      "artifactIds": ["S1-APPLICATION", "S1-DATA"]
+    },
+    {
+      "id": "S1-AC-009",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/data test",
+      "artifactIds": ["S1-DATA"]
+    },
+    {
+      "id": "S1-AC-010",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/data test",
+      "artifactIds": ["S1-DATA"]
+    },
+    {
+      "id": "S1-AC-011",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test",
+      "artifactIds": [
+        "S1-AI",
+        "S1-AI-ROUTE-POLICY",
+        "S1-AI-TRANSPORT",
+        "S1-AI-GEMINI-ADAPTER",
+        "S1-AI-OPENROUTER-ADAPTER",
+        "S1-PROVIDER-CONFIG"
+      ]
+    },
+    {
+      "id": "S1-AC-012",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test && pnpm test:browser",
+      "artifactIds": ["S1-AI", "S1-BROWSER"]
+    },
+    {
+      "id": "S1-AC-013",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test && pnpm test:slice1:api",
+      "artifactIds": ["S1-AI", "S1-APPLICATION"]
+    },
+    {
+      "id": "S1-AC-014",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test && pnpm test:slice1:api",
+      "artifactIds": ["S1-AI", "S1-DATA"]
+    },
+    {
+      "id": "S1-AC-015",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test && pnpm test:slice1:api",
+      "artifactIds": [
+        "S1-AI",
+        "S1-AI-TRANSPORT",
+        "S1-AI-COST-RECONCILER",
+        "S1-APPLICATION",
+        "S1-DATA"
+      ]
+    },
+    {
+      "id": "S1-AC-016",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/auth test && pnpm test:slice1:api",
+      "artifactIds": ["S1-AUTH", "S1-APPLICATION", "S1-BROWSER-LIVE"]
+    },
+    {
+      "id": "S1-AC-017",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/data test && pnpm test:slice1:api",
+      "artifactIds": ["S1-DATA", "S1-APPLICATION", "S1-BROWSER-LIVE"]
+    },
+    {
+      "id": "S1-AC-018",
+      "status": "PASS",
+      "command": "pnpm test:browser",
+      "artifactIds": ["S1-BROWSER", "S1-BROWSER-LIVE", "S1-UI", "S1-WORKER"]
+    },
+    {
+      "id": "S1-AC-019",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/web test && pnpm test:browser",
+      "artifactIds": ["S1-BROWSER", "S1-BROWSER-LIVE", "S1-UI"]
+    },
+    {
+      "id": "S1-AC-020",
+      "status": "PASS",
+      "command": "pnpm snapshot:generate && pnpm snapshot:verify-sources",
+      "artifactIds": ["S1-PLAN"]
+    },
+    {
+      "id": "S1-AC-021",
+      "status": "PASS",
+      "command": "pnpm slice1:validate:local && pnpm dependency:audit",
+      "artifactIds": [
+        "S1-CI",
+        "S1-PROTECTED",
+        "S1-HISTORY-SCAN",
+        "S1-LOCAL-VALIDATOR"
+      ]
+    },
+    {
+      "id": "S1-AC-022",
+      "status": "PENDING",
+      "command": "independent same-byte audits, commit/push parity, and exact hosted CI",
+      "artifactIds": ["S1-PLAN"]
+    }
+  ],
+  "defects": { "critical": 0, "major": 0, "minor": 0 },
+  "hostedCi": { "status": "PENDING_SUCCESSOR_RUN" },
+  "role2": { "status": "PENDING" }
+}

@@ -29,6 +29,9 @@ const reviewed = new Set([
   "BlueOak-1.0.0",
   "CC0-1.0",
   "CC-BY-3.0",
+  "CC-BY-4.0",
+  "0BSD",
+  "Apache-2.0 AND LGPL-3.0-or-later",
   "(MIT OR CC0-1.0)",
 ]);
 const observed = Object.keys(inventory);

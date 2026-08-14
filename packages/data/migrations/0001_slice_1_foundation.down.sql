@@ -1,0 +1,50 @@
+ALTER TABLE IF EXISTS transformation_provenance
+  DROP CONSTRAINT IF EXISTS transformation_provenance_capability_attempt_fk;
+ALTER TABLE IF EXISTS sourcing_request
+  DROP CONSTRAINT IF EXISTS sourcing_request_canonicalization_execution_fk;
+
+DROP TABLE IF EXISTS audit_event;
+DROP TABLE IF EXISTS projection_serving;
+DROP TABLE IF EXISTS result_candidate;
+DROP TABLE IF EXISTS run_result;
+DROP TABLE IF EXISTS claim_evidence;
+DROP TABLE IF EXISTS claim;
+DROP TABLE IF EXISTS candidate;
+DROP TABLE IF EXISTS evidence_item;
+DROP TABLE IF EXISTS cost_event;
+DROP TABLE IF EXISTS provider_call;
+DROP TABLE IF EXISTS capability_attempt;
+DROP TABLE IF EXISTS provider_route;
+DROP TABLE IF EXISTS canonicalization_execution_run;
+DROP TABLE IF EXISTS execution_lease;
+DROP TABLE IF EXISTS quota_ledger;
+DROP TABLE IF EXISTS research_run;
+DROP TABLE IF EXISTS idempotency_record;
+DROP TABLE IF EXISTS canonical_contradiction;
+DROP TABLE IF EXISTS constraint_item;
+DROP TABLE IF EXISTS canonical_confirmation;
+DROP TABLE IF EXISTS original_text_digest;
+DROP TABLE IF EXISTS canonical_field_provenance;
+DROP TABLE IF EXISTS request_field;
+DROP TABLE IF EXISTS transformation_provenance;
+DROP TABLE IF EXISTS canonical_language_record;
+DROP TABLE IF EXISTS canonical_request_version;
+DROP TABLE IF EXISTS sourcing_request;
+DROP TABLE IF EXISTS projection_version;
+DROP TABLE IF EXISTS scoring_config_version;
+DROP TABLE IF EXISTS model_policy_version;
+DROP TABLE IF EXISTS prompt_version;
+DROP TABLE IF EXISTS user_session;
+DROP TABLE IF EXISTS oauth_transaction;
+DROP TABLE IF EXISTS admin_role_grant;
+DROP TABLE IF EXISTS entitlement_grant;
+DROP TABLE IF EXISTS app_user;
+DROP TABLE IF EXISTS account;
+
+DROP FUNCTION IF EXISTS matchbase_assert_attempt_ledger_closed();
+DROP FUNCTION IF EXISTS matchbase_assert_decision_claim_has_evidence();
+DROP FUNCTION IF EXISTS matchbase_release_terminal_lease();
+DROP FUNCTION IF EXISTS matchbase_validate_run_submission();
+DROP FUNCTION IF EXISTS matchbase_reject_mutation();
+
+DROP EXTENSION IF EXISTS citext;

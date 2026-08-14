@@ -1,0 +1,33 @@
+{
+  "name": "@matchbase/data",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test ../../test/slice1/data/*.test.mjs",
+    "migrate": "node dist/cli.js up",
+    "migrate:down": "node dist/cli.js down",
+    "seed:local": "node dist/seed-local.js"
+  },
+  "dependencies": {
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/pg": "8.20.0",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=24.14.0"
+  }
+}

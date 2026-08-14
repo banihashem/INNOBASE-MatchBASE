@@ -1,0 +1,32 @@
+{
+  "name": "@matchbase/application",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test ../../test/slice1/application/*.test.mjs",
+    "worker:synthetic": "node dist/synthetic-worker.js"
+  },
+  "dependencies": {
+    "@matchbase/ai-evidence": "workspace:*",
+    "@matchbase/contracts": "workspace:*",
+    "@matchbase/data": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=24.14.0"
+  }
+}

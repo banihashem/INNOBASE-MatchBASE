@@ -1,0 +1,20 @@
+{
+  "projectionVersion": 1,
+  "demo": {
+    "candidateAllow": ["display_name", "country_code", "rationale_short"],
+    "runAllow": [
+      "schema_version",
+      "run_id",
+      "outcome",
+      "scarcity",
+      "candidates",
+      "unmet_mandatory_constraints",
+      "limitations_notice",
+      "projection_version"
+    ],
+    "maxItems": 3,
+    "denyAllOthers": true,
+    "countsAllow": [],
+    "artifactsAllow": []
+  }
+}

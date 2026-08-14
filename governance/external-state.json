@@ -13,6 +13,7 @@
     "lastHostedValidatedJobId": 94765297132,
     "lastHostedValidatedConclusion": "success",
     "currentClosureHostedStatus": "PENDING_SUCCESSOR_RUN",
+    "slice1CandidateStatus": "LOCAL_UNCOMMITTED",
     "evidenceRefs": [
       {
         "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_HOSTED_CI_CORRECTION_VALIDATION_PO_001_SLICE_0.md",
@@ -51,5 +52,7 @@
       }
     ]
   },
-  "deployment": { "status": "NOT_STARTED" }
+  "deployment": {
+    "status": "NOT_STARTED"
+  }
 }

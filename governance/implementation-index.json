@@ -20,7 +20,9 @@
       "standard": 5,
       "consultant": 20
     },
-    "concurrency": { "activeRunCap": 3 },
+    "concurrency": {
+      "activeRunCap": 3
+    },
     "cost": {
       "v1MonetaryHardStop": false,
       "fullAttributionRequiredForRelease": true
@@ -48,6 +50,7 @@
     "gates": "governance/gates.json",
     "slices": "governance/slices.json",
     "externalState": "governance/external-state.json",
-    "traceability": "governance/traceability.json"
+    "traceability": "governance/traceability.json",
+    "slice1LocalValidation": "evidence/slice1/local-validation.json"
   }
 }

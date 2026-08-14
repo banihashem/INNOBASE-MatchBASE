@@ -15,7 +15,21 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18.1-bookworm@sha256:cc9f4143a8d2fa8cf3749d0cb4d26ecf2d53a77a2ac807e9ebd67ae22426221a
+        env:
+          POSTGRES_DB: matchbase_slice1
+          POSTGRES_USER: matchbase_ci
+          POSTGRES_PASSWORD: matchbase_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U matchbase_ci -d matchbase_slice1"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -31,4 +45,10 @@ jobs:
       - run: pnpm test:ci
         env:
           MATCHBASE_EXTERNAL_EVIDENCE_MODE: ANCHOR_ONLY_CI
+          DATABASE_URL: postgresql://matchbase_ci:matchbase_ci@127.0.0.1:5432/matchbase_slice1
+          MATCHBASE_ENVIRONMENT: test
+          MATCHBASE_OIDC_SIMULATOR: "true"
+          MATCHBASE_SYNTHETIC_FIXTURE: "true"
+          MATCHBASE_ORIGIN: http://127.0.0.1:3010
+          MATCHBASE_DIGEST_KEY: ci-synthetic-digest-material-not-a-secret
       - run: pnpm dependency:audit

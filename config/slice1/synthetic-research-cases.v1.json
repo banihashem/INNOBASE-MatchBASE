@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "synthetic-research-cases.v1",
+  "provenance": "synthetic_fixture",
+  "externallyReachable": false,
+  "cases": [
+    { "id": "zero", "eligibleCandidates": 0 },
+    { "id": "one", "eligibleCandidates": 1 },
+    { "id": "two", "eligibleCandidates": 2 },
+    { "id": "three", "eligibleCandidates": 3 },
+    { "id": "many", "eligibleCandidates": 4 }
+  ]
+}

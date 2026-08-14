@@ -28,6 +28,13 @@
       "status": "ACTIVE",
       "summary": "Absolute contained sources, mandatory SHA-256 and observation time, redaction, ignored local snapshot and no mutations.",
       "traceabilityIds": ["TRACE-S1-002"]
+    },
+    {
+      "id": "REQ-S1-003",
+      "title": "Authenticated Demo reference path",
+      "status": "ACTIVE",
+      "summary": "All S1-AC-001 through S1-AC-022 for the local-only, fixture-backed authenticated Demo product path.",
+      "traceabilityIds": ["TRACE-S1-003"]
     }
   ],
   "tests": [
@@ -62,6 +69,169 @@
       "summary": "System Chrome headless validated mobile and desktop overflow plus navigation across all thirteen views; two Playwright tests exited zero.",
       "command": "pnpm test:browser",
       "traceabilityIds": ["TRACE-S1-001"]
+    },
+    {
+      "id": "TEST-S1-LOCAL-ACCEPTANCE",
+      "title": "Slice 1 local acceptance matrix",
+      "status": "ACTIVE",
+      "summary": "S1-AC-001 through S1-AC-021 pass locally; S1-AC-022 remains pending independent audit, remote parity, and hosted evidence.",
+      "command": "pnpm test:ci",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-001",
+      "title": "Reproducible install, migration, build, and startup",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-002",
+      "title": "OIDC fail-closed contract",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-003",
+      "title": "Non-production simulator boundary",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-004",
+      "title": "Stored-grant authorization",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-005",
+      "title": "Original-language non-persistence",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-006",
+      "title": "Canonical-English provenance",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-007",
+      "title": "Canonicalization atomic failure",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-008",
+      "title": "Contradiction and immutable revision",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-009",
+      "title": "Atomic rolling quota",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-010",
+      "title": "Three-slot global lease contention",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-011",
+      "title": "Provider-route fail-closed policy",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-012",
+      "title": "Fixture scarcity and deterministic ranking",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-013",
+      "title": "Strict Demo projection",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-014",
+      "title": "Evidence-link and content-hash integrity",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-015",
+      "title": "Complete cost attribution",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-016",
+      "title": "Uniform authorization refusals",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-017",
+      "title": "Append-only audit and disclosure atomicity",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-018",
+      "title": "Real Chrome reference path",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-019",
+      "title": "Accessibility and keyboard states",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-020",
+      "title": "Governance dashboard reconciliation",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-021",
+      "title": "Repository and protected-boundary gates",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S1-AC-022",
+      "title": "Independent, remote, and hosted closure",
+      "status": "PENDING",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"],
+      "traceabilityIds": ["TRACE-S1-003"]
     }
   ],
   "risks": [
@@ -85,6 +255,13 @@
       "status": "OPEN",
       "summary": "Brand font licensing is unresolved; dashboard uses system fallbacks.",
       "traceabilityIds": ["TRACE-S1-001"]
+    },
+    {
+      "id": "RISK-S1-001",
+      "severity": "major",
+      "status": "OPEN",
+      "summary": "Live OAuth, provider routing, infrastructure, and production readiness are deliberately absent and must remain fail-closed.",
+      "traceabilityIds": ["TRACE-S1-003"]
     }
   ],
   "defects": [
@@ -123,6 +300,15 @@
         "TRACE-S1-001",
         "TRACE-S1-002"
       ]
+    },
+    {
+      "id": "DEPLOY-S1-LOCAL",
+      "target": "local synthetic authenticated Demo reference path",
+      "status": "NOT_APPLICABLE",
+      "reason": "Slice 1 permits only local/hosted synthetic validation and explicitly prohibits deployment mutations.",
+      "artifact": "apps/web/.next/BUILD_ID",
+      "rollback": "Stop only the named local processes, run docker compose down --volumes after exact target verification, and remove only ignored generated outputs; no external state exists to roll back.",
+      "traceabilityIds": ["TRACE-S1-003"]
     }
   ],
   "costs": [
@@ -130,11 +316,23 @@
       "scope": "Slice 0",
       "status": "UNKNOWN",
       "reason": "No deployed MatchBASE workload and no budget visibility."
+    },
+    {
+      "scope": "Slice 1",
+      "status": "ACTIVE",
+      "reason": "Every fixture capability attempt records explicit zero synthetic cost; live/deployed cost remains UNKNOWN and release-blocking."
     }
   ],
   "loops": [
     {
       "id": "PO-001-R3-S0",
+      "status": "IN_PROGRESS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0
+    },
+    {
+      "id": "PO-001-R3-S1",
       "status": "IN_PROGRESS",
       "critical": 0,
       "major": 0,
@@ -186,6 +384,13 @@
       "evidenceRefs": [
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_IMPLEMENTATION_VALIDATION_PO_001_SLICE_0.md"
       ]
+    },
+    {
+      "id": "EVIDENCE-S1-LOCAL",
+      "title": "Slice 1 local full-stack validation",
+      "status": "ACTIVE",
+      "summary": "Current local root gate passes across 119 unit/integration/policy tests and 14 real-browser scenarios; all six required independent reviews pass 0/0/0; exact commit, hosted CI, and Role 2 remain pending.",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"]
     }
   ]
 }

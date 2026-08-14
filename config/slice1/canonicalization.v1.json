@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "canonicalization-config.v1",
+  "canonicalLanguage": "en",
+  "internalBudgetMs": 20000,
+  "persistOriginalSourceText": false,
+  "digestAlgorithm": "HMAC-SHA-256",
+  "protectedSpanCategories": [
+    "identifier",
+    "model",
+    "quantity_unit",
+    "code_enum"
+  ],
+  "fixtureOnly": true
+}

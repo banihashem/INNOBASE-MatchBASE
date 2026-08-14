@@ -118,6 +118,23 @@ validateProviderRoutes(providerPolicy);
 const registers = JSON.parse(
   readFileSync(resolve("governance/registers.json"), "utf8"),
 );
+const slice1Evidence = JSON.parse(
+  readFileSync(resolve("evidence/slice1/local-validation.json"), "utf8"),
+);
+const slice1Tests = new Map(
+  registers.tests
+    .filter((test) => /^S1-AC-\d{3}$/u.test(test.id))
+    .map((test) => [test.id, test]),
+);
+if (slice1Tests.size !== 22)
+  throw new Error("Governance must expose all 22 Slice 1 criteria.");
+for (const acceptance of slice1Evidence.acceptance ?? []) {
+  const test = slice1Tests.get(acceptance.id);
+  if (!test || test.status !== acceptance.status)
+    throw new Error(`${acceptance.id} governance status is not reconciled.`);
+  if (!test.evidenceRefs?.includes("evidence/slice1/local-validation.json"))
+    throw new Error(`${acceptance.id} lacks exact local evidence linkage.`);
+}
 const backlog = JSON.parse(
   readFileSync(resolve("governance/backlog.json"), "utf8"),
 ).items;

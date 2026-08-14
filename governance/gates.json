@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-14T16:22:15+04:00",
+  "updatedAt": "2026-08-14T22:12:00+04:00",
   "gates": [
     {
       "id": "AG0",
@@ -68,6 +68,33 @@
         "complete inventory unavailable",
         "IaC absent"
       ]
+    },
+    {
+      "id": "AG4",
+      "name": "Slice 1 local acceptance",
+      "status": "PASS",
+      "owner": "Role 3",
+      "evidence": ["evidence/slice1/local-validation.json"],
+      "summary": "The exact local acceptance runner and S1-AC-001 through S1-AC-021 pass; S1-AC-022 remains pending commit, remote parity, hosted CI, and Role 2.",
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "AG5",
+      "name": "Slice 1 independent audits",
+      "status": "PASS",
+      "owner": "Independent discipline auditors",
+      "evidence": ["evidence/slice1/local-validation.json"],
+      "summary": "Security/privacy, QA/accessibility, SRE/cost, AI/evidence, repository/release, and integration-critic reviews pass on the same current bytes with zero critical, major, or minor defects.",
+      "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "AG6",
+      "name": "Slice 1 hosted closure",
+      "status": "ACTIVE",
+      "owner": "Repository safety",
+      "evidence": ["evidence/slice1/local-validation.json"],
+      "summary": "The current Slice 1 candidate is not committed or pushed; exact hosted CI is PENDING_SUCCESSOR_RUN.",
+      "traceabilityIds": ["TRACE-S1-003"]
     }
   ]
 }

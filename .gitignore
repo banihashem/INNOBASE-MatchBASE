@@ -2,6 +2,8 @@ node_modules/
 playwright-report/
 test-results/
 dist/
+.next/
+.turbo/
 coverage/
 *.tsbuildinfo
 .env

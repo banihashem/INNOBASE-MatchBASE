@@ -17,7 +17,7 @@
           "outputHashes": [
             {
               "path": "governance/traceability.json",
-              "sha256": "952EDE1194A2EB102BEBAA75AC41A72EB2F68456B26C986153897499FEC9F202"
+              "sha256": "95DC5D7764CD65DC0E1992D609485F7628DA494AE480538FAC765386BA63CC5F"
             }
           ]
         }
@@ -263,7 +263,7 @@
           "outputHashes": [
             {
               "path": "governance/provider-routes.json",
-              "sha256": "7B01BB94128011F20304A8CEE7051EA240A835B376E58D4FF25EDF7C223014F9"
+              "sha256": "837D5F6D99B61E36943B2E71E520DF3917FFEB02A67F5EC6E37F0B4678391811"
             }
           ]
         }
@@ -401,7 +401,7 @@
           "outputHashes": [
             {
               "path": "docs/LOCAL_OPERATIONS_RUNBOOK.md",
-              "sha256": "8A6C87E55720D7E6A3FE3015A2BCCDE792C7B71E1F8FC52084590E036812DEBA"
+              "sha256": "D6FCC06F422BAA299D3D728603540321397BB46E68751FB2EB4F34D7D3E01DD9"
             }
           ]
         }
@@ -475,6 +475,315 @@
         "auditorRole": "Role 2 independent auditor",
         "disposition": "PENDING",
         "evidenceRefs": []
+      }
+    },
+    {
+      "id": "AGENT-S1-ORCHESTRATOR",
+      "role": "Slice 1 executor/orchestrator",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "IN_PROGRESS",
+      "scope": "Slice 1 integration, governance synchronization, correction loops, release evidence",
+      "independent": false,
+      "allowedTargets": ["evidence/slice1/**"],
+      "deliverables": [
+        {
+          "target": "evidence/slice1/local-validation.json",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "evidence/slice1/local-validation.json",
+              "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "S1-ROOT-LOCAL",
+          "status": "PASS",
+          "commandOrMethod": "pnpm test:ci against disposable PostgreSQL 18.1",
+          "evidenceRefs": [
+            {
+              "path": "evidence/slice1/local-validation.json",
+              "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC"
+            }
+          ]
+        }
+      ],
+      "dependencies": ["independent audits", "hosted CI", "Role 2"],
+      "independentAudit": {
+        "auditorRole": "Slice 1 independent integration critic",
+        "disposition": "PASS",
+        "evidenceRefs": [
+          {
+            "path": "evidence/slice1/local-validation.json",
+            "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AGENT-S1-PRODUCT-UX",
+      "role": "Slice 1 product UX and accessibility",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "COMPLETED",
+      "scope": "responsive authenticated Demo UI and browser-accessibility path",
+      "independent": false,
+      "allowedTargets": ["apps/web/**"],
+      "deliverables": [
+        {
+          "target": "apps/web/components/ProductFlow.tsx",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "apps/web/components/ProductFlow.tsx",
+              "sha256": "EC5BECABCE8B58E053199E002E18F04227848925652AC1EDD303E5FEABC61ACE"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "S1-PUX-LOCAL",
+          "status": "PASS",
+          "commandOrMethod": "pnpm --filter @matchbase/web test && pnpm test:browser",
+          "evidenceRefs": [
+            {
+              "path": "evidence/slice1/local-validation.json",
+              "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC"
+            }
+          ]
+        }
+      ],
+      "dependencies": ["application dispatcher", "fixture path"],
+      "independentAudit": {
+        "auditorRole": "Slice 1 independent QA auditor",
+        "disposition": "PASS",
+        "evidenceRefs": [
+          {
+            "path": "evidence/slice1/local-validation.json",
+            "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AGENT-S1-APP-DATA",
+      "role": "Slice 1 application data and concurrency",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "COMPLETED",
+      "scope": "PostgreSQL schema, quota, leases, audit, application orchestration and API",
+      "independent": false,
+      "allowedTargets": ["packages/data/**", "packages/application/**"],
+      "deliverables": [
+        {
+          "target": "packages/data/migrations/0001_slice_1_foundation.up.sql",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "packages/data/migrations/0001_slice_1_foundation.up.sql",
+              "sha256": "E47E3E706EA00ABF57EED0A7AD21ADFB9ED8CD46266208015E9476B0B3EA048D"
+            }
+          ]
+        },
+        {
+          "target": "packages/application/src/service.ts",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "packages/application/src/service.ts",
+              "sha256": "1C59CFDCC92581FEAE18E71299D38C22C1FA83CF95D95720ED1B05C7275A45BB"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "S1-DATA-API-LOCAL",
+          "status": "PASS",
+          "commandOrMethod": "real PostgreSQL 18.1 data 10/10 and API 4/4 tests",
+          "evidenceRefs": [
+            {
+              "path": "evidence/slice1/local-validation.json",
+              "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC"
+            }
+          ]
+        }
+      ],
+      "dependencies": ["disposable PostgreSQL 18.1"],
+      "independentAudit": {
+        "auditorRole": "Slice 1 independent security auditor",
+        "disposition": "PASS",
+        "evidenceRefs": [
+          {
+            "path": "evidence/slice1/local-validation.json",
+            "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AGENT-S1-AI-EVIDENCE",
+      "role": "Slice 1 AI evidence and provider routing",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "COMPLETED",
+      "scope": "provider-neutral contracts, synthetic fixtures, evidence graph, projection and cost",
+      "independent": false,
+      "allowedTargets": ["packages/ai-evidence/**", "config/slice1/**"],
+      "deliverables": [
+        {
+          "target": "packages/ai-evidence/src/index.ts",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "packages/ai-evidence/src/index.ts",
+              "sha256": "2EFDD7FA16B03BC6CD775D9463F7694490014EF54BDF4B31563E2315A82F5D14"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "S1-AI-LOCAL",
+          "status": "PASS",
+          "commandOrMethod": "pnpm --filter @matchbase/ai-evidence test",
+          "evidenceRefs": [
+            {
+              "path": "evidence/slice1/local-validation.json",
+              "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC"
+            }
+          ]
+        }
+      ],
+      "dependencies": ["closed capability registry", "fixture-only execution"],
+      "independentAudit": {
+        "auditorRole": "Slice 1 independent AI/evidence auditor",
+        "disposition": "PASS",
+        "evidenceRefs": [
+          {
+            "path": "evidence/slice1/local-validation.json",
+            "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AGENT-S1-SECURITY-PRIVACY",
+      "role": "Slice 1 authentication security and privacy",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "COMPLETED",
+      "scope": "OIDC/session/CSRF/authorization and original-text non-persistence",
+      "independent": false,
+      "allowedTargets": ["packages/auth/**", "packages/security/**"],
+      "deliverables": [
+        {
+          "target": "packages/auth/src/index.ts",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "packages/auth/src/index.ts",
+              "sha256": "F49A6780B41D9FD781B553FF315FE6BD48B0D8890D70A8E058FD0795097BD822"
+            }
+          ]
+        },
+        {
+          "target": "packages/security/src/index.ts",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "packages/security/src/index.ts",
+              "sha256": "EA4B0D062C4DFA5B44F81ED0F93BF80409116A3B2C96E91F26B9254E41F0423B"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "S1-SECURITY-LOCAL",
+          "status": "PASS",
+          "commandOrMethod": "auth 8/8 and security/privacy 4/4 including real PostgreSQL canary scans",
+          "evidenceRefs": [
+            {
+              "path": "evidence/slice1/local-validation.json",
+              "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC"
+            }
+          ]
+        }
+      ],
+      "dependencies": ["stored grants", "disposable PostgreSQL 18.1"],
+      "independentAudit": {
+        "auditorRole": "Slice 1 independent security auditor",
+        "disposition": "PASS",
+        "evidenceRefs": [
+          {
+            "path": "evidence/slice1/local-validation.json",
+            "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AGENT-S1-SRE-RELEASE",
+      "role": "Slice 1 SRE cost and release safety",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "IN_PROGRESS",
+      "scope": "local operations, PostgreSQL CI, cost evidence, dependency/license and hosted release gates",
+      "independent": false,
+      "allowedTargets": [
+        "docs/LOCAL_OPERATIONS_RUNBOOK.md",
+        ".github/workflows/ci.yml"
+      ],
+      "deliverables": [
+        {
+          "target": "docs/LOCAL_OPERATIONS_RUNBOOK.md",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "docs/LOCAL_OPERATIONS_RUNBOOK.md",
+              "sha256": "D6FCC06F422BAA299D3D728603540321397BB46E68751FB2EB4F34D7D3E01DD9"
+            }
+          ]
+        },
+        {
+          "target": ".github/workflows/ci.yml",
+          "status": "IN_PROGRESS",
+          "outputHashes": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "sha256": "9DFB7C0C6C8CFEC4C3BA80AE66E4C5F5F0894929CAF89A837EAFB6AB4CC02E07"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "S1-SRE-LOCAL",
+          "status": "PASS",
+          "commandOrMethod": "pnpm test:ci and pnpm dependency:audit locally; hosted successor pending",
+          "evidenceRefs": [
+            {
+              "path": "evidence/slice1/local-validation.json",
+              "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC"
+            }
+          ]
+        }
+      ],
+      "dependencies": ["independent release audit", "exact hosted CI"],
+      "independentAudit": {
+        "auditorRole": "Slice 1 independent SRE/release auditor",
+        "disposition": "PASS",
+        "evidenceRefs": [
+          {
+            "path": "evidence/slice1/local-validation.json",
+            "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC"
+          }
+        ]
       }
     }
   ]

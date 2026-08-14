@@ -1,12 +1,32 @@
 {
   "schemaVersion": 1,
-  "builds": [],
-  "artifacts": [],
+  "builds": [
+    {
+      "id": "BUILD-SLICE-1-LOCAL",
+      "status": "ACTIVE",
+      "summary": "All nine workspace projects and the Next.js 16.3.0 standalone product application build locally; hosted successor is pending.",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "ARTIFACT-SLICE-1-LOCAL-VALIDATION",
+      "status": "ACTIVE",
+      "path": "evidence/slice1/local-validation.json",
+      "sha256": "399E30546DFA7C134C51CE434BA17D4C10EBE1FE4C886A7D03D18040AD920FAC",
+      "evidenceRefs": ["evidence/slice1/local-validation.json"]
+    }
+  ],
   "sboms": [
     {
       "id": "SBOM-SLICE-0",
       "status": "NOT_GENERATED",
       "reason": "Slice 0 has no deployable release artifact; pinned reproducible SBOM generation remains a later release gate."
+    },
+    {
+      "id": "SBOM-SLICE-1",
+      "status": "NOT_GENERATED",
+      "reason": "Slice 1 is a private local reference path, not a deployable release; dependency and license gates are exact and a release SBOM remains a later release gate."
     }
   ],
   "provenance": [
@@ -15,6 +35,12 @@
       "status": "PUSHED_PRIVATE",
       "source": "https://github.com/banihashem/INNOBASE-MatchBASE/commit/518ff98aa4c4b719460bca020894782fc660ce21",
       "note": "Initial main commit was verified through Git, git ls-remote and the GitHub connector; hosted CI result remains UNKNOWN."
+    },
+    {
+      "id": "PROV-SLICE-1-LOCAL",
+      "status": "IN_PROGRESS",
+      "source": "local uncommitted Slice 1 candidate derived from cb9ecc2f12c3a4e1cb6bec801c57b88c595c5285",
+      "note": "Local gates pass; commit, push, exact hosted run, and independent final audit remain pending."
     }
   ],
   "deployments": []

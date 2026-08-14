@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "provider-registry.v1",
+  "registryVersion": "slice1-fixture.v1",
+  "environment": "test",
+  "realData": false,
+  "routes": [
+    {
+      "routeId": "RT-SYNTHETIC-FIXTURE-V1",
+      "providerId": "synthetic_fixture",
+      "modelId": "deterministic-fixture-v1",
+      "enabled": true,
+      "environment": "test",
+      "realData": false,
+      "billingPath": "not_applicable",
+      "retentionPosture": "not_applicable",
+      "dataHandlingEvidenceRefs": ["matchbase://slice1/synthetic-fixture"],
+      "timeoutMs": 20000,
+      "retry": { "maxAttempts": 1, "backoffMs": 0 },
+      "requireParameters": true,
+      "allowFallbacks": false,
+      "capabilities": [
+        "CAP-LANGUAGE-ID",
+        "CAP-TRANSLATE",
+        "CAP-SEARCH",
+        "CAP-STRUCTURED-GENERATION"
+      ]
+    },
+    {
+      "routeId": "RT-GEMINI-DIRECT-CONTRACT-V1",
+      "providerId": "gemini_direct",
+      "modelId": "gemini-contract-fixture-v1",
+      "enabled": false,
+      "environment": "test",
+      "realData": false,
+      "billingPath": "not_applicable",
+      "retentionPosture": "unknown",
+      "dataHandlingEvidenceRefs": [],
+      "timeoutMs": 20000,
+      "retry": { "maxAttempts": 2, "backoffMs": 250 },
+      "requireParameters": true,
+      "allowFallbacks": false,
+      "capabilities": ["CAP-TRANSLATE", "CAP-STRUCTURED-GENERATION"]
+    },
+    {
+      "routeId": "RT-OPENROUTER-CONTRACT-V1",
+      "providerId": "openrouter",
+      "modelId": "openrouter-contract-fixture-v1",
+      "enabled": false,
+      "environment": "test",
+      "realData": false,
+      "billingPath": "not_applicable",
+      "retentionPosture": "unknown",
+      "dataHandlingEvidenceRefs": [],
+      "timeoutMs": 20000,
+      "retry": { "maxAttempts": 2, "backoffMs": 250 },
+      "requireParameters": true,
+      "allowFallbacks": false,
+      "capabilities": ["CAP-TRANSLATE", "CAP-STRUCTURED-GENERATION"]
+    }
+  ]
+}

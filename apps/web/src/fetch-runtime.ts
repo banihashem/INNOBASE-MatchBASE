@@ -3,9 +3,9 @@ import {
   API_MINOR_VERSION,
   ApplicationFault,
   MatchBaseApplication,
+  assertSlice1EndpointAuthorized,
   type CanonicalRevisionInput,
   type IntakeInput,
-  type PersistedTier,
   type RequestContext,
 } from "@matchbase/application";
 import {
@@ -25,6 +25,7 @@ import {
   appendAuditEvent,
   createPool,
   inTransaction,
+  resolveStoredAuthorization,
   type ConnectionPool,
   type TransactionClient,
 } from "@matchbase/data";
@@ -446,15 +447,10 @@ async function sessionFor(
       );
       const row = found.rows[0];
       if (!row) return { kind: "anonymous" };
-      const grant = await client.query<{ tier: PersistedTier }>(
-        `SELECT tier FROM entitlement_grant
-          WHERE account_id = $1 AND user_id = $2 AND effective_from <= clock_timestamp()
-            AND (effective_to IS NULL OR effective_to > clock_timestamp()) AND revoked_at IS NULL
-          ORDER BY effective_from DESC, created_at DESC LIMIT 1`,
-        [row.account_id, row.user_id],
-      );
-      const tier = grant.rows[0]?.tier;
-      if (!row.session_active || !tier) {
+      const authorization = row.session_active
+        ? await resolveStoredAuthorization(client, row.account_id, row.user_id)
+        : null;
+      if (!row.session_active || !authorization) {
         const fault = !row.session_active
           ? new ApplicationFault(
               401,
@@ -471,7 +467,7 @@ async function sessionFor(
         await appendAuditEvent(client, {
           accountId: row.account_id,
           actorUserId: row.user_id,
-          ...(tier ? { actorTier: tier } : {}),
+          ...(authorization ? { actorTier: authorization.tier } : {}),
           eventType: "access.denied",
           resourceKind: "api_route",
           outcome: "deny",
@@ -486,12 +482,6 @@ async function sessionFor(
         });
         return { kind: "denied", fault };
       }
-      const roles = await client.query<{ sub_role: string }>(
-        `SELECT sub_role FROM admin_role_grant
-          WHERE account_id = $1 AND user_id = $2 AND effective_from <= clock_timestamp()
-            AND (effective_to IS NULL OR effective_to > clock_timestamp()) AND revoked_at IS NULL`,
-        [row.account_id, row.user_id],
-      );
       await client.query(
         "UPDATE user_session SET last_used_at = clock_timestamp() WHERE session_id = $1",
         [row.session_id],
@@ -504,8 +494,8 @@ async function sessionFor(
           requestContext: {
             accountId: row.account_id,
             userId: row.user_id,
-            tier,
-            adminSubRoles: roles.rows.map((role) => role.sub_role),
+            tier: authorization.tier,
+            adminSubRoles: authorization.adminSubRoles,
             correlationId,
             deploymentId: current.config.deploymentId,
           },
@@ -1011,6 +1001,7 @@ export async function handleRoute(request: Request): Promise<Response> {
       return new Response(null, { status: 204, headers: logoutHeaders });
     }
     if (request.method === "GET" && path === "/api/v1/me") {
+      assertSlice1EndpointAuthorized(session.requestContext, "GET /api/v1/me");
       const csrfToken = cookie(request, csrfCookieName(current.config));
       if (!csrfToken || sha256Base64Url(csrfToken) !== session.csrfHash) {
         throw new ApplicationFault(
@@ -1034,6 +1025,10 @@ export async function handleRoute(request: Request): Promise<Response> {
       return json(current.config, correlationId, body);
     }
     if (request.method === "POST" && path === "/api/v1/requests") {
+      assertSlice1EndpointAuthorized(
+        session.requestContext,
+        "POST /api/v1/requests",
+      );
       const input = await requestBody(request);
       assertClosedDto(
         input,
@@ -1101,6 +1096,10 @@ export async function handleRoute(request: Request): Promise<Response> {
     }
     const requestMatch = /^\/api\/v1\/requests\/([^/]+)$/u.exec(path);
     if (request.method === "GET" && requestMatch) {
+      assertSlice1EndpointAuthorized(
+        session.requestContext,
+        "GET /api/v1/requests/:requestId",
+      );
       const requestId = visibleUuid(requestMatch[1]!);
       const body = await current.application.getRequest(
         session.requestContext,
@@ -1116,6 +1115,10 @@ export async function handleRoute(request: Request): Promise<Response> {
     }
     const versionMatch = /^\/api\/v1\/requests\/([^/]+)\/versions$/u.exec(path);
     if (request.method === "POST" && versionMatch) {
+      assertSlice1EndpointAuthorized(
+        session.requestContext,
+        "POST /api/v1/requests/:requestId/versions",
+      );
       const requestId = visibleUuid(versionMatch[1]!);
       await current.application.assertRequestVisible(
         session.requestContext,
@@ -1157,6 +1160,10 @@ export async function handleRoute(request: Request): Promise<Response> {
         path,
       );
     if (request.method === "POST" && confirmationMatch) {
+      assertSlice1EndpointAuthorized(
+        session.requestContext,
+        "POST /api/v1/requests/:requestId/versions/:version/confirmation",
+      );
       const requestId = visibleUuid(confirmationMatch[1]!);
       await current.application.assertRequestVisible(
         session.requestContext,
@@ -1178,6 +1185,10 @@ export async function handleRoute(request: Request): Promise<Response> {
       );
     }
     if (request.method === "POST" && path === "/api/v1/runs") {
+      assertSlice1EndpointAuthorized(
+        session.requestContext,
+        "POST /api/v1/runs",
+      );
       const input = await requestBody(request);
       assertClosedDto(
         input,
@@ -1217,6 +1228,10 @@ export async function handleRoute(request: Request): Promise<Response> {
       );
     }
     if (request.method === "GET" && path === "/api/v1/runs") {
+      assertSlice1EndpointAuthorized(
+        session.requestContext,
+        "GET /api/v1/runs",
+      );
       const body = await current.application.listRuns(
         session.requestContext,
         url.searchParams.get("cursor") ?? undefined,
@@ -1230,6 +1245,10 @@ export async function handleRoute(request: Request): Promise<Response> {
     }
     const resultMatch = /^\/api\/v1\/runs\/([^/]+)\/result$/u.exec(path);
     if (request.method === "GET" && resultMatch) {
+      assertSlice1EndpointAuthorized(
+        session.requestContext,
+        "GET /api/v1/runs/:runId/result",
+      );
       const disclosure = await current.application.getRunResult(
         session.requestContext,
         visibleUuid(resultMatch[1]!),
@@ -1240,6 +1259,10 @@ export async function handleRoute(request: Request): Promise<Response> {
       path,
     );
     if (request.method === "POST" && cancellationMatch) {
+      assertSlice1EndpointAuthorized(
+        session.requestContext,
+        "POST /api/v1/runs/:runId/cancellation",
+      );
       return json(
         current.config,
         correlationId,
@@ -1252,6 +1275,10 @@ export async function handleRoute(request: Request): Promise<Response> {
     }
     const runMatch = /^\/api\/v1\/runs\/([^/]+)$/u.exec(path);
     if (request.method === "GET" && runMatch) {
+      assertSlice1EndpointAuthorized(
+        session.requestContext,
+        "GET /api/v1/runs/:runId",
+      );
       const runId = visibleUuid(runMatch[1]!);
       const status = await current.application.getRunStatus(
         session.requestContext,

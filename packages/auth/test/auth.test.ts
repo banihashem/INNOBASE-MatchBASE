@@ -2,6 +2,8 @@ import { generateKeyPairSync } from "node:crypto";
 import { exportJWK, SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 import {
+  ADMIN_SUB_ROLES,
+  PERSISTED_TIERS,
   assertRuntimeIdentityPolicy,
   assertSession,
   assertUnsafeRequest,
@@ -312,36 +314,46 @@ describe("sessions, unsafe requests, and stored grants", () => {
       {
         accountId: "account-a",
         userId: "user-a",
-        tier: "DEMO",
-        adminRole: "NONE",
+        tier: "demo",
+        adminSubRoles: [],
         active: true,
       },
     ] as const;
     expect(resolveAuthorization(stored, "account-a", "user-a")).toMatchObject({
-      tier: "DEMO",
-      adminRole: "NONE",
+      tier: "demo",
+      adminSubRoles: [],
     });
     expect(() => resolveAuthorization(stored, "account-b", "user-a")).toThrow(
       /refused/,
     );
   });
 
-  it("resolves every stored tier and admin sub-role without client input", () => {
-    const tiers = ["DEMO", "STANDARD", "CONSULTANT"] as const;
-    const roles = ["NONE", "SUPPORT", "AUDITOR", "OPERATOR"] as const;
-    for (const tier of tiers) {
-      for (const adminRole of roles) {
-        const grant = {
-          accountId: `account-${tier}`,
-          userId: `user-${adminRole}`,
-          tier,
-          adminRole,
-          active: true,
-        } as const;
-        expect(
-          resolveAuthorization([grant], grant.accountId, grant.userId),
-        ).toEqual(grant);
-      }
+  it("resolves all four stored tiers and exactly six Admin sub-roles without client authority", () => {
+    expect(PERSISTED_TIERS).toEqual([
+      "demo",
+      "standard",
+      "consultant",
+      "admin",
+    ]);
+    expect(ADMIN_SUB_ROLES).toEqual([
+      "support",
+      "analyst",
+      "consultant_manager",
+      "product",
+      "security_audit",
+      "super_admin",
+    ]);
+    for (const tier of PERSISTED_TIERS) {
+      const grant = {
+        accountId: `account-${tier}`,
+        userId: `user-${tier}`,
+        tier,
+        adminSubRoles: tier === "admin" ? ADMIN_SUB_ROLES : [],
+        active: true,
+      } as const;
+      expect(
+        resolveAuthorization([grant], grant.accountId, grant.userId),
+      ).toEqual(grant);
     }
   });
 });

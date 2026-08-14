@@ -13,7 +13,7 @@
     "check": "pnpm run format:check && pnpm run lint && pnpm run governance:check && pnpm run slice1:evidence:check && pnpm run snapshot:check && pnpm run boundary:check && pnpm run protected:check && pnpm run secrets:scan && pnpm run secrets:scan:independent && pnpm run secrets:scan:history && pnpm run dependency:check && pnpm run license:check && pnpm -r --if-present check",
     "test": "pnpm -r --workspace-concurrency=1 --if-present test && pnpm run test:slice1:api && node --test test/*.test.mjs",
     "test:slice1:api": "pnpm --filter @matchbase/application build && pnpm --filter @matchbase/security build && node --test test/slice1/api/*.test.mjs",
-    "test:ci": "pnpm run build && pnpm run check && pnpm run test && pnpm run test:standalone:repeat && pnpm run test:browser",
+    "test:ci": "pnpm run snapshot:prepare && pnpm run build && pnpm run check && pnpm run test && pnpm run test:standalone:repeat && pnpm run test:browser",
     "slice1:validate:local": "node scripts/validate-slice1-local.mjs",
     "governance:check": "node scripts/validate-governance.mjs",
     "slice1:evidence:check": "node scripts/validate-slice1-evidence.mjs",
@@ -29,9 +29,10 @@
     "test:browser": "pnpm --filter @matchbase/security build && playwright test && node scripts/scan-slice1-runtime-artifacts.mjs",
     "test:standalone:cold": "pnpm --filter @matchbase/web test:standalone",
     "test:standalone:repeat": "pnpm --filter @matchbase/web test:standalone:repeat",
-    "snapshot:check": "node scripts/validate-dashboard-snapshot.mjs",
+    "snapshot:prepare": "pnpm --filter @matchbase/artifact-indexer build && node scripts/prepare-dashboard-snapshot.mjs",
+    "snapshot:check": "node scripts/validate-dashboard-snapshot.mjs --actual",
     "snapshot:generate": "pnpm --filter @matchbase/artifact-indexer build && node scripts/generate-dashboard-snapshot.mjs",
-    "snapshot:verify-sources": "node scripts/validate-dashboard-snapshot.mjs --require-sources",
+    "snapshot:verify-sources": "node scripts/validate-dashboard-snapshot.mjs --actual --require-sources",
     "format:check": "prettier --check ."
   },
   "devDependencies": {

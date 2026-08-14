@@ -7,6 +7,9 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./test/setup.ts"],
-    include: ["components/**/*.test.tsx"],
+    include: [
+      "components/**/*.test.tsx",
+      "src/authorization-matrix.postgres.test.ts",
+    ],
   },
 });

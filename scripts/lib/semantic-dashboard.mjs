@@ -147,6 +147,7 @@ function evidenceState(value) {
       "NOT_APPLICABLE",
       "PUSHED_PRIVATE",
       "OPEN",
+      "CORRECTED_PENDING_ROLE2",
     ].includes(normalized)
   )
     return "ACTIVE";
@@ -196,6 +197,9 @@ function record(item, sourceRef, index, prefix, catalog) {
     facts: {
       ...(typeof item.status === "string"
         ? { lifecycleStatus: item.status }
+        : {}),
+      ...(typeof item.disposition === "string"
+        ? { disposition: item.disposition }
         : {}),
       ...Object.fromEntries(
         Object.entries(item)
@@ -298,6 +302,55 @@ export function buildSemanticViews(documents) {
   const registers = documents.registers.value;
   const artifactIndex = documents.artifactIndex.value;
   const external = documents.externalState.value;
+  const closure = documents.externalClosure?.value;
+  const closureEvidence = closure
+    ? [
+        {
+          path: documents.externalClosure.sourceRef.path,
+          sha256: documents.externalClosure.sourceRef.sha256,
+        },
+        {
+          path: closure.role2.auditPath,
+          sha256: closure.role2.auditSha256,
+        },
+      ]
+    : [];
+  const closureGate = (item) =>
+    closure
+      ? {
+          id: item.id,
+          name: item.name,
+          status: "ACTIVE",
+          owner: "Repository safety",
+          summary: `HOSTED_VERIFIED for ${closure.commit} at run ${closure.runId}, job ${closure.jobId}; Role 2 remains PENDING_ROLE2.`,
+          closureStatus: closure.closureStatus,
+          role2Status: closure.role2Status,
+          repository: closure.repository,
+          commit: closure.commit,
+          tree: closure.tree,
+          runId: closure.runId,
+          jobId: closure.jobId,
+          conclusion: closure.conclusion,
+          evidenceRefs: closureEvidence,
+        }
+      : null;
+  const closureTest = closure
+    ? {
+        id: "S1-AC-022",
+        title: "Independent, remote, and hosted closure",
+        status: "ACTIVE",
+        summary: `${closure.closureStatus}; exact remote and hosted evidence verified; ${closure.role2Status}.`,
+        closureStatus: closure.closureStatus,
+        role2Status: closure.role2Status,
+        repository: closure.repository,
+        commit: closure.commit,
+        tree: closure.tree,
+        runId: closure.runId,
+        jobId: closure.jobId,
+        conclusion: closure.conclusion,
+        evidenceRefs: closureEvidence,
+      }
+    : null;
   const externalRecords = [
     {
       id: "EXT-GITHUB",
@@ -306,6 +359,26 @@ export function buildSemanticViews(documents) {
       summary: `${external.github.visibility} repository ${external.github.repository}; ${external.github.refs} refs at observation time.`,
       evidenceRefs: external.github.evidenceRefs,
     },
+    ...(closure
+      ? [
+          {
+            id: "EXT-GITHUB-CLOSURE",
+            title: "GitHub hosted Slice 1 closure",
+            status: "ACTIVE",
+            summary: `${closure.repository} commit ${closure.commit}; run ${closure.runId}; job ${closure.jobId}; ${closure.closureStatus}; ${closure.role2Status}.`,
+            repository: closure.repository,
+            commit: closure.commit,
+            tree: closure.tree,
+            runId: closure.runId,
+            jobId: closure.jobId,
+            conclusion: closure.conclusion,
+            closureStatus: closure.closureStatus,
+            role2Status: closure.role2Status,
+            predecessorFailures: closure.predecessorFailures.length,
+            evidenceRefs: closureEvidence,
+          },
+        ]
+      : []),
     {
       id: "EXT-GCP",
       title: "Google Cloud readiness",
@@ -334,7 +407,15 @@ export function buildSemanticViews(documents) {
       record(item, documents.slices.sourceRef, index, "SLICE", catalog),
     ),
     gates: (documents.gates.value.gates ?? []).map((item, index) =>
-      record(item, documents.gates.sourceRef, index, "GATE", catalog),
+      record(
+        ["AG1", "AG6"].includes(item.id) && closure ? closureGate(item) : item,
+        ["AG1", "AG6"].includes(item.id) && closure
+          ? documents.externalClosure.sourceRef
+          : documents.gates.sourceRef,
+        index,
+        "GATE",
+        catalog,
+      ),
     ),
     backlog: (documents.backlog.value.items ?? []).map((item, index) =>
       record(item, documents.backlog.sourceRef, index, "WORK", catalog),
@@ -351,13 +432,38 @@ export function buildSemanticViews(documents) {
     ],
     tests: [
       ...(registers.tests ?? []).map((item, index) =>
-        record(item, documents.registers.sourceRef, index, "TEST", catalog),
+        record(
+          item.id === "S1-AC-022" && closureTest ? closureTest : item,
+          item.id === "S1-AC-022" && closureTest
+            ? documents.externalClosure.sourceRef
+            : documents.registers.sourceRef,
+          index,
+          "TEST",
+          catalog,
+        ),
       ),
       ...(documents.artifactRecordsByView.tests ?? []),
     ],
-    defects: (registers.defects ?? []).map((item, index) =>
-      record(item, documents.registers.sourceRef, index, "DEFECT", catalog),
-    ),
+    defects: [
+      ...(registers.defects ?? []).map((item, index) =>
+        record(item, documents.registers.sourceRef, index, "DEFECT", catalog),
+      ),
+      ...(closure?.role2.defects ?? []).map((item, index) =>
+        record(
+          {
+            ...item,
+            summary: `${item.title}; Role 2 Loop 1 status ${item.status}.`,
+            role2AuditStatus: closure.role2.status,
+            role2Disposition: closure.role2.disposition,
+            evidenceRefs: closureEvidence,
+          },
+          documents.externalClosure.sourceRef,
+          index,
+          "S1-L1-DEFECT",
+          catalog,
+        ),
+      ),
+    ],
     deployments: [
       ...(registers.deployments ?? []).map((item, index) =>
         record(item, documents.registers.sourceRef, index, "DEPLOY", catalog),
@@ -379,9 +485,32 @@ export function buildSemanticViews(documents) {
     agents: (documents.agents.value.agents ?? []).map((item, index) =>
       record(item, documents.agents.sourceRef, index, "AGENT", catalog),
     ),
-    loops: (registers.loops ?? []).map((item, index) =>
-      record(item, documents.registers.sourceRef, index, "LOOP", catalog),
-    ),
+    loops: [
+      ...(registers.loops ?? []).map((item, index) =>
+        record(item, documents.registers.sourceRef, index, "LOOP", catalog),
+      ),
+      ...(closure
+        ? [
+            record(
+              {
+                id: "PO-001-R2-S1-L1",
+                title: "Role 2 Slice 1 correction audit Loop 1",
+                status: closure.role2.status,
+                summary: `Role 2 FAIL with ${closure.role2.critical} critical, ${closure.role2.major} major, and ${closure.role2.minor} minor defects; correction re-audit pending.`,
+                critical: closure.role2.critical,
+                major: closure.role2.major,
+                minor: closure.role2.minor,
+                disposition: closure.role2.disposition,
+                evidenceRefs: closureEvidence,
+              },
+              documents.externalClosure.sourceRef,
+              0,
+              "ROLE2-LOOP",
+              catalog,
+            ),
+          ]
+        : []),
+    ],
     evidence: [
       ...(registers.evidence ?? []).map((item, index) =>
         record(item, documents.registers.sourceRef, index, "EVIDENCE", catalog),
@@ -401,6 +530,31 @@ export function buildSemanticViews(documents) {
         ),
       ),
       ...documents.artifactRecords,
+      ...(closure
+        ? [
+            record(
+              {
+                id: "EVIDENCE-S1-EXTERNAL-CLOSURE",
+                title: "Authenticated hosted Slice 1 closure",
+                status: "ACTIVE",
+                summary: `${closure.closureStatus} for ${closure.commit}, run ${closure.runId}, job ${closure.jobId}; ${closure.role2Status}.`,
+                repository: closure.repository,
+                commit: closure.commit,
+                tree: closure.tree,
+                runId: closure.runId,
+                jobId: closure.jobId,
+                conclusion: closure.conclusion,
+                closureStatus: closure.closureStatus,
+                role2Status: closure.role2Status,
+                evidenceRefs: closureEvidence,
+              },
+              documents.externalClosure.sourceRef,
+              0,
+              "EXTERNAL-CLOSURE",
+              catalog,
+            ),
+          ]
+        : []),
     ],
   };
 

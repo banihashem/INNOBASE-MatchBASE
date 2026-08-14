@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "candidateId": "PO-001-SLICE-1-LOOP-1",
+  "algorithm": "SHA256(PATH_NUL_SHA256_LF)",
+  "fileCount": 39,
+  "aggregateSha256": "AA518B4F7CDB4F7BC33384857F2EEBB4E0307BEDF37B18FA054715484A8F640A",
+  "files": [
+    {
+      "path": "apps/web/package.json",
+      "sha256": "5CD957E775E3B934D1332913708D0ECB201A8EA0662EFAD081533E266C8DEDD1"
+    },
+    {
+      "path": "apps/web/src/authorization-matrix.postgres.test.ts",
+      "sha256": "AEF402AEBB0A714FC8775DC1D64D552CF81ADB2B342EA5037DB6FE5E05A12A3C"
+    },
+    {
+      "path": "apps/web/src/fetch-runtime.ts",
+      "sha256": "94B29136DBA80F8F5BADD94EBACF31FF40AD993DD8F4D2D9C30A8ED80FE7A62F"
+    },
+    {
+      "path": "apps/web/src/runtime.ts",
+      "sha256": "8F99254E1969A45EB7C03CCAAF436F8199D6830194105D82E571C843ED2EE5A0"
+    },
+    {
+      "path": "apps/web/vitest.config.ts",
+      "sha256": "47EF0FFA5A15D918FC4D1EB705A43FCF407DC449143CF8BF0C1F87F66E40BF0B"
+    },
+    {
+      "path": "config/protected-management-history.v1.json",
+      "sha256": "5796E23E3937C19C1E5202453AB1D85B7F253EDD619C7C40E1DAE84E67E3437D"
+    },
+    {
+      "path": "governance/external-closure-anchor-v1.json",
+      "sha256": "1E50E9F302D34B0C078B53B5C05DF2AFDBCC925B1AAC9B99744678643D89A21F"
+    },
+    {
+      "path": "package.json",
+      "sha256": "65B200A0BC8B389EDD1DDCAFF4802C436F202CC4751544038BCD5DADBD7E483B"
+    },
+    {
+      "path": "packages/application/src/authorization.ts",
+      "sha256": "D9B6147D375825395B53F98B91AC95A5D8B025EE9417F25283EF63FAEAE5EDC5"
+    },
+    {
+      "path": "packages/application/src/index.ts",
+      "sha256": "0282EA00ED772079E00945A4E2EEDF227B0DC05A1165CD525CFDBAF9381F1F15"
+    },
+    {
+      "path": "packages/application/src/service.ts",
+      "sha256": "810DEEC5F7309892BC6B54462AC0129375103BBE6645BDCAFCBE4E4F991F6D03"
+    },
+    {
+      "path": "packages/application/src/types.ts",
+      "sha256": "E79D73BFBF35996AD0FCFA9E585B981F1FB474635978475B6AC156800EBBC59D"
+    },
+    {
+      "path": "packages/auth/package.json",
+      "sha256": "8DAF65E57985F7B3999A55BE6C893A6DA4FE83E6FA39578FED89D39FDDC2916F"
+    },
+    {
+      "path": "packages/auth/src/index.ts",
+      "sha256": "FA0ADB23CC137D29492E592E427229B8D6B8A6FD4320E587E4BF15FF52FACE44"
+    },
+    {
+      "path": "packages/auth/test/auth.test.ts",
+      "sha256": "9AF62E99A4BBB021859EDC9E96B43DB4F68A5604DD7DD9BE45528A64B9D3078A"
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "sha256": "4694E2D2EEFDFF9F3632F1A13316031DA1AE3012EFDADC405A6B1BEF3DFAF596"
+    },
+    {
+      "path": "packages/contracts/src/v1/authorization.ts",
+      "sha256": "BF17104B0FBA9105F35EFE546193915D95D859CA5463430307BC35C05247C56A"
+    },
+    {
+      "path": "packages/data/package.json",
+      "sha256": "C8B1FD01ACACD9CDC16D22F39DD2CA8C69DF555F92A5F4815376DA1EF750F538"
+    },
+    {
+      "path": "packages/data/src/authorization.ts",
+      "sha256": "CC1FC5AF7E8DDDBBB27D9B999E6A377DCE7D839F0A667B405F4F3B6D88D1E865"
+    },
+    {
+      "path": "packages/data/src/index.ts",
+      "sha256": "6994A160FCC0F89FDD02D14E29A8B8B3B978B4FE588B9AF6C4C7589A90B222AD"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "902F2976392C185099B808D62B378097B57AD5CF3E9774A254F19DE5F0F813C0"
+    },
+    {
+      "path": "scripts/generate-dashboard-ci-snapshot.mjs",
+      "sha256": "DA5A6352AB80DD9D3FFADF3135F387448DDFEBF4883781C3066CA1A7908862FC"
+    },
+    {
+      "path": "scripts/generate-dashboard-snapshot.mjs",
+      "sha256": "4AB205EBD8FAB53DF47650D5D65699E209CED5DF95A6C16EC319FC71FFAF3CE7"
+    },
+    {
+      "path": "scripts/lib/correction-candidate-policy.mjs",
+      "sha256": "092933AD8FB370E4572B02EE5EB1388AB8DDDF4BD4488FABCF510282CB2E26A9"
+    },
+    {
+      "path": "scripts/lib/dashboard-closure-policy.mjs",
+      "sha256": "DB44952AC2392CE3C1832263D19DCA35774353864DE7BFBD5AED831B9AEAB4CE"
+    },
+    {
+      "path": "scripts/lib/external-closure-policy.mjs",
+      "sha256": "C1A3296F04B2E3C4B08A11C524D483C0E6FF82BD5EC71217B26413A96D04147A"
+    },
+    {
+      "path": "scripts/lib/protected-management-history.mjs",
+      "sha256": "345299BD7FE19A3E7AA6C8D6FDBFA2E4C07F376FBA0F1727D9D6DB1228741CD1"
+    },
+    {
+      "path": "scripts/lib/semantic-dashboard.mjs",
+      "sha256": "2DF1D1AA5673AA2E093AF610C853F38CAF8574300D11E2195F6EC153A1CE973F"
+    },
+    {
+      "path": "scripts/prepare-dashboard-snapshot.mjs",
+      "sha256": "35F442F1813EBB0C47E7C0D1DB8677A4EDB31672E787C3CAE7C94B7A53DD75B5"
+    },
+    {
+      "path": "scripts/validate-dashboard-snapshot.mjs",
+      "sha256": "20E730CCE1B4C49D811D3F2794F9FC03A24F61C1E21A87BB8FA1A8F0F64E5B54"
+    },
+    {
+      "path": "scripts/validate-protected-baseline.mjs",
+      "sha256": "022AE465FC02E30EEFCF68C10B229B23A92C39AF0A24C6AEFEB88615EDA74C0D"
+    },
+    {
+      "path": "scripts/validate-slice1-evidence.mjs",
+      "sha256": "5EB69F5F89BA23C14413057EBB690C8B8F1B8245CE4BF0C740826810C7DC8E87"
+    },
+    {
+      "path": "scripts/validate-slice1-local.mjs",
+      "sha256": "57B74A09B815F582DDDC274168DD20AFA1F49326758A99DF7E08D7736EB6EED3"
+    },
+    {
+      "path": "test/correction-candidate-policy.test.mjs",
+      "sha256": "F9783D8534F8FA66E3EBEA78EC89C4FDE450B74E0FDD3665DDA4F034D7378512"
+    },
+    {
+      "path": "test/dashboard-closure-policy.test.mjs",
+      "sha256": "306CA813FD49EDAD87AB4AD3756D26E2F5809241582B4212FDD4C44CF95DA6A4"
+    },
+    {
+      "path": "test/external-closure-policy.test.mjs",
+      "sha256": "3D829CEBA47BAEA316128D73C158683654E41D350697C0D99F8273241F95CDBF"
+    },
+    {
+      "path": "test/protected-management-history.test.mjs",
+      "sha256": "D4CBFBEA36AB2A036C09F5E1923F4618C6AFFFDDB92966D89A59E695968F85ED"
+    },
+    {
+      "path": "test/semantic-dashboard.test.mjs",
+      "sha256": "17FB8115B09AAEB217FA129097B27CA0C09FEDCD6DC915AA74BB926435C66EC0"
+    },
+    {
+      "path": "test/slice1/api/application-postgres.test.mjs",
+      "sha256": "28BDED535E4834577638A0875B266D5AE712E3D9E2AAF17D990FF021C3B5DB8D"
+    }
+  ]
+}

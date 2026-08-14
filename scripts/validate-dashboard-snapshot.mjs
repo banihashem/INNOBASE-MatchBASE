@@ -6,15 +6,16 @@ import {
   readFileSync,
   realpathSync,
 } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, win32 } from "node:path";
+import { validateDashboardClosure } from "./lib/dashboard-closure-policy.mjs";
 import {
   isPathWithinRoot,
   validateSourceReferenceShape,
 } from "./lib/dashboard-source-policy.mjs";
 
-const actual =
-  process.argv.includes("--actual") ||
-  process.argv.includes("--require-sources");
+import { validateExternalClosure } from "./lib/external-closure-policy.mjs";
+
+const actual = !process.argv.includes("--bootstrap");
 const snapshotPath = resolve(
   actual
     ? "apps/dashboard/public/current-snapshot.json"
@@ -42,8 +43,9 @@ const allowedRoots = [
   "C:\\INNOBASE\\MatchBASE\\02_Product_Research_and_Planning",
   "C:\\INNOBASE\\MatchBASE\\03_Implementation\\INNOBASE-MatchBASE",
   "C:\\INNOBASE\\MatchBASE\\03_Implementation\\INNOBASE-MatchBASE\\governance",
+  process.cwd(),
 ].map((value) => resolve(value));
-const requireSources = process.argv.includes("--require-sources");
+const requireSources = actual || process.argv.includes("--require-sources");
 
 if (snapshot.schemaVersion !== "1.0" || snapshot.mode !== "READ_ONLY") {
   throw new Error("Dashboard snapshot contract is invalid.");
@@ -108,6 +110,11 @@ for (const record of records) {
 }
 
 if (actual) {
+  if (records.length === 0)
+    throw new Error("Current dashboard snapshot cannot be empty.");
+  for (const view of requiredViews)
+    if (snapshot.views[view].records.length === 0)
+      throw new Error(`Current dashboard view cannot be empty: ${view}`);
   if (!snapshot.views.gates.records.some(({ id }) => id === "AG0"))
     throw new Error("Semantic gate records are missing.");
   if (!snapshot.views.backlog.records.some(({ id }) => id === "S0-001"))
@@ -116,6 +123,24 @@ if (actual) {
     throw new Error(
       "Decision disposition projection does not reconcile to 162.",
     );
+  const anchorOnly =
+    process.env.MATCHBASE_EXTERNAL_EVIDENCE_MODE === "ANCHOR_ONLY_CI";
+  const closurePath = process.env.MATCHBASE_EXTERNAL_CLOSURE_OVERLAY
+    ? resolve(process.env.MATCHBASE_EXTERNAL_CLOSURE_OVERLAY)
+    : resolve("governance/external-closure-anchor-v1.json");
+  if (
+    process.env.MATCHBASE_EXTERNAL_CLOSURE_OVERLAY &&
+    (!win32.isAbsolute(process.env.MATCHBASE_EXTERNAL_CLOSURE_OVERLAY) ||
+      anchorOnly)
+  )
+    throw new Error("Dashboard closure overlay is not allowed in this mode.");
+  const closure = validateExternalClosure(
+    JSON.parse(readFileSync(closurePath, "utf8")),
+    { anchorOnly },
+  );
+  validateDashboardClosure(snapshot.views, closure);
+  if (requireSources && verifiedSources === 0)
+    throw new Error("Current dashboard source verification was vacuous.");
 }
 
 if (

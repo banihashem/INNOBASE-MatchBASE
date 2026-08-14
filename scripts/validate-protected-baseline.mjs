@@ -1,12 +1,33 @@
 import { createHash } from "node:crypto";
 import { lstat, open, readFile, readdir } from "node:fs/promises";
-import { basename, relative, resolve, sep, win32 } from "node:path";
+import { relative, resolve, sep, win32 } from "node:path";
+import {
+  validateManagementManifestBytes,
+  verifyProtectedManagementHistory,
+} from "./lib/protected-management-history.mjs";
+
+const MANAGEMENT_MANIFEST_EXPECTED = Object.freeze({
+  manifestSha256:
+    "5796E23E3937C19C1E5202453AB1D85B7F253EDD619C7C40E1DAE84E67E3437D",
+  manifestId: "matchbase-protected-management-history-v1",
+  rootIdentity: "01_Product_Management",
+  fileCount: 36,
+  legacyAggregateSha256:
+    "BE407DA2BB59084F208AE6247B0CFFB0391CEEA021F480B64A9392F066F64803",
+});
 
 const baseline = JSON.parse(
   await readFile(
     new URL("../evidence/slice1/protected-baseline.json", import.meta.url),
     "utf8",
   ),
+);
+const managementManifestBytes = await readFile(
+  new URL("../config/protected-management-history.v1.json", import.meta.url),
+);
+const managementManifest = validateManagementManifestBytes(
+  managementManifestBytes,
+  MANAGEMENT_MANIFEST_EXPECTED,
 );
 const anchorOnly =
   process.env.MATCHBASE_EXTERNAL_EVIDENCE_MODE === "ANCHOR_ONLY_CI";
@@ -17,7 +38,7 @@ function validSha(value) {
   return typeof value === "string" && /^[A-F0-9]{64}$/u.test(value);
 }
 
-async function inventory(root, excludedFiles = []) {
+async function inventory(root) {
   const files = [];
   async function walk(directory) {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -26,8 +47,7 @@ async function inventory(root, excludedFiles = []) {
       if (metadata.isSymbolicLink())
         throw new Error(`Protected source symlink refused: ${path}`);
       if (metadata.isDirectory()) await walk(path);
-      else if (metadata.isFile() && !excludedFiles.includes(basename(path)))
-        files.push(path);
+      else if (metadata.isFile()) files.push(path);
     }
   }
   await walk(root);
@@ -48,6 +68,9 @@ async function inventory(root, excludedFiles = []) {
   return { count: files.length, sha: aggregate.digest("hex").toUpperCase() };
 }
 
+if (!Array.isArray(baseline.roots) || baseline.roots.length !== 3)
+  throw new Error("Protected baseline roots are invalid.");
+const rootsById = new Map();
 for (const root of baseline.roots) {
   if (
     !["authoritative", "planning", "managementHistory"].includes(root.id) ||
@@ -57,12 +80,36 @@ for (const root of baseline.roots) {
     !validSha(root.aggregateSha256)
   )
     throw new Error("Protected baseline anchor is invalid.");
+  if (rootsById.has(root.id))
+    throw new Error(`Protected baseline root is duplicated: ${root.id}`);
+  rootsById.set(root.id, root);
+}
+
+for (const id of ["authoritative", "planning"]) {
+  const root = rootsById.get(id);
+  if (!root) throw new Error(`Protected baseline root is missing: ${id}`);
   if (!anchorOnly) {
-    const actual = await inventory(root.path, root.excludedFiles ?? []);
+    const actual = await inventory(root.path);
     if (actual.count !== root.fileCount || actual.sha !== root.aggregateSha256)
       throw new Error(`Protected baseline mismatch: ${root.id}`);
   }
 }
+
+const managementRoot = rootsById.get("managementHistory");
+if (
+  !managementRoot ||
+  managementRoot.fileCount !== managementManifest.fileCount ||
+  managementRoot.aggregateSha256 !== managementManifest.legacyAggregateSha256 ||
+  win32.basename(win32.normalize(managementRoot.path)) !==
+    managementManifest.rootIdentity
+) {
+  throw new Error("Protected management baseline/manifest mismatch.");
+}
+if (!anchorOnly)
+  await verifyProtectedManagementHistory(
+    managementRoot.path,
+    managementManifest,
+  );
 
 const log = baseline.appendOnlyLog;
 if (
@@ -86,5 +133,5 @@ if (!anchorOnly) {
   }
 }
 process.stdout.write(
-  `protected baseline: PASS (${anchorOnly ? "ANCHOR_ONLY_CI" : "EXACT_LOCAL_SHA256"}; 14 authoritative, 67 planning, 36 management-history files)\n`,
+  `protected baseline: PASS (${anchorOnly ? "MANIFEST_ANCHOR_CI" : "EXACT_LOCAL_SHA256"}; 14 authoritative, 67 planning, 36 explicit management-history files)\n`,
 );

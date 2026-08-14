@@ -5,6 +5,11 @@ import { replaceRegularFileTransactionally } from "./lib/replace-regular-file.mj
 import { validateAgentRoster } from "./lib/agent-policy.mjs";
 import { buildSemanticViews } from "./lib/semantic-dashboard.mjs";
 import {
+  externalClosureRole2SourceRef,
+  externalClosureSourceRef,
+  validateExternalClosure,
+} from "./lib/external-closure-policy.mjs";
+import {
   SNAPSHOT_CONFIG_PATH,
   SNAPSHOT_OUTPUT_PATH,
   assertSafeSnapshotOutput,
@@ -22,6 +27,27 @@ if (Number.isNaN(Date.parse(effectiveAsOf)))
   throw new Error("as-of override must be ISO-8601");
 config.asOf = new Date(effectiveAsOf).toISOString();
 const artifactSnapshot = await buildArtifactSnapshot(config);
+const anchorOnly =
+  process.env.MATCHBASE_EXTERNAL_EVIDENCE_MODE === "ANCHOR_ONLY_CI";
+const externalClosurePath = process.env.MATCHBASE_EXTERNAL_CLOSURE_OVERLAY
+  ? resolve(process.env.MATCHBASE_EXTERNAL_CLOSURE_OVERLAY)
+  : resolve("governance/external-closure-anchor-v1.json");
+if (
+  process.env.MATCHBASE_EXTERNAL_CLOSURE_OVERLAY &&
+  (!win32.isAbsolute(process.env.MATCHBASE_EXTERNAL_CLOSURE_OVERLAY) ||
+    anchorOnly)
+)
+  throw new Error(
+    "External closure overlay must be an absolute local management path and cannot override CI anchor mode.",
+  );
+const externalClosureValue = validateExternalClosure(
+  JSON.parse(await readFile(externalClosurePath, "utf8")),
+  { anchorOnly },
+);
+const externalClosureDocument = {
+  value: externalClosureValue,
+  sourceRef: externalClosureSourceRef(externalClosureValue),
+};
 const rootMap = new Map(
   config.roots.map((root) => [root.id, root.absolutePath]),
 );
@@ -120,6 +146,10 @@ const trustedAgentEvidenceRefs = agentsDocument.value.agents.flatMap((agent) =>
     observedAt: artifactSnapshot.generatedAt,
   })),
 );
+trustedAgentEvidenceRefs.push(
+  externalClosureDocument.sourceRef,
+  externalClosureRole2SourceRef(externalClosureValue),
+);
 
 const semantic = buildSemanticViews({
   slices: await indexedDocument("implementation-governance", "slices.json"),
@@ -138,6 +168,7 @@ const semantic = buildSemanticViews({
     "implementation-governance",
     "external-state.json",
   ),
+  externalClosure: externalClosureDocument,
   dispositions: await indexedDocument(
     "product-management",
     "OWNER_DECISION_DISPOSITION_REGISTER_PO_001.json",

@@ -1,4 +1,5 @@
 export * from "./schema.js";
+export * from "./v1/authorization.js";
 export * from "./v1/canonical-request.js";
 export * from "./v1/cost.js";
 export * from "./v1/evidence.js";

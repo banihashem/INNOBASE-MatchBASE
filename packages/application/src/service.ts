@@ -26,6 +26,7 @@ import {
   type ConnectionPool,
   type TransactionClient,
 } from "@matchbase/data";
+import { assertSlice1EndpointAuthorized } from "./authorization.js";
 import {
   ApplicationFault,
   TERMINAL_RUN_STATES,
@@ -124,6 +125,7 @@ export class MatchBaseApplication {
   }
 
   async me(context: RequestContext): Promise<Record<string, unknown>> {
+    assertSlice1EndpointAuthorized(context, "GET /api/v1/me");
     const limit =
       context.tier === "admin" ? null : ROLLING_QUOTA_LIMITS[context.tier];
     const quota = await this.pool.query<{
@@ -174,14 +176,7 @@ export class MatchBaseApplication {
     idempotencyKey: string,
     input: IntakeInput,
   ): Promise<Record<string, unknown>> {
-    if (context.tier === "admin") {
-      throw new ApplicationFault(
-        403,
-        "tier-not-entitled",
-        "MB-403-TIER",
-        "Not entitled.",
-      );
-    }
+    assertSlice1EndpointAuthorized(context, "POST /api/v1/requests");
     const keyHash = sha256(idempotencyKey);
     const requestHash = createHmac("sha256", this.privacyKey)
       .update(JSON.stringify(input), "utf8")
@@ -319,6 +314,7 @@ export class MatchBaseApplication {
     context: RequestContext,
     requestId: string,
   ): Promise<Record<string, unknown>> {
+    assertSlice1EndpointAuthorized(context, "GET /api/v1/requests/:requestId");
     const result = await this.pool.query<{
       request_id: string;
       current_version: number;
@@ -361,6 +357,10 @@ export class MatchBaseApplication {
     context: RequestContext,
     requestId: string,
   ): Promise<void> {
+    assertSlice1EndpointAuthorized(
+      context,
+      "POST /api/v1/requests/:requestId/versions/:version/confirmation",
+    );
     const visible = await this.pool.query(
       `SELECT 1
          FROM sourcing_request
@@ -375,6 +375,10 @@ export class MatchBaseApplication {
     requestId: string,
     input: CanonicalRevisionInput,
   ): Promise<Record<string, unknown>> {
+    assertSlice1EndpointAuthorized(
+      context,
+      "POST /api/v1/requests/:requestId/versions",
+    );
     if (
       !isEnglishCanonical(input.canonicalText) ||
       input.fields.some(
@@ -484,6 +488,10 @@ export class MatchBaseApplication {
     version: number,
     accepted: boolean,
   ): Promise<Record<string, unknown>> {
+    assertSlice1EndpointAuthorized(
+      context,
+      "POST /api/v1/requests/:requestId/versions/:version/confirmation",
+    );
     return inTransaction(this.pool, async (client) => {
       const visible = await client.query<{
         canonical_request_version_id: string;
@@ -550,6 +558,7 @@ export class MatchBaseApplication {
     idempotencyKey: string,
     input: { requestId: string; version: number },
   ): Promise<Record<string, unknown>> {
+    assertSlice1EndpointAuthorized(context, "POST /api/v1/runs");
     const configuration = await this.ensureConfigurationVersions();
     const version = await this.pool.query<{
       canonical_request_version_id: string;
@@ -644,6 +653,7 @@ export class MatchBaseApplication {
     context: RequestContext,
     cursor?: string,
   ): Promise<Record<string, unknown>> {
+    assertSlice1EndpointAuthorized(context, "GET /api/v1/runs");
     let cursorDate: Date | null = null;
     let cursorRunId: string | null = null;
     if (cursor) {
@@ -746,6 +756,7 @@ export class MatchBaseApplication {
     context: RequestContext,
     runId: string,
   ): Promise<RunStatus> {
+    assertSlice1EndpointAuthorized(context, "GET /api/v1/runs/:runId");
     const result = await this.pool.query<{
       run_id: string;
       state: string;
@@ -826,6 +837,7 @@ export class MatchBaseApplication {
     context: RequestContext,
     runId: string,
   ): Promise<ResultDisclosure> {
+    assertSlice1EndpointAuthorized(context, "GET /api/v1/runs/:runId/result");
     return inTransaction(this.pool, async (client) => {
       const result = await client.query<{
         state: string;
@@ -911,6 +923,10 @@ export class MatchBaseApplication {
     context: RequestContext,
     runId: string,
   ): Promise<Record<string, unknown>> {
+    assertSlice1EndpointAuthorized(
+      context,
+      "POST /api/v1/runs/:runId/cancellation",
+    );
     return inTransaction(this.pool, async (client) => {
       const run = await client.query<{ state: string }>(
         "SELECT state FROM research_run WHERE run_id = $1 AND account_id = $2 AND requested_by_user_id = $3 FOR UPDATE",

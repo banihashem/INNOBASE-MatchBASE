@@ -4,9 +4,9 @@ import {
   ApplicationFault,
   API_MINOR_VERSION,
   MatchBaseApplication,
+  assertSlice1EndpointAuthorized,
   type CanonicalRevisionInput,
   type IntakeInput,
-  type PersistedTier,
   type RequestContext,
 } from "@matchbase/application";
 import {
@@ -19,6 +19,7 @@ import {
 import {
   appendAuditEvent,
   inTransaction,
+  resolveStoredAuthorization,
   type ConnectionPool,
 } from "@matchbase/data";
 import type { WebConfig } from "./config";
@@ -300,15 +301,14 @@ export function createWebRuntime(
         "MB-401-SESSION",
         "A valid session is required.",
       );
-    const grant = await options.pool.query<{ tier: PersistedTier }>(
-      `SELECT tier FROM entitlement_grant
-        WHERE account_id = $1 AND user_id = $2 AND effective_from <= clock_timestamp()
-          AND (effective_to IS NULL OR effective_to > clock_timestamp()) AND revoked_at IS NULL
-        ORDER BY effective_from DESC, created_at DESC LIMIT 1`,
-      [row.account_id, row.user_id],
-    );
-    const tier = grant.rows[0]?.tier;
-    if (!row.session_active || !tier) {
+    const authorization = row.session_active
+      ? await resolveStoredAuthorization(
+          options.pool,
+          row.account_id,
+          row.user_id,
+        )
+      : null;
+    if (!row.session_active || !authorization) {
       const fault = !row.session_active
         ? new ApplicationFault(
             401,
@@ -326,7 +326,7 @@ export function createWebRuntime(
         appendAuditEvent(client, {
           accountId: row.account_id,
           actorUserId: row.user_id,
-          ...(tier ? { actorTier: tier } : {}),
+          ...(authorization ? { actorTier: authorization.tier } : {}),
           eventType: "access.denied",
           resourceKind: "api_route",
           outcome: "deny",
@@ -341,12 +341,6 @@ export function createWebRuntime(
       );
       throw fault;
     }
-    const roles = await options.pool.query<{ sub_role: string }>(
-      `SELECT sub_role FROM admin_role_grant
-        WHERE account_id = $1 AND user_id = $2 AND effective_from <= clock_timestamp()
-          AND (effective_to IS NULL OR effective_to > clock_timestamp()) AND revoked_at IS NULL`,
-      [row.account_id, row.user_id],
-    );
     await options.pool.query(
       "UPDATE user_session SET last_used_at = clock_timestamp() WHERE session_id = $1",
       [row.session_id],
@@ -358,8 +352,8 @@ export function createWebRuntime(
       requestContext: {
         accountId: row.account_id,
         userId: row.user_id,
-        tier,
-        adminSubRoles: roles.rows.map((role) => role.sub_role),
+        tier: authorization.tier,
+        adminSubRoles: authorization.adminSubRoles,
         correlationId,
         deploymentId: options.config.deploymentId,
       },
@@ -738,6 +732,10 @@ export function createWebRuntime(
         return;
       }
       if (request.method === "GET" && path === "/api/v1/me") {
+        assertSlice1EndpointAuthorized(
+          session.requestContext,
+          "GET /api/v1/me",
+        );
         json(response, 200, {
           ...(await options.application.me(session.requestContext)),
           environment: options.config.environment,
@@ -745,6 +743,10 @@ export function createWebRuntime(
         return;
       }
       if (request.method === "POST" && path === "/api/v1/requests") {
+        assertSlice1EndpointAuthorized(
+          session.requestContext,
+          "POST /api/v1/requests",
+        );
         const input = intakeDto(await body(request));
         const result = await options.application.createRequest(
           session.requestContext,
@@ -761,6 +763,10 @@ export function createWebRuntime(
       }
       const requestMatch = /^\/api\/v1\/requests\/([^/]+)$/u.exec(path);
       if (request.method === "GET" && requestMatch) {
+        assertSlice1EndpointAuthorized(
+          session.requestContext,
+          "GET /api/v1/requests/:requestId",
+        );
         json(
           response,
           200,
@@ -775,6 +781,10 @@ export function createWebRuntime(
         path,
       );
       if (request.method === "POST" && versionMatch) {
+        assertSlice1EndpointAuthorized(
+          session.requestContext,
+          "POST /api/v1/requests/:requestId/versions",
+        );
         json(
           response,
           201,
@@ -791,6 +801,10 @@ export function createWebRuntime(
           path,
         );
       if (request.method === "POST" && confirmationMatch) {
+        assertSlice1EndpointAuthorized(
+          session.requestContext,
+          "POST /api/v1/requests/:requestId/versions/:version/confirmation",
+        );
         const requestId = visibleUuid(confirmationMatch[1]);
         await options.application.assertRequestVisible(
           session.requestContext,
@@ -813,6 +827,10 @@ export function createWebRuntime(
         return;
       }
       if (request.method === "POST" && path === "/api/v1/runs") {
+        assertSlice1EndpointAuthorized(
+          session.requestContext,
+          "POST /api/v1/runs",
+        );
         const input = object(await body(request));
         assertClosedDto(
           input,
@@ -844,6 +862,10 @@ export function createWebRuntime(
         return;
       }
       if (request.method === "GET" && path === "/api/v1/runs") {
+        assertSlice1EndpointAuthorized(
+          session.requestContext,
+          "GET /api/v1/runs",
+        );
         json(
           response,
           200,
@@ -856,6 +878,10 @@ export function createWebRuntime(
       }
       const resultMatch = /^\/api\/v1\/runs\/([^/]+)\/result$/u.exec(path);
       if (request.method === "GET" && resultMatch) {
+        assertSlice1EndpointAuthorized(
+          session.requestContext,
+          "GET /api/v1/runs/:runId/result",
+        );
         const disclosure = await options.application.getRunResult(
           session.requestContext,
           visibleUuid(resultMatch[1]),
@@ -866,6 +892,10 @@ export function createWebRuntime(
       const cancellationMatch =
         /^\/api\/v1\/runs\/([^/]+)\/cancellation$/u.exec(path);
       if (request.method === "POST" && cancellationMatch) {
+        assertSlice1EndpointAuthorized(
+          session.requestContext,
+          "POST /api/v1/runs/:runId/cancellation",
+        );
         json(
           response,
           202,
@@ -878,6 +908,10 @@ export function createWebRuntime(
       }
       const runMatch = /^\/api\/v1\/runs\/([^/]+)$/u.exec(path);
       if (request.method === "GET" && runMatch) {
+        assertSlice1EndpointAuthorized(
+          session.requestContext,
+          "GET /api/v1/runs/:runId",
+        );
         const runStatus = await options.application.getRunStatus(
           session.requestContext,
           visibleUuid(runMatch[1]),

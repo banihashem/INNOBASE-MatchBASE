@@ -269,3 +269,86 @@ test("maps explicit non-deployment states to ACTIVE rather than UNKNOWN", () => 
   assert.equal(local.status, "ACTIVE");
   assert.equal(local.facts.lifecycleStatus, "NOT_APPLICABLE");
 });
+
+test("projects hosted closure without converting pending Role 2 into PASS", () => {
+  const documents = fixtureDocuments();
+  const auditRef = {
+    ...managementRef,
+    sourceId: "matchbase://product-management/role2-audit",
+    path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_AUDIT.md",
+    sha256: "D".repeat(64),
+  };
+  documents.trustedEvidenceRefs = [exactEvidenceRef, managementRef, auditRef];
+  documents.gates.value.gates.push({
+    id: "AG6",
+    status: "ACTIVE",
+    summary: "stale candidate state",
+  });
+  documents.registers.value.tests.push({
+    id: "S1-AC-022",
+    status: "PENDING",
+  });
+  documents.externalClosure = {
+    sourceRef: managementRef,
+    value: {
+      repository: "banihashem/INNOBASE-MatchBASE",
+      commit: "a".repeat(40),
+      tree: "b".repeat(40),
+      runId: 123,
+      jobId: 456,
+      conclusion: "success",
+      closureStatus: "HOSTED_VERIFIED",
+      role2Status: "PENDING_ROLE2",
+      predecessorFailures: [{ runId: 100, jobId: 200 }],
+      role2: {
+        status: "FAIL",
+        disposition: "PENDING_ROLE2_CORRECTION_REAUDIT",
+        auditPath: auditRef.path,
+        auditSha256: auditRef.sha256,
+        critical: 0,
+        major: 3,
+        minor: 0,
+        defects: [
+          {
+            id: "S1-L1-D001",
+            severity: "major",
+            status: "OPEN",
+            title: "D001",
+          },
+          {
+            id: "S1-L1-D002",
+            severity: "major",
+            status: "OPEN",
+            title: "D002",
+          },
+          {
+            id: "S1-L1-D003",
+            severity: "major",
+            status: "OPEN",
+            title: "D003",
+          },
+        ],
+      },
+    },
+  };
+  const views = buildSemanticViews(documents);
+  const gate = views.gates.records.find(({ id }) => id === "AG6");
+  const acceptance = views.tests.records.find(({ id }) => id === "S1-AC-022");
+  const closure = views.deployments.records.find(
+    ({ id }) => id === "EXT-GITHUB-CLOSURE",
+  );
+  assert.equal(gate.status, "ACTIVE");
+  assert.equal(gate.facts.closureStatus, "HOSTED_VERIFIED");
+  assert.equal(gate.facts.role2Status, "PENDING_ROLE2");
+  assert.equal(acceptance.status, "ACTIVE");
+  assert.equal(acceptance.facts.runId, 123);
+  assert.equal(closure.facts.jobId, 456);
+  assert.equal(
+    views.defects.records.filter(({ id }) => id.startsWith("S1-L1-D")).length,
+    3,
+  );
+  assert.equal(
+    views.loops.records.find(({ id }) => id === "PO-001-R2-S1-L1").status,
+    "BLOCKED",
+  );
+});

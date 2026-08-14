@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "slice": "SLICE-1",
-  "observedAt": "2026-08-14T22:31:31+04:00",
+  "observedAt": "2026-08-14T23:26:40+04:00",
   "environment": {
     "scope": "LOCAL_SYNTHETIC_ONLY",
     "postgresql": "18.1",
@@ -19,7 +19,7 @@
       "minor": 0,
       "method": "Independent same-byte auth, session, authorization, privacy, tenant-isolation, secret-history, and protected-state audit",
       "auditedArtifact": "packages/application/src/service.ts",
-      "auditedSha256": "1C59CFDCC92581FEAE18E71299D38C22C1FA83CF95D95720ED1B05C7275A45BB"
+      "auditedSha256": "810DEEC5F7309892BC6B54462AC0129375103BBE6645BDCAFCBE4E4F991F6D03"
     },
     {
       "id": "S1-AUDIT-QA-ACCESSIBILITY",
@@ -69,7 +69,7 @@
       "minor": 0,
       "method": "Independent corrected-runner reproduction and cross-stack AC001-AC022 trace, evidence, pending-state, and preservation reconciliation",
       "auditedArtifact": "scripts/validate-slice1-local.mjs",
-      "auditedSha256": "C80E92E86D54B5F741F007BCCB16C743965811D8E8B165CF0FD63276303BBF5E"
+      "auditedSha256": "57B74A09B815F582DDDC274168DD20AFA1F49326758A99DF7E08D7736EB6EED3"
     },
     {
       "id": "S1-AUDIT-HOSTED-LICENSE-CORRECTION",
@@ -82,10 +82,78 @@
       "auditedSha256": "7ACA5561135C4202B1AE20C5233C2D742D4233B72615F0C41F1D24EE1909DC6F"
     }
   ],
+  "correctionLoopAudits": [
+    {
+      "id": "S1-L1-AUDIT-SECURITY",
+      "status": "PASS",
+      "reasoningEffort": "high",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestPath": "evidence/slice1/correction-loop-1-candidate.json",
+      "candidateManifestSha256": "C41C881358E57A4F2F66A0C1511300DDA1C8848D38B4FBB872D2F97A83EAB666",
+      "candidateAggregateSha256": "AA518B4F7CDB4F7BC33384857F2EEBB4E0307BEDF37B18FA054715484A8F640A"
+    },
+    {
+      "id": "S1-L1-AUDIT-QA-ACCESSIBILITY",
+      "status": "PASS",
+      "reasoningEffort": "high",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestPath": "evidence/slice1/correction-loop-1-candidate.json",
+      "candidateManifestSha256": "C41C881358E57A4F2F66A0C1511300DDA1C8848D38B4FBB872D2F97A83EAB666",
+      "candidateAggregateSha256": "AA518B4F7CDB4F7BC33384857F2EEBB4E0307BEDF37B18FA054715484A8F640A"
+    },
+    {
+      "id": "S1-L1-AUDIT-SRE-COST",
+      "status": "PASS",
+      "reasoningEffort": "high",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestPath": "evidence/slice1/correction-loop-1-candidate.json",
+      "candidateManifestSha256": "C41C881358E57A4F2F66A0C1511300DDA1C8848D38B4FBB872D2F97A83EAB666",
+      "candidateAggregateSha256": "AA518B4F7CDB4F7BC33384857F2EEBB4E0307BEDF37B18FA054715484A8F640A"
+    },
+    {
+      "id": "S1-L1-AUDIT-AI-EVIDENCE",
+      "status": "PASS",
+      "reasoningEffort": "high",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestPath": "evidence/slice1/correction-loop-1-candidate.json",
+      "candidateManifestSha256": "C41C881358E57A4F2F66A0C1511300DDA1C8848D38B4FBB872D2F97A83EAB666",
+      "candidateAggregateSha256": "AA518B4F7CDB4F7BC33384857F2EEBB4E0307BEDF37B18FA054715484A8F640A"
+    },
+    {
+      "id": "S1-L1-AUDIT-REPOSITORY-SAFETY",
+      "status": "PASS",
+      "reasoningEffort": "high",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestPath": "evidence/slice1/correction-loop-1-candidate.json",
+      "candidateManifestSha256": "C41C881358E57A4F2F66A0C1511300DDA1C8848D38B4FBB872D2F97A83EAB666",
+      "candidateAggregateSha256": "AA518B4F7CDB4F7BC33384857F2EEBB4E0307BEDF37B18FA054715484A8F640A"
+    },
+    {
+      "id": "S1-L1-AUDIT-INTEGRATION-CRITIC",
+      "status": "PASS",
+      "reasoningEffort": "high",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestPath": "evidence/slice1/correction-loop-1-candidate.json",
+      "candidateManifestSha256": "C41C881358E57A4F2F66A0C1511300DDA1C8848D38B4FBB872D2F97A83EAB666",
+      "candidateAggregateSha256": "AA518B4F7CDB4F7BC33384857F2EEBB4E0307BEDF37B18FA054715484A8F640A"
+    }
+  ],
   "rootGate": {
     "command": "pnpm slice1:validate:local",
     "status": "PASS",
-    "durationSeconds": 195.7,
+    "durationSeconds": 207.1,
     "testCounts": {
       "dashboard": 14,
       "artifactIndexer": 8,
@@ -94,10 +162,10 @@
       "dataPostgresql": 10,
       "aiEvidence": 24,
       "securityPrivacy": 4,
-      "webUiAccessibility": 7,
+      "webUiAccessibility": 14,
       "apiPostgresql": 4,
       "applicationLifecycle": 4,
-      "rootPolicy": 36,
+      "rootPolicy": 72,
       "browser": 14,
       "failed": 0,
       "skipped": 0
@@ -127,7 +195,7 @@
     {
       "id": "S1-AUTH",
       "path": "packages/auth/src/index.ts",
-      "sha256": "F49A6780B41D9FD781B553FF315FE6BD48B0D8890D70A8E058FD0795097BD822"
+      "sha256": "FA0ADB23CC137D29492E592E427229B8D6B8A6FD4320E587E4BF15FF52FACE44"
     },
     {
       "id": "S1-DATA",
@@ -137,7 +205,7 @@
     {
       "id": "S1-APPLICATION",
       "path": "packages/application/src/service.ts",
-      "sha256": "1C59CFDCC92581FEAE18E71299D38C22C1FA83CF95D95720ED1B05C7275A45BB"
+      "sha256": "810DEEC5F7309892BC6B54462AC0129375103BBE6645BDCAFCBE4E4F991F6D03"
     },
     {
       "id": "S1-AI",
@@ -252,7 +320,7 @@
     {
       "id": "S1-LOCAL-VALIDATOR",
       "path": "scripts/validate-slice1-local.mjs",
-      "sha256": "C80E92E86D54B5F741F007BCCB16C743965811D8E8B165CF0FD63276303BBF5E"
+      "sha256": "57B74A09B815F582DDDC274168DD20AFA1F49326758A99DF7E08D7736EB6EED3"
     },
     {
       "id": "S1-LICENSE-POLICY",
@@ -263,6 +331,86 @@
       "id": "S1-LICENSE-POLICY-TEST",
       "path": "test/license-policy.test.mjs",
       "sha256": "C61E2797A064D5EDF4B079211460C4E9231718E97C0C9A65B2B875FE9334FE07"
+    },
+    {
+      "id": "S1-AUTHORIZATION-CONTRACT",
+      "path": "packages/contracts/src/v1/authorization.ts",
+      "sha256": "BF17104B0FBA9105F35EFE546193915D95D859CA5463430307BC35C05247C56A"
+    },
+    {
+      "id": "S1-AUTHORIZATION-POLICY",
+      "path": "packages/application/src/authorization.ts",
+      "sha256": "D9B6147D375825395B53F98B91AC95A5D8B025EE9417F25283EF63FAEAE5EDC5"
+    },
+    {
+      "id": "S1-AUTHORIZATION-DB",
+      "path": "packages/data/src/authorization.ts",
+      "sha256": "CC1FC5AF7E8DDDBBB27D9B999E6A377DCE7D839F0A667B405F4F3B6D88D1E865"
+    },
+    {
+      "id": "S1-AUTHORIZATION-MATRIX",
+      "path": "apps/web/src/authorization-matrix.postgres.test.ts",
+      "sha256": "AEF402AEBB0A714FC8775DC1D64D552CF81ADB2B342EA5037DB6FE5E05A12A3C"
+    },
+    {
+      "id": "S1-EXTERNAL-CLOSURE-ANCHOR",
+      "path": "governance/external-closure-anchor-v1.json",
+      "sha256": "1E50E9F302D34B0C078B53B5C05DF2AFDBCC925B1AAC9B99744678643D89A21F"
+    },
+    {
+      "id": "S1-DASHBOARD-CLOSURE-POLICY",
+      "path": "scripts/lib/dashboard-closure-policy.mjs",
+      "sha256": "DB44952AC2392CE3C1832263D19DCA35774353864DE7BFBD5AED831B9AEAB4CE"
+    },
+    {
+      "id": "S1-EXTERNAL-CLOSURE-POLICY",
+      "path": "scripts/lib/external-closure-policy.mjs",
+      "sha256": "C1A3296F04B2E3C4B08A11C524D483C0E6FF82BD5EC71217B26413A96D04147A"
+    },
+    {
+      "id": "S1-DASHBOARD-CI-GENERATOR",
+      "path": "scripts/generate-dashboard-ci-snapshot.mjs",
+      "sha256": "DA5A6352AB80DD9D3FFADF3135F387448DDFEBF4883781C3066CA1A7908862FC"
+    },
+    {
+      "id": "S1-DASHBOARD-VALIDATOR",
+      "path": "scripts/validate-dashboard-snapshot.mjs",
+      "sha256": "20E730CCE1B4C49D811D3F2794F9FC03A24F61C1E21A87BB8FA1A8F0F64E5B54"
+    },
+    {
+      "id": "S1-PROTECTED-HISTORY-MANIFEST",
+      "path": "config/protected-management-history.v1.json",
+      "sha256": "5796E23E3937C19C1E5202453AB1D85B7F253EDD619C7C40E1DAE84E67E3437D"
+    },
+    {
+      "id": "S1-PROTECTED-HISTORY-TEST",
+      "path": "test/protected-management-history.test.mjs",
+      "sha256": "D4CBFBEA36AB2A036C09F5E1923F4618C6AFFFDDB92966D89A59E695968F85ED"
+    },
+    {
+      "id": "S1-CORRECTION-CANDIDATE",
+      "path": "evidence/slice1/correction-loop-1-candidate.json",
+      "sha256": "C41C881358E57A4F2F66A0C1511300DDA1C8848D38B4FBB872D2F97A83EAB666"
+    },
+    {
+      "id": "S1-CORRECTION-CANDIDATE-POLICY",
+      "path": "scripts/lib/correction-candidate-policy.mjs",
+      "sha256": "092933AD8FB370E4572B02EE5EB1388AB8DDDF4BD4488FABCF510282CB2E26A9"
+    },
+    {
+      "id": "S1-CORRECTION-CANDIDATE-TEST",
+      "path": "test/correction-candidate-policy.test.mjs",
+      "sha256": "F9783D8534F8FA66E3EBEA78EC89C4FDE450B74E0FDD3665DDA4F034D7378512"
+    },
+    {
+      "id": "S1-EVIDENCE-VALIDATOR",
+      "path": "scripts/validate-slice1-evidence.mjs",
+      "sha256": "5EB69F5F89BA23C14413057EBB690C8B8F1B8245CE4BF0C740826810C7DC8E87"
+    },
+    {
+      "id": "S1-API-INTEGRATION-TEST",
+      "path": "test/slice1/api/application-postgres.test.mjs",
+      "sha256": "28BDED535E4834577638A0875B266D5AE712E3D9E2AAF17D990FF021C3B5DB8D"
     }
   ],
   "acceptance": [
@@ -286,19 +434,34 @@
       "id": "S1-AC-002",
       "status": "PASS",
       "command": "pnpm --filter @matchbase/auth test",
-      "artifactIds": ["S1-AUTH"]
+      "artifactIds": [
+        "S1-AUTH",
+        "S1-AUTHORIZATION-CONTRACT",
+        "S1-AUTHORIZATION-POLICY",
+        "S1-AUTHORIZATION-DB",
+        "S1-AUTHORIZATION-MATRIX"
+      ]
     },
     {
       "id": "S1-AC-003",
       "status": "PASS",
       "command": "pnpm --filter @matchbase/auth test && pnpm --filter @matchbase/web test",
-      "artifactIds": ["S1-AUTH", "S1-UI"]
+      "artifactIds": [
+        "S1-AUTH",
+        "S1-UI",
+        "S1-AUTHORIZATION-CONTRACT",
+        "S1-AUTHORIZATION-MATRIX"
+      ]
     },
     {
       "id": "S1-AC-004",
       "status": "PASS",
       "command": "pnpm --filter @matchbase/auth test",
-      "artifactIds": ["S1-AUTH"]
+      "artifactIds": [
+        "S1-AUTH",
+        "S1-AUTHORIZATION-CONTRACT",
+        "S1-AUTHORIZATION-MATRIX"
+      ]
     },
     {
       "id": "S1-AC-005",
@@ -383,7 +546,13 @@
       "id": "S1-AC-016",
       "status": "PASS",
       "command": "pnpm --filter @matchbase/auth test && pnpm test:slice1:api",
-      "artifactIds": ["S1-AUTH", "S1-APPLICATION", "S1-BROWSER-LIVE"]
+      "artifactIds": [
+        "S1-AUTH",
+        "S1-APPLICATION",
+        "S1-BROWSER-LIVE",
+        "S1-AUTHORIZATION-POLICY",
+        "S1-AUTHORIZATION-MATRIX"
+      ]
     },
     {
       "id": "S1-AC-017",
@@ -406,8 +575,15 @@
     {
       "id": "S1-AC-020",
       "status": "PASS",
-      "command": "pnpm snapshot:generate && pnpm snapshot:verify-sources",
-      "artifactIds": ["S1-PLAN"]
+      "command": "pnpm snapshot:prepare && pnpm snapshot:verify-sources",
+      "artifactIds": [
+        "S1-PLAN",
+        "S1-EXTERNAL-CLOSURE-ANCHOR",
+        "S1-EXTERNAL-CLOSURE-POLICY",
+        "S1-DASHBOARD-CLOSURE-POLICY",
+        "S1-DASHBOARD-CI-GENERATOR",
+        "S1-DASHBOARD-VALIDATOR"
+      ]
     },
     {
       "id": "S1-AC-021",
@@ -419,17 +595,33 @@
         "S1-HISTORY-SCAN",
         "S1-LOCAL-VALIDATOR",
         "S1-LICENSE-POLICY",
-        "S1-LICENSE-POLICY-TEST"
+        "S1-LICENSE-POLICY-TEST",
+        "S1-PROTECTED-HISTORY-MANIFEST",
+        "S1-PROTECTED-HISTORY-TEST",
+        "S1-CORRECTION-CANDIDATE",
+        "S1-CORRECTION-CANDIDATE-POLICY",
+        "S1-CORRECTION-CANDIDATE-TEST",
+        "S1-EVIDENCE-VALIDATOR",
+        "S1-API-INTEGRATION-TEST"
       ]
     },
     {
       "id": "S1-AC-022",
       "status": "PENDING",
       "command": "independent same-byte audits, commit/push parity, and exact hosted CI",
-      "artifactIds": ["S1-PLAN"]
+      "artifactIds": ["S1-PLAN", "S1-EXTERNAL-CLOSURE-ANCHOR"]
     }
   ],
   "defects": { "critical": 0, "major": 0, "minor": 0 },
-  "hostedCi": { "status": "PENDING_SUCCESSOR_RUN" },
-  "role2": { "status": "PENDING" }
+  "hostedCi": {
+    "status": "PENDING_CORRECTION_SUCCESSOR",
+    "baseClosure": {
+      "commit": "dcfc44b0eb5ffaa5fc3af9b64f1cb9f2df2460ad",
+      "tree": "1a58415215dfae7c318f31a83d479ed579936a56",
+      "runId": 31829362742,
+      "jobId": 94861065649,
+      "conclusion": "success"
+    }
+  },
+  "role2": { "status": "PENDING_CORRECTION_REAUDIT" }
 }

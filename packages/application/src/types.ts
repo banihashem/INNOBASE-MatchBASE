@@ -1,4 +1,9 @@
-import type { CanonicalFieldV1, DemoProjectionV1 } from "@matchbase/contracts";
+import type {
+  AdminSubRole,
+  CanonicalFieldV1,
+  DemoProjectionV1,
+  PersistedTier,
+} from "@matchbase/contracts";
 
 export const API_MINOR_VERSION = "2026-08-14";
 export const TERMINAL_RUN_STATES = new Set([
@@ -9,13 +14,13 @@ export const TERMINAL_RUN_STATES = new Set([
   "superseded",
 ]);
 
-export type PersistedTier = "demo" | "standard" | "consultant" | "admin";
+export type { AdminSubRole, PersistedTier } from "@matchbase/contracts";
 
 export interface RequestContext {
   accountId: string;
   userId: string;
   tier: PersistedTier;
-  adminSubRoles: readonly string[];
+  adminSubRoles: readonly AdminSubRole[];
   correlationId: string;
   deploymentId: string;
 }

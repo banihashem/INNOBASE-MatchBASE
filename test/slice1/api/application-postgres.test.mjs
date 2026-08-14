@@ -628,7 +628,7 @@ postgresTest(
 
       const other = await seedSubject(pool);
       const sameAccountOther = {
-        accountId: ids.accountId,
+        accountId: other.accountId,
         userId: randomUUID(),
       };
       await pool.query(
@@ -636,7 +636,7 @@ postgresTest(
          VALUES ($1,$2,$3,true,'active')`,
         [
           sameAccountOther.userId,
-          ids.accountId,
+          other.accountId,
           `same-account-${sameAccountOther.userId}`,
         ],
       );
@@ -644,12 +644,32 @@ postgresTest(
         `INSERT INTO entitlement_grant
            (grant_id, account_id, user_id, tier, grant_actor_kind, granted_by_user_id,
             justification, effective_from)
-         VALUES ($1,$2,$3,'standard','user',$4,'same-account IDOR fixture',clock_timestamp())`,
-        [randomUUID(), ids.accountId, sameAccountOther.userId, ids.userId],
+         VALUES ($1,$2,$3,'demo','user',$4,'same-account IDOR fixture',clock_timestamp())`,
+        [randomUUID(), other.accountId, sameAccountOther.userId, other.userId],
+      );
+      const firstSameAccountRequest = await app.createRequest(
+        context(other),
+        "request-idempotency-0001",
+        {
+          ...intake,
+          sourceText: "First same-account subject source",
+          fixtureCanonicalText: "First same-account canonical request",
+        },
+      );
+      await app.confirmVersion(
+        context(other),
+        firstSameAccountRequest.request_id,
+        1,
+        true,
+      );
+      const firstSameAccountRun = await app.submitRun(
+        context(other),
+        "run-idempotency-after-confirm",
+        { requestId: firstSameAccountRequest.request_id, version: 1 },
       );
       const otherSubjectContext = {
         ...context(sameAccountOther),
-        tier: "standard",
+        tier: "demo",
       };
       const otherSubjectRequest = await app.createRequest(
         otherSubjectContext,
@@ -660,7 +680,10 @@ postgresTest(
           fixtureCanonicalText: "Distinct same-account canonical request",
         },
       );
-      assert.notEqual(otherSubjectRequest.request_id, created.request_id);
+      assert.notEqual(
+        otherSubjectRequest.request_id,
+        firstSameAccountRequest.request_id,
+      );
       await app.confirmVersion(
         otherSubjectContext,
         otherSubjectRequest.request_id,
@@ -672,14 +695,14 @@ postgresTest(
         "run-idempotency-after-confirm",
         { requestId: otherSubjectRequest.request_id, version: 1 },
       );
-      assert.notEqual(otherSubjectRun.run_id, submitted.run_id);
+      assert.notEqual(otherSubjectRun.run_id, firstSameAccountRun.run_id);
       const subjectBoundIdempotency = await pool.query(
         `SELECT route, count(DISTINCT subject_user_id)::int AS subjects
            FROM idempotency_record
           WHERE account_id = $1 AND key_hash IN ($2, $3)
           GROUP BY route`,
         [
-          ids.accountId,
+          other.accountId,
           digest("request-idempotency-0001"),
           digest("run-idempotency-after-confirm"),
         ],

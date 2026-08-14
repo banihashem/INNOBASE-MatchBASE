@@ -39,3 +39,4 @@ run("docker", ["compose", "up", "-d", "postgres"]);
 pnpm("--filter", "@matchbase/data", "migrate");
 pnpm("--filter", "@matchbase/data", "seed:local");
 pnpm("test:ci");
+pnpm("snapshot:verify-sources");

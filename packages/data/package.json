@@ -20,6 +20,7 @@
     "seed:local": "node dist/seed-local.js"
   },
   "dependencies": {
+    "@matchbase/contracts": "workspace:*",
     "pg": "8.23.0"
   },
   "devDependencies": {

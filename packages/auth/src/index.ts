@@ -12,6 +12,14 @@ import {
   type JWTVerifyGetKey,
   type JWTVerifyOptions,
 } from "jose";
+import type { AdminSubRole, PersistedTier } from "@matchbase/contracts";
+
+export {
+  ADMIN_SUB_ROLES,
+  PERSISTED_TIERS,
+  type AdminSubRole,
+  type PersistedTier,
+} from "@matchbase/contracts";
 
 export type RuntimeEnvironment = "local" | "test" | "production";
 
@@ -270,16 +278,11 @@ export function assertUnsafeRequest(input: {
   }
 }
 
-export const TIERS = ["DEMO", "STANDARD", "CONSULTANT"] as const;
-export const ADMIN_ROLES = ["NONE", "SUPPORT", "AUDITOR", "OPERATOR"] as const;
-export type Tier = (typeof TIERS)[number];
-export type AdminRole = (typeof ADMIN_ROLES)[number];
-
 export interface StoredGrant {
   accountId: string;
   userId: string;
-  tier: Tier;
-  adminRole: AdminRole;
+  tier: PersistedTier;
+  adminSubRoles: readonly AdminSubRole[];
   active: boolean;
 }
 

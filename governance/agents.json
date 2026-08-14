@@ -323,7 +323,7 @@
           "outputHashes": [
             {
               "path": "test/browser/dashboard.spec.mjs",
-              "sha256": "3084948117CBE5D78C10E637459D9D0371F6D9E411A55BE13E5AC798B85D52BA"
+              "sha256": "F857DB27A9DF33E89B825F0EEF8082F51800AD8064758D405F3D643348A1AC6B"
             }
           ]
         }

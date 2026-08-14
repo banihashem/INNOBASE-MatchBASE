@@ -20,8 +20,13 @@ test("renders every control view without horizontal mobile overflow", async ({
   page,
 }) => {
   const errors = [];
+  const failedResponses = [];
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
+  });
+  page.on("response", (response) => {
+    if (response.status() >= 400)
+      failedResponses.push({ status: response.status(), url: response.url() });
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
@@ -38,7 +43,19 @@ test("renders every control view without horizontal mobile overflow", async ({
   expect(Math.max(dimensions.body, dimensions.document)).toBeLessThanOrEqual(
     dimensions.viewport,
   );
-  expect(errors).toEqual([]);
+  const expectedSnapshotMisses = failedResponses.filter(
+    ({ status, url }) =>
+      status === 404 && new URL(url).pathname === "/current-snapshot.json",
+  );
+  expect(failedResponses).toEqual(expectedSnapshotMisses);
+  expect(
+    errors.filter(
+      (message) =>
+        message !==
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    ),
+  ).toEqual([]);
+  expect(errors).toHaveLength(expectedSnapshotMisses.length);
 });
 
 test("desktop control room fits its viewport", async ({ page }) => {

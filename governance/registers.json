@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "requirements": [
+    {
+      "id": "REQ-S0-001",
+      "title": "Private repository safety baseline",
+      "status": "ACTIVE",
+      "summary": "Private single-repository bootstrap with secret, protected-source, license, dependency and history controls."
+    },
+    {
+      "id": "REQ-S0-002",
+      "title": "Autonomous current-control registers",
+      "status": "ACTIVE",
+      "summary": "Versioned machine-readable gates, slices, backlog, decisions, risks, tests, evidence, agents and external state."
+    },
+    {
+      "id": "REQ-S1-001",
+      "title": "Read-only local PM dashboard",
+      "status": "ACTIVE",
+      "summary": "Thirteen semantic control views with actual-artifact evidence explorer, explicit uncertainty and exact source drilldown."
+    },
+    {
+      "id": "REQ-S1-002",
+      "title": "Evidence integrity and privacy boundary",
+      "status": "ACTIVE",
+      "summary": "Absolute contained sources, mandatory SHA-256 and observation time, redaction, ignored local snapshot and no mutations."
+    }
+  ],
+  "tests": [
+    {
+      "id": "TEST-S0-CI",
+      "title": "Deterministic local CI suite",
+      "status": "PASS",
+      "summary": "Formatting, lint, governance, schema, boundaries, two secret scanners, dependency/license, type, unit, component, accessibility, adversarial and build checks exit zero.",
+      "command": "pnpm test:ci"
+    },
+    {
+      "id": "TEST-S1-SOURCES",
+      "title": "Current snapshot source verification",
+      "status": "PASS",
+      "summary": "Every rendered source reference resolves inside an allowlisted root and matches its mandatory SHA-256.",
+      "command": "pnpm snapshot:verify-sources"
+    },
+    {
+      "id": "TEST-S1-BROWSER",
+      "title": "Real-browser responsive and navigation check",
+      "status": "PASS",
+      "summary": "System Chrome headless validated mobile and desktop overflow plus navigation across all thirteen views; two Playwright tests exited zero.",
+      "command": "pnpm test:browser"
+    }
+  ],
+  "risks": [
+    {
+      "id": "RISK-001",
+      "severity": "major",
+      "status": "OPEN",
+      "summary": "Repository protection settings are not yet independently observable."
+    },
+    {
+      "id": "RISK-002",
+      "severity": "major",
+      "status": "OPEN",
+      "summary": "Infrastructure preflight is blocked by API, budget, quota, inventory, and IaC gaps."
+    },
+    {
+      "id": "RISK-003",
+      "severity": "minor",
+      "status": "OPEN",
+      "summary": "Brand font licensing is unresolved; dashboard uses system fallbacks."
+    }
+  ],
+  "defects": [],
+  "deployments": [],
+  "costs": [
+    {
+      "scope": "Slice 0",
+      "status": "UNKNOWN",
+      "reason": "No deployed MatchBASE workload and no budget visibility."
+    }
+  ],
+  "loops": [
+    {
+      "id": "PO-001-R3-S0",
+      "status": "IN_PROGRESS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EVIDENCE-S0-SECURITY",
+      "title": "Independent security/privacy/IAM audit",
+      "status": "PASS",
+      "summary": "Current pre-QA bytes passed with zero critical, major and minor defects; later integrated bytes require final critic reproduction."
+    },
+    {
+      "id": "EVIDENCE-S0-AI",
+      "title": "Independent AI/evidence/provider-routing audit",
+      "status": "PASS",
+      "summary": "Provider-route, evidence-state and redaction controls passed with zero critical, major and minor defects."
+    },
+    {
+      "id": "EVIDENCE-S0-QA",
+      "title": "Independent QA/red-team correction loop",
+      "status": "IN_PROGRESS",
+      "summary": "S0-QA-L2 is active; no PASS is claimed until the current-byte re-audit closes."
+    }
+  ]
+}

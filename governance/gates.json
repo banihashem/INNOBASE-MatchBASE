@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-08-14T13:52:03.3476740+04:00",
+  "gates": [
+    {
+      "id": "AG0",
+      "name": "Governance baseline",
+      "status": "IN_PROGRESS",
+      "owner": "Role 3",
+      "evidence": []
+    },
+    {
+      "id": "AG1",
+      "name": "Repository bootstrap",
+      "status": "IN_PROGRESS",
+      "owner": "Repository safety",
+      "evidence": []
+    },
+    {
+      "id": "AG2",
+      "name": "Protected-source boundary",
+      "status": "PASS",
+      "owner": "Repository safety",
+      "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md"
+      ]
+    },
+    {
+      "id": "AG3",
+      "name": "Local vertical slice",
+      "status": "IN_PROGRESS",
+      "owner": "Product/UX + Application/Data",
+      "evidence": []
+    },
+    {
+      "id": "AG7",
+      "name": "Infrastructure preflight",
+      "status": "BLOCKED",
+      "owner": "Platform",
+      "evidence": [
+        "budget visibility 403",
+        "core APIs disabled",
+        "complete inventory unavailable",
+        "IaC absent"
+      ]
+    }
+  ]
+}

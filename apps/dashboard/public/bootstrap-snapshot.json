@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "1970-01-01T00:00:00.000Z",
+  "mode": "READ_ONLY",
+  "buildRef": "bootstrap-no-local-evidence",
+  "notice": "UNKNOWN: generate a local sanitized evidence snapshot before drawing conclusions.",
+  "views": {
+    "portfolio": {
+      "label": "Portfolio",
+      "description": "No local evidence snapshot.",
+      "status": "UNKNOWN",
+      "records": []
+    },
+    "gates": {
+      "label": "Gates",
+      "description": "No local evidence snapshot.",
+      "status": "UNKNOWN",
+      "records": []
+    },
+    "backlog": {
+      "label": "Backlog",
+      "description": "No local evidence snapshot.",
+      "status": "UNKNOWN",
+      "records": []
+    },
+    "decisions": {
+      "label": "Decisions",
+      "description": "No local evidence snapshot.",
+      "status": "UNKNOWN",
+      "records": []
+    },
+    "risks": {
+      "label": "Risks",
+      "description": "No local evidence snapshot.",
+      "status": "UNKNOWN",
+      "records": []
+    },
+    "requirements": {
+      "label": "Requirements",
+      "description": "No local evidence snapshot.",
+      "status": "UNKNOWN",
+      "records": []
+    },
+    "tests": {
+      "label": "Tests",
+      "description": "No local evidence snapshot.",
+      "status": "UNKNOWN",
+      "records": []
+    },
+    "defects": {
+      "label": "Defects",
+      "description": "No local evidence snapshot.",
+      "status": "UNKNOWN",
+      "records": []
+    },
+    "deployments": {
+      "label": "Deployments",
+      "description": "No local evidence snapshot.",
+      "status": "UNKNOWN",
+      "records": []
+    },
+    "costs": {
+      "label": "Costs",
+      "description": "No local evidence snapshot.",
+      "status": "UNKNOWN",
+      "records": []
+    },
+    "agents": {
+      "label": "Agents",
+      "description": "No local evidence snapshot.",
+      "status": "UNKNOWN",
+      "records": []
+    },
+    "loops": {
+      "label": "Loops",
+      "description": "No local evidence snapshot.",
+      "status": "UNKNOWN",
+      "records": []
+    },
+    "evidence": {
+      "label": "Evidence",
+      "description": "No local evidence snapshot.",
+      "status": "UNKNOWN",
+      "records": []
+    }
+  }
+}

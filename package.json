@@ -1,0 +1,39 @@
+{
+  "name": "@innobase/matchbase",
+  "version": "0.0.0-private",
+  "private": true,
+  "description": "Private MatchBASE autonomous delivery workspace",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run governance:check && pnpm run snapshot:check && pnpm run boundary:check && pnpm run secrets:scan && pnpm run secrets:scan:independent && pnpm run dependency:check && pnpm run license:check && pnpm -r --if-present check",
+    "test": "pnpm -r --if-present test && node --test test/*.test.mjs",
+    "test:ci": "pnpm run check && pnpm run test && pnpm run build && pnpm run test:browser",
+    "governance:check": "node scripts/validate-governance.mjs",
+    "boundary:check": "node scripts/verify-boundaries.mjs",
+    "secrets:scan": "node scripts/secret-scan.mjs",
+    "secrets:scan:independent": "node scripts/run-secretlint.mjs",
+    "dependency:check": "node scripts/dependency-policy.mjs",
+    "dependency:audit": "pnpm audit --audit-level=high",
+    "license:check": "node scripts/license-policy.mjs",
+    "lint": "oxlint . --deny-warnings",
+    "test:browser": "playwright test",
+    "snapshot:check": "node scripts/validate-dashboard-snapshot.mjs",
+    "snapshot:generate": "pnpm --filter @matchbase/artifact-indexer build && node scripts/generate-dashboard-snapshot.mjs",
+    "snapshot:verify-sources": "node scripts/validate-dashboard-snapshot.mjs --require-sources",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@secretlint/quick-start": "13.0.4",
+    "@playwright/test": "1.62.1",
+    "oxlint": "1.78.0",
+    "prettier": "3.9.6",
+    "secretlint": "13.0.4",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

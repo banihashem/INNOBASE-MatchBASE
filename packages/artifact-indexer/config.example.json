@@ -1,0 +1,24 @@
+{
+  "roots": [
+    {
+      "id": "authoritative",
+      "absolutePath": "C:\\INNOBASE\\MatchBASE\\00_Authoritative_Sources"
+    },
+    {
+      "id": "planning",
+      "absolutePath": "C:\\INNOBASE\\MatchBASE\\02_Product_Research_and_Planning"
+    },
+    {
+      "id": "product-management",
+      "absolutePath": "C:\\INNOBASE\\MatchBASE\\01_Product_Management"
+    },
+    {
+      "id": "implementation-governance",
+      "absolutePath": "C:\\INNOBASE\\MatchBASE\\03_Implementation\\INNOBASE-MatchBASE\\governance"
+    }
+  ],
+  "asOf": "2026-08-14T10:15:00.000Z",
+  "staleAfterMs": 2592000000,
+  "maxFiles": 10000,
+  "maxExcerptBytes": 4096
+}

@@ -1,0 +1,19 @@
+name: Defect
+description: Record a reproducible MatchBASE defect without secrets or personal data.
+title: "[DEFECT] "
+labels: ["defect"]
+body:
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Sanitized reproduction, expected behavior, actual behavior, and affected gate.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options: [critical, major, minor]
+    validations:
+      required: true

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-08-14T13:52:03.3476740+04:00",
+  "github": {
+    "repository": "banihashem/INNOBASE-MatchBASE",
+    "visibility": "private",
+    "refs": 0,
+    "status": "BOOTSTRAP_IN_PROGRESS",
+    "evidenceRefs": [
+      {
+        "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
+        "sha256": "A23521C8E5F5605BE2E577E7A8950C7BCD59BBB51FB8DF06B6DF8B4C647058A4",
+        "method": "GitHub connector reads and git ls-remote recorded during discovery",
+        "result": "PRIVATE_ZERO_REF_OBSERVED"
+      }
+    ]
+  },
+  "gcp": {
+    "project": "innobase-matchbase",
+    "lifecycle": "ACTIVE",
+    "billingAttachment": "OBSERVED_ENABLED_IN_DISCOVERY_RECORD",
+    "mutation": "NONE",
+    "readiness": "BLOCKED",
+    "evidenceRefs": [
+      {
+        "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
+        "sha256": "A23521C8E5F5605BE2E577E7A8950C7BCD59BBB51FB8DF06B6DF8B4C647058A4",
+        "method": "Read-only gcloud and REST observations recorded during discovery; current budget visibility remains blocked",
+        "result": "PROJECT_ACTIVE_BILLING_RECORDED_AG7_BLOCKED"
+      }
+    ]
+  },
+  "cloudflare": {
+    "zone": "innobase.app",
+    "matchbaseDnsRecords": 0,
+    "mutation": "NONE",
+    "readiness": "BLOCKED",
+    "evidenceRefs": [
+      {
+        "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
+        "sha256": "A23521C8E5F5605BE2E577E7A8950C7BCD59BBB51FB8DF06B6DF8B4C647058A4",
+        "method": "Authenticated read-only Cloudflare connector observations recorded during discovery",
+        "result": "ZONE_ACTIVE_MATCHBASE_CONFIGURATION_ABSENT"
+      }
+    ]
+  },
+  "deployment": { "status": "NOT_STARTED" }
+}

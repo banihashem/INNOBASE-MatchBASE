@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "agents": [
+    {
+      "role": "Role 3 executor/orchestrator",
+      "scope": "integration, gates, append-only evidence",
+      "independent": false
+    },
+    {
+      "role": "Repository/licensing/release safety",
+      "scope": "repository discovery and release boundaries",
+      "independent": true
+    },
+    {
+      "role": "Platform/GCP/Cloudflare/IaC",
+      "scope": "read-only platform discovery",
+      "independent": true
+    },
+    {
+      "role": "Product/UX/dashboard",
+      "scope": "local read-only dashboard",
+      "independent": false
+    },
+    {
+      "role": "Application/data/API",
+      "scope": "safe evidence indexer",
+      "independent": false
+    },
+    {
+      "role": "AI/evidence/provider routing",
+      "scope": "provider and provenance review",
+      "independent": true
+    },
+    {
+      "role": "Security/privacy/IAM",
+      "scope": "security and privacy review",
+      "independent": true
+    },
+    {
+      "role": "QA/evaluation/red-team",
+      "scope": "tests and adversarial review",
+      "independent": true
+    },
+    {
+      "role": "SRE/cost/runbooks",
+      "scope": "operability and cost evidence",
+      "independent": true
+    },
+    {
+      "role": "Independent integration critic",
+      "scope": "final zero-defect gate",
+      "independent": true
+    }
+  ]
+}

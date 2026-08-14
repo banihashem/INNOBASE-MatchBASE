@@ -1,0 +1,117 @@
+import { createHash } from "node:crypto";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { resolve, win32 } from "node:path";
+import { isPathWithinRoot } from "./lib/dashboard-source-policy.mjs";
+import { validateProviderRoutes } from "./lib/provider-route-policy.mjs";
+
+const files = [
+  "agents.json",
+  "artifact-index.json",
+  "backlog.json",
+  "decisions.json",
+  "external-evidence-anchors.json",
+  "external-state.json",
+  "gates.json",
+  "implementation-index.json",
+  "provider-routes.json",
+  "registers.json",
+  "slices.json",
+];
+for (const file of files) {
+  const path = resolve("governance", file);
+  const value = JSON.parse(readFileSync(path, "utf8"));
+  if (value.schemaVersion !== 1)
+    throw new Error(`${path}: schemaVersion must be 1`);
+}
+
+const gates = JSON.parse(
+  readFileSync(resolve("governance/gates.json"), "utf8"),
+).gates;
+const gateIds = gates.map((gate) => gate.id);
+if (new Set(gateIds).size !== gateIds.length)
+  throw new Error("Duplicate gate IDs");
+if (!["AG0", "AG1", "AG2", "AG3", "AG7"].every((id) => gateIds.includes(id))) {
+  throw new Error("Required Slice 0 gate missing");
+}
+
+const external = JSON.parse(
+  readFileSync(resolve("governance/external-state.json"), "utf8"),
+);
+const anchorOnly =
+  process.env.MATCHBASE_EXTERNAL_EVIDENCE_MODE === "ANCHOR_ONLY_CI";
+if (anchorOnly && process.env.CI !== "true")
+  throw new Error("ANCHOR_ONLY_CI is allowed only on an explicit CI runner.");
+if (process.env.MATCHBASE_EXTERNAL_EVIDENCE_MODE && !anchorOnly)
+  throw new Error("Unknown external evidence validation mode.");
+const anchors = JSON.parse(
+  readFileSync(resolve("governance/external-evidence-anchors.json"), "utf8"),
+);
+if (anchors.mode !== "ANCHOR_ONLY_CI")
+  throw new Error("External evidence anchor mode is invalid.");
+const externalEvidenceRoot = anchorOnly
+  ? null
+  : realpathSync("C:\\INNOBASE\\MatchBASE\\01_Product_Management");
+if (
+  external.gcp.mutation !== "NONE" ||
+  external.cloudflare.mutation !== "NONE"
+) {
+  throw new Error("Slice 0 cannot claim external platform mutation");
+}
+for (const [surfaceName, surface] of Object.entries({
+  github: external.github,
+  gcp: external.gcp,
+  cloudflare: external.cloudflare,
+})) {
+  if (
+    !Array.isArray(surface.evidenceRefs) ||
+    surface.evidenceRefs.length === 0
+  ) {
+    throw new Error("External-state observation lacks evidence references.");
+  }
+  for (const evidence of surface.evidenceRefs) {
+    if (
+      typeof evidence.path !== "string" ||
+      !win32.isAbsolute(evidence.path) ||
+      !/^[A-F0-9]{64}$/.test(evidence.sha256) ||
+      typeof evidence.method !== "string" ||
+      !evidence.method.trim() ||
+      typeof evidence.result !== "string" ||
+      !evidence.result.trim()
+    ) {
+      throw new Error("External-state evidence reference is incomplete.");
+    }
+    const anchor = anchors.surfaces?.[surfaceName];
+    if (
+      !anchor ||
+      ["path", "sha256", "method", "result"].some(
+        (field) => anchor[field] !== evidence[field],
+      )
+    )
+      throw new Error("External-state evidence does not match its CI anchor.");
+    if (anchorOnly) continue;
+    const evidencePath = resolve(evidence.path);
+    const evidenceStat = lstatSync(evidencePath);
+    if (evidenceStat.isSymbolicLink() || !evidenceStat.isFile())
+      throw new Error("External-state evidence must be a regular file.");
+    const evidenceRealPath = realpathSync(evidencePath);
+    if (!isPathWithinRoot(externalEvidenceRoot, evidenceRealPath))
+      throw new Error(
+        "External-state evidence resolves outside management root.",
+      );
+    const actualHash = createHash("sha256")
+      .update(readFileSync(evidenceRealPath))
+      .digest("hex")
+      .toUpperCase();
+    if (actualHash !== evidence.sha256)
+      throw new Error("External-state evidence hash mismatch.");
+  }
+}
+
+const providerPolicy = JSON.parse(
+  readFileSync(resolve("governance/provider-routes.json"), "utf8"),
+);
+validateProviderRoutes(providerPolicy);
+
+console.log(
+  `governance: PASS (${files.length} registers; external evidence ${anchorOnly ? "ANCHOR_ONLY_CI" : "EXACT_LOCAL_SHA256"})`,
+);

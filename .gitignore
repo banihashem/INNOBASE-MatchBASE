@@ -1,0 +1,26 @@
+node_modules/
+playwright-report/
+test-results/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.local
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+data/generated/
+apps/dashboard/public/current-snapshot.json
+
+# MatchBASE governed source and management trees must never be copied here.
+00_Authoritative_Sources/
+01_Product_Management/
+02_Product_Research_and_Planning/
+.cw17_backup/
+.role2_tmp/
+.role3_work/
+.work/

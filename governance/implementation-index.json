@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-08-14T13:52:03.3476740+04:00",
+  "repository": {
+    "visibility": "private",
+    "license": "UNLICENSED",
+    "defaultBranch": "main",
+    "publicReleaseAuthorized": false
+  },
+  "policy": {
+    "region": {
+      "constraint": "Europe",
+      "candidate": "europe-west2",
+      "status": "PREFLIGHT_BLOCKED"
+    },
+    "quotas": {
+      "windowHours": 168,
+      "demo": 3,
+      "standard": 5,
+      "consultant": 20
+    },
+    "concurrency": { "activeRunCap": 3 },
+    "cost": {
+      "v1MonetaryHardStop": false,
+      "fullAttributionRequiredForRelease": true
+    },
+    "providers": {
+      "directProviders": true,
+      "openRouter": true,
+      "openRouterAuto": false,
+      "realDataRequiresPaidVerifiedPath": true
+    },
+    "data": {
+      "originalIntake": "TRANSIENT",
+      "persistentCanonicalLanguage": "English",
+      "provenanceRequired": true
+    },
+    "delivery": {
+      "mode": "continuous evidence-gated",
+      "role2GateRequiredBetweenSlices": true
+    }
+  },
+  "indexes": {
+    "decisions": "governance/decisions.json",
+    "requirementsTestsRisksDefectsDeploymentsCostsLoopsEvidence": "governance/registers.json",
+    "agents": "governance/agents.json",
+    "gates": "governance/gates.json",
+    "slices": "governance/slices.json",
+    "externalState": "governance/external-state.json"
+  }
+}

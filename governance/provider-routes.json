@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "status": "NOT_IMPLEMENTED",
+  "rules": {
+    "directProvidersAllowed": true,
+    "openRouterAllowed": true,
+    "openRouterAutoAllowed": false,
+    "realDataRequiresPaidVerifiedRoute": true,
+    "credentialsInRepositoryAllowed": false
+  },
+  "routes": [],
+  "promptVersions": [],
+  "modelVersions": []
+}

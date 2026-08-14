@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "source": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\OWNER_DECISION_DISPOSITION_REGISTER_PO_001.json",
+  "sourceSha256": "817029411A8D0E67318CF9FCE9E9C925BB3A261D9F8ED581EF43AC886919E112",
+  "summary": {
+    "total": 162,
+    "closed": 28,
+    "whollySuperseded": 0,
+    "partiallyClosed": 14,
+    "delegatedTechnical": 14,
+    "open": 106
+  },
+  "status": "CURRENT"
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "builds": [],
+  "artifacts": [],
+  "sboms": [
+    {
+      "id": "SBOM-SLICE-0",
+      "status": "NOT_GENERATED",
+      "reason": "Slice 0 has no deployable release artifact; pinned reproducible SBOM generation remains a later release gate."
+    }
+  ],
+  "provenance": [
+    {
+      "id": "PROV-SLICE-0-001",
+      "status": "LOCAL_ONLY",
+      "source": "pnpm-lock.yaml",
+      "note": "Repository commit and remote CI provenance are added only after the first protected private push."
+    }
+  ],
+  "deployments": []
+}

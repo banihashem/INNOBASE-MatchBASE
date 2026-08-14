@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "id": "S0-001",
+      "slice": "SLICE-0",
+      "title": "Secure repository baseline",
+      "status": "IN_PROGRESS",
+      "owner": "Repository safety"
+    },
+    {
+      "id": "S0-002",
+      "slice": "SLICE-0",
+      "title": "Autonomous organization registers",
+      "status": "IN_PROGRESS",
+      "owner": "Role 3"
+    },
+    {
+      "id": "S0-003",
+      "slice": "SLICE-0",
+      "title": "Read-only local PM dashboard",
+      "status": "IN_PROGRESS",
+      "owner": "Product/UX/dashboard"
+    },
+    {
+      "id": "S0-004",
+      "slice": "SLICE-0",
+      "title": "Safe evidence indexer",
+      "status": "IN_PROGRESS",
+      "owner": "Application/data/API"
+    },
+    {
+      "id": "S0-005",
+      "slice": "SLICE-0",
+      "title": "Independent validation and append-only closure",
+      "status": "PENDING",
+      "owner": "Independent integration critic"
+    }
+  ]
+}

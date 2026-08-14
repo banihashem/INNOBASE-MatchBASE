@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "candidateId": "PO-001-SLICE-1-LOOP-1",
   "algorithm": "SHA256(PATH_NUL_SHA256_LF)",
-  "fileCount": 39,
-  "aggregateSha256": "AA518B4F7CDB4F7BC33384857F2EEBB4E0307BEDF37B18FA054715484A8F640A",
+  "fileCount": 41,
+  "aggregateSha256": "934EE77771B263D705EDD71D0F8118C15206BF839BC1E073BF94FAE21E141103",
   "files": [
     {
       "path": "apps/web/package.json",
@@ -99,11 +99,15 @@
     },
     {
       "path": "scripts/lib/correction-candidate-policy.mjs",
-      "sha256": "092933AD8FB370E4572B02EE5EB1388AB8DDDF4BD4488FABCF510282CB2E26A9"
+      "sha256": "49EF15B212D62C19F272AF1C66563C26B815E53892ED7CAFC1A724537840BBFC"
     },
     {
       "path": "scripts/lib/dashboard-closure-policy.mjs",
       "sha256": "DB44952AC2392CE3C1832263D19DCA35774353864DE7BFBD5AED831B9AEAB4CE"
+    },
+    {
+      "path": "scripts/lib/dashboard-source-policy.mjs",
+      "sha256": "6C6E40C602AFB6780F46A58999F95E0CFF17900CFB15A411C09DA11B48DB2C5A"
     },
     {
       "path": "scripts/lib/external-closure-policy.mjs",
@@ -139,7 +143,7 @@
     },
     {
       "path": "test/correction-candidate-policy.test.mjs",
-      "sha256": "F9783D8534F8FA66E3EBEA78EC89C4FDE450B74E0FDD3665DDA4F034D7378512"
+      "sha256": "5B7EFC6D7409D26420DCEFF9A5A62D176EEF9FA5EE896A87E4F42451B61A30AB"
     },
     {
       "path": "test/dashboard-closure-policy.test.mjs",
@@ -160,6 +164,10 @@
     {
       "path": "test/slice1/api/application-postgres.test.mjs",
       "sha256": "28BDED535E4834577638A0875B266D5AE712E3D9E2AAF17D990FF021C3B5DB8D"
+    },
+    {
+      "path": "test/snapshot-path-policy.test.mjs",
+      "sha256": "C86D016BD3ACD5889F48067EEBABF7F9808B75909D3851ABB0EE35C0F571B6CA"
     }
   ]
 }

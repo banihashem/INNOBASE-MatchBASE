@@ -16,7 +16,10 @@ import {
   validateGeneratorConfig,
 } from "../scripts/lib/snapshot-path-policy.mjs";
 import { replaceRegularFileTransactionally } from "../scripts/lib/replace-regular-file.mjs";
-import { validateSourceReferenceShape } from "../scripts/lib/dashboard-source-policy.mjs";
+import {
+  isPathWithinRoot,
+  validateSourceReferenceShape,
+} from "../scripts/lib/dashboard-source-policy.mjs";
 
 test("accepts only the exact governed source-root set", () => {
   const roots = [...TRUSTED_ROOTS].map(([id, absolutePath]) => ({
@@ -72,6 +75,43 @@ test("rejects traversal and weak source evidence before verification", () => {
   assert.throws(
     () => validateSourceReferenceShape({ ...valid, sha256: undefined }, [root]),
     /invalid source hash/,
+  );
+});
+
+test("preserves native slash-absolute paths instead of treating them as Windows paths", () => {
+  const root = "/home/runner/work/INNOBASE-MatchBASE/INNOBASE-MatchBASE";
+  const source = {
+    sourceId: "matchbase://ci-snapshot/governance/slices.json",
+    path: `${root}/governance/slices.json`,
+    sha256: "A".repeat(64),
+    observedAt: "2026-08-14T00:00:00.000Z",
+  };
+  const result = validateSourceReferenceShape(source, [root]);
+  assert.equal(result.normalizedPath, source.path);
+  assert.equal(result.lexicalRoot, root);
+  assert.throws(
+    () =>
+      validateSourceReferenceShape(
+        {
+          ...source,
+          path: source.path.replace("/home/", "/HOME/"),
+        },
+        [root],
+      ),
+    /outside allowlisted roots/,
+  );
+  assert.equal(
+    isPathWithinRoot(root, "C:\\home\\runner\\work\\candidate.json"),
+    false,
+  );
+  assert.equal(isPathWithinRoot("C:\\INNOBASE\\MatchBASE", source.path), false);
+  assert.throws(
+    () =>
+      validateSourceReferenceShape(
+        { ...source, path: "C:\\home\\runner\\work\\candidate.json" },
+        [root],
+      ),
+    /outside allowlisted roots/,
   );
 });
 

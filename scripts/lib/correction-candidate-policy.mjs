@@ -35,6 +35,7 @@ const expectedPaths = [
   "scripts/generate-dashboard-snapshot.mjs",
   "scripts/lib/correction-candidate-policy.mjs",
   "scripts/lib/dashboard-closure-policy.mjs",
+  "scripts/lib/dashboard-source-policy.mjs",
   "scripts/lib/external-closure-policy.mjs",
   "scripts/lib/protected-management-history.mjs",
   "scripts/lib/semantic-dashboard.mjs",
@@ -49,6 +50,7 @@ const expectedPaths = [
   "test/protected-management-history.test.mjs",
   "test/semantic-dashboard.test.mjs",
   "test/slice1/api/application-postgres.test.mjs",
+  "test/snapshot-path-policy.test.mjs",
 ];
 
 function hasExactKeys(value, keys) {

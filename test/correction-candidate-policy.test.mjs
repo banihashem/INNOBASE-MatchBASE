@@ -13,7 +13,7 @@ const manifest = JSON.parse(
 test("binds the correction disciplines to one exact candidate manifest", () => {
   assert.equal(
     validateCorrectionCandidate(structuredClone(manifest)).fileCount,
-    39,
+    41,
   );
 });
 

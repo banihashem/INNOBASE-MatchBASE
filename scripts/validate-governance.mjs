@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { resolve, win32 } from "node:path";
 import { isPathWithinRoot } from "./lib/dashboard-source-policy.mjs";
+import { validateAgentRoster } from "./lib/agent-policy.mjs";
 import { validateProviderRoutes } from "./lib/provider-route-policy.mjs";
+import { validateTraceability } from "./lib/traceability-policy.mjs";
 
 const files = [
   "agents.json",
@@ -16,6 +18,7 @@ const files = [
   "provider-routes.json",
   "registers.json",
   "slices.json",
+  "traceability.json",
 ];
 for (const file of files) {
   const path = resolve("governance", file);
@@ -111,6 +114,48 @@ const providerPolicy = JSON.parse(
   readFileSync(resolve("governance/provider-routes.json"), "utf8"),
 );
 validateProviderRoutes(providerPolicy);
+
+const registers = JSON.parse(
+  readFileSync(resolve("governance/registers.json"), "utf8"),
+);
+const backlog = JSON.parse(
+  readFileSync(resolve("governance/backlog.json"), "utf8"),
+).items;
+const traceability = JSON.parse(
+  readFileSync(resolve("governance/traceability.json"), "utf8"),
+);
+const decisions = JSON.parse(
+  readFileSync(resolve("governance/decisions.json"), "utf8"),
+);
+validateTraceability(
+  traceability,
+  {
+    requirements: registers.requirements,
+    risks: registers.risks,
+    backlog,
+    tests: registers.tests,
+    gates,
+    deployments: registers.deployments,
+    decisionSource: {
+      path: decisions.source,
+      sha256: decisions.sourceSha256,
+    },
+  },
+  {
+    repoRoot: realpathSync("."),
+    managementRoot: externalEvidenceRoot ?? realpathSync("."),
+    managementWindowsRoot: "C:\\INNOBASE\\MatchBASE\\01_Product_Management",
+    anchorOnly,
+  },
+);
+
+const agentRoster = JSON.parse(
+  readFileSync(resolve("governance/agents.json"), "utf8"),
+);
+validateAgentRoster(agentRoster, {
+  repoRoot: realpathSync("."),
+  anchorOnly,
+});
 
 console.log(
   `governance: PASS (${files.length} registers; external evidence ${anchorOnly ? "ANCHOR_ONLY_CI" : "EXACT_LOCAL_SHA256"})`,

@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "verification": {
+    "local": "EXACT_LOCAL_SHA256",
+    "hostedCiExternalSources": "ANCHOR_ONLY_CI"
+  },
+  "chains": [
+    {
+      "id": "TRACE-S0-001",
+      "sourceRefs": [
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_IMPLEMENTATION_ORCHESTRATOR_PROMPT_PO_001.md",
+          "sha256": "6BFB001E7BA64D3FF61DB787C3A12A5C64ED47A003BA355BB50BE3BEE291E50D"
+        }
+      ],
+      "decisionRefs": [
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\OWNER_DECISION_DISPOSITION_REGISTER_PO_001.json",
+          "sha256": "817029411A8D0E67318CF9FCE9E9C925BB3A261D9F8ED581EF43AC886919E112"
+        }
+      ],
+      "requirementId": "REQ-S0-001",
+      "riskIds": ["RISK-001"],
+      "designRefs": [
+        {
+          "path": "docs/LOCAL_BOOTSTRAP.md",
+          "sha256": "A7D6CC20C34942BB4D7710CF361E3D8168D01A6A4A3750F015FCC83AFE85EE27"
+        }
+      ],
+      "backlogIds": ["S0-001"],
+      "testIds": ["TEST-S0-CI"],
+      "gateIds": ["AG1"],
+      "deploymentId": "DEPLOY-S0-LOCAL"
+    },
+    {
+      "id": "TRACE-S0-002",
+      "sourceRefs": [
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\AUTONOMOUS_CONTINUOUS_DELIVERY_GOVERNANCE_CURRENT.md",
+          "sha256": "347EE0BBDD4D4CA546FA25D42593802E1B951FFEFC2902024B896C9B8D2457E8"
+        }
+      ],
+      "decisionRefs": [
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\OWNER_DECISION_DISPOSITION_REGISTER_PO_001.json",
+          "sha256": "817029411A8D0E67318CF9FCE9E9C925BB3A261D9F8ED581EF43AC886919E112"
+        }
+      ],
+      "requirementId": "REQ-S0-002",
+      "riskIds": ["RISK-002"],
+      "designRefs": [
+        {
+          "path": "docs/AUTONOMOUS_OPERATING_MODEL.md",
+          "sha256": "E8BF9ED208FA4E3884D094B029B06952A148D992F88C3B3FC1E2D467F061010B"
+        }
+      ],
+      "backlogIds": ["S0-002"],
+      "testIds": ["TEST-S0-CI"],
+      "gateIds": ["AG0", "AG2"],
+      "deploymentId": "DEPLOY-S0-LOCAL"
+    },
+    {
+      "id": "TRACE-S1-001",
+      "sourceRefs": [
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\AUTONOMOUS_CONTINUOUS_DELIVERY_GOVERNANCE_CURRENT.md",
+          "sha256": "347EE0BBDD4D4CA546FA25D42593802E1B951FFEFC2902024B896C9B8D2457E8"
+        }
+      ],
+      "decisionRefs": [
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\OWNER_DECISION_DISPOSITION_REGISTER_PO_001.json",
+          "sha256": "817029411A8D0E67318CF9FCE9E9C925BB3A261D9F8ED581EF43AC886919E112"
+        }
+      ],
+      "requirementId": "REQ-S1-001",
+      "riskIds": ["RISK-003"],
+      "designRefs": [
+        {
+          "path": "apps/dashboard/README.md",
+          "sha256": "B10B338150B0407364A18356DA9DB29CA4966FDFFA5569CA5DC68FDC90655D4F"
+        }
+      ],
+      "backlogIds": ["S0-003"],
+      "testIds": ["TEST-S0-CI", "TEST-S1-BROWSER"],
+      "gateIds": ["AG3"],
+      "deploymentId": "DEPLOY-S0-LOCAL"
+    },
+    {
+      "id": "TRACE-S1-002",
+      "sourceRefs": [
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_IMPLEMENTATION_ORCHESTRATOR_PROMPT_PO_001.md",
+          "sha256": "6BFB001E7BA64D3FF61DB787C3A12A5C64ED47A003BA355BB50BE3BEE291E50D"
+        }
+      ],
+      "decisionRefs": [
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\OWNER_DECISION_DISPOSITION_REGISTER_PO_001.json",
+          "sha256": "817029411A8D0E67318CF9FCE9E9C925BB3A261D9F8ED581EF43AC886919E112"
+        }
+      ],
+      "requirementId": "REQ-S1-002",
+      "riskIds": ["RISK-002"],
+      "designRefs": [
+        {
+          "path": "packages/artifact-indexer/README.md",
+          "sha256": "CEC6ADBEEA6068150534E455357B2581103E89876A9B0FED1F713156663A7D42"
+        }
+      ],
+      "backlogIds": ["S0-004"],
+      "testIds": ["TEST-S0-CI", "TEST-S1-SOURCES"],
+      "gateIds": ["AG2", "AG3"],
+      "deploymentId": "DEPLOY-S0-LOCAL"
+    }
+  ]
+}

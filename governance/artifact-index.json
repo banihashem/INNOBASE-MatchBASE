@@ -12,9 +12,9 @@
   "provenance": [
     {
       "id": "PROV-SLICE-0-001",
-      "status": "LOCAL_ONLY",
-      "source": "pnpm-lock.yaml",
-      "note": "Repository commit and remote CI provenance are added only after the first protected private push."
+      "status": "PUSHED_PRIVATE",
+      "source": "https://github.com/banihashem/INNOBASE-MatchBASE/commit/518ff98aa4c4b719460bca020894782fc660ce21",
+      "note": "Initial main commit was verified through Git, git ls-remote and the GitHub connector; hosted CI result remains UNKNOWN."
     }
   ],
   "deployments": []

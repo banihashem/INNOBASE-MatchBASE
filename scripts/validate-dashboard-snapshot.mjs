@@ -40,6 +40,7 @@ const allowedRoots = [
   "C:\\INNOBASE\\MatchBASE\\00_Authoritative_Sources",
   "C:\\INNOBASE\\MatchBASE\\01_Product_Management",
   "C:\\INNOBASE\\MatchBASE\\02_Product_Research_and_Planning",
+  "C:\\INNOBASE\\MatchBASE\\03_Implementation\\INNOBASE-MatchBASE",
   "C:\\INNOBASE\\MatchBASE\\03_Implementation\\INNOBASE-MatchBASE\\governance",
 ].map((value) => resolve(value));
 const requireSources = process.argv.includes("--require-sources");

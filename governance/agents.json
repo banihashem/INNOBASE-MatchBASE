@@ -2,54 +2,424 @@
   "schemaVersion": 1,
   "agents": [
     {
+      "id": "AGENT-R3-ORCHESTRATOR",
       "role": "Role 3 executor/orchestrator",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "IN_PROGRESS",
       "scope": "integration, gates, append-only evidence",
-      "independent": false
+      "independent": false,
+      "allowedTargets": [
+        "repository Slice 0 integration",
+        "repository integration files",
+        "governance registers",
+        "append-only management evidence"
+      ],
+      "deliverables": [
+        {
+          "target": "repository Slice 0 integration",
+          "status": "IN_PROGRESS",
+          "outputHashes": []
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "R3-FINAL-CI",
+          "status": "PENDING",
+          "commandOrMethod": "pnpm test:ci",
+          "evidenceRefs": []
+        }
+      ],
+      "dependencies": [
+        "all discipline outputs",
+        "independent critic disposition",
+        "Role 2 gate"
+      ],
+      "independentAudit": {
+        "auditorRole": "Independent integration critic",
+        "disposition": "PENDING",
+        "evidenceRefs": []
+      }
     },
     {
+      "id": "AGENT-REPO-SAFETY",
       "role": "Repository/licensing/release safety",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "COMPLETED",
       "scope": "repository discovery and release boundaries",
-      "independent": true
+      "independent": true,
+      "allowedTargets": [
+        "GitHub repository read-only state",
+        "local Git metadata",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md"
+      ],
+      "deliverables": [
+        {
+          "target": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
+              "sha256": "16297E5BC152B389DD8526769422932379FB5075342A959698617E8070611D0D"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "REPO-DISCOVERY-READONLY",
+          "status": "PASS",
+          "commandOrMethod": "read-only Git, git ls-remote, and GitHub connector observations",
+          "evidenceRefs": [
+            {
+              "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
+              "sha256": "16297E5BC152B389DD8526769422932379FB5075342A959698617E8070611D0D"
+            }
+          ]
+        }
+      ],
+      "dependencies": [],
+      "independentAudit": {
+        "auditorRole": "Independent integration critic",
+        "disposition": "PENDING",
+        "evidenceRefs": []
+      }
     },
     {
+      "id": "AGENT-PLATFORM",
       "role": "Platform/GCP/Cloudflare/IaC",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "COMPLETED",
       "scope": "read-only platform discovery",
-      "independent": true
+      "independent": true,
+      "allowedTargets": [
+        "GCP read-only state",
+        "Cloudflare read-only state",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md"
+      ],
+      "deliverables": [
+        {
+          "target": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
+              "sha256": "16297E5BC152B389DD8526769422932379FB5075342A959698617E8070611D0D"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "PLATFORM-DISCOVERY-READONLY",
+          "status": "PASS",
+          "commandOrMethod": "read-only gcloud and Cloudflare connector observations",
+          "evidenceRefs": [
+            {
+              "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
+              "sha256": "16297E5BC152B389DD8526769422932379FB5075342A959698617E8070611D0D"
+            }
+          ]
+        }
+      ],
+      "dependencies": [],
+      "independentAudit": {
+        "auditorRole": "Independent integration critic",
+        "disposition": "PENDING",
+        "evidenceRefs": []
+      }
     },
     {
+      "id": "AGENT-PRODUCT-UX",
       "role": "Product/UX/dashboard",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "IN_PROGRESS",
       "scope": "local read-only dashboard",
-      "independent": false
+      "independent": false,
+      "allowedTargets": ["apps/dashboard/**"],
+      "deliverables": [
+        {
+          "target": "apps/dashboard/src/App.tsx",
+          "status": "OBSERVED",
+          "outputHashes": [
+            {
+              "path": "apps/dashboard/src/App.tsx",
+              "sha256": "E17224B4462EF5B2AB8AA245670DD63A929BA5E04F8B91E89981B0F5EB8800BF"
+            }
+          ]
+        },
+        {
+          "target": "apps/dashboard/public/bootstrap-snapshot.json",
+          "status": "OBSERVED",
+          "outputHashes": [
+            {
+              "path": "apps/dashboard/public/bootstrap-snapshot.json",
+              "sha256": "8574CA23BBEAC72C17789A3EF2DB057DB46C3788DAD58A8FBB4F7F26840554D2"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "DASHBOARD-FINAL",
+          "status": "PENDING",
+          "commandOrMethod": "pnpm --filter @matchbase/dashboard test",
+          "evidenceRefs": []
+        }
+      ],
+      "dependencies": ["artifact-indexer snapshot", "semantic projection"],
+      "independentAudit": {
+        "auditorRole": "Independent integration critic",
+        "disposition": "PENDING",
+        "evidenceRefs": []
+      }
     },
     {
+      "id": "AGENT-APP-DATA",
       "role": "Application/data/API",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "IN_PROGRESS",
       "scope": "safe evidence indexer",
-      "independent": false
+      "independent": false,
+      "allowedTargets": ["packages/artifact-indexer/**"],
+      "deliverables": [
+        {
+          "target": "packages/artifact-indexer/src/indexer.ts",
+          "status": "OBSERVED",
+          "outputHashes": [
+            {
+              "path": "packages/artifact-indexer/src/indexer.ts",
+              "sha256": "A8BDDE72C85F5BE79DC00D09D8C000BB90EA01A831973B20DCAF2E6532600C50"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "INDEXER-FINAL",
+          "status": "PENDING",
+          "commandOrMethod": "pnpm --filter @matchbase/artifact-indexer test",
+          "evidenceRefs": []
+        }
+      ],
+      "dependencies": [
+        "allowlisted source roots",
+        "dashboard snapshot contract"
+      ],
+      "independentAudit": {
+        "auditorRole": "Independent integration critic",
+        "disposition": "PENDING",
+        "evidenceRefs": []
+      }
     },
     {
+      "id": "AGENT-AI-EVIDENCE",
       "role": "AI/evidence/provider routing",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "IN_PROGRESS",
       "scope": "provider and provenance review",
-      "independent": true
+      "independent": true,
+      "allowedTargets": [
+        "governance/provider-routes.json",
+        "scripts/lib/provider-route-policy.mjs",
+        "provider policy tests"
+      ],
+      "deliverables": [
+        {
+          "target": "governance/provider-routes.json",
+          "status": "OBSERVED",
+          "outputHashes": [
+            {
+              "path": "governance/provider-routes.json",
+              "sha256": "7B01BB94128011F20304A8CEE7051EA240A835B376E58D4FF25EDF7C223014F9"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "AI-EVIDENCE-FINAL",
+          "status": "PENDING",
+          "commandOrMethod": "node --test test/provider-route-policy.test.mjs",
+          "evidenceRefs": []
+        }
+      ],
+      "dependencies": ["provider policy", "final integrated bytes"],
+      "independentAudit": {
+        "auditorRole": "Independent integration critic",
+        "disposition": "PENDING",
+        "evidenceRefs": []
+      }
     },
     {
+      "id": "AGENT-SECURITY",
       "role": "Security/privacy/IAM",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "IN_PROGRESS",
       "scope": "security and privacy review",
-      "independent": true
+      "independent": true,
+      "allowedTargets": [
+        "scripts/run-secretlint.mjs",
+        "security policy",
+        "secret scanners",
+        "boundary validation",
+        "security tests"
+      ],
+      "deliverables": [
+        {
+          "target": "scripts/run-secretlint.mjs",
+          "status": "OBSERVED",
+          "outputHashes": [
+            {
+              "path": "scripts/run-secretlint.mjs",
+              "sha256": "CF498961829AD6927DC241A19A452AFDE3AC9F5818A3D83FB2B1D7C29C878428"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "SECURITY-FINAL",
+          "status": "PENDING",
+          "commandOrMethod": "pnpm secrets:scan && pnpm secrets:scan:independent",
+          "evidenceRefs": []
+        }
+      ],
+      "dependencies": ["final integrated bytes"],
+      "independentAudit": {
+        "auditorRole": "Independent integration critic",
+        "disposition": "PENDING",
+        "evidenceRefs": []
+      }
     },
     {
+      "id": "AGENT-QA",
       "role": "QA/evaluation/red-team",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "IN_PROGRESS",
       "scope": "tests and adversarial review",
-      "independent": true
+      "independent": true,
+      "allowedTargets": [
+        "adversarial regression tests",
+        "test/**",
+        "apps/dashboard/**/*.test.*"
+      ],
+      "deliverables": [
+        {
+          "target": "adversarial regression tests",
+          "status": "IN_PROGRESS",
+          "outputHashes": []
+        },
+        {
+          "target": "test/browser/dashboard.spec.mjs",
+          "status": "OBSERVED",
+          "outputHashes": [
+            {
+              "path": "test/browser/dashboard.spec.mjs",
+              "sha256": "3084948117CBE5D78C10E637459D9D0371F6D9E411A55BE13E5AC798B85D52BA"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "QA-FINAL",
+          "status": "PENDING",
+          "commandOrMethod": "pnpm test:ci",
+          "evidenceRefs": []
+        }
+      ],
+      "dependencies": ["final integrated bytes", "browser runtime"],
+      "independentAudit": {
+        "auditorRole": "Independent integration critic",
+        "disposition": "PENDING",
+        "evidenceRefs": []
+      }
     },
     {
+      "id": "AGENT-SRE",
       "role": "SRE/cost/runbooks",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "IN_PROGRESS",
       "scope": "operability and cost evidence",
-      "independent": true
+      "independent": true,
+      "allowedTargets": [
+        "docs/LOCAL_OPERATIONS_RUNBOOK.md",
+        "governance cost and deployment records"
+      ],
+      "deliverables": [
+        {
+          "target": "docs/LOCAL_OPERATIONS_RUNBOOK.md",
+          "status": "OBSERVED",
+          "outputHashes": [
+            {
+              "path": "docs/LOCAL_OPERATIONS_RUNBOOK.md",
+              "sha256": "8A6C87E55720D7E6A3FE3015A2BCCDE792C7B71E1F8FC52084590E036812DEBA"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "SRE-FINAL",
+          "status": "PENDING",
+          "commandOrMethod": "runbook and cost-evidence audit",
+          "evidenceRefs": []
+        }
+      ],
+      "dependencies": ["final integrated bytes", "cost attribution evidence"],
+      "independentAudit": {
+        "auditorRole": "Independent integration critic",
+        "disposition": "PENDING",
+        "evidenceRefs": []
+      }
     },
     {
+      "id": "AGENT-INTEGRATION-CRITIC",
       "role": "Independent integration critic",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "executionStatus": "PENDING",
       "scope": "final zero-defect gate",
-      "independent": true
+      "independent": true,
+      "allowedTargets": [
+        "independent Slice 0 disposition",
+        "repository read-only state",
+        "test evidence",
+        "audit report"
+      ],
+      "deliverables": [
+        {
+          "target": "independent Slice 0 disposition",
+          "status": "PENDING",
+          "outputHashes": []
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "CRITIC-REPRODUCTION",
+          "status": "PENDING",
+          "commandOrMethod": "independent reproduction of final checks",
+          "evidenceRefs": []
+        }
+      ],
+      "dependencies": [
+        "all producing roles complete",
+        "final current-byte test run"
+      ],
+      "independentAudit": {
+        "auditorRole": "Role 2 independent auditor",
+        "disposition": "PENDING",
+        "evidenceRefs": []
+      }
     }
   ]
 }

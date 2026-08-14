@@ -5,6 +5,7 @@
     "visibility": "private",
     "license": "UNLICENSED",
     "defaultBranch": "main",
+    "initialCommit": "518ff98aa4c4b719460bca020894782fc660ce21",
     "publicReleaseAuthorized": false
   },
   "policy": {
@@ -46,6 +47,7 @@
     "agents": "governance/agents.json",
     "gates": "governance/gates.json",
     "slices": "governance/slices.json",
-    "externalState": "governance/external-state.json"
+    "externalState": "governance/external-state.json",
+    "traceability": "governance/traceability.json"
   }
 }

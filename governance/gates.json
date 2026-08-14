@@ -1,36 +1,54 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-14T13:52:03.3476740+04:00",
+  "updatedAt": "2026-08-14T15:28:04.0357204+04:00",
   "gates": [
     {
       "id": "AG0",
       "name": "Governance baseline",
-      "status": "IN_PROGRESS",
+      "status": "PASS",
       "owner": "Role 3",
-      "evidence": []
+      "evidence": [
+        "governance/implementation-index.json",
+        "governance/decisions.json",
+        "governance/traceability.json"
+      ],
+      "traceabilityIds": ["TRACE-S0-002"]
     },
     {
       "id": "AG1",
       "name": "Repository bootstrap",
-      "status": "IN_PROGRESS",
-      "owner": "Repository safety",
-      "evidence": []
-    },
-    {
-      "id": "AG2",
-      "name": "Protected-source boundary",
       "status": "PASS",
       "owner": "Repository safety",
       "evidence": [
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md"
-      ]
+      ],
+      "commitUrl": "https://github.com/banihashem/INNOBASE-MatchBASE/commit/518ff98aa4c4b719460bca020894782fc660ce21",
+      "traceabilityIds": ["TRACE-S0-001"]
+    },
+    {
+      "id": "AG2",
+      "name": "Decision and traceability",
+      "status": "PASS",
+      "owner": "Repository safety",
+      "evidence": [
+        "governance/backlog.json",
+        "governance/registers.json",
+        "governance/decisions.json",
+        "governance/traceability.json"
+      ],
+      "traceabilityIds": ["TRACE-S0-002", "TRACE-S1-002"]
     },
     {
       "id": "AG3",
       "name": "Local vertical slice",
-      "status": "IN_PROGRESS",
+      "status": "PASS",
       "owner": "Product/UX + Application/Data",
-      "evidence": []
+      "evidence": [
+        "apps/dashboard/public/bootstrap-snapshot.json",
+        "test/browser/dashboard.spec.mjs",
+        "docs/LOCAL_OPERATIONS_RUNBOOK.md"
+      ],
+      "traceabilityIds": ["TRACE-S1-001", "TRACE-S1-002"]
     },
     {
       "id": "AG7",
@@ -38,6 +56,9 @@
       "status": "BLOCKED",
       "owner": "Platform",
       "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md"
+      ],
+      "evidenceGaps": [
         "budget visibility 403",
         "core APIs disabled",
         "complete inventory unavailable",

@@ -5,36 +5,89 @@
       "id": "S0-001",
       "slice": "SLICE-0",
       "title": "Secure repository baseline",
-      "status": "IN_PROGRESS",
-      "owner": "Repository safety"
+      "status": "PASS",
+      "owner": "Repository safety",
+      "priority": "MUST",
+      "dependencies": [],
+      "requirementIds": ["REQ-S0-001"],
+      "riskIds": ["RISK-001"],
+      "acceptanceTestIds": ["TEST-S0-CI"],
+      "gateIds": ["AG1"],
+      "deploymentId": "DEPLOY-S0-LOCAL",
+      "traceabilityIds": ["TRACE-S0-001"]
     },
     {
       "id": "S0-002",
       "slice": "SLICE-0",
       "title": "Autonomous organization registers",
-      "status": "IN_PROGRESS",
-      "owner": "Role 3"
+      "status": "PASS",
+      "owner": "Role 3",
+      "priority": "MUST",
+      "dependencies": ["S0-001"],
+      "requirementIds": ["REQ-S0-002"],
+      "riskIds": ["RISK-002"],
+      "acceptanceTestIds": ["TEST-S0-CI"],
+      "gateIds": ["AG0", "AG2"],
+      "deploymentId": "DEPLOY-S0-LOCAL",
+      "traceabilityIds": ["TRACE-S0-002"]
     },
     {
       "id": "S0-003",
       "slice": "SLICE-0",
       "title": "Read-only local PM dashboard",
-      "status": "IN_PROGRESS",
-      "owner": "Product/UX/dashboard"
+      "status": "PASS",
+      "owner": "Product/UX/dashboard",
+      "priority": "MUST",
+      "dependencies": ["S0-002"],
+      "requirementIds": ["REQ-S1-001"],
+      "riskIds": ["RISK-003"],
+      "acceptanceTestIds": ["TEST-S0-CI", "TEST-S1-BROWSER"],
+      "gateIds": ["AG3"],
+      "deploymentId": "DEPLOY-S0-LOCAL",
+      "traceabilityIds": ["TRACE-S1-001"]
     },
     {
       "id": "S0-004",
       "slice": "SLICE-0",
       "title": "Safe evidence indexer",
-      "status": "IN_PROGRESS",
-      "owner": "Application/data/API"
+      "status": "PASS",
+      "owner": "Application/data/API",
+      "priority": "MUST",
+      "dependencies": ["S0-002"],
+      "requirementIds": ["REQ-S1-002"],
+      "riskIds": ["RISK-002"],
+      "acceptanceTestIds": ["TEST-S0-CI", "TEST-S1-SOURCES"],
+      "gateIds": ["AG2", "AG3"],
+      "deploymentId": "DEPLOY-S0-LOCAL",
+      "traceabilityIds": ["TRACE-S1-002"]
     },
     {
       "id": "S0-005",
       "slice": "SLICE-0",
       "title": "Independent validation and append-only closure",
-      "status": "PENDING",
-      "owner": "Independent integration critic"
+      "status": "PASS",
+      "owner": "Independent integration critic",
+      "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_IMPLEMENTATION_VALIDATION_PO_001_SLICE_0.md"
+      ],
+      "priority": "MUST",
+      "dependencies": ["S0-001", "S0-002", "S0-003", "S0-004"],
+      "requirementIds": [
+        "REQ-S0-001",
+        "REQ-S0-002",
+        "REQ-S1-001",
+        "REQ-S1-002"
+      ],
+      "riskIds": ["RISK-001", "RISK-002", "RISK-003"],
+      "acceptanceTestIds": ["TEST-S0-CI", "TEST-S1-SOURCES", "TEST-S1-BROWSER"],
+      "gateIds": ["AG0", "AG1", "AG2", "AG3"],
+      "deploymentId": "DEPLOY-S0-LOCAL",
+      "traceabilityIds": [
+        "TRACE-S0-001",
+        "TRACE-S0-002",
+        "TRACE-S1-001",
+        "TRACE-S1-002"
+      ]
     }
   ]
 }

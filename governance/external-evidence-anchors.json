@@ -5,19 +5,19 @@
   "surfaces": {
     "github": {
       "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
-      "sha256": "A23521C8E5F5605BE2E577E7A8950C7BCD59BBB51FB8DF06B6DF8B4C647058A4",
-      "method": "GitHub connector reads and git ls-remote recorded during discovery",
-      "result": "PRIVATE_ZERO_REF_OBSERVED"
+      "sha256": "16297E5BC152B389DD8526769422932379FB5075342A959698617E8070611D0D",
+      "method": "Git push, git ls-remote, GitHub repository search and canonical commit fetch recorded in the workspace register",
+      "result": "PRIVATE_MAIN_INITIAL_PUSH_VERIFIED"
     },
     "gcp": {
       "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
-      "sha256": "A23521C8E5F5605BE2E577E7A8950C7BCD59BBB51FB8DF06B6DF8B4C647058A4",
+      "sha256": "16297E5BC152B389DD8526769422932379FB5075342A959698617E8070611D0D",
       "method": "Read-only gcloud and REST observations recorded during discovery; current budget visibility remains blocked",
       "result": "PROJECT_ACTIVE_BILLING_RECORDED_AG7_BLOCKED"
     },
     "cloudflare": {
       "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\IMPLEMENTATION_WORKSPACE_REGISTER.md",
-      "sha256": "A23521C8E5F5605BE2E577E7A8950C7BCD59BBB51FB8DF06B6DF8B4C647058A4",
+      "sha256": "16297E5BC152B389DD8526769422932379FB5075342A959698617E8070611D0D",
       "method": "Authenticated read-only Cloudflare connector observations recorded during discovery",
       "result": "ZONE_ACTIVE_MATCHBASE_CONFIGURATION_ABSENT"
     }

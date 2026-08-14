@@ -13,7 +13,7 @@ Required top-level fields:
 - `mode`: `"READ_ONLY"`
 - `views`: records keyed by the 13 values exported in `src/types.ts`
 
-Missing views normalize to `UNKNOWN`. Invalid schemas or failed requests render `ERROR`. Snapshots older than 24 hours render `STALE`. Every item accepts `sourceRefs` with an exact path, optional line range, SHA-256, section, and observation timestamp.
+Missing or invalid views fail schema validation and render `ERROR`. Empty valid views remain `UNKNOWN`. Failed requests render `ERROR`, and snapshots older than 24 hours render `STALE`. Every item requires `sourceRefs` with an exact path, SHA-256, observation timestamp, and optional line range or section.
 
 `public/bootstrap-snapshot.json` is the tracked UNKNOWN-only fallback used when the local generated snapshot is absent. `public/current-snapshot.json` is generated from governed local sources, ignored by Git, and required before any dashboard observation is treated as current.
 

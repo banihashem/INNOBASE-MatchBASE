@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-14T13:52:03.3476740+04:00",
+  "updatedAt": "2026-08-14T15:28:04.0357204+04:00",
   "slices": [
     {
       "id": "SLICE-0",
       "name": "Local governed observability baseline",
-      "status": "IN_PROGRESS",
+      "status": "READY_FOR_ROLE2",
       "scope": [
         "secure repository baseline",
         "autonomous organization registers",

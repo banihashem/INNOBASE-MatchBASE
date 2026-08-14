@@ -5,25 +5,29 @@
       "id": "REQ-S0-001",
       "title": "Private repository safety baseline",
       "status": "ACTIVE",
-      "summary": "Private single-repository bootstrap with secret, protected-source, license, dependency and history controls."
+      "summary": "Private single-repository bootstrap with secret, protected-source, license, dependency and history controls.",
+      "traceabilityIds": ["TRACE-S0-001"]
     },
     {
       "id": "REQ-S0-002",
       "title": "Autonomous current-control registers",
       "status": "ACTIVE",
-      "summary": "Versioned machine-readable gates, slices, backlog, decisions, risks, tests, evidence, agents and external state."
+      "summary": "Versioned machine-readable gates, slices, backlog, decisions, risks, tests, evidence, agents and external state.",
+      "traceabilityIds": ["TRACE-S0-002"]
     },
     {
       "id": "REQ-S1-001",
       "title": "Read-only local PM dashboard",
       "status": "ACTIVE",
-      "summary": "Thirteen semantic control views with actual-artifact evidence explorer, explicit uncertainty and exact source drilldown."
+      "summary": "Thirteen semantic control views with actual-artifact evidence explorer, explicit uncertainty and exact source drilldown.",
+      "traceabilityIds": ["TRACE-S1-001"]
     },
     {
       "id": "REQ-S1-002",
       "title": "Evidence integrity and privacy boundary",
       "status": "ACTIVE",
-      "summary": "Absolute contained sources, mandatory SHA-256 and observation time, redaction, ignored local snapshot and no mutations."
+      "summary": "Absolute contained sources, mandatory SHA-256 and observation time, redaction, ignored local snapshot and no mutations.",
+      "traceabilityIds": ["TRACE-S1-002"]
     }
   ],
   "tests": [
@@ -32,21 +36,29 @@
       "title": "Deterministic local CI suite",
       "status": "PASS",
       "summary": "Formatting, lint, governance, schema, boundaries, two secret scanners, dependency/license, type, unit, component, accessibility, adversarial and build checks exit zero.",
-      "command": "pnpm test:ci"
+      "command": "pnpm test:ci",
+      "traceabilityIds": [
+        "TRACE-S0-001",
+        "TRACE-S0-002",
+        "TRACE-S1-001",
+        "TRACE-S1-002"
+      ]
     },
     {
       "id": "TEST-S1-SOURCES",
       "title": "Current snapshot source verification",
       "status": "PASS",
       "summary": "Every rendered source reference resolves inside an allowlisted root and matches its mandatory SHA-256.",
-      "command": "pnpm snapshot:verify-sources"
+      "command": "pnpm snapshot:verify-sources",
+      "traceabilityIds": ["TRACE-S1-002"]
     },
     {
       "id": "TEST-S1-BROWSER",
       "title": "Real-browser responsive and navigation check",
       "status": "PASS",
       "summary": "System Chrome headless validated mobile and desktop overflow plus navigation across all thirteen views; two Playwright tests exited zero.",
-      "command": "pnpm test:browser"
+      "command": "pnpm test:browser",
+      "traceabilityIds": ["TRACE-S1-001"]
     }
   ],
   "risks": [
@@ -54,23 +66,41 @@
       "id": "RISK-001",
       "severity": "major",
       "status": "OPEN",
-      "summary": "Repository protection settings are not yet independently observable."
+      "summary": "Repository protection settings are not yet independently observable.",
+      "traceabilityIds": ["TRACE-S0-001"]
     },
     {
       "id": "RISK-002",
       "severity": "major",
       "status": "OPEN",
-      "summary": "Infrastructure preflight is blocked by API, budget, quota, inventory, and IaC gaps."
+      "summary": "Infrastructure preflight is blocked by API, budget, quota, inventory, and IaC gaps.",
+      "traceabilityIds": ["TRACE-S0-002", "TRACE-S1-002"]
     },
     {
       "id": "RISK-003",
       "severity": "minor",
       "status": "OPEN",
-      "summary": "Brand font licensing is unresolved; dashboard uses system fallbacks."
+      "summary": "Brand font licensing is unresolved; dashboard uses system fallbacks.",
+      "traceabilityIds": ["TRACE-S1-001"]
     }
   ],
   "defects": [],
-  "deployments": [],
+  "deployments": [
+    {
+      "id": "DEPLOY-S0-LOCAL",
+      "target": "local read-only dashboard",
+      "status": "NOT_APPLICABLE",
+      "reason": "Slice 0 explicitly excludes GCP, Cloudflare, DNS and deployment mutations; the verified terminal is a local build and browser test only.",
+      "artifact": "apps/dashboard/public/bootstrap-snapshot.json",
+      "rollback": "Delete ignored generated output and rerun pnpm snapshot:generate; no external state exists to roll back.",
+      "traceabilityIds": [
+        "TRACE-S0-001",
+        "TRACE-S0-002",
+        "TRACE-S1-001",
+        "TRACE-S1-002"
+      ]
+    }
+  ],
   "costs": [
     {
       "scope": "Slice 0",
@@ -81,7 +111,7 @@
   "loops": [
     {
       "id": "PO-001-R3-S0",
-      "status": "IN_PROGRESS",
+      "status": "READY_FOR_ROLE2",
       "critical": 0,
       "major": 0,
       "minor": 0
@@ -92,19 +122,46 @@
       "id": "EVIDENCE-S0-SECURITY",
       "title": "Independent security/privacy/IAM audit",
       "status": "PASS",
-      "summary": "Current pre-QA bytes passed with zero critical, major and minor defects; later integrated bytes require final critic reproduction."
+      "summary": "Current integrated bytes passed with zero critical, major and minor defects under the final independent critic.",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_IMPLEMENTATION_VALIDATION_PO_001_SLICE_0.md"
+      ]
     },
     {
       "id": "EVIDENCE-S0-AI",
       "title": "Independent AI/evidence/provider-routing audit",
       "status": "PASS",
-      "summary": "Provider-route, evidence-state and redaction controls passed with zero critical, major and minor defects."
+      "summary": "Provider-route, evidence-state and redaction controls passed with zero critical, major and minor defects.",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_IMPLEMENTATION_VALIDATION_PO_001_SLICE_0.md"
+      ]
     },
     {
       "id": "EVIDENCE-S0-QA",
       "title": "Independent QA/red-team correction loop",
-      "status": "IN_PROGRESS",
-      "summary": "S0-QA-L2 is active; no PASS is claimed until the current-byte re-audit closes."
+      "status": "PASS",
+      "summary": "S0-QA-L2 current-byte re-audit passed with zero critical, major and minor defects.",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_IMPLEMENTATION_VALIDATION_PO_001_SLICE_0.md"
+      ]
+    },
+    {
+      "id": "EVIDENCE-S0-SRE",
+      "title": "Independent SRE/cost/runbook correction loop",
+      "status": "PASS",
+      "summary": "Local and hosted evidence semantics, bootstrap, runbook, cleanup, cost state and cross-platform controls passed with zero defects.",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_IMPLEMENTATION_VALIDATION_PO_001_SLICE_0.md"
+      ]
+    },
+    {
+      "id": "EVIDENCE-S0-INTEGRATION",
+      "title": "Independent integration critic S0-CRITIC-L2",
+      "status": "PASS",
+      "summary": "Current bytes passed with zero critical, major and minor defects after all bounded correction loops.",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_IMPLEMENTATION_VALIDATION_PO_001_SLICE_0.md"
+      ]
     }
   ]
 }

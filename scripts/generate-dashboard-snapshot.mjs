@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, resolve, win32 } from "node:path";
 import { buildArtifactSnapshot } from "../packages/artifact-indexer/dist/src/indexer.js";
 import { replaceRegularFileTransactionally } from "./lib/replace-regular-file.mjs";
+import { validateAgentRoster } from "./lib/agent-policy.mjs";
 import { buildSemanticViews } from "./lib/semantic-dashboard.mjs";
 import {
   SNAPSHOT_CONFIG_PATH,
@@ -99,6 +100,27 @@ async function indexedDocument(rootId, relativePath) {
   };
 }
 
+const agentsDocument = await indexedDocument(
+  "implementation-governance",
+  "agents.json",
+);
+validateAgentRoster(agentsDocument.value, { repoRoot: process.cwd() });
+const trustedAgentEvidenceRefs = agentsDocument.value.agents.flatMap((agent) =>
+  [
+    ...agent.deliverables.flatMap((deliverable) => deliverable.outputHashes),
+    ...agent.testEvidence.flatMap((test) => test.evidenceRefs),
+    ...agent.independentAudit.evidenceRefs,
+  ].map((reference, index) => ({
+    sourceId: `matchbase://agent-evidence/${agent.id}/${index + 1}`,
+    path:
+      isAbsolute(reference.path) || win32.isAbsolute(reference.path)
+        ? reference.path
+        : resolve(reference.path),
+    sha256: reference.sha256,
+    observedAt: artifactSnapshot.generatedAt,
+  })),
+);
+
 const semantic = buildSemanticViews({
   slices: await indexedDocument("implementation-governance", "slices.json"),
   gates: await indexedDocument("implementation-governance", "gates.json"),
@@ -107,7 +129,7 @@ const semantic = buildSemanticViews({
     "implementation-governance",
     "registers.json",
   ),
-  agents: await indexedDocument("implementation-governance", "agents.json"),
+  agents: agentsDocument,
   artifactIndex: await indexedDocument(
     "implementation-governance",
     "artifact-index.json",
@@ -121,6 +143,7 @@ const semantic = buildSemanticViews({
     "OWNER_DECISION_DISPOSITION_REGISTER_PO_001.json",
   ),
   artifactRecords: artifactSnapshot.artifacts.map(artifactRecord),
+  trustedEvidenceRefs: trustedAgentEvidenceRefs,
   artifactRecordsByView: Object.fromEntries(
     viewNames.map((view) => {
       const ids = new Set(artifactSnapshot.views[view] ?? []);

@@ -93,6 +93,11 @@ test("renders exact failed workflow identities with source drilldown", async ({
       jobId: "94900624954",
       commit: "23c932c4b731e02976e86cf23f25f49a0653b242",
     },
+    {
+      runId: "31848282665",
+      jobId: "94919022117",
+      commit: "d44fc5305473725600237f0de40d8e66568cb3b7",
+    },
   ]) {
     const card = page.locator("article", {
       hasText: `EXT-GITHUB-FAILURE-${runId}`,

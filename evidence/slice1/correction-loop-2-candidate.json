@@ -2,16 +2,20 @@
   "schemaVersion": 1,
   "candidateId": "PO-001-SLICE-1-LOOP-2",
   "algorithm": "SHA256(PATH_NUL_SHA256_LF)",
-  "fileCount": 17,
-  "aggregateSha256": "265B0F42F0D2B20AFFB5C18E32D5E5D1239C437F0612DBD24072CA9EC6E51002",
+  "fileCount": 18,
+  "aggregateSha256": "860666A688E37FACDD035C268B15B62E6324ED745D297A7F2EE11227757ACA44",
   "files": [
     {
+      "path": "apps/dashboard/src/styles.css",
+      "sha256": "8A20035F6DCCB9A71B120D7441F1724E58A9F968BF57E091279BAD68D43ED0DD"
+    },
+    {
       "path": "governance/external-closure-anchor-v1.json",
-      "sha256": "4E021BC1973D895C13904C8AB1B72FFA69020B14FFB42F84C435BA595954F755"
+      "sha256": "C91C424C52916BEFCA66B1BFDC5E23282405F992DC396C5CAD945797823F76C6"
     },
     {
       "path": "governance/predecessor-failures-v1.json",
-      "sha256": "65AEDCBC6C21CDE9A42F49682F1A8511C5DEFAE3A66707F4F72719D536AAFE15"
+      "sha256": "36C97BA82BB61FE4368649EFE2B45EB3918A3F2FE394021B352C610B5393E592"
     },
     {
       "path": "scripts/generate-dashboard-ci-snapshot.mjs",
@@ -23,7 +27,7 @@
     },
     {
       "path": "scripts/lib/correction-candidate-policy.mjs",
-      "sha256": "11449D1BBBDBBCF5510A113FDAB64C80947AB98149E159A3365298956B7427AE"
+      "sha256": "34CFE0FAF41F348D26018E4B291119961AA00F0A4BAB149E4359498154300627"
     },
     {
       "path": "scripts/lib/dashboard-closure-policy.mjs",
@@ -31,7 +35,7 @@
     },
     {
       "path": "scripts/lib/external-closure-policy.mjs",
-      "sha256": "F7DDA11EA8377A6ACFA113EB8282B39E8F267BDC9604CE168344278B7BBC3402"
+      "sha256": "D9F5393857D9FC9365868284BA6985E3E3D92B92715AFE5B2EA874DA998FFC82"
     },
     {
       "path": "scripts/lib/predecessor-failure-policy.mjs",
@@ -51,11 +55,11 @@
     },
     {
       "path": "test/browser/dashboard.spec.mjs",
-      "sha256": "4ECA91FA0CCC17895D088DD25EF04E8C5D040461C85430120866A531A1F05A5F"
+      "sha256": "271C73F26E94DC17B3ADA3BE5E498B4F147902D6DD9E7D35BE41EA2955A77839"
     },
     {
       "path": "test/correction-candidate-policy.test.mjs",
-      "sha256": "F1B953D8620BAC06925F52F88062EBB2E5B730C2B2918629377AC3F101B60B05"
+      "sha256": "DCF74381EA240B7AAC4A1404F67E0937710BBB5CF1A34225CCC9A20E3946F6B0"
     },
     {
       "path": "test/dashboard-closure-policy.test.mjs",

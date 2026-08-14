@@ -17,7 +17,7 @@
   "predecessorSource": {
     "kind": "repository_artifact",
     "path": "C:\\INNOBASE\\MatchBASE\\03_Implementation\\INNOBASE-MatchBASE\\governance\\predecessor-failures-v1.json",
-    "sha256": "65AEDCBC6C21CDE9A42F49682F1A8511C5DEFAE3A66707F4F72719D536AAFE15",
+    "sha256": "36C97BA82BB61FE4368649EFE2B45EB3918A3F2FE394021B352C610B5393E592",
     "method": "Versioned repository attestation of exact authenticated failed workflow identities"
   },
   "predecessorFailures": [
@@ -38,6 +38,12 @@
       "jobId": 94900624954,
       "conclusion": "failure",
       "commit": "23c932c4b731e02976e86cf23f25f49a0653b242"
+    },
+    {
+      "runId": 31848282665,
+      "jobId": 94919022117,
+      "conclusion": "failure",
+      "commit": "d44fc5305473725600237f0de40d8e66568cb3b7"
     }
   ],
   "predecessorFailureReasons": [
@@ -52,6 +58,10 @@
     {
       "runId": 31841980355,
       "reasonCode": "EXTERNAL_CLOSURE_IDENTITY_REJECTION_ORDER"
+    },
+    {
+      "runId": 31848282665,
+      "reasonCode": "DASHBOARD_MOBILE_OVERFLOW"
     }
   ],
   "role2": {

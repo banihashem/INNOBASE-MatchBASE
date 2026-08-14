@@ -409,6 +409,12 @@ h1 {
   justify-content: space-between;
   gap: 10px;
 }
+.record-card__header > div {
+  min-width: 0;
+}
+.record-card__header .status {
+  flex: 0 0 auto;
+}
 .record-id {
   margin-bottom: 4px;
   color: var(--coral);

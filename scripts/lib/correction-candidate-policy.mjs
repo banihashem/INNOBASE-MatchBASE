@@ -54,6 +54,7 @@ const loop1ExpectedPaths = [
   "test/snapshot-path-policy.test.mjs",
 ];
 const loop2ExpectedPaths = [
+  "apps/dashboard/src/styles.css",
   "governance/external-closure-anchor-v1.json",
   "governance/predecessor-failures-v1.json",
   "scripts/generate-dashboard-ci-snapshot.mjs",

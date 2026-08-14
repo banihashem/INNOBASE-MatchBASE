@@ -159,8 +159,8 @@
       "major": 0,
       "minor": 0,
       "candidateManifestPath": "evidence/slice1/correction-loop-2-candidate.json",
-      "candidateManifestSha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1",
-      "candidateAggregateSha256": "265B0F42F0D2B20AFFB5C18E32D5E5D1239C437F0612DBD24072CA9EC6E51002"
+      "candidateManifestSha256": "F611F32C617C48AFC7EE7A0C23217012D5019166010578939F9B58E7733BB754",
+      "candidateAggregateSha256": "860666A688E37FACDD035C268B15B62E6324ED745D297A7F2EE11227757ACA44"
     },
     {
       "id": "S1-L2-AUDIT-QA-ACCESSIBILITY",
@@ -170,8 +170,8 @@
       "major": 0,
       "minor": 0,
       "candidateManifestPath": "evidence/slice1/correction-loop-2-candidate.json",
-      "candidateManifestSha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1",
-      "candidateAggregateSha256": "265B0F42F0D2B20AFFB5C18E32D5E5D1239C437F0612DBD24072CA9EC6E51002"
+      "candidateManifestSha256": "F611F32C617C48AFC7EE7A0C23217012D5019166010578939F9B58E7733BB754",
+      "candidateAggregateSha256": "860666A688E37FACDD035C268B15B62E6324ED745D297A7F2EE11227757ACA44"
     },
     {
       "id": "S1-L2-AUDIT-SRE-COST",
@@ -181,8 +181,8 @@
       "major": 0,
       "minor": 0,
       "candidateManifestPath": "evidence/slice1/correction-loop-2-candidate.json",
-      "candidateManifestSha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1",
-      "candidateAggregateSha256": "265B0F42F0D2B20AFFB5C18E32D5E5D1239C437F0612DBD24072CA9EC6E51002"
+      "candidateManifestSha256": "F611F32C617C48AFC7EE7A0C23217012D5019166010578939F9B58E7733BB754",
+      "candidateAggregateSha256": "860666A688E37FACDD035C268B15B62E6324ED745D297A7F2EE11227757ACA44"
     },
     {
       "id": "S1-L2-AUDIT-AI-EVIDENCE",
@@ -192,8 +192,8 @@
       "major": 0,
       "minor": 0,
       "candidateManifestPath": "evidence/slice1/correction-loop-2-candidate.json",
-      "candidateManifestSha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1",
-      "candidateAggregateSha256": "265B0F42F0D2B20AFFB5C18E32D5E5D1239C437F0612DBD24072CA9EC6E51002"
+      "candidateManifestSha256": "F611F32C617C48AFC7EE7A0C23217012D5019166010578939F9B58E7733BB754",
+      "candidateAggregateSha256": "860666A688E37FACDD035C268B15B62E6324ED745D297A7F2EE11227757ACA44"
     },
     {
       "id": "S1-L2-AUDIT-REPOSITORY-SAFETY",
@@ -203,8 +203,8 @@
       "major": 0,
       "minor": 0,
       "candidateManifestPath": "evidence/slice1/correction-loop-2-candidate.json",
-      "candidateManifestSha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1",
-      "candidateAggregateSha256": "265B0F42F0D2B20AFFB5C18E32D5E5D1239C437F0612DBD24072CA9EC6E51002"
+      "candidateManifestSha256": "F611F32C617C48AFC7EE7A0C23217012D5019166010578939F9B58E7733BB754",
+      "candidateAggregateSha256": "860666A688E37FACDD035C268B15B62E6324ED745D297A7F2EE11227757ACA44"
     },
     {
       "id": "S1-L2-AUDIT-INTEGRATION-CRITIC",
@@ -214,14 +214,14 @@
       "major": 0,
       "minor": 0,
       "candidateManifestPath": "evidence/slice1/correction-loop-2-candidate.json",
-      "candidateManifestSha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1",
-      "candidateAggregateSha256": "265B0F42F0D2B20AFFB5C18E32D5E5D1239C437F0612DBD24072CA9EC6E51002"
+      "candidateManifestSha256": "F611F32C617C48AFC7EE7A0C23217012D5019166010578939F9B58E7733BB754",
+      "candidateAggregateSha256": "860666A688E37FACDD035C268B15B62E6324ED745D297A7F2EE11227757ACA44"
     }
   ],
   "rootGate": {
     "command": "pnpm slice1:validate:local",
     "status": "PASS",
-    "durationSeconds": 205.4,
+    "durationSeconds": 221.0,
     "testCounts": {
       "dashboard": 14,
       "artifactIndexer": 8,
@@ -240,6 +240,11 @@
     }
   },
   "artifacts": [
+    {
+      "id": "S1-L2-DASHBOARD-MOBILE-STYLES",
+      "path": "apps/dashboard/src/styles.css",
+      "sha256": "8A20035F6DCCB9A71B120D7441F1724E58A9F968BF57E091279BAD68D43ED0DD"
+    },
     {
       "id": "S1-PLAN",
       "path": "docs/SLICE_1_IMPLEMENTATION_PLAN.md",
@@ -423,7 +428,7 @@
     {
       "id": "S1-EXTERNAL-CLOSURE-ANCHOR",
       "path": "governance/external-closure-anchor-v1.json",
-      "sha256": "4E021BC1973D895C13904C8AB1B72FFA69020B14FFB42F84C435BA595954F755"
+      "sha256": "C91C424C52916BEFCA66B1BFDC5E23282405F992DC396C5CAD945797823F76C6"
     },
     {
       "id": "S1-DASHBOARD-CLOSURE-POLICY",
@@ -433,7 +438,7 @@
     {
       "id": "S1-EXTERNAL-CLOSURE-POLICY",
       "path": "scripts/lib/external-closure-policy.mjs",
-      "sha256": "F7DDA11EA8377A6ACFA113EB8282B39E8F267BDC9604CE168344278B7BBC3402"
+      "sha256": "D9F5393857D9FC9365868284BA6985E3E3D92B92715AFE5B2EA874DA998FFC82"
     },
     {
       "id": "S1-DASHBOARD-CI-GENERATOR",
@@ -463,12 +468,12 @@
     {
       "id": "S1-CORRECTION-CANDIDATE-POLICY",
       "path": "scripts/lib/correction-candidate-policy.mjs",
-      "sha256": "11449D1BBBDBBCF5510A113FDAB64C80947AB98149E159A3365298956B7427AE"
+      "sha256": "34CFE0FAF41F348D26018E4B291119961AA00F0A4BAB149E4359498154300627"
     },
     {
       "id": "S1-CORRECTION-CANDIDATE-TEST",
       "path": "test/correction-candidate-policy.test.mjs",
-      "sha256": "F1B953D8620BAC06925F52F88062EBB2E5B730C2B2918629377AC3F101B60B05"
+      "sha256": "DCF74381EA240B7AAC4A1404F67E0937710BBB5CF1A34225CCC9A20E3946F6B0"
     },
     {
       "id": "S1-EVIDENCE-VALIDATOR",
@@ -493,12 +498,12 @@
     {
       "id": "S1-L2-CORRECTION-CANDIDATE",
       "path": "evidence/slice1/correction-loop-2-candidate.json",
-      "sha256": "428E65C329FDC4600E446BE32E5874D6C419A2D9815B532D6A9FB9A2DDF6A6A1"
+      "sha256": "F611F32C617C48AFC7EE7A0C23217012D5019166010578939F9B58E7733BB754"
     },
     {
       "id": "S1-L2-PREDECESSOR-REGISTRY",
       "path": "governance/predecessor-failures-v1.json",
-      "sha256": "65AEDCBC6C21CDE9A42F49682F1A8511C5DEFAE3A66707F4F72719D536AAFE15"
+      "sha256": "36C97BA82BB61FE4368649EFE2B45EB3918A3F2FE394021B352C610B5393E592"
     },
     {
       "id": "S1-L2-PREDECESSOR-POLICY",
@@ -528,7 +533,7 @@
     {
       "id": "S1-L2-DASHBOARD-BROWSER",
       "path": "test/browser/dashboard.spec.mjs",
-      "sha256": "4ECA91FA0CCC17895D088DD25EF04E8C5D040461C85430120866A531A1F05A5F"
+      "sha256": "271C73F26E94DC17B3ADA3BE5E498B4F147902D6DD9E7D35BE41EA2955A77839"
     },
     {
       "id": "S1-L2-LOCAL-SNAPSHOT-GENERATOR",
@@ -785,6 +790,15 @@
         "conclusion": "failure",
         "failedStep": "pnpm test:ci",
         "cause": "External-closure identity regression attempted local Windows source access before rejecting anchored identity divergence on hosted Linux"
+      },
+      {
+        "commit": "d44fc5305473725600237f0de40d8e66568cb3b7",
+        "tree": "48aca0ec84d8628855c92f91b5da45e6be8f2a93",
+        "runId": 31848282665,
+        "jobId": 94919022117,
+        "conclusion": "failure",
+        "failedStep": "pnpm test:browser",
+        "cause": "Chrome Stable on hosted Ubuntu measured 393px dashboard scroll width at the required 390px mobile viewport"
       }
     ],
     "baseClosure": {

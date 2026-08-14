@@ -28,7 +28,7 @@ test("preserves the exact Loop 1 candidate manifest", () => {
 test("binds Loop 2 disciplines to one exact candidate manifest", () => {
   assert.equal(
     validateCorrectionCandidate(structuredClone(loop2Manifest)).fileCount,
-    17,
+    18,
   );
 });
 

@@ -597,24 +597,54 @@ export function generateContractSchemas(): JsonSchema {
       corroboration,
     },
   );
-  const standardEvidencedValue = closedObject(
-    [
-      "value_id",
-      "candidate_id",
-      "kind",
-      "value",
-      "verification_status",
-      "evidence_ids",
+  const standardEvidencedValue: JsonSchema = {
+    oneOf: [
+      closedObject(
+        [
+          "value_id",
+          "candidate_id",
+          "kind",
+          "channel_type",
+          "value",
+          "organization_domain",
+          "verification_status",
+          "evidence_ids",
+        ],
+        {
+          value_id: string(),
+          candidate_id: string(),
+          kind: string(["organization_contact"]),
+          channel_type: string([
+            "role_email",
+            "organization_phone",
+            "organization_web",
+          ]),
+          value: string(),
+          organization_domain: string(),
+          verification_status: standardVerificationStatus,
+          evidence_ids: strings,
+        },
+      ),
+      closedObject(
+        [
+          "value_id",
+          "candidate_id",
+          "kind",
+          "value",
+          "verification_status",
+          "evidence_ids",
+        ],
+        {
+          value_id: string(),
+          candidate_id: string(),
+          kind: string(["plant", "approval", "capacity"]),
+          value: string(),
+          verification_status: standardVerificationStatus,
+          evidence_ids: strings,
+        },
+      ),
     ],
-    {
-      value_id: string(),
-      candidate_id: string(),
-      kind: string(["organization_contact", "plant", "approval", "capacity"]),
-      value: string(),
-      verification_status: standardVerificationStatus,
-      evidence_ids: strings,
-    },
-  );
+  };
   const standardHiddenCandidate = closedObject(
     [
       "candidate_id",
@@ -702,15 +732,38 @@ export function generateContractSchemas(): JsonSchema {
       evidence_ids: strings,
     },
   );
-  const projectedValue = closedObject(
-    ["kind", "value", "verification_status", "evidence_ids"],
-    {
-      kind: string(["organization_contact", "plant", "approval", "capacity"]),
-      value: string(),
-      verification_status: standardVerificationStatus,
-      evidence_ids: strings,
-    },
-  );
+  const projectedValue: JsonSchema = {
+    oneOf: [
+      closedObject(
+        [
+          "kind",
+          "channel_type",
+          "value",
+          "organization_domain",
+          "verification_status",
+          "evidence_ids",
+        ],
+        {
+          kind: string(["organization_contact"]),
+          channel_type: string([
+            "role_email",
+            "organization_phone",
+            "organization_web",
+          ]),
+          value: string(),
+          organization_domain: string(),
+          verification_status: standardVerificationStatus,
+          evidence_ids: strings,
+        },
+      ),
+      closedObject(["kind", "value", "verification_status", "evidence_ids"], {
+        kind: string(["plant", "approval", "capacity"]),
+        value: string(),
+        verification_status: standardVerificationStatus,
+        evidence_ids: strings,
+      }),
+    ],
+  };
   const standardCandidateProjection = closedObject(
     [
       "display_name",
@@ -844,7 +897,7 @@ export function generateContractSchemas(): JsonSchema {
     scarcity: string(["pending", "none", "limited", "zero", "not_applicable"]),
     limitations_notice: string(),
     links: projectionLinks,
-    projection_version: { type: "integer", enum: [1] },
+    projection_version: { type: "integer", enum: [3] },
   };
   const runStateRequired = [
     "run_id",
@@ -1233,7 +1286,7 @@ export function generateContractSchemas(): JsonSchema {
           gate_eliminations: { type: "array", items: gateEvaluation },
           limitations,
           synthetic_warning: string(),
-          projection_version: { type: "integer", enum: [1] },
+          projection_version: { type: "integer", enum: [3] },
         },
       ),
       standardRunProjection: {
@@ -1248,12 +1301,13 @@ export function generateContractSchemas(): JsonSchema {
         oneOf: runStateVariants,
       },
       standardRequestHistory: closedObject(
-        ["schema_version", "items", "synthetic_warning"],
+        ["schema_version", "items", "synthetic_warning", "projection_version"],
         {
           schema_version: string(["standard-request-history.v1"]),
           items: { type: "array", items: requestHistoryItem },
           next_cursor: string(),
           synthetic_warning: string(),
+          projection_version: { type: "integer", enum: [3] },
         },
       ),
       standardRequestDetail: closedObject(
@@ -1263,6 +1317,7 @@ export function generateContractSchemas(): JsonSchema {
           "version_history",
           "links",
           "synthetic_warning",
+          "projection_version",
         ],
         {
           schema_version: string(["standard-request-detail.v1"]),
@@ -1285,10 +1340,11 @@ export function generateContractSchemas(): JsonSchema {
             runs: string(),
           }),
           synthetic_warning: string(),
+          projection_version: { type: "integer", enum: [3] },
         },
       ),
       standardRequestVersionHistory: closedObject(
-        ["schema_version", "items", "synthetic_warning"],
+        ["schema_version", "items", "synthetic_warning", "projection_version"],
         {
           schema_version: string(["standard-request-version-history.v1"]),
           items: {
@@ -1305,15 +1361,17 @@ export function generateContractSchemas(): JsonSchema {
           },
           next_cursor: string(),
           synthetic_warning: string(),
+          projection_version: { type: "integer", enum: [3] },
         },
       ),
       standardRunHistory: closedObject(
-        ["schema_version", "items", "synthetic_warning"],
+        ["schema_version", "items", "synthetic_warning", "projection_version"],
         {
           schema_version: string(["standard-run-history.v1"]),
           items: { type: "array", items: runHistoryItem },
           next_cursor: string(),
           synthetic_warning: string(),
+          projection_version: { type: "integer", enum: [3] },
         },
       ),
       costEvent: closedObject(

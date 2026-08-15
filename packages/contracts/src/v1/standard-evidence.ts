@@ -75,14 +75,29 @@ export interface StandardClaimV1 {
   };
 }
 
-export interface StandardEvidencedValueV1 {
+interface StandardEvidencedValueBaseV1 {
   value_id: string;
   candidate_id: string;
-  kind: "organization_contact" | "plant" | "approval" | "capacity";
-  value: string;
   verification_status: StandardVerificationStatus;
   evidence_ids: string[];
 }
+
+export type StandardOrganizationContactChannel =
+  "role_email" | "organization_phone" | "organization_web";
+
+export type StandardEvidencedValueV1 = StandardEvidencedValueBaseV1 &
+  (
+    | {
+        kind: "organization_contact";
+        channel_type: StandardOrganizationContactChannel;
+        value: string;
+        organization_domain: string;
+      }
+    | {
+        kind: "plant" | "approval" | "capacity";
+        value: string;
+      }
+  );
 
 export interface StandardHiddenCandidateV1 {
   candidate_id: string;

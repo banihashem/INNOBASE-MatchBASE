@@ -29,6 +29,7 @@ import type {
   StandardRequestDetailV1,
   StructuredStandardRequestV1,
 } from "@matchbase/contracts";
+import { STANDARD_DISCLOSURE_PROJECTION_VERSION } from "@matchbase/contracts";
 import {
   admitRunWithinQuota,
   acquireExecutionLease,
@@ -54,7 +55,7 @@ import {
   type RequestContext,
 } from "./types.js";
 
-const STANDARD_PROJECTION_VERSION = 2;
+const STANDARD_PROJECTION_VERSION = STANDARD_DISCLOSURE_PROJECTION_VERSION;
 const HISTORY_LIMIT = 20;
 const PACK_FIELDS = [
   ...SYNTHETIC_DOMAIN_PACK.core_fields,
@@ -118,6 +119,7 @@ const CANONICAL_RELEASED_FIELDS = [
 const PROJECTION_FIELDS = {
   request_history: [
     "schema_version",
+    "projection_version",
     "items[].request_id",
     "items[].canonical_summary",
     "items[].version_count",
@@ -132,6 +134,7 @@ const PROJECTION_FIELDS = {
   ],
   request_detail: [
     "schema_version",
+    "projection_version",
     ...CANONICAL_RELEASED_FIELDS,
     "version_history[].canonical_version_id",
     "version_history[].version",
@@ -144,6 +147,7 @@ const PROJECTION_FIELDS = {
   ],
   version_history: [
     "schema_version",
+    "projection_version",
     "items[].canonical_version_id",
     "items[].version",
     "items[].readiness",
@@ -153,6 +157,7 @@ const PROJECTION_FIELDS = {
   ],
   run_history: [
     "schema_version",
+    "projection_version",
     "items[].run_id",
     "items[].request_id",
     "items[].canonical_request_version",
@@ -893,6 +898,7 @@ export class StandardWorkspaceApplication {
     const last = rows.at(-1);
     const body = {
       schema_version: "standard-request-history.v1",
+      projection_version: STANDARD_PROJECTION_VERSION,
       items,
       ...(hasMore && last
         ? {
@@ -955,6 +961,7 @@ export class StandardWorkspaceApplication {
     );
     const body: StandardRequestDetailV1 = {
       schema_version: "standard-request-detail.v1",
+      projection_version: STANDARD_PROJECTION_VERSION,
       canonical: current.canonical_document,
       version_history: history.rows.map((row) => ({
         canonical_version_id: row.canonical_request_version_id,
@@ -1026,6 +1033,7 @@ export class StandardWorkspaceApplication {
     const last = rows.at(-1);
     const body = {
       schema_version: "standard-request-version-history.v1",
+      projection_version: STANDARD_PROJECTION_VERSION,
       items: rows.map((row) => ({
         canonical_version_id: row.canonical_request_version_id,
         version: row.version,
@@ -1820,6 +1828,7 @@ export class StandardWorkspaceApplication {
     const last = rows.at(-1);
     const body = {
       schema_version: "standard-run-history.v1",
+      projection_version: STANDARD_PROJECTION_VERSION,
       items,
       ...(result.rows.length > HISTORY_LIMIT && last
         ? {
@@ -2272,7 +2281,15 @@ export class StandardWorkspaceApplication {
                   : value.kind === "plant"
                     ? "plant_identifiers"
                     : "approval_identifiers",
-              JSON.stringify({ value: value.value }),
+              JSON.stringify(
+                value.kind === "organization_contact"
+                  ? {
+                      value: value.value,
+                      channel_type: value.channel_type,
+                      organization_domain: value.organization_domain,
+                    }
+                  : { value: value.value },
+              ),
               value.kind === "organization_contact",
               supportIds.get(evidenceId),
             ],
@@ -2582,11 +2599,14 @@ export class StandardWorkspaceApplication {
     kind: keyof typeof PROJECTION_FIELDS,
     body: Record<string, unknown>,
   ): void {
+    if (body.projection_version !== STANDARD_PROJECTION_VERSION)
+      throw new Error("Standard disclosure projection version drifted.");
     const items = (value: unknown): Record<string, unknown>[] =>
       Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
     if (kind === "request_history") {
       this.exactKeys(body, [
         "schema_version",
+        "projection_version",
         "items",
         "next_cursor",
         "synthetic_warning",
@@ -2609,6 +2629,7 @@ export class StandardWorkspaceApplication {
     if (kind === "version_history") {
       this.exactKeys(body, [
         "schema_version",
+        "projection_version",
         "items",
         "next_cursor",
         "synthetic_warning",
@@ -2625,6 +2646,7 @@ export class StandardWorkspaceApplication {
     if (kind === "request_detail") {
       this.exactKeys(body, [
         "schema_version",
+        "projection_version",
         "canonical",
         "version_history",
         "links",
@@ -2644,6 +2666,7 @@ export class StandardWorkspaceApplication {
     if (kind === "run_history") {
       this.exactKeys(body, [
         "schema_version",
+        "projection_version",
         "items",
         "next_cursor",
         "synthetic_warning",
@@ -2729,6 +2752,8 @@ export class StandardWorkspaceApplication {
           this.exactKeys(evidenced, [
             "kind",
             "value",
+            "channel_type",
+            "organization_domain",
             "verification_status",
             "evidence_ids",
           ]);
@@ -3447,7 +3472,7 @@ export class StandardWorkspaceApplication {
         ? { poll_after_ms: row.state === "queued" ? 10_000 : 2_000 }
         : {}),
       ...(envelope ? { synthetic_warning: STANDARD_SYNTHETIC_WARNING } : {}),
-      projection_version: 1,
+      projection_version: STANDARD_PROJECTION_VERSION,
     };
   }
 
@@ -3555,23 +3580,41 @@ export class StandardWorkspaceApplication {
     notModified = false,
   ): Promise<void> {
     await inTransaction(this.pool, async (client) => {
+      const definition = {
+        schema_version: "standard-disclosure-projection.v3",
+        version: STANDARD_PROJECTION_VERSION,
+        tier: "standard",
+        resources: PROJECTION_FIELDS,
+      } as const;
+      const serializedDefinition = stableJson(definition);
+      const definitionHash = sha256(serializedDefinition);
       await client.query(
         `INSERT INTO projection_version(projection_version_id,version,definition,content_sha256,released_at) VALUES($1,$2,$3::jsonb,$4,clock_timestamp()) ON CONFLICT(version) DO NOTHING`,
         [
           randomUUID(),
           STANDARD_PROJECTION_VERSION,
-          JSON.stringify({
-            tier: "standard",
-            allowlist: "standard-projection.v1",
-          }),
-          sha256("standard-projection.v1"),
+          serializedDefinition,
+          definitionHash,
         ],
       );
-      const version = await client.query<{ projection_version_id: string }>(
-        "SELECT projection_version_id FROM projection_version WHERE version=$1",
+      const version = await client.query<{
+        projection_version_id: string;
+        definition: unknown;
+        content_sha256: Buffer;
+      }>(
+        "SELECT projection_version_id,definition,content_sha256 FROM projection_version WHERE version=$1",
         [STANDARD_PROJECTION_VERSION],
       );
-      const projectionVersionId = version.rows[0]!.projection_version_id;
+      const registry = version.rows[0];
+      if (
+        !registry ||
+        stableJson(registry.definition) !== serializedDefinition ||
+        !registry.content_sha256.equals(definitionHash)
+      )
+        throw new Error(
+          "Standard disclosure projection registry is stale or ambiguous.",
+        );
+      const projectionVersionId = registry.projection_version_id;
       if (requestId || runId)
         await client.query(
           `INSERT INTO projection_serving(projection_serving_id,account_id,subject_user_id,tier,resource_kind,resource_id,projection_version_id,fields_released,item_count,request_correlation_id,request_id,run_id) VALUES($1,$2,$3,'standard',$4,$5,$6,$7,$8,$9,$10,$11)`,

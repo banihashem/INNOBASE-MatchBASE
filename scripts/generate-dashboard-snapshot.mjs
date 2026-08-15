@@ -11,6 +11,12 @@ import {
   validateExternalClosure,
 } from "./lib/external-closure-policy.mjs";
 import {
+  slice2AuditSourceRef,
+  slice2ClosureSourceRef,
+  slice2Role2SourceRef,
+  validateSlice2ExternalClosure,
+} from "./lib/slice2-external-closure-policy.mjs";
+import {
   SNAPSHOT_CONFIG_PATH,
   SNAPSHOT_OUTPUT_PATH,
   assertSafeSnapshotOutput,
@@ -50,6 +56,26 @@ const externalClosureDocument = {
   sourceRef: externalClosureSourceRef(externalClosureValue),
   predecessorSourceRef:
     externalClosurePredecessorSourceRef(externalClosureValue),
+};
+const slice2ClosurePath = process.env.MATCHBASE_SLICE2_EXTERNAL_CLOSURE_OVERLAY
+  ? resolve(process.env.MATCHBASE_SLICE2_EXTERNAL_CLOSURE_OVERLAY)
+  : resolve("governance/slice2-external-closure-anchor-v1.json");
+if (
+  process.env.MATCHBASE_SLICE2_EXTERNAL_CLOSURE_OVERLAY &&
+  (!win32.isAbsolute(process.env.MATCHBASE_SLICE2_EXTERNAL_CLOSURE_OVERLAY) ||
+    anchorOnly)
+)
+  throw new Error(
+    "Slice 2 closure overlay must be an absolute local management path and cannot override CI anchor mode.",
+  );
+const slice2ClosureValue = validateSlice2ExternalClosure(
+  JSON.parse(await readFile(slice2ClosurePath, "utf8")),
+  { anchorOnly },
+);
+const slice2ClosureDocument = {
+  value: slice2ClosureValue,
+  sourceRef: slice2ClosureSourceRef(slice2ClosureValue),
+  auditSourceRef: slice2AuditSourceRef(slice2ClosureValue),
 };
 const rootMap = new Map(
   config.roots.map((root) => [root.id, root.absolutePath]),
@@ -154,6 +180,11 @@ trustedAgentEvidenceRefs.push(
   externalClosureDocument.predecessorSourceRef,
   externalClosureRole2SourceRef(externalClosureValue),
 );
+trustedAgentEvidenceRefs.push(
+  slice2ClosureDocument.sourceRef,
+  slice2ClosureDocument.auditSourceRef,
+  slice2Role2SourceRef(slice2ClosureValue),
+);
 
 const semantic = buildSemanticViews({
   slices: await indexedDocument("implementation-governance", "slices.json"),
@@ -173,6 +204,7 @@ const semantic = buildSemanticViews({
     "external-state.json",
   ),
   externalClosure: externalClosureDocument,
+  slice2Closure: slice2ClosureDocument,
   dispositions: await indexedDocument(
     "product-management",
     "OWNER_DECISION_DISPOSITION_REGISTER_PO_001.json",

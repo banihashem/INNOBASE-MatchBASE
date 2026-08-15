@@ -18,6 +18,9 @@ export const STANDARD_REQUEST_DETAIL_SCHEMA_VERSION =
   "standard-request-detail.v1" as const;
 export const STANDARD_REQUEST_VERSION_HISTORY_SCHEMA_VERSION =
   "standard-request-version-history.v1" as const;
+// Version 3 is the first release whose body, cursor, registry, serving ledger,
+// and audit identities are defined as one immutable disclosure contract.
+export const STANDARD_DISCLOSURE_PROJECTION_VERSION = 3 as const;
 
 export interface StandardCitationProjectionV1 {
   evidence_id: string;
@@ -43,12 +46,26 @@ export interface StandardExplanationItemV1 {
   evidence_ids: string[];
 }
 
-export interface StandardEvidencedValueProjectionV1 {
-  kind: "organization_contact" | "plant" | "approval" | "capacity";
-  value: string;
+interface StandardEvidencedValueProjectionBaseV1 {
   verification_status: StandardVerificationStatus;
   evidence_ids: string[];
 }
+
+export type StandardEvidencedValueProjectionV1 =
+  StandardEvidencedValueProjectionBaseV1 &
+    (
+      | {
+          kind: "organization_contact";
+          channel_type:
+            "role_email" | "organization_phone" | "organization_web";
+          value: string;
+          organization_domain: string;
+        }
+      | {
+          kind: "plant" | "approval" | "capacity";
+          value: string;
+        }
+    );
 
 export interface StandardCandidateProjectionV1 {
   display_name: string;
@@ -102,7 +119,7 @@ export interface StandardResultProjectionV1 {
   }>;
   limitations: StandardLimitationsProjectionV1;
   synthetic_warning: string;
-  projection_version: 1;
+  projection_version: typeof STANDARD_DISCLOSURE_PROJECTION_VERSION;
 }
 
 export interface StandardProjectionLinksV1 {
@@ -152,7 +169,7 @@ export type StandardRunStateV1 = StandardRunStateBaseV1 &
 export type StandardRunProjectionV1 = StandardRunStateV1 & {
   schema_version: typeof STANDARD_RUN_PROJECTION_SCHEMA_VERSION;
   synthetic_warning: string;
-  projection_version: 1;
+  projection_version: typeof STANDARD_DISCLOSURE_PROJECTION_VERSION;
 };
 
 export interface StandardRequestHistoryItemV1 {
@@ -185,6 +202,7 @@ export interface StandardRequestHistoryV1 {
   items: StandardRequestHistoryItemV1[];
   next_cursor?: string;
   synthetic_warning: string;
+  projection_version: typeof STANDARD_DISCLOSURE_PROJECTION_VERSION;
 }
 
 export interface StandardRequestVersionSummaryV1 {
@@ -204,6 +222,7 @@ export interface StandardRequestDetailV1 {
     runs: string;
   };
   synthetic_warning: string;
+  projection_version: typeof STANDARD_DISCLOSURE_PROJECTION_VERSION;
 }
 
 export interface StandardRequestVersionHistoryV1 {
@@ -211,10 +230,11 @@ export interface StandardRequestVersionHistoryV1 {
   items: StandardRequestVersionSummaryV1[];
   next_cursor?: string;
   synthetic_warning: string;
+  projection_version: typeof STANDARD_DISCLOSURE_PROJECTION_VERSION;
 }
 
 export type StandardRunHistoryItemV1 = StandardRunStateV1 & {
-  projection_version: 1;
+  projection_version: typeof STANDARD_DISCLOSURE_PROJECTION_VERSION;
 };
 
 export interface StandardRunHistoryV1 {
@@ -222,4 +242,5 @@ export interface StandardRunHistoryV1 {
   items: StandardRunHistoryItemV1[];
   next_cursor?: string;
   synthetic_warning: string;
+  projection_version: typeof STANDARD_DISCLOSURE_PROJECTION_VERSION;
 }

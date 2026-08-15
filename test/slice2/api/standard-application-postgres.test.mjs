@@ -21,6 +21,16 @@ function digest(value) {
   return createHash("sha256").update(value).digest();
 }
 
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value !== null && typeof value === "object")
+    return `{${Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right, "en"))
+      .map(([key, child]) => `${JSON.stringify(key)}:${stableJson(child)}`)
+      .join(",")}}`;
+  return JSON.stringify(value) ?? "null";
+}
+
 async function seedOwner(pool) {
   const ids = {
     accountId: randomUUID(),
@@ -291,6 +301,84 @@ postgresTest(
       const result = await app.getResult(ctx, submitted.run_id);
       assert.ok(["matched", "no_responsible_match"].includes(result.outcome));
       assert.ok(result.candidates.length >= 0 && result.candidates.length <= 3);
+      for (let version = 3; version <= 22; version += 1) {
+        await pool.query(
+          `INSERT INTO canonical_request_version
+             (canonical_request_version_id,request_id,account_id,version,canonical_language,canonical_document,protected_spans,match_readiness,parent_version_id,created_by_user_id,created_at)
+           SELECT $1,request_id,account_id,$2,canonical_language,canonical_document,protected_spans,match_readiness,canonical_request_version_id,created_by_user_id,clock_timestamp()+make_interval(secs => $4)
+             FROM canonical_request_version WHERE canonical_request_version_id=$3`,
+          [randomUUID(), version, resolved.canonical_version_id, version],
+        );
+      }
+      const surfaces = [
+        ["request_history", await app.listRequests(ctx)],
+        ["request_detail", await app.getRequest(ctx, conflicted.request_id)],
+        ["version_history", await app.listVersions(ctx, conflicted.request_id)],
+        ["run_history", await app.listRuns(ctx)],
+        ["run_status", await app.getRun(ctx, submitted.run_id)],
+        ["run_result", result],
+      ];
+      for (const [kind, body] of surfaces) {
+        assert.equal(body.projection_version, 3, kind);
+        const ledger = await pool.query(
+          `SELECT pv.version,pv.definition,pv.content_sha256,p.fields_released,
+                  p.projection_version_id AS serving_projection_version_id,
+                  a.projection_version_id AS audit_projection_version_id,a.detail
+             FROM projection_serving p
+             JOIN projection_version pv USING(projection_version_id)
+             JOIN audit_event a ON a.request_correlation_id=p.request_correlation_id
+               AND a.resource_kind=p.resource_kind AND a.resource_id=p.resource_id
+               AND a.event_type='projection.served'
+            WHERE p.resource_kind=$1
+            ORDER BY p.served_at DESC LIMIT 1`,
+          [
+            kind === "request_detail"
+              ? "request"
+              : kind === "version_history"
+                ? "request_version_history"
+                : kind,
+          ],
+        );
+        const row = ledger.rows[0];
+        assert.equal(row.version, 3, `${kind} registry version`);
+        assert.equal(
+          row.definition.schema_version,
+          "standard-disclosure-projection.v3",
+        );
+        assert.equal(row.definition.version, 3);
+        assert.ok(row.definition.resources[kind]);
+        assert.ok(
+          row.content_sha256.equals(digest(stableJson(row.definition))),
+        );
+        assert.deepEqual(
+          row.fields_released,
+          standardReleasedFieldPaths(body),
+          `${kind} released fields`,
+        );
+        assert.equal(row.detail.projectionVersion, 3, `${kind} audit detail`);
+        assert.equal(
+          row.audit_projection_version_id,
+          row.serving_projection_version_id,
+        );
+      }
+      const cursor = surfaces[2][1].next_cursor;
+      assert.equal(typeof cursor, "string");
+      const [encoded] = cursor.split(".");
+      const cursorPayload = JSON.parse(
+        Buffer.from(encoded, "base64url").toString("utf8"),
+      );
+      assert.equal(cursorPayload.projection, 3);
+      cursorPayload.projection = 2;
+      const staleEncoded = Buffer.from(JSON.stringify(cursorPayload)).toString(
+        "base64url",
+      );
+      const staleCursor = `${staleEncoded}.${createHmac("sha256", privacyKey)
+        .update(staleEncoded)
+        .digest("base64url")}`;
+      await assert.rejects(
+        () => app.listVersions(ctx, conflicted.request_id, staleCursor),
+        /Invalid cursor/iu,
+      );
       const servedResult = await pool.query(
         `SELECT fields_released FROM projection_serving
         WHERE run_id=$1 AND resource_kind='run_result'
@@ -338,6 +426,25 @@ postgresTest(
       assert.deepEqual(notModified.rows[0].fields_released, []);
       assert.equal(notModified.rows[0].detail.notModified, true);
       assert.equal(notModified.rows[0].detail.bodyReleased, false);
+      assert.equal(notModified.rows[0].detail.projectionVersion, 3);
+
+      for (const personCanary of [
+        "Jane Mary Smith",
+        "John Q. Public",
+        "Jean Claude Van Damme",
+        "علی رضا حسینی",
+        "السيد أحمد محمد علي",
+      ]) {
+        const leaked = await pool.query(
+          `SELECT count(*)::int AS findings FROM (
+             SELECT typed_value::text AS value FROM candidate_evidenced_value
+             UNION ALL SELECT complete_result_document::text FROM run_result
+             UNION ALL SELECT detail::text FROM audit_event
+           ) released WHERE value LIKE '%' || $1 || '%'`,
+          [personCanary],
+        );
+        assert.equal(leaked.rows[0].findings, 0, personCanary);
+      }
     } finally {
       await migrateDown(pool).catch(() => false);
       await pool.end();
@@ -387,6 +494,51 @@ postgresTest(
         "SELECT count(*)::int AS count FROM sourcing_request",
       );
       assert.equal(after.rows[0].count, before.rows[0].count);
+    } finally {
+      await migrateDown(pool).catch(() => false);
+      await pool.end();
+    }
+  },
+);
+
+postgresTest(
+  "fails closed on stale or same-number different Standard projection registries",
+  async () => {
+    const pool = createPool({ connectionString: databaseUrl, max: 2 });
+    try {
+      await migrateDown(pool).catch(() => false);
+      await migrateUp(pool);
+      const ids = await seedOwner(pool);
+      const ctx = context(ids);
+      const app = new StandardWorkspaceApplication({ pool, privacyKey });
+      await pool.query(
+        `INSERT INTO projection_version
+           (projection_version_id,version,definition,content_sha256,released_at)
+         VALUES($1,3,$2::jsonb,$3,clock_timestamp())`,
+        [
+          randomUUID(),
+          JSON.stringify({
+            schema_version: "standard-disclosure-projection.v3",
+            version: 3,
+            tier: "standard",
+            resources: { same_shape_different_identity: [] },
+          }),
+          digest("forged-standard-projection-v3"),
+        ],
+      );
+      await assert.rejects(
+        () => app.listRequests(ctx),
+        /registry is stale or ambiguous/iu,
+      );
+      assert.equal(
+        (
+          await pool.query(
+            `SELECT count(*)::int AS count FROM audit_event
+              WHERE event_type='projection.served'`,
+          )
+        ).rows[0].count,
+        0,
+      );
     } finally {
       await migrateDown(pool).catch(() => false);
       await pool.end();

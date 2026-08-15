@@ -2,8 +2,10 @@ import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { validateCorrectionCandidate } from "./lib/correction-candidate-policy.mjs";
+import { verifyHistoricalArtifact } from "./lib/historical-artifact-policy.mjs";
 
 const root = realpathSync(".");
+const acceptedSlice1Commit = "832fa68244eefa0dae4c079b9b94ecaea4b6a872";
 const evidencePath = resolve(root, "evidence/slice1/local-validation.json");
 const evidence = JSON.parse(readFileSync(evidencePath, "utf8"));
 const correctionManifestPath = resolve(
@@ -72,12 +74,12 @@ for (const artifact of evidence.artifacts ?? []) {
   const stat = lstatSync(path);
   if (stat.isSymbolicLink() || !stat.isFile())
     throw new Error(`Slice 1 artifact is not a regular file: ${artifact.path}`);
-  const actual = createHash("sha256")
-    .update(readFileSync(realpathSync(path)))
-    .digest("hex")
-    .toUpperCase();
-  if (actual !== artifact.sha256)
-    throw new Error(`Slice 1 artifact hash mismatch: ${artifact.path}`);
+  verifyHistoricalArtifact({
+    repoRoot: root,
+    acceptedCommit: acceptedSlice1Commit,
+    path: artifact.path,
+    sha256: artifact.sha256,
+  });
   artifacts.set(artifact.id, artifact);
 }
 

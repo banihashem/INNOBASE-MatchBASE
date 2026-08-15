@@ -131,9 +131,14 @@ function evidenceState(value) {
   )
     return "PASS";
   if (
-    ["BLOCKED", "FAIL", "FAILED", "REMAINS_OPEN", "PARTIALLY_CLOSED"].includes(
-      normalized,
-    )
+    [
+      "BLOCKED",
+      "FAIL",
+      "FAILED",
+      "REOPENED",
+      "REMAINS_OPEN",
+      "PARTIALLY_CLOSED",
+    ].includes(normalized)
   )
     return "BLOCKED";
   if (
@@ -306,6 +311,22 @@ export function buildSemanticViews(documents) {
   const artifactIndex = documents.artifactIndex.value;
   const external = documents.externalState.value;
   const closure = documents.externalClosure?.value;
+  const slice2Closure = documents.slice2Closure?.value;
+  const slice2SourceRef = documents.slice2Closure?.sourceRef;
+  const slice2AuditSourceRef = documents.slice2Closure?.auditSourceRef;
+  const slice2Ready = slice2Closure?.role3Disposition === "READY_FOR_ROLE2";
+  const slice2Evidence = slice2Closure
+    ? [
+        {
+          path: slice2SourceRef.path,
+          sha256: slice2SourceRef.sha256,
+        },
+        {
+          path: slice2AuditSourceRef.path,
+          sha256: slice2AuditSourceRef.sha256,
+        },
+      ]
+    : [];
   const closureEvidence = closure
     ? [
         {
@@ -430,16 +451,88 @@ export function buildSemanticViews(documents) {
       catalog,
     ),
   );
+  const slice2Facts = slice2Closure
+    ? {
+        repository: slice2Closure.repository,
+        commit: slice2Closure.commit,
+        tree: slice2Closure.tree,
+        runId: slice2Closure.runId,
+        jobId: slice2Closure.jobId,
+        conclusion: slice2Closure.conclusion,
+        role3Disposition: slice2Closure.role3Disposition,
+        role2Status: slice2Closure.role2.status,
+        candidateManifestSha256: slice2Closure.candidate.manifestSha256,
+        candidateAggregateSha256: slice2Closure.candidate.aggregateSha256,
+      }
+    : null;
+  const slice2Gate = (item) => ({
+    ...item,
+    status: slice2Closure.gates[item.id],
+    summary: `${slice2Closure.repository} commit ${slice2Closure.commit}; run ${slice2Closure.runId}; job ${slice2Closure.jobId}; ${slice2Closure.role3Disposition}; Role 2 ${slice2Closure.role2.status}.`,
+    ...slice2Facts,
+    evidenceRefs: slice2Evidence,
+  });
+  const slice2Acceptance = (item) => ({
+    ...item,
+    status: slice2Closure.acceptance[item.id],
+    summary: `${item.title}; ${slice2Closure.acceptance[item.id]}; Role 2 ${slice2Closure.role2.status}.`,
+    ...slice2Facts,
+    evidenceRefs: slice2Evidence,
+  });
+  const slice2DeploymentRecords = slice2Closure
+    ? [
+        {
+          id: "EXT-S2-GITHUB-CLOSURE",
+          title: "GitHub hosted Slice 2 closure",
+          status: "PASS",
+          summary: `${slice2Closure.commit}; run ${slice2Closure.runId}; job ${slice2Closure.jobId}; ${slice2Closure.conclusion}.`,
+          ...slice2Facts,
+          predecessorCount: slice2Closure.predecessors.length,
+          evidenceRefs: slice2Evidence,
+        },
+        ...slice2Closure.predecessors.map((predecessor) => ({
+          id: `EXT-S2-GITHUB-PREDECESSOR-${predecessor.runId}`,
+          title: `Preserved Slice 2 workflow run ${predecessor.runId}`,
+          status: "PASS",
+          summary: `${predecessor.conclusion}; ${predecessor.reason}.`,
+          ...predecessor,
+          reasonCode: predecessor.reason,
+          evidenceRefs: slice2Evidence,
+        })),
+      ]
+    : [];
   const collections = {
     portfolio: (documents.slices.value.slices ?? []).map((item, index) =>
-      record(item, documents.slices.sourceRef, index, "SLICE", catalog),
+      record(
+        item.id === "SLICE-2" && slice2Closure
+          ? {
+              ...item,
+              status: slice2Ready ? "READY_FOR_ROLE2" : "IN_PROGRESS",
+              summary: `${item.name}; ${slice2Closure.role3Disposition}; Role 2 ${slice2Closure.role2.status}.`,
+              ...slice2Facts,
+              evidenceRefs: slice2Evidence,
+            }
+          : item,
+        item.id === "SLICE-2" && slice2Closure
+          ? slice2SourceRef
+          : documents.slices.sourceRef,
+        index,
+        "SLICE",
+        catalog,
+      ),
     ),
     gates: (documents.gates.value.gates ?? []).map((item, index) =>
       record(
-        ["AG1", "AG6"].includes(item.id) && closure ? closureGate(item) : item,
-        ["AG1", "AG6"].includes(item.id) && closure
-          ? documents.externalClosure.sourceRef
-          : documents.gates.sourceRef,
+        ["S2-G2", "S2-G9"].includes(item.id) && slice2Closure
+          ? slice2Gate(item)
+          : ["AG1", "AG6"].includes(item.id) && closure
+            ? closureGate(item)
+            : item,
+        ["S2-G2", "S2-G9"].includes(item.id) && slice2Closure
+          ? slice2SourceRef
+          : ["AG1", "AG6"].includes(item.id) && closure
+            ? documents.externalClosure.sourceRef
+            : documents.gates.sourceRef,
         index,
         "GATE",
         catalog,
@@ -461,10 +554,16 @@ export function buildSemanticViews(documents) {
     tests: [
       ...(registers.tests ?? []).map((item, index) =>
         record(
-          item.id === "S1-AC-022" && closureTest ? closureTest : item,
-          item.id === "S1-AC-022" && closureTest
-            ? documents.externalClosure.sourceRef
-            : documents.registers.sourceRef,
+          slice2Closure && Object.hasOwn(slice2Closure.acceptance, item.id)
+            ? slice2Acceptance(item)
+            : item.id === "S1-AC-022" && closureTest
+              ? closureTest
+              : item,
+          slice2Closure && Object.hasOwn(slice2Closure.acceptance, item.id)
+            ? slice2SourceRef
+            : item.id === "S1-AC-022" && closureTest
+              ? documents.externalClosure.sourceRef
+              : documents.registers.sourceRef,
           index,
           "TEST",
           catalog,
@@ -491,6 +590,21 @@ export function buildSemanticViews(documents) {
           catalog,
         ),
       ),
+      ...(slice2Closure?.role2.defects ?? []).map((item, index) =>
+        record(
+          {
+            ...item,
+            summary: `${item.title}; ${item.status}; Role 2 ${slice2Closure.role2.status}.`,
+            role2Status: slice2Closure.role2.status,
+            role2Disposition: slice2Closure.role2.disposition,
+            evidenceRefs: slice2Evidence,
+          },
+          slice2SourceRef,
+          index,
+          "S2-R2-DEFECT",
+          catalog,
+        ),
+      ),
     ],
     deployments: [
       ...(registers.deployments ?? []).map((item, index) =>
@@ -506,6 +620,9 @@ export function buildSemanticViews(documents) {
         ),
       ),
       ...externalRecords,
+      ...slice2DeploymentRecords.map((item, index) =>
+        record(item, slice2SourceRef, index, "S2-DEPLOY", catalog),
+      ),
     ],
     costs: (registers.costs ?? []).map((item, index) =>
       record(item, documents.registers.sourceRef, index, "COST", catalog),
@@ -534,6 +651,28 @@ export function buildSemanticViews(documents) {
               documents.externalClosure.sourceRef,
               0,
               "ROLE2-LOOP",
+              catalog,
+            ),
+          ]
+        : []),
+      ...(slice2Closure
+        ? [
+            record(
+              {
+                id: "PO-001-R2-S2-L1",
+                title: "Role 2 Slice 2 correction Loop 1",
+                status: slice2Ready ? "CORRECTED_PENDING_ROLE2" : "OPEN",
+                summary: `Three Role 2 Major defects; ${slice2Closure.role3Disposition}; Role 2 ${slice2Closure.role2.status}.`,
+                critical: slice2Closure.role2.critical,
+                major: slice2Closure.role2.major,
+                minor: slice2Closure.role2.minor,
+                disposition: slice2Closure.role2.disposition,
+                ...slice2Facts,
+                evidenceRefs: slice2Evidence,
+              },
+              slice2SourceRef,
+              0,
+              "S2-ROLE2-LOOP",
               catalog,
             ),
           ]
@@ -580,6 +719,46 @@ export function buildSemanticViews(documents) {
               0,
               "EXTERNAL-CLOSURE",
               catalog,
+            ),
+          ]
+        : []),
+      ...(slice2Closure
+        ? [
+            record(
+              {
+                id: "EVIDENCE-S2-EXTERNAL-CLOSURE",
+                title: "Authenticated hosted Slice 2 closure",
+                status: "PASS",
+                summary: `${slice2Closure.commit}; run ${slice2Closure.runId}; job ${slice2Closure.jobId}; ${slice2Closure.role3Disposition}.`,
+                ...slice2Facts,
+                evidenceRefs: slice2Evidence,
+              },
+              slice2SourceRef,
+              0,
+              "S2-EXTERNAL-CLOSURE",
+              catalog,
+            ),
+            ...slice2Closure.audits.map((id, index) =>
+              record(
+                {
+                  id,
+                  title: id,
+                  status: "PASS",
+                  summary: `PASS 0C/0M/0m on ${slice2Closure.candidate.manifestSha256}.`,
+                  critical: 0,
+                  major: 0,
+                  minor: 0,
+                  candidateManifestSha256:
+                    slice2Closure.candidate.manifestSha256,
+                  candidateAggregateSha256:
+                    slice2Closure.candidate.aggregateSha256,
+                  evidenceRefs: slice2Evidence,
+                },
+                slice2AuditSourceRef,
+                index,
+                "S2-AUDIT",
+                catalog,
+              ),
             ),
           ]
         : []),

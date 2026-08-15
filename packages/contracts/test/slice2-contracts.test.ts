@@ -128,5 +128,23 @@ test("separates transient conditional input from canonical review metadata", () 
     "version_history",
     "links",
     "synthetic_warning",
+    "projection_version",
   ]);
+  for (const name of [
+    "standardResultProjection",
+    "standardRunProjection",
+    "standardRequestHistory",
+    "standardRequestDetail",
+    "standardRequestVersionHistory",
+    "standardRunHistory",
+  ]) {
+    const schema = schemas[name] as {
+      properties: { projection_version: { enum: number[] } };
+    };
+    assert.deepEqual(schema.properties.projection_version.enum, [3], name);
+  }
+  const demo = schemas.demoProjection as {
+    properties: { projection_version: { enum: number[] } };
+  };
+  assert.deepEqual(demo.properties.projection_version.enum, [1]);
 });

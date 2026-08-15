@@ -2,9 +2,11 @@ import type {
   StandardCandidateProjectionV1,
   StandardEvidenceGraphV1,
   StandardEvidenceItemV1,
+  StandardEvidencedValueProjectionV1,
   StandardResultProjectionV1,
   StandardVerificationStatus,
 } from "@matchbase/contracts";
+import { STANDARD_DISCLOSURE_PROJECTION_VERSION } from "@matchbase/contracts";
 import {
   STANDARD_EVIDENCE_VOLATILITY_POLICY,
   type EvidenceVolatilityPolicyV1,
@@ -199,12 +201,23 @@ export function projectStandardResult(
             );
           }),
         )
-        .map((value) => ({
-          kind: value.kind,
-          value: value.value,
-          verification_status: value.verification_status,
-          evidence_ids: [...value.evidence_ids],
-        }));
+        .map((value): StandardEvidencedValueProjectionV1 =>
+          value.kind === "organization_contact"
+            ? {
+                kind: value.kind,
+                channel_type: value.channel_type,
+                value: value.value,
+                organization_domain: value.organization_domain,
+                verification_status: value.verification_status,
+                evidence_ids: [...value.evidence_ids],
+              }
+            : {
+                kind: value.kind,
+                value: value.value,
+                verification_status: value.verification_status,
+                evidence_ids: [...value.evidence_ids],
+              },
+        );
       const byKind = (kind: (typeof evidencedValues)[number]["kind"]) =>
         evidencedValues.filter((value) => value.kind === kind);
       const contactDetails = byKind("organization_contact");
@@ -312,7 +325,7 @@ export function projectStandardResult(
       advisory_boundary: STANDARD_ADVISORY_BOUNDARY,
     },
     synthetic_warning: STANDARD_SYNTHETIC_WARNING,
-    projection_version: 1,
+    projection_version: STANDARD_DISCLOSURE_PROJECTION_VERSION,
   };
   assertStandardProjectionEvidenceLinks(projection, graph);
   assertStandardProjectionSafe(projection);

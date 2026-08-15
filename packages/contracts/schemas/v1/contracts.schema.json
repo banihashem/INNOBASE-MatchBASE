@@ -2385,53 +2385,109 @@
         "evidenced_values": {
           "type": "array",
           "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "value_id",
-              "candidate_id",
-              "kind",
-              "value",
-              "verification_status",
-              "evidence_ids"
-            ],
-            "properties": {
-              "value_id": {
-                "type": "string"
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "value_id",
+                  "candidate_id",
+                  "kind",
+                  "channel_type",
+                  "value",
+                  "organization_domain",
+                  "verification_status",
+                  "evidence_ids"
+                ],
+                "properties": {
+                  "value_id": {
+                    "type": "string"
+                  },
+                  "candidate_id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": ["organization_contact"]
+                  },
+                  "channel_type": {
+                    "type": "string",
+                    "enum": [
+                      "role_email",
+                      "organization_phone",
+                      "organization_web"
+                    ]
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "organization_domain": {
+                    "type": "string"
+                  },
+                  "verification_status": {
+                    "type": "string",
+                    "enum": [
+                      "claimed",
+                      "externally_verified",
+                      "inferred",
+                      "stale",
+                      "conflicting",
+                      "unknown"
+                    ]
+                  },
+                  "evidence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
               },
-              "candidate_id": {
-                "type": "string"
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "organization_contact",
-                  "plant",
-                  "approval",
-                  "capacity"
-                ]
-              },
-              "value": {
-                "type": "string"
-              },
-              "verification_status": {
-                "type": "string",
-                "enum": [
-                  "claimed",
-                  "externally_verified",
-                  "inferred",
-                  "stale",
-                  "conflicting",
-                  "unknown"
-                ]
-              },
-              "evidence_ids": {
-                "type": "array",
-                "items": {
-                  "type": "string"
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "value_id",
+                  "candidate_id",
+                  "kind",
+                  "value",
+                  "verification_status",
+                  "evidence_ids"
+                ],
+                "properties": {
+                  "value_id": {
+                    "type": "string"
+                  },
+                  "candidate_id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": ["plant", "approval", "capacity"]
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "verification_status": {
+                    "type": "string",
+                    "enum": [
+                      "claimed",
+                      "externally_verified",
+                      "inferred",
+                      "stale",
+                      "conflicting",
+                      "unknown"
+                    ]
+                  },
+                  "evidence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
-            }
+            ]
           }
         },
         "eligible_candidate_ids": {
@@ -2906,177 +2962,369 @@
               "contact_details": {
                 "type": "array",
                 "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "kind",
-                    "value",
-                    "verification_status",
-                    "evidence_ids"
-                  ],
-                  "properties": {
-                    "kind": {
-                      "type": "string",
-                      "enum": [
-                        "organization_contact",
-                        "plant",
-                        "approval",
-                        "capacity"
-                      ]
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "channel_type",
+                        "value",
+                        "organization_domain",
+                        "verification_status",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["organization_contact"]
+                        },
+                        "channel_type": {
+                          "type": "string",
+                          "enum": [
+                            "role_email",
+                            "organization_phone",
+                            "organization_web"
+                          ]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "organization_domain": {
+                          "type": "string"
+                        },
+                        "verification_status": {
+                          "type": "string",
+                          "enum": [
+                            "claimed",
+                            "externally_verified",
+                            "inferred",
+                            "stale",
+                            "conflicting",
+                            "unknown"
+                          ]
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
                     },
-                    "value": {
-                      "type": "string"
-                    },
-                    "verification_status": {
-                      "type": "string",
-                      "enum": [
-                        "claimed",
-                        "externally_verified",
-                        "inferred",
-                        "stale",
-                        "conflicting",
-                        "unknown"
-                      ]
-                    },
-                    "evidence_ids": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "value",
+                        "verification_status",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["plant", "approval", "capacity"]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "verification_status": {
+                          "type": "string",
+                          "enum": [
+                            "claimed",
+                            "externally_verified",
+                            "inferred",
+                            "stale",
+                            "conflicting",
+                            "unknown"
+                          ]
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
                       }
                     }
-                  }
+                  ]
                 }
               },
               "plant_identifiers": {
                 "type": "array",
                 "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "kind",
-                    "value",
-                    "verification_status",
-                    "evidence_ids"
-                  ],
-                  "properties": {
-                    "kind": {
-                      "type": "string",
-                      "enum": [
-                        "organization_contact",
-                        "plant",
-                        "approval",
-                        "capacity"
-                      ]
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "channel_type",
+                        "value",
+                        "organization_domain",
+                        "verification_status",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["organization_contact"]
+                        },
+                        "channel_type": {
+                          "type": "string",
+                          "enum": [
+                            "role_email",
+                            "organization_phone",
+                            "organization_web"
+                          ]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "organization_domain": {
+                          "type": "string"
+                        },
+                        "verification_status": {
+                          "type": "string",
+                          "enum": [
+                            "claimed",
+                            "externally_verified",
+                            "inferred",
+                            "stale",
+                            "conflicting",
+                            "unknown"
+                          ]
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
                     },
-                    "value": {
-                      "type": "string"
-                    },
-                    "verification_status": {
-                      "type": "string",
-                      "enum": [
-                        "claimed",
-                        "externally_verified",
-                        "inferred",
-                        "stale",
-                        "conflicting",
-                        "unknown"
-                      ]
-                    },
-                    "evidence_ids": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "value",
+                        "verification_status",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["plant", "approval", "capacity"]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "verification_status": {
+                          "type": "string",
+                          "enum": [
+                            "claimed",
+                            "externally_verified",
+                            "inferred",
+                            "stale",
+                            "conflicting",
+                            "unknown"
+                          ]
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
                       }
                     }
-                  }
+                  ]
                 }
               },
               "approval_identifiers": {
                 "type": "array",
                 "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "kind",
-                    "value",
-                    "verification_status",
-                    "evidence_ids"
-                  ],
-                  "properties": {
-                    "kind": {
-                      "type": "string",
-                      "enum": [
-                        "organization_contact",
-                        "plant",
-                        "approval",
-                        "capacity"
-                      ]
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "channel_type",
+                        "value",
+                        "organization_domain",
+                        "verification_status",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["organization_contact"]
+                        },
+                        "channel_type": {
+                          "type": "string",
+                          "enum": [
+                            "role_email",
+                            "organization_phone",
+                            "organization_web"
+                          ]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "organization_domain": {
+                          "type": "string"
+                        },
+                        "verification_status": {
+                          "type": "string",
+                          "enum": [
+                            "claimed",
+                            "externally_verified",
+                            "inferred",
+                            "stale",
+                            "conflicting",
+                            "unknown"
+                          ]
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
                     },
-                    "value": {
-                      "type": "string"
-                    },
-                    "verification_status": {
-                      "type": "string",
-                      "enum": [
-                        "claimed",
-                        "externally_verified",
-                        "inferred",
-                        "stale",
-                        "conflicting",
-                        "unknown"
-                      ]
-                    },
-                    "evidence_ids": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "value",
+                        "verification_status",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["plant", "approval", "capacity"]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "verification_status": {
+                          "type": "string",
+                          "enum": [
+                            "claimed",
+                            "externally_verified",
+                            "inferred",
+                            "stale",
+                            "conflicting",
+                            "unknown"
+                          ]
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
                       }
                     }
-                  }
+                  ]
                 }
               },
               "capacity_figures": {
                 "type": "array",
                 "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "kind",
-                    "value",
-                    "verification_status",
-                    "evidence_ids"
-                  ],
-                  "properties": {
-                    "kind": {
-                      "type": "string",
-                      "enum": [
-                        "organization_contact",
-                        "plant",
-                        "approval",
-                        "capacity"
-                      ]
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "channel_type",
+                        "value",
+                        "organization_domain",
+                        "verification_status",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["organization_contact"]
+                        },
+                        "channel_type": {
+                          "type": "string",
+                          "enum": [
+                            "role_email",
+                            "organization_phone",
+                            "organization_web"
+                          ]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "organization_domain": {
+                          "type": "string"
+                        },
+                        "verification_status": {
+                          "type": "string",
+                          "enum": [
+                            "claimed",
+                            "externally_verified",
+                            "inferred",
+                            "stale",
+                            "conflicting",
+                            "unknown"
+                          ]
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
                     },
-                    "value": {
-                      "type": "string"
-                    },
-                    "verification_status": {
-                      "type": "string",
-                      "enum": [
-                        "claimed",
-                        "externally_verified",
-                        "inferred",
-                        "stale",
-                        "conflicting",
-                        "unknown"
-                      ]
-                    },
-                    "evidence_ids": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "value",
+                        "verification_status",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["plant", "approval", "capacity"]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "verification_status": {
+                          "type": "string",
+                          "enum": [
+                            "claimed",
+                            "externally_verified",
+                            "inferred",
+                            "stale",
+                            "conflicting",
+                            "unknown"
+                          ]
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
                       }
                     }
-                  }
+                  ]
                 }
               }
             }
@@ -3159,7 +3407,7 @@
         },
         "projection_version": {
           "type": "integer",
-          "enum": [1]
+          "enum": [3]
         }
       }
     },
@@ -3278,7 +3526,7 @@
         },
         "projection_version": {
           "type": "integer",
-          "enum": [1]
+          "enum": [3]
         },
         "synthetic_warning": {
           "type": "string"
@@ -3342,7 +3590,12 @@
     "standardRequestHistory": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "items", "synthetic_warning"],
+      "required": [
+        "schema_version",
+        "items",
+        "synthetic_warning",
+        "projection_version"
+      ],
       "properties": {
         "schema_version": {
           "type": "string",
@@ -3428,6 +3681,10 @@
         },
         "synthetic_warning": {
           "type": "string"
+        },
+        "projection_version": {
+          "type": "integer",
+          "enum": [3]
         }
       }
     },
@@ -3439,7 +3696,8 @@
         "canonical",
         "version_history",
         "links",
-        "synthetic_warning"
+        "synthetic_warning",
+        "projection_version"
       ],
       "properties": {
         "schema_version": {
@@ -3496,13 +3754,22 @@
         },
         "synthetic_warning": {
           "type": "string"
+        },
+        "projection_version": {
+          "type": "integer",
+          "enum": [3]
         }
       }
     },
     "standardRequestVersionHistory": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "items", "synthetic_warning"],
+      "required": [
+        "schema_version",
+        "items",
+        "synthetic_warning",
+        "projection_version"
+      ],
       "properties": {
         "schema_version": {
           "type": "string",
@@ -3542,13 +3809,22 @@
         },
         "synthetic_warning": {
           "type": "string"
+        },
+        "projection_version": {
+          "type": "integer",
+          "enum": [3]
         }
       }
     },
     "standardRunHistory": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "items", "synthetic_warning"],
+      "required": [
+        "schema_version",
+        "items",
+        "synthetic_warning",
+        "projection_version"
+      ],
       "properties": {
         "schema_version": {
           "type": "string",
@@ -3665,7 +3941,7 @@
               },
               "projection_version": {
                 "type": "integer",
-                "enum": [1]
+                "enum": [3]
               }
             },
             "oneOf": [
@@ -3729,6 +4005,10 @@
         },
         "synthetic_warning": {
           "type": "string"
+        },
+        "projection_version": {
+          "type": "integer",
+          "enum": [3]
         }
       }
     },

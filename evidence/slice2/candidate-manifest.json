@@ -9,8 +9,8 @@
     "governance/agents.json",
     "governance/artifact-index.json"
   ],
-  "fileCount": 84,
-  "aggregateSha256": "B7A0F5AF16BDFFFA69FD65483E92CA2E00D420B0A9F64999AF2CD453D4737FE2",
+  "fileCount": 98,
+  "aggregateSha256": "CDD2951D136827B08ADF84C3AEA9A12C97512A01A64FEB68FF62F07794CDA6B8",
   "files": [
     {
       "path": "apps/web/app/globals.css",
@@ -26,7 +26,7 @@
     },
     {
       "path": "apps/web/components/StandardWorkspace.test.tsx",
-      "sha256": "C113AC2CD39EC0AAB7B2A6304E86E8E5B9D2DD6FFBB9398C808102702BCBA282"
+      "sha256": "1B7054F0C02BF5ED53DD3A3135411739BA75F5C067ACC54406C72B0F837E9153"
     },
     {
       "path": "apps/web/components/standard/CanonicalReview.tsx",
@@ -133,6 +133,14 @@
       "sha256": "3515E88C2E1607F2483A01A57B129F409BDF56A40BE6302DA5AA0BA4DA186855"
     },
     {
+      "path": "governance/slice2-external-closure-anchor-v1.json",
+      "sha256": "55BAFFABBACF601344C47632A42BA8F94B377F4AAEFF66E7F0785D30D0A63ED9"
+    },
+    {
+      "path": "governance/slice2-rejected-candidate-attestation-v1.json",
+      "sha256": "152B60D766D6796BD265CA8EE82D3B75203372BA2191ECAF37EC426BCE05FC03"
+    },
+    {
       "path": "governance/slices.json",
       "sha256": "3BCC2A1B1C8CEF3271D7615D141C78292C67BACB4B54E362618EBA00D657A9C2"
     },
@@ -158,11 +166,11 @@
     },
     {
       "path": "packages/ai-evidence/src/evidence/standard.ts",
-      "sha256": "B1F9313809F1CBCAB30E18FABC22CDF00BBD30EDC2D1E8FBAB090D12617F0960"
+      "sha256": "829D12E23DAE42233DA6EB135A40BC8E7692E9F54090479D9586FFC3D479A4FB"
     },
     {
       "path": "packages/ai-evidence/src/projection/standard.ts",
-      "sha256": "E5952785926EA6C708DDEAB723B5EC20BBEAC347D487B14386581ECEB556AFD9"
+      "sha256": "BFC44F77768D40843DEAA5F40BD9C4BE1277F6EE754F680B8FE8CFA9ADEB7258"
     },
     {
       "path": "packages/ai-evidence/src/research/standard-synthetic-fixtures.ts",
@@ -178,7 +186,7 @@
     },
     {
       "path": "packages/ai-evidence/test/standard-slice2.test.ts",
-      "sha256": "D2A1BF1FD10F62CEE9AC1DF057C3E48D24A1D6A254FAAD8F99C730CF9B4B3B14"
+      "sha256": "5F686C1E7B4FF99F16B41F4D72534DD972F6E73E41CEBB4769CF463B81233532"
     },
     {
       "path": "packages/application/package.json",
@@ -210,7 +218,7 @@
     },
     {
       "path": "packages/application/src/standard-workspace.ts",
-      "sha256": "4D16D046B737462AC7FEB08FA9A7F849FE842D98A839DAA93E8AEF7AD61CA3FB"
+      "sha256": "5CBB1B2D0BEE1861B9962014C571E73F19D31A96C84E3A4FFEC964747357B67C"
     },
     {
       "path": "packages/application/src/types.ts",
@@ -226,7 +234,7 @@
     },
     {
       "path": "packages/contracts/schemas/v1/contracts.schema.json",
-      "sha256": "BAB5F6F4DC0BECDA3630759C45D45D9CF961701B55B282F942AE16B8FCAEEFC2"
+      "sha256": "DD884A9923BE73027E476D692DE35632460D9C0C745EA3A4F90C08379D4AA8BC"
     },
     {
       "path": "packages/contracts/src/index.ts",
@@ -238,7 +246,7 @@
     },
     {
       "path": "packages/contracts/src/schema.ts",
-      "sha256": "078EAA7A2BCAB6B55C12C8BBB55CFA4F2D978D9F3ECF8A07B06033B4FAF2334D"
+      "sha256": "BE3BBF9ABC7BCEF12EAD0A4735521B068403A5E03C7C620991D9E2ACB87148C8"
     },
     {
       "path": "packages/contracts/src/v1/domain-pack.ts",
@@ -246,11 +254,11 @@
     },
     {
       "path": "packages/contracts/src/v1/standard-evidence.ts",
-      "sha256": "C3266342C1827B71314A011B09DECCE3BC6B7D359384D32993840A64718CE367"
+      "sha256": "F0C434D1708140F621242BCF6E844779C5A3B80E185F7E4C23355186A5F4759F"
     },
     {
       "path": "packages/contracts/src/v1/standard-projection.ts",
-      "sha256": "9AC94496D4283061100E24D25987C06088F18839AE8613BCE9FDFED881BF5CF2"
+      "sha256": "01437E81C7C1F61EA3F28F4ABE3A99660C766AC294F48CD6E9A2291F9D2922D7"
     },
     {
       "path": "packages/contracts/src/v1/standard-validation.ts",
@@ -262,7 +270,7 @@
     },
     {
       "path": "packages/contracts/test/slice2-contracts.test.ts",
-      "sha256": "15D338AB9DDBA0B666FD08311504BACDB3E6FEF728F027055CF53455523504FE"
+      "sha256": "4376950CC96C7FF70551D1F42E166B4E0CE1DC00AAFCCD6B912D3335F4BE2E19"
     },
     {
       "path": "packages/data/migrations/0002_slice_2_standard_workspace.down.sql",
@@ -293,12 +301,40 @@
       "sha256": "22AFE025B5800A98F035A6213168EFBCB4D8C5E485671291B99B7990EFD8AA3C"
     },
     {
+      "path": "scripts/generate-dashboard-ci-snapshot.mjs",
+      "sha256": "4DD815D3DB5F979FA560557219FDA1DC363BE4752D530C63092CED0AB2BCC33C"
+    },
+    {
+      "path": "scripts/generate-dashboard-snapshot.mjs",
+      "sha256": "3585AE0B436E33F23F03FDDAE014DB1D5033D745EFBD2060F798F02CA7D26EF8"
+    },
+    {
       "path": "scripts/generate-slice2-candidate.mjs",
       "sha256": "EBAE6E595E16807AB0CE8FAFE902B4E9F77F82043CAE63DA11F01CC56282BEDD"
     },
     {
+      "path": "scripts/lib/correction-candidate-policy.mjs",
+      "sha256": "EBD503D6179B1B4449CF0FFFD89FE6DCF01B7EB80B5C0345F9A35AA6ECB41FAA"
+    },
+    {
+      "path": "scripts/lib/historical-artifact-policy.mjs",
+      "sha256": "2B3B8A1AB27DDE7782A65E4A9CFFD85FC1165BF505EF0766AB05E1D66507CE5B"
+    },
+    {
+      "path": "scripts/lib/semantic-dashboard.mjs",
+      "sha256": "F39664E36CB2BBC6673142D5312C5A1B58AF56ECF5D9322125CBF3A18AC5911D"
+    },
+    {
       "path": "scripts/lib/slice2-audit-policy.mjs",
-      "sha256": "E64778785400AA8DC5AD10629F028E09B57A778707FB097B6361249D9FB44233"
+      "sha256": "5E26ACE2B4CE9364423526EFDC834A7894C7E6B5DE01B42645458D7280CF6066"
+    },
+    {
+      "path": "scripts/lib/slice2-dashboard-closure-policy.mjs",
+      "sha256": "ACC904A855A44FC3B89711B27C286D7D3D68E38DFEB7A7D40E25E87AC05CE303"
+    },
+    {
+      "path": "scripts/lib/slice2-external-closure-policy.mjs",
+      "sha256": "F7F244EF95EF8E22CEACC305DE0291CAE064E91651A4EB4EB065F18429BE62BD"
     },
     {
       "path": "scripts/sync-governance-agent-hashes.mjs",
@@ -309,12 +345,20 @@
       "sha256": "52163E750FB3AC5FBEB7A8CE23E5814DC5E9B69943F4337F8601B0E4364CB1A9"
     },
     {
+      "path": "scripts/validate-dashboard-snapshot.mjs",
+      "sha256": "ACC9888D2EB69FA5144CD335CD1DBD3B987F3EF62B6F0BB177D01AEE24A945AB"
+    },
+    {
       "path": "scripts/validate-governance.mjs",
       "sha256": "36AF6C53788EC87E330A94C719A015F27EC2FD068347A3551B18F8CCB6AB3370"
     },
     {
+      "path": "scripts/validate-slice1-evidence.mjs",
+      "sha256": "DBED27648E0D5F682C83B92BB405246D832BFE70AA6E6A312103CC9823589763"
+    },
+    {
       "path": "scripts/validate-slice2-evidence.mjs",
-      "sha256": "A55E3C887597AFAA38028A1FB2082753C8887E03C9F7F51742A90BDF47ACA84D"
+      "sha256": "8C676C627AE259B0B8D7BA84B3E8239FD039EE3C18C4DA5F89D4997898963FCB"
     },
     {
       "path": "scripts/validate-slice2-local.mjs",
@@ -325,16 +369,28 @@
       "sha256": "26DC78FDF3E63A32D46E8652C0BCE16B3A84D354CDA82C7E6E5C6AA149E54199"
     },
     {
+      "path": "test/historical-artifact-policy.test.mjs",
+      "sha256": "8381DB0C1E1CB6E50F62A7446975769693817EBB79B352E14340792E08FAAE2B"
+    },
+    {
       "path": "test/slice2-audit-policy.test.mjs",
-      "sha256": "8427550694F7D7A354779C5CB01CDB81906404A3328B5532CD943B24989A58E9"
+      "sha256": "3BDA2F48C81ABB7F2EC26C79B4DB19F15726730EC9E67CFAA19CD70FADC5EF9C"
+    },
+    {
+      "path": "test/slice2-dashboard-closure-policy.test.mjs",
+      "sha256": "E57F8ABB2BC74DF0E52407B4297DD78216DAF79850C967A9804653D3C33567B6"
+    },
+    {
+      "path": "test/slice2-external-closure-policy.test.mjs",
+      "sha256": "7E9CE2D0C75A9973C18F7EEB4CF0FB9DECBBB2F453B55081D54F651F95ECC41B"
     },
     {
       "path": "test/slice2/api/standard-application-postgres.test.mjs",
-      "sha256": "561B54364B24E67521D3F362C5C4643E4C22734B262C9E24E6C37A10F9D9291C"
+      "sha256": "4E56FD5891E98E614EA6F5E0187B7379CDA329E693876A0434D88D4C2B5C1DDF"
     },
     {
       "path": "test/slice2/application/combined-worker-postgres.test.mjs",
-      "sha256": "B40F7F683A936ECF184AECAB58541E5D7EE68EE17FD231C18748F1D0115993CB"
+      "sha256": "BC7ACF119B4C2A739528B65E465B60B805404458B95950D8EF3F1F17954B7888"
     },
     {
       "path": "test/slice2/data/migration-contract.test.mjs",

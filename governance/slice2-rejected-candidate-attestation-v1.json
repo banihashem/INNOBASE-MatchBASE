@@ -1,0 +1,93 @@
+{
+  "schemaVersion": "matchbase.slice2-rejected-candidate-attestation/v1",
+  "repository": "banihashem/INNOBASE-MatchBASE",
+  "commit": "58ed065f8a8e2ac5c60812b13cd4607c1a8d9cb6",
+  "tree": "358606112d663ac15e2e065557cbbed6f00cae86",
+  "runId": 31867699009,
+  "jobId": 94971277544,
+  "conclusion": "success",
+  "candidate": {
+    "manifestSha256": "F667088C27DE3333F3CB4FF880364C42248B114CE7EF3EFB1A2ECDE773FC30CB",
+    "aggregateSha256": "B7A0F5AF16BDFFFA69FD65483E92CA2E00D420B0A9F64999AF2CD453D4737FE2",
+    "fileCount": 84
+  },
+  "role2Audit": {
+    "sha256": "A2664F01F43C074B9485136687E05DD6180D5A76E4C5CDEB68C9DA1B1E5EB6F6",
+    "status": "FAIL",
+    "critical": 0,
+    "major": 3,
+    "minor": 0
+  },
+  "independentAudits": [
+    {
+      "id": "S2-AUDIT-SECURITY-PRIVACY",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F667088C27DE3333F3CB4FF880364C42248B114CE7EF3EFB1A2ECDE773FC30CB",
+      "candidateAggregateSha256": "B7A0F5AF16BDFFFA69FD65483E92CA2E00D420B0A9F64999AF2CD453D4737FE2",
+      "method": "Independent frozen-byte authorization, privacy, cursor, cache and denial audit"
+    },
+    {
+      "id": "S2-AUDIT-DATA-MIGRATION",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F667088C27DE3333F3CB4FF880364C42248B114CE7EF3EFB1A2ECDE773FC30CB",
+      "candidateAggregateSha256": "B7A0F5AF16BDFFFA69FD65483E92CA2E00D420B0A9F64999AF2CD453D4737FE2",
+      "method": "Independent PostgreSQL 18 migration, rollback, quota, lease and immutability audit"
+    },
+    {
+      "id": "S2-AUDIT-AI-EVIDENCE",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F667088C27DE3333F3CB4FF880364C42248B114CE7EF3EFB1A2ECDE773FC30CB",
+      "candidateAggregateSha256": "B7A0F5AF16BDFFFA69FD65483E92CA2E00D420B0A9F64999AF2CD453D4737FE2",
+      "method": "Independent deterministic scoring, evidence, citation, projection and no-network audit"
+    },
+    {
+      "id": "S2-AUDIT-QA-ACCESSIBILITY",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F667088C27DE3333F3CB4FF880364C42248B114CE7EF3EFB1A2ECDE773FC30CB",
+      "candidateAggregateSha256": "B7A0F5AF16BDFFFA69FD65483E92CA2E00D420B0A9F64999AF2CD453D4737FE2",
+      "method": "Independent HTTP matrix and real Chrome desktop/mobile/accessibility audit"
+    },
+    {
+      "id": "S2-AUDIT-SRE-COST",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F667088C27DE3333F3CB4FF880364C42248B114CE7EF3EFB1A2ECDE773FC30CB",
+      "candidateAggregateSha256": "B7A0F5AF16BDFFFA69FD65483E92CA2E00D420B0A9F64999AF2CD453D4737FE2",
+      "method": "Independent worker, concurrency, replay, readiness and cost-reconciliation audit"
+    },
+    {
+      "id": "S2-AUDIT-REPOSITORY-RELEASE",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F667088C27DE3333F3CB4FF880364C42248B114CE7EF3EFB1A2ECDE773FC30CB",
+      "candidateAggregateSha256": "B7A0F5AF16BDFFFA69FD65483E92CA2E00D420B0A9F64999AF2CD453D4737FE2",
+      "method": "Independent predecessor-preservation and local repository-boundary audit; hosted closure excluded"
+    },
+    {
+      "id": "S2-AUDIT-INTEGRATION-CRITIC",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F667088C27DE3333F3CB4FF880364C42248B114CE7EF3EFB1A2ECDE773FC30CB",
+      "candidateAggregateSha256": "B7A0F5AF16BDFFFA69FD65483E92CA2E00D420B0A9F64999AF2CD453D4737FE2",
+      "method": "Independent semantic reconciliation on the frozen local candidate"
+    }
+  ]
+}

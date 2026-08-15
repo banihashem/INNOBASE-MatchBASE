@@ -58,6 +58,10 @@ export function validateSlice2AuditBindings(
   )
     throw new Error("Slice 2 audit binding identity is invalid.");
 
+  const disciplineStatus = audits[0]?.status;
+  if (!["PENDING", "PASS"].includes(disciplineStatus))
+    throw new Error("Slice 2 discipline audit lifecycle is invalid.");
+
   for (const [index, audit] of audits.entries()) {
     if (
       audit === null ||
@@ -70,8 +74,9 @@ export function validateSlice2AuditBindings(
     if (
       audit.id !== SLICE2_AUDIT_IDS[index] ||
       (critic
-        ? !["PENDING", "PASS"].includes(audit.status)
-        : audit.status !== "PASS") ||
+        ? audit.status !== "PENDING" &&
+          !(disciplineStatus === "PASS" && audit.status === "PASS")
+        : audit.status !== disciplineStatus) ||
       audit.critical !== 0 ||
       audit.major !== 0 ||
       audit.minor !== 0 ||

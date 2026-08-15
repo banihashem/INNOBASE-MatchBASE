@@ -17,6 +17,7 @@ import {
 } from "../src/domain-packs/registry.js";
 import {
   STANDARD_EVIDENCE_VOLATILITY_POLICY,
+  standardContentSha256,
   standardEvidenceReadStatuses,
   validateStandardEvidenceGraph,
 } from "../src/evidence/standard.js";
@@ -274,22 +275,258 @@ test("rejects dangling driver, gap, value, and evidence lineage", () => {
   );
 });
 
-test("rejects titled and unprefixed multilingual natural-person contact values", () => {
+test("fails closed on natural-person and ambiguous organization contact values", () => {
   for (const person of [
-    "Dr Jane Smith",
     "Jane Smith",
-    "علی رضایی",
-    "محمد أحمد",
+    "Jane Mary Smith",
+    "John Q. Public",
+    "Jean Claude Van Damme",
+    "Mary-Jane O'Neil",
+    "Dr. Samir A. Haddad",
+    "علی رضا حسینی",
+    "دکتر محمد علی رضایی",
+    "السيد أحمد محمد علي",
+    "jane.smith@example.invalid",
+    "Jane Smith sales@example.invalid",
+    "sales@example.invalid John Public",
+    "+971 50 123 4567 (Jane)",
+    "Call our procurement team",
   ]) {
     const graph = buildStandardSyntheticEvidenceGraph("RUN-PERSON", "one");
+    const evidence = graph.evidence[0]!;
     graph.evidenced_values[0] = {
-      ...graph.evidenced_values[0]!,
+      value_id: graph.evidenced_values[0]!.value_id,
+      candidate_id: graph.evidenced_values[0]!.candidate_id,
       kind: "organization_contact",
+      channel_type: "role_email",
       value: person,
+      organization_domain: evidence.publisher_domain,
+      verification_status: "claimed",
+      evidence_ids: [evidence.evidence_id],
     };
     assert.throws(
       () => validateStandardEvidenceGraph(graph),
-      /named natural-person contact data/iu,
+      /organization role inbox/iu,
+    );
+  }
+});
+
+test("permits only closed organization channels with matching value-level evidence", () => {
+  for (const channel of [
+    {
+      channel_type: "role_email",
+      value: "procurement@publisher-01.example.invalid",
+    },
+    { channel_type: "organization_phone", value: "+971501234567" },
+    {
+      channel_type: "organization_web",
+      value: "https://publisher-01.example.invalid/",
+    },
+    {
+      channel_type: "organization_web",
+      value: "https://contact.publisher-01.example.invalid/procurement",
+    },
+  ] as const) {
+    const graph = buildStandardSyntheticEvidenceGraph("RUN-ORG", "one");
+    const evidence = graph.evidence[0]!;
+    evidence.extract = `${evidence.extract} Contact: [${channel.value}], verified.`;
+    evidence.content_sha256 = standardContentSha256(evidence.extract);
+    graph.evidenced_values[0] = {
+      value_id: graph.evidenced_values[0]!.value_id,
+      candidate_id: graph.evidenced_values[0]!.candidate_id,
+      kind: "organization_contact",
+      ...channel,
+      organization_domain: evidence.publisher_domain,
+      verification_status: "claimed",
+      evidence_ids: [evidence.evidence_id],
+    };
+    assert.doesNotThrow(() => validateStandardEvidenceGraph(graph));
+    const projected = projectStandardResult(graph, { now: NOW });
+    assert.deepEqual(projected.candidates[0]!.contact_details![0], {
+      kind: "organization_contact",
+      ...channel,
+      organization_domain: evidence.publisher_domain,
+      verification_status: "claimed",
+      evidence_ids: [evidence.evidence_id],
+    });
+  }
+});
+
+test("rejects organization channels without exact value-level provenance", () => {
+  const channels = [
+    { channel_type: "role_email", value: "sales@publisher-01.example.invalid" },
+    { channel_type: "organization_phone", value: "+971501234567" },
+    {
+      channel_type: "organization_web",
+      value: "https://publisher-01.example.invalid/procurement",
+    },
+    {
+      channel_type: "organization_web",
+      value: "https://arbitrary.publisher-01.example.invalid/contact",
+    },
+    {
+      channel_type: "organization_web",
+      value: "https://publisher-01.example.invalid/contact?person=Jane-Smith",
+    },
+  ] as const;
+  for (const channel of channels) {
+    const graph = buildStandardSyntheticEvidenceGraph("RUN-UNBOUND", "one");
+    const evidence = graph.evidence[0]!;
+    graph.evidenced_values[0] = {
+      value_id: graph.evidenced_values[0]!.value_id,
+      candidate_id: graph.evidenced_values[0]!.candidate_id,
+      kind: "organization_contact",
+      ...channel,
+      organization_domain: evidence.publisher_domain,
+      verification_status: "claimed",
+      evidence_ids: [evidence.evidence_id],
+    };
+    assert.throws(
+      () => validateStandardEvidenceGraph(graph),
+      /contact evidence|organization web channel/iu,
+    );
+  }
+});
+
+test("rejects evidenced person names embedded in organization web URLs", () => {
+  for (const url of [
+    "https://publisher-01.example.invalid/Jane-Mary-Smith",
+    "https://publisher-01.example.invalid/Jane-Q-Smith",
+    "https://publisher-01.example.invalid/%D9%85%D8%AD%D9%85%D8%AF-%D8%B9%D9%84%DB%8C-%D8%B1%D8%B6%D8%A7%DB%8C%DB%8C",
+    "https://publisher-01.example.invalid/contact?name=%D8%A3%D8%AD%D9%85%D8%AF-%D9%85%D8%AD%D9%85%D8%AF-%D8%B9%D9%84%D9%8A",
+  ]) {
+    const graph = buildStandardSyntheticEvidenceGraph("RUN-WEB-PERSON", "one");
+    const evidence = graph.evidence[0]!;
+    evidence.extract = `${evidence.extract} Contact: ${url}`;
+    evidence.content_sha256 = standardContentSha256(evidence.extract);
+    graph.evidenced_values[0] = {
+      value_id: graph.evidenced_values[0]!.value_id,
+      candidate_id: graph.evidenced_values[0]!.candidate_id,
+      kind: "organization_contact",
+      channel_type: "organization_web",
+      value: url,
+      organization_domain: evidence.publisher_domain,
+      verification_status: "claimed",
+      evidence_ids: [evidence.evidence_id],
+    };
+    assert.throws(
+      () => validateStandardEvidenceGraph(graph),
+      /organization web channel/iu,
+    );
+  }
+});
+
+test("requires exact contact boundaries and closed organization web locations", () => {
+  const cases = [
+    {
+      channel_type: "organization_phone",
+      value: "+971501234567",
+      evidenced: "+9715012345678",
+      message: /contact evidence/iu,
+    },
+    {
+      channel_type: "organization_phone",
+      value: "+971501234567",
+      evidenced: "9+971501234567",
+      message: /contact evidence/iu,
+    },
+    {
+      channel_type: "role_email",
+      value: "sales@publisher-01.example.invalid",
+      evidenced: "sales@publisher-01.example.invalid.evil",
+      message: /contact evidence/iu,
+    },
+    {
+      channel_type: "role_email",
+      value: "sales@publisher-01.example.invalid",
+      evidenced: "xsales@publisher-01.example.invalid",
+      message: /contact evidence/iu,
+    },
+    {
+      channel_type: "organization_web",
+      value: "https://jane-smith.publisher-01.example.invalid/",
+      evidenced: "https://jane-smith.publisher-01.example.invalid/",
+      message: /organization web channel/iu,
+    },
+    {
+      channel_type: "organization_web",
+      value: "https://publisher-01.example.invalid/contact",
+      evidenced: "xhttps://publisher-01.example.invalid/contact",
+      message: /contact evidence/iu,
+    },
+    {
+      channel_type: "organization_web",
+      value: "https://arbitrary.publisher-01.example.invalid/contact",
+      evidenced: "https://arbitrary.publisher-01.example.invalid/contact",
+      message: /organization web channel/iu,
+    },
+    {
+      channel_type: "organization_web",
+      value: "https://publisher-01.example.invalid/arbitrary-path",
+      evidenced: "https://publisher-01.example.invalid/arbitrary-path",
+      message: /organization web channel/iu,
+    },
+    {
+      channel_type: "organization_web",
+      value: "https://publisher-01.example.invalid/contact?arbitrary=value",
+      evidenced: "https://publisher-01.example.invalid/contact?arbitrary=value",
+      message: /organization web channel/iu,
+    },
+    {
+      channel_type: "organization_web",
+      value: "https://publisher-01.example.invalid/contact#Jane-Smith",
+      evidenced: "https://publisher-01.example.invalid/contact#Jane-Smith",
+      message: /organization web channel/iu,
+    },
+  ] as const;
+  for (const item of cases) {
+    const graph = buildStandardSyntheticEvidenceGraph("RUN-BOUNDARY", "one");
+    const evidence = graph.evidence[0]!;
+    evidence.extract = `${evidence.extract} Contact: ${item.evidenced}`;
+    evidence.content_sha256 = standardContentSha256(evidence.extract);
+    graph.evidenced_values[0] = {
+      value_id: graph.evidenced_values[0]!.value_id,
+      candidate_id: graph.evidenced_values[0]!.candidate_id,
+      kind: "organization_contact",
+      channel_type: item.channel_type,
+      value: item.value,
+      organization_domain: evidence.publisher_domain,
+      verification_status: "claimed",
+      evidence_ids: [evidence.evidence_id],
+    };
+    assert.throws(() => validateStandardEvidenceGraph(graph), item.message);
+  }
+});
+
+test("rejects every RFC 3986 continuation and encoded Unicode web suffix", () => {
+  const claimed = "https://publisher-01.example.invalid/contact";
+  const continuations = [
+    ..."ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=",
+    "%4A",
+    "%D8%AC%D8%A7%D9%86",
+  ];
+  for (const suffix of continuations) {
+    const graph = buildStandardSyntheticEvidenceGraph(
+      "RUN-URI-BOUNDARY",
+      "one",
+    );
+    const evidence = graph.evidence[0]!;
+    evidence.extract = `${evidence.extract} Contact: ${claimed}${suffix}jane-smith`;
+    evidence.content_sha256 = standardContentSha256(evidence.extract);
+    graph.evidenced_values[0] = {
+      value_id: graph.evidenced_values[0]!.value_id,
+      candidate_id: graph.evidenced_values[0]!.candidate_id,
+      kind: "organization_contact",
+      channel_type: "organization_web",
+      value: claimed,
+      organization_domain: evidence.publisher_domain,
+      verification_status: "claimed",
+      evidence_ids: [evidence.evidence_id],
+    };
+    assert.throws(
+      () => validateStandardEvidenceGraph(graph),
+      /contact evidence/iu,
+      `continuation ${JSON.stringify(suffix)} must not attest the shorter URL`,
     );
   }
 });

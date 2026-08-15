@@ -5,6 +5,7 @@ import {
   externalClosureSourceRef,
   validateExternalClosure,
 } from "./lib/external-closure-policy.mjs";
+import { validateSlice2ExternalClosure } from "./lib/slice2-external-closure-policy.mjs";
 import {
   assertExactPredecessorHistory,
   validatePredecessorAttestation,
@@ -58,6 +59,16 @@ const closure = validateExternalClosure(closureDocument.value, {
 });
 observationTime = closure.observedAt;
 closureDocument.sourceRef.observedAt = observationTime;
+const slice2ClosureDocument = await document(
+  "governance/slice2-external-closure-anchor-v1.json",
+);
+const slice2Closure = validateSlice2ExternalClosure(
+  slice2ClosureDocument.value,
+  {
+    anchorOnly: true,
+  },
+);
+slice2ClosureDocument.sourceRef.observedAt = slice2Closure.observedAt;
 const [
   slices,
   gates,
@@ -67,6 +78,8 @@ const [
   agents,
   artifactIndex,
   predecessorHistory,
+  slice2AuditEvidence,
+  externalState,
 ] = await Promise.all([
   document("governance/slices.json"),
   document("governance/gates.json"),
@@ -76,7 +89,10 @@ const [
   document("governance/agents.json"),
   document("governance/artifact-index.json"),
   document("governance/predecessor-failures-v1.json"),
+  document("governance/slice2-rejected-candidate-attestation-v1.json"),
+  document("governance/external-state.json"),
 ]);
+slice2AuditEvidence.sourceRef.observedAt = slice2Closure.observedAt;
 const predecessorAttestation = validatePredecessorAttestation(
   predecessorHistory.value,
   {
@@ -217,16 +233,76 @@ const role2Loop = {
   sourceRefs: [closureDocument.sourceRef],
 };
 
+const slice2Facts = {
+  repository: slice2Closure.repository,
+  commit: slice2Closure.commit,
+  tree: slice2Closure.tree,
+  runId: slice2Closure.runId,
+  jobId: slice2Closure.jobId,
+  conclusion: slice2Closure.conclusion,
+  role3Disposition: slice2Closure.role3Disposition,
+  role2Status: slice2Closure.role2.status,
+  candidateManifestSha256: slice2Closure.candidate.manifestSha256,
+  candidateAggregateSha256: slice2Closure.candidate.aggregateSha256,
+};
+function slice2Record(id, title, status, extra = {}, audit = false) {
+  return {
+    id,
+    title,
+    summary: `${slice2Closure.commit}; run ${slice2Closure.runId}; job ${slice2Closure.jobId}; ${slice2Closure.role3Disposition}; Role 2 ${slice2Closure.role2.status}.`,
+    status: ["FAIL", "REOPENED", "OPEN"].includes(status)
+      ? "BLOCKED"
+      : "ACTIVE",
+    facts: { lifecycleStatus: status, ...slice2Facts, ...extra },
+    sourceRefs: [
+      audit ? slice2AuditEvidence.sourceRef : slice2ClosureDocument.sourceRef,
+    ],
+  };
+}
+const slice2Predecessors = slice2Closure.predecessors.map((item) => ({
+  id: `EXT-S2-GITHUB-PREDECESSOR-${item.runId}`,
+  title: `Preserved Slice 2 workflow run ${item.runId}`,
+  summary: `${item.conclusion}; ${item.reason}.`,
+  status: "ACTIVE",
+  facts: { lifecycleStatus: "PASS", ...item, reasonCode: item.reason },
+  sourceRefs: [slice2ClosureDocument.sourceRef],
+}));
+const slice2Defects = slice2Closure.role2.defects.map((item) =>
+  slice2Record(item.id, item.title, item.status, {
+    role2Status: slice2Closure.role2.status,
+    role2Disposition: slice2Closure.role2.disposition,
+  }),
+);
+const slice2Audits = slice2Closure.audits.map((id) =>
+  slice2Record(
+    id,
+    id,
+    "PASS",
+    {
+      critical: 0,
+      major: 0,
+      minor: 0,
+      candidateManifestSha256: slice2Closure.candidate.manifestSha256,
+      candidateAggregateSha256: slice2Closure.candidate.aggregateSha256,
+    },
+    true,
+  ),
+);
+
 const collections = {
   portfolio: slices.value.slices.map((item, index) =>
-    record(item, slices.sourceRef, "SLICE", index),
+    item.id === "SLICE-2"
+      ? slice2Record("SLICE-2", item.name, "IN_PROGRESS")
+      : record(item, slices.sourceRef, "SLICE", index),
   ),
   gates: gates.value.gates.map((item, index) =>
-    item.id === "AG6"
-      ? closureGate
-      : item.id === "AG1"
-        ? { ...closureGate, id: "AG1", title: item.name }
-        : record(item, gates.sourceRef, "GATE", index),
+    ["S2-G2", "S2-G9"].includes(item.id)
+      ? slice2Record(item.id, item.name, slice2Closure.gates[item.id])
+      : item.id === "AG6"
+        ? closureGate
+        : item.id === "AG1"
+          ? { ...closureGate, id: "AG1", title: item.name }
+          : record(item, gates.sourceRef, "GATE", index),
   ),
   backlog: backlog.value.items.map((item, index) =>
     record(item, backlog.sourceRef, "WORK", index),
@@ -239,17 +315,53 @@ const collections = {
     record(item, registers.sourceRef, "REQ", index),
   ),
   tests: registers.value.tests.map((item, index) =>
-    item.id === "S1-AC-022"
-      ? closureTest
-      : record(item, registers.sourceRef, "TEST", index),
+    Object.hasOwn(slice2Closure.acceptance, item.id)
+      ? slice2Record(item.id, item.title, slice2Closure.acceptance[item.id])
+      : item.id === "S1-AC-022"
+        ? closureTest
+        : record(item, registers.sourceRef, "TEST", index),
   ),
-  defects: defectRecords,
+  defects: [...defectRecords, ...slice2Defects],
   deployments: [
     ...registers.value.deployments.map((item, index) =>
       record(item, registers.sourceRef, "DEPLOY", index),
     ),
     closureDeployment,
     ...predecessorFailureRecords,
+    slice2Record(
+      "EXT-S2-GITHUB-CLOSURE",
+      "GitHub hosted Slice 2 closure",
+      "PASS",
+      { predecessorCount: slice2Closure.predecessors.length },
+    ),
+    ...slice2Predecessors,
+    record(
+      {
+        id: "EXT-GCP",
+        title: "Google Cloud readiness",
+        status: externalState.value.gcp.readiness,
+      },
+      externalState.sourceRef,
+      "EXT",
+    ),
+    record(
+      {
+        id: "EXT-CLOUDFLARE",
+        title: "Cloudflare readiness",
+        status: externalState.value.cloudflare.readiness,
+      },
+      externalState.sourceRef,
+      "EXT",
+    ),
+    record(
+      {
+        id: "EXT-DEPLOYMENT",
+        title: "MatchBASE deployment",
+        status: externalState.value.deployment.status,
+      },
+      externalState.sourceRef,
+      "EXT",
+    ),
   ],
   costs: registers.value.costs.map((item, index) =>
     record(item, registers.sourceRef, "COST", index),
@@ -262,9 +374,26 @@ const collections = {
       record(item, registers.sourceRef, "LOOP", index),
     ),
     role2Loop,
+    slice2Record(
+      "PO-001-R2-S2-L1",
+      "Role 2 Slice 2 correction Loop 1",
+      "OPEN",
+      {
+        critical: slice2Closure.role2.critical,
+        major: slice2Closure.role2.major,
+        minor: slice2Closure.role2.minor,
+        disposition: slice2Closure.role2.disposition,
+      },
+    ),
   ],
   evidence: [
     closureEvidence,
+    slice2Record(
+      "EVIDENCE-S2-EXTERNAL-CLOSURE",
+      "Authenticated hosted Slice 2 closure",
+      "PASS",
+    ),
+    ...slice2Audits,
     ...[
       ...(artifactIndex.value.builds ?? []),
       ...(artifactIndex.value.artifacts ?? []),

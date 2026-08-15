@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
-import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { lstatSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const shaPattern = /^[A-F0-9]{64}$/u;
+const acceptedSlice1Commit = "832fa68244eefa0dae4c079b9b94ecaea4b6a872";
 const excluded = new Set([
   "evidence/slice1/correction-loop-1-candidate.json",
   "evidence/slice1/correction-loop-2-candidate.json",
@@ -88,11 +90,14 @@ function hasExactKeys(value, keys) {
   );
 }
 
-function hashFile(path) {
-  return createHash("sha256")
-    .update(readFileSync(path))
-    .digest("hex")
-    .toUpperCase();
+function historicalHash(root, path) {
+  const result = spawnSync("git", ["show", `${acceptedSlice1Commit}:${path}`], {
+    cwd: root,
+    encoding: "buffer",
+  });
+  if (result.status !== 0)
+    throw new Error(`Accepted Slice 1 history is unavailable: ${path}`);
+  return createHash("sha256").update(result.stdout).digest("hex").toUpperCase();
 }
 
 export function correctionCandidateAggregate(entries) {
@@ -155,8 +160,10 @@ export function validateCorrectionCandidate(value, { repoRoot = "." } = {}) {
       throw new Error(
         `Correction candidate path is not a regular file: ${entry.path}`,
       );
-    if (hashFile(realpathSync(path)) !== entry.sha256)
-      throw new Error(`Correction candidate hash mismatch: ${entry.path}`);
+    if (historicalHash(root, entry.path) !== entry.sha256)
+      throw new Error(
+        `Accepted Slice 1 candidate hash mismatch: ${entry.path}`,
+      );
   }
   if (correctionCandidateAggregate(value.files) !== value.aggregateSha256)
     throw new Error("Correction candidate aggregate mismatch.");

@@ -216,6 +216,7 @@ postgresTest(
       ]);
       await pool.query(`CREATE FUNCTION slice2_fail_provider_call_once() RETURNS trigger LANGUAGE plpgsql AS $$
         BEGIN
+          PERFORM pg_sleep(0.15);
           IF EXISTS (SELECT 1 FROM slice2_worker_failure_probe WHERE run_id=NEW.run_id) THEN
             RAISE EXCEPTION 'slice2 deterministic retry probe';
           END IF;

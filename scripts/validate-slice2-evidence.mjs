@@ -101,9 +101,9 @@ for (const item of evidence.acceptance)
     throw new Error(`${item.id} references unknown evidence.`);
 
 const requiredCounts = {
-  applicationPostgresql: 7,
+  applicationPostgresql: 8,
   webPostgresql: 28,
-  aiEvidence: 32,
+  aiEvidence: 37,
   browserChrome: 2,
   slice1Criteria: 22,
   slice1Artifacts: 60,

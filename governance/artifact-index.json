@@ -26,7 +26,7 @@
       "id": "ARTIFACT-SLICE-2-LOCAL-VALIDATION",
       "status": "ACTIVE",
       "path": "evidence/slice2/local-validation.json",
-      "sha256": "A501000DC67ECCDEDC9314D31FE17B0570B331B3FCD30EADDFA95F557D91ACAD",
+      "sha256": "AF3A41B6D43B1E9F64BB979383982AF078277CDEBED11A7CF6B31271D7D948B6",
       "evidenceRefs": ["evidence/slice2/local-validation.json"]
     }
   ],

@@ -17,6 +17,12 @@ import {
   externalClosurePredecessorSourceRef,
   validateExternalClosure,
 } from "./lib/external-closure-policy.mjs";
+import {
+  slice2AuditSourceRef,
+  slice2ClosureSourceRef,
+  validateSlice2ExternalClosure,
+} from "./lib/slice2-external-closure-policy.mjs";
+import { validateSlice2DashboardClosure } from "./lib/slice2-dashboard-closure-policy.mjs";
 
 const actual = !process.argv.includes("--bootstrap");
 const snapshotPath = resolve(
@@ -152,6 +158,48 @@ if (actual) {
     : externalClosurePredecessorSourceRef(closure);
   validateDashboardClosure(snapshot.views, closure, {
     predecessorSourceRef,
+  });
+  const slice2ClosurePath = process.env
+    .MATCHBASE_SLICE2_EXTERNAL_CLOSURE_OVERLAY
+    ? resolve(process.env.MATCHBASE_SLICE2_EXTERNAL_CLOSURE_OVERLAY)
+    : resolve("governance/slice2-external-closure-anchor-v1.json");
+  if (
+    process.env.MATCHBASE_SLICE2_EXTERNAL_CLOSURE_OVERLAY &&
+    (!win32.isAbsolute(process.env.MATCHBASE_SLICE2_EXTERNAL_CLOSURE_OVERLAY) ||
+      anchorOnly)
+  )
+    throw new Error(
+      "Slice 2 dashboard closure overlay is not allowed in this mode.",
+    );
+  const slice2Closure = validateSlice2ExternalClosure(
+    JSON.parse(readFileSync(slice2ClosurePath, "utf8")),
+    { anchorOnly },
+  );
+  const slice2ClosureRef = anchorOnly
+    ? {
+        sourceId:
+          "matchbase://ci-snapshot/governance/slice2-external-closure-anchor-v1.json",
+        path: resolve("governance/slice2-external-closure-anchor-v1.json"),
+        sha256: await sha256File(
+          resolve("governance/slice2-external-closure-anchor-v1.json"),
+        ),
+        observedAt: slice2Closure.observedAt,
+      }
+    : slice2ClosureSourceRef(slice2Closure);
+  const slice2AuditRef = anchorOnly
+    ? {
+        sourceId:
+          "matchbase://ci-snapshot/governance/slice2-rejected-candidate-attestation-v1.json",
+        path: resolve(
+          "governance/slice2-rejected-candidate-attestation-v1.json",
+        ),
+        sha256: slice2Closure.auditSource.sha256,
+        observedAt: slice2Closure.observedAt,
+      }
+    : slice2AuditSourceRef(slice2Closure);
+  validateSlice2DashboardClosure(snapshot.views, slice2Closure, {
+    closureSourceRef: slice2ClosureRef,
+    auditSourceRef: slice2AuditRef,
   });
   if (requireSources && verifiedSources === 0)
     throw new Error("Current dashboard source verification was vacuous.");

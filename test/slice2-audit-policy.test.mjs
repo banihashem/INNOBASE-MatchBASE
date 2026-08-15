@@ -25,6 +25,10 @@ test("binds the closed ordered Slice 2 audit set to one exact candidate", () => 
   assert.doesNotThrow(() =>
     validateSlice2AuditBindings(records(), manifestSha, aggregateSha),
   );
+  const pending = records().map((record) => ({ ...record, status: "PENDING" }));
+  assert.doesNotThrow(() =>
+    validateSlice2AuditBindings(pending, manifestSha, aggregateSha),
+  );
   const mutations = [
     (items) => items.slice(0, -1),
     (items) => [...items, structuredClone(items[0])],

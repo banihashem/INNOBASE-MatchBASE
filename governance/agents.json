@@ -807,7 +807,7 @@
           "outputHashes": [
             {
               "path": "evidence/slice2/local-validation.json",
-              "sha256": "C7F246CF315BE233301163FDCC84B3307024B3F9CA352BD752E0806C9ADE5A02"
+              "sha256": "5599BAE3BEB3F9C7A978253FA623A4841389E809247F36DC909142D10E0EC085"
             }
           ]
         }
@@ -820,7 +820,7 @@
           "evidenceRefs": [
             {
               "path": "evidence/slice2/local-validation.json",
-              "sha256": "C7F246CF315BE233301163FDCC84B3307024B3F9CA352BD752E0806C9ADE5A02"
+              "sha256": "5599BAE3BEB3F9C7A978253FA623A4841389E809247F36DC909142D10E0EC085"
             }
           ]
         }
@@ -837,7 +837,7 @@
         "evidenceRefs": [
           {
             "path": "evidence/slice2/local-validation.json",
-            "sha256": "C7F246CF315BE233301163FDCC84B3307024B3F9CA352BD752E0806C9ADE5A02"
+            "sha256": "5599BAE3BEB3F9C7A978253FA623A4841389E809247F36DC909142D10E0EC085"
           }
         ]
       }

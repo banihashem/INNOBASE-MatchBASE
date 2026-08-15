@@ -138,6 +138,14 @@ const EXPECTED_PREDECESSORS = Object.freeze([
     "failure",
     "UBUNTU_DASHBOARD_390PX_OVERFLOW",
   ],
+  [
+    31891114910,
+    95027409962,
+    "869181bdf862641c3892fd640ecbbee663739e21",
+    "ae931cb977393c2a55f31f041cf642a34a8060bd",
+    "failure",
+    "HOSTED_STANDARD_MULTI_SCENARIO_TIMEOUT",
+  ],
 ]);
 const ACCEPTANCE_IDS = Object.freeze([
   "L2-C1-AT-01",

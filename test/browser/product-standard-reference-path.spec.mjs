@@ -73,7 +73,12 @@ async function overflowingElements(page) {
   );
 }
 
-async function createScenarioRequest(page, sourceText, expectedScenario) {
+async function createScenarioRequest(
+  page,
+  sourceText,
+  expectedScenario,
+  phase = expectedScenario,
+) {
   let canonical;
   for (let notAskedCount = 0; notAskedCount <= 12; notAskedCount += 1) {
     const newRequest = page.getByRole("button", {
@@ -82,7 +87,12 @@ async function createScenarioRequest(page, sourceText, expectedScenario) {
     await newRequest.focus();
     await page.keyboard.press("Enter");
     await expect(page.locator("h1.sr-only")).toBeFocused();
-    await page.getByLabel("Source language").selectOption("en");
+    const sourceLanguage = page.getByLabel("Source language");
+    await expect(
+      sourceLanguage,
+      `${phase}: source-language control did not become visible`,
+    ).toBeVisible({ timeout: 20_000 });
+    await sourceLanguage.selectOption("en");
     await page
       .getByLabel("Source-language input")
       .fill(`${sourceText} pattern-${notAskedCount}`);
@@ -266,7 +276,7 @@ test("completes the signed Standard workspace through the real HTTP, PostgreSQL,
 test("reconstructs history and renders deterministic no-match and scarcity paths accessibly", async ({
   page,
 }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(180_000);
   const serverErrors = [];
   page.on("response", (response) => {
     if (response.status() >= 500)
@@ -278,7 +288,7 @@ test("reconstructs history and renders deterministic no-match and scarcity paths
   ).toBeVisible();
 
   const longSource = `Industrial component model MX900 ${"bounded synthetic requirement ".repeat(80)}${randomUUID()}`;
-  await createScenarioRequest(page, longSource, "zero");
+  await createScenarioRequest(page, longSource, "zero", "zero-match phase");
   await expect(
     page.getByRole("heading", { name: "No responsible match" }),
   ).toBeVisible();
@@ -305,6 +315,7 @@ test("reconstructs history and renders deterministic no-match and scarcity paths
     page,
     `Industrial component model MX900 scarcity-${randomUUID()}`,
     "two",
+    "scarcity phase",
   );
   await expect(
     page.getByRole("heading", { name: "Responsible candidate comparison" }),

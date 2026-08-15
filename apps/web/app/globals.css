@@ -50,8 +50,10 @@ select {
 
 .sr-only {
   position: absolute;
+  inset: 0 auto auto 0;
   width: 1px;
   height: 1px;
+  margin: 0;
   padding: 0;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
@@ -74,7 +76,19 @@ select {
   gap: 1rem;
 }
 
+.standard-header > *,
+.standard-header nav {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.standard-header nav {
+  flex-wrap: wrap;
+}
+
 .nav-button {
+  min-width: 0;
+  max-width: 100%;
   min-height: 2.75rem;
   padding: 0.5rem 0.75rem;
   color: var(--ink);
@@ -83,6 +97,15 @@ select {
   border-bottom: 3px solid transparent;
   font-weight: 750;
   cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+next-route-announcer {
+  position: fixed !important;
+  inset: 1px auto auto 1px !important;
+  width: 0;
+  height: 0;
+  direction: ltr;
 }
 
 .nav-button.active {

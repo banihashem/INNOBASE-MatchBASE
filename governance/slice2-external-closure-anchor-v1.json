@@ -95,6 +95,14 @@
       "tree": "cb934371ff505da432c15891fab32700e89615e9",
       "conclusion": "failure",
       "reason": "POSIX_HOSTED_CLOSURE_TEST_WINDOWS_SOURCE_PATH"
+    },
+    {
+      "runId": 31889097732,
+      "jobId": 95022584258,
+      "commit": "7efae9e3ff73fdd814cc414de06cdbfcde22abc7",
+      "tree": "94610d59c7739cb86423d508f0706745ddc0c4df",
+      "conclusion": "failure",
+      "reason": "SHALLOW_HOSTED_CLOSURE_TEST_GIT_OBJECT_UNAVAILABLE"
     }
   ],
   "candidate": {

@@ -26,7 +26,7 @@
       "id": "ARTIFACT-SLICE-2-LOCAL-VALIDATION",
       "status": "SUPERSEDED",
       "path": "evidence/slice2/local-validation.json",
-      "sha256": "F6569F48A76A2378FA9790C182A704F8F47C1172FDB54A538E97C93AC35CA5FE",
+      "sha256": "78D5FA6D357671454C0BA9989EBEBBF0872EF39BC201E9C43AF56CC9C1AB2F66",
       "evidenceRefs": ["evidence/slice2/local-validation.json"]
     }
   ],

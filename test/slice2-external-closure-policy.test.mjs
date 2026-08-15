@@ -21,6 +21,21 @@ const anchor = JSON.parse(
   readFileSync("governance/slice2-external-closure-anchor-v1.json", "utf8"),
 );
 
+function exactAuditLedger(value) {
+  return JSON.stringify({
+    independentAudits: value.audits.map((id) => ({
+      id,
+      status: "PASS",
+      critical: 0,
+      major: 0,
+      minor: 0,
+      candidateManifestSha256: value.candidate.manifestSha256,
+      candidateAggregateSha256: value.candidate.aggregateSha256,
+      method: "Injected exact immutable-audit unit fixture",
+    })),
+  });
+}
+
 test("accepts the exact v2 Loop 2 anchor locally and in ANCHOR_ONLY_CI", () => {
   const verified = [];
   assert.equal(
@@ -35,6 +50,11 @@ test("accepts the exact v2 Loop 2 anchor locally and in ANCHOR_ONLY_CI", () => {
           "C:\\INNOBASE\\MatchBASE\\01_Product_Management",
         );
         verified.push(source.path);
+      },
+      gitAuditResolver(source, { expectedCommit, expectedGitObject }) {
+        assert.equal(source.commit, expectedCommit);
+        assert.equal(source.gitObject, expectedGitObject);
+        return exactAuditLedger(anchor);
       },
     }).role2.status,
     "PENDING",
@@ -59,6 +79,30 @@ test("accepts the exact v2 Loop 2 anchor locally and in ANCHOR_ONLY_CI", () => {
     },
     role2: { status: "FAIL" },
   });
+});
+
+test("fails closed when the immutable audit Git object is unavailable", () => {
+  const emptyRepository = mkdtempSync(join(tmpdir(), "matchbase-s2-shallow-"));
+  try {
+    assert.throws(
+      () =>
+        validateSlice2ExternalClosure(structuredClone(anchor), {
+          repositoryRoot: emptyRepository,
+          regularSourceResolver() {},
+        }),
+      /Git object/u,
+    );
+    assert.throws(() =>
+      validateSlice2ExternalClosure(structuredClone(anchor), {
+        regularSourceResolver() {},
+        gitAuditResolver() {
+          return JSON.stringify({ independentAudits: [] });
+        },
+      }),
+    );
+  } finally {
+    rmSync(emptyRepository, { recursive: true, force: true });
+  }
 });
 
 test("resolves Windows source identity inside a platform-neutral fixture root", () => {

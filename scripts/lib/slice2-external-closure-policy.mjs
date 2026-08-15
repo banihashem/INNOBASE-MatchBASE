@@ -122,6 +122,14 @@ const EXPECTED_PREDECESSORS = Object.freeze([
     "failure",
     "POSIX_HOSTED_CLOSURE_TEST_WINDOWS_SOURCE_PATH",
   ],
+  [
+    31889097732,
+    95022584258,
+    "7efae9e3ff73fdd814cc414de06cdbfcde22abc7",
+    "94610d59c7739cb86423d508f0706745ddc0c4df",
+    "failure",
+    "SHALLOW_HOSTED_CLOSURE_TEST_GIT_OBJECT_UNAVAILABLE",
+  ],
 ]);
 const ACCEPTANCE_IDS = Object.freeze([
   "L2-C1-AT-01",
@@ -217,7 +225,10 @@ function regularSource(
   });
 }
 
-function gitAuditText(source, { anchorOnly, repositoryRoot }) {
+function gitAuditText(
+  source,
+  { anchorOnly, repositoryRoot, gitAuditResolver },
+) {
   closed(
     source,
     ["kind", "path", "sha256", "method", "commit", "gitObject"],
@@ -234,6 +245,12 @@ function gitAuditText(source, { anchorOnly, repositoryRoot }) {
   )
     throw new Error("Slice 2 audit source identity is invalid.");
   if (anchorOnly) return null;
+  if (gitAuditResolver)
+    return gitAuditResolver(source, {
+      repositoryRoot,
+      expectedCommit: CURRENT.commit,
+      expectedGitObject: CURRENT.auditObject,
+    });
   const resolved = spawnSync(
     "git",
     ["rev-parse", `${source.commit}:${source.path}`],
@@ -325,6 +342,7 @@ export function validateSlice2ExternalClosure(
     managementRoot = SLICE2_MANAGEMENT_ROOT,
     repositoryRoot = SLICE2_REPOSITORY_ROOT,
     regularSourceResolver,
+    gitAuditResolver,
   } = {},
 ) {
   closed(
@@ -383,6 +401,7 @@ export function validateSlice2ExternalClosure(
   const auditText = gitAuditText(value.auditSource, {
     anchorOnly,
     repositoryRoot,
+    gitAuditResolver,
   });
   validatePredecessors(value.predecessors);
   closed(

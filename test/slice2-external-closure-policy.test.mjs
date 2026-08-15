@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  slice2DashboardAuditSourceRef,
   slice2HistoricalLocalClosure,
   validateSlice2ExternalClosure,
 } from "../scripts/lib/slice2-external-closure-policy.mjs";
@@ -34,6 +35,49 @@ test("accepts the exact v2 Loop 2 anchor locally and in ANCHOR_ONLY_CI", () => {
     },
     role2: { status: "FAIL" },
   });
+});
+
+test("derives one fail-closed audit source policy for local and CI snapshots", () => {
+  const local = slice2DashboardAuditSourceRef(anchor);
+  assert.equal(
+    local.sourceId,
+    "matchbase://slice2-external-closure/audits-git-object-attestation",
+  );
+  assert.equal(local.path, anchor.source.path);
+  assert.equal(local.sha256, anchor.source.sha256);
+
+  const ciAnchor = {
+    sourceId:
+      "matchbase://ci-snapshot/governance/slice2-external-closure-anchor-v1.json",
+    path: "C:\\repo\\governance\\slice2-external-closure-anchor-v1.json",
+    sha256: "A".repeat(64),
+    observedAt: anchor.observedAt,
+  };
+  assert.deepEqual(
+    slice2DashboardAuditSourceRef(anchor, {
+      anchorOnly: true,
+      anchorSourceRef: ciAnchor,
+    }),
+    ciAnchor,
+  );
+  for (const mutation of [
+    (value) => (value.sha256 = "f".repeat(64)),
+    (value) => (value.observedAt = "2026-08-15T00:00:00Z"),
+    (value) => delete value.path,
+    (value) => (value.sourceId = 7),
+  ]) {
+    const forged = structuredClone(ciAnchor);
+    mutation(forged);
+    assert.throws(() =>
+      slice2DashboardAuditSourceRef(anchor, {
+        anchorOnly: true,
+        anchorSourceRef: forged,
+      }),
+    );
+  }
+  assert.throws(() =>
+    slice2DashboardAuditSourceRef(anchor, { anchorOnly: true }),
+  );
 });
 
 test("rejects stale loop, source, audit, candidate, lifecycle, and unknown keys", () => {

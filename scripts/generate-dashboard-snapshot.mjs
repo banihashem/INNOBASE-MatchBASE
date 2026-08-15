@@ -13,8 +13,8 @@ import {
   validateExternalClosure,
 } from "./lib/external-closure-policy.mjs";
 import {
-  slice2AuditSourceRef,
   slice2ClosureSourceRef,
+  slice2DashboardAuditSourceRef,
   slice2HistoricalLocalClosure,
   slice2Role2SourceRef,
   validateSlice2ExternalClosure,
@@ -79,7 +79,9 @@ const slice2ClosureValue = validateSlice2ExternalClosure(
 const slice2ClosureDocument = {
   value: slice2ClosureValue,
   sourceRef: slice2ClosureSourceRef(slice2ClosureValue),
-  auditSourceRef: slice2AuditSourceRef(slice2ClosureValue),
+  auditSourceRef: slice2DashboardAuditSourceRef(slice2ClosureValue, {
+    anchorOnly,
+  }),
   predecessorSourceRef: {
     sourceId: "matchbase://slice2-external-closure/predecessor-anchor",
     path: slice2ClosurePath,

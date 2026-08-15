@@ -6,6 +6,7 @@ import {
   validateExternalClosure,
 } from "./lib/external-closure-policy.mjs";
 import {
+  slice2DashboardAuditSourceRef,
   slice2HistoricalLocalClosure,
   validateSlice2ExternalClosure,
 } from "./lib/slice2-external-closure-policy.mjs";
@@ -80,6 +81,13 @@ const slice2Closure = validateSlice2ExternalClosure(
 );
 const slice2Lifecycle = slice2LifecycleProjection(slice2Closure);
 slice2ClosureDocument.sourceRef.observedAt = slice2Closure.observedAt;
+const slice2DashboardAuditSource = slice2DashboardAuditSourceRef(
+  slice2Closure,
+  {
+    anchorOnly: true,
+    anchorSourceRef: slice2ClosureDocument.sourceRef,
+  },
+);
 const [
   slices,
   gates,
@@ -91,7 +99,6 @@ const [
   slice1LocalEvidence,
   slice2LocalEvidence,
   predecessorHistory,
-  slice2AuditEvidence,
   externalState,
 ] = await Promise.all([
   document("governance/slices.json"),
@@ -104,10 +111,8 @@ const [
   document("evidence/slice1/local-validation.json"),
   document("evidence/slice2/local-validation.json"),
   document("governance/predecessor-failures-v1.json"),
-  document("governance/slice2-rejected-candidate-attestation-v1.json"),
   document("governance/external-state.json"),
 ]);
-slice2AuditEvidence.sourceRef.observedAt = slice2Closure.observedAt;
 validateSlice2HistoricalGitObject(
   artifactIndex.value,
   slice2HistoricalLocalClosure(slice2Closure),
@@ -280,7 +285,7 @@ function slice2Record(id, title, status, extra = {}, audit = false) {
           : "ACTIVE",
     facts: { lifecycleStatus: status, ...slice2Facts, ...extra },
     sourceRefs: [
-      audit ? slice2AuditEvidence.sourceRef : slice2ClosureDocument.sourceRef,
+      audit ? slice2DashboardAuditSource : slice2ClosureDocument.sourceRef,
     ],
   };
 }
@@ -334,7 +339,7 @@ const slice2Orchestrator = {
     auditDisposition: slice2Lifecycle.orchestratorAuditDisposition,
     ...slice2Facts,
   },
-  sourceRefs: [slice2AuditEvidence.sourceRef],
+  sourceRefs: [slice2DashboardAuditSource],
 };
 
 const historicalProvenanceOptions = {
@@ -508,7 +513,7 @@ validateDashboardHistoricalProvenance(
 );
 validateSlice2DashboardClosure(views, slice2Closure, {
   closureSourceRef: slice2ClosureDocument.sourceRef,
-  auditSourceRef: slice2AuditEvidence.sourceRef,
+  auditSourceRef: slice2DashboardAuditSource,
   predecessorSourceRef: slice2ClosureDocument.sourceRef,
 });
 const dashboard = {

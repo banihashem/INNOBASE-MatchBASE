@@ -37,6 +37,14 @@
       "reason": "UBUNTU_200_PERCENT_TEXT_OVERFLOW"
     },
     {
+      "runId": 31867699009,
+      "jobId": 94971277544,
+      "commit": "58ed065f8a8e2ac5c60812b13cd4607c1a8d9cb6",
+      "tree": "358606112d663ac15e2e065557cbbed6f00cae86",
+      "conclusion": "success",
+      "reason": "ROLE2_REJECTED_THREE_MAJOR_DEFECTS"
+    },
+    {
       "runId": 31873727149,
       "jobId": 94986166204,
       "commit": "ac729b1081d4125afe0677b895e93f8f3747c65b",
@@ -67,11 +75,19 @@
       "tree": "1c41f4a68c0f8c448a9ad0216003c3dfc494cbc9",
       "conclusion": "success",
       "reason": "ROLE2_REJECTED_TWO_MAJOR_DEFECTS"
+    },
+    {
+      "runId": 31886484933,
+      "jobId": 95016417693,
+      "commit": "e87f73e3bd740ae3e72e9886884c1570d9cec50a",
+      "tree": "96b678707906d39db13cc6e56a72b09ca1dcf67e",
+      "conclusion": "failure",
+      "reason": "ANCHOR_ONLY_CI_AUDIT_SOURCE_PARITY"
     }
   ],
   "localGate": {
     "status": "PASS",
-    "basis": "Exact pnpm slice2:validate:local passed on the refrozen Loop 2 external-closure correction candidate in 391.6 seconds with PostgreSQL 18 and real Chrome.",
+    "basis": "Exact pnpm slice2:validate:local passed on the refrozen hosted-predecessor ledger parity candidate in 366.8 seconds with PostgreSQL 18 and real Chrome.",
     "testCounts": {
       "applicationPostgresql": 8,
       "webPostgresql": 28,
@@ -83,10 +99,10 @@
       "dataPostgresql": 20,
       "applicationWorker": 6,
       "web": 28,
-      "rootPolicy": 116,
+      "rootPolicy": 118,
       "standaloneRepeat": 1,
       "browserTotal": 17,
-      "runtimeArtifactsScanned": 5872,
+      "runtimeArtifactsScanned": 5920,
       "failed": 0,
       "skipped": 0
     }
@@ -95,7 +111,7 @@
     {
       "id": "S2-EVIDENCE-VALIDATOR",
       "path": "scripts/validate-slice2-evidence.mjs",
-      "sha256": "DEED33E0087C214973B27AC22E33843FCDE2F36E2ED15F0AA0F7632C54C933E6"
+      "sha256": "9F591F28897D9F7728E54AB7225EDAFCAF4C3E9DD3C0AA188842A219132EED4E"
     },
     {
       "id": "S2-LOCAL-RUNNER",
@@ -170,8 +186,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "41431B9451C629CF0105FAE493FC673ABC7209CF8C65A1C6FF9210BB0FA2249B",
-      "candidateAggregateSha256": "0C5FDB0E5E94D8807265E1EAF9FCF8BF58851EED077E700D10B9D2B57DE2F1B4",
+      "candidateManifestSha256": "3C781C2CE5393A9630527871DBC59AAEA84C6048B23B8346A4725E3D16A2ECC3",
+      "candidateAggregateSha256": "19224E3D2EE954E08E363B596BB7ECDDC4CD57C3920C25C317BA5EEA1BF25CCA",
       "method": "Independent frozen-byte authorization, privacy, cursor, cache and denial audit"
     },
     {
@@ -180,8 +196,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "41431B9451C629CF0105FAE493FC673ABC7209CF8C65A1C6FF9210BB0FA2249B",
-      "candidateAggregateSha256": "0C5FDB0E5E94D8807265E1EAF9FCF8BF58851EED077E700D10B9D2B57DE2F1B4",
+      "candidateManifestSha256": "3C781C2CE5393A9630527871DBC59AAEA84C6048B23B8346A4725E3D16A2ECC3",
+      "candidateAggregateSha256": "19224E3D2EE954E08E363B596BB7ECDDC4CD57C3920C25C317BA5EEA1BF25CCA",
       "method": "Independent PostgreSQL 18 migration, rollback, quota, lease and immutability audit"
     },
     {
@@ -190,8 +206,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "41431B9451C629CF0105FAE493FC673ABC7209CF8C65A1C6FF9210BB0FA2249B",
-      "candidateAggregateSha256": "0C5FDB0E5E94D8807265E1EAF9FCF8BF58851EED077E700D10B9D2B57DE2F1B4",
+      "candidateManifestSha256": "3C781C2CE5393A9630527871DBC59AAEA84C6048B23B8346A4725E3D16A2ECC3",
+      "candidateAggregateSha256": "19224E3D2EE954E08E363B596BB7ECDDC4CD57C3920C25C317BA5EEA1BF25CCA",
       "method": "Independent deterministic scoring, evidence, citation, projection and no-network audit"
     },
     {
@@ -200,8 +216,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "41431B9451C629CF0105FAE493FC673ABC7209CF8C65A1C6FF9210BB0FA2249B",
-      "candidateAggregateSha256": "0C5FDB0E5E94D8807265E1EAF9FCF8BF58851EED077E700D10B9D2B57DE2F1B4",
+      "candidateManifestSha256": "3C781C2CE5393A9630527871DBC59AAEA84C6048B23B8346A4725E3D16A2ECC3",
+      "candidateAggregateSha256": "19224E3D2EE954E08E363B596BB7ECDDC4CD57C3920C25C317BA5EEA1BF25CCA",
       "method": "Independent HTTP matrix and real Chrome desktop/mobile/accessibility audit"
     },
     {
@@ -210,8 +226,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "41431B9451C629CF0105FAE493FC673ABC7209CF8C65A1C6FF9210BB0FA2249B",
-      "candidateAggregateSha256": "0C5FDB0E5E94D8807265E1EAF9FCF8BF58851EED077E700D10B9D2B57DE2F1B4",
+      "candidateManifestSha256": "3C781C2CE5393A9630527871DBC59AAEA84C6048B23B8346A4725E3D16A2ECC3",
+      "candidateAggregateSha256": "19224E3D2EE954E08E363B596BB7ECDDC4CD57C3920C25C317BA5EEA1BF25CCA",
       "method": "Independent worker, concurrency, replay, readiness and cost-reconciliation audit"
     },
     {
@@ -220,8 +236,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "41431B9451C629CF0105FAE493FC673ABC7209CF8C65A1C6FF9210BB0FA2249B",
-      "candidateAggregateSha256": "0C5FDB0E5E94D8807265E1EAF9FCF8BF58851EED077E700D10B9D2B57DE2F1B4",
+      "candidateManifestSha256": "3C781C2CE5393A9630527871DBC59AAEA84C6048B23B8346A4725E3D16A2ECC3",
+      "candidateAggregateSha256": "19224E3D2EE954E08E363B596BB7ECDDC4CD57C3920C25C317BA5EEA1BF25CCA",
       "method": "Independent predecessor-preservation and local repository-boundary audit; hosted closure excluded"
     },
     {
@@ -230,8 +246,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "41431B9451C629CF0105FAE493FC673ABC7209CF8C65A1C6FF9210BB0FA2249B",
-      "candidateAggregateSha256": "0C5FDB0E5E94D8807265E1EAF9FCF8BF58851EED077E700D10B9D2B57DE2F1B4",
+      "candidateManifestSha256": "3C781C2CE5393A9630527871DBC59AAEA84C6048B23B8346A4725E3D16A2ECC3",
+      "candidateAggregateSha256": "19224E3D2EE954E08E363B596BB7ECDDC4CD57C3920C25C317BA5EEA1BF25CCA",
       "method": "Independent semantic reconciliation on the frozen local candidate"
     }
   ],

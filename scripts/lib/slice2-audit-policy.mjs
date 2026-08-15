@@ -10,6 +10,38 @@ export const SLICE2_AUDIT_IDS = Object.freeze([
   "S2-AUDIT-INTEGRATION-CRITIC",
 ]);
 
+const PREDECESSOR_KEYS = Object.freeze([
+  "commit",
+  "conclusion",
+  "jobId",
+  "reason",
+  "runId",
+  "tree",
+]);
+
+export function validateSlice2PredecessorParity(actual, expected) {
+  if (
+    !Array.isArray(actual) ||
+    !Array.isArray(expected) ||
+    actual.length !== expected.length
+  )
+    throw new Error("Slice 2 predecessor ledger is incomplete.");
+  for (let index = 0; index < expected.length; index += 1) {
+    const entry = actual[index];
+    if (
+      !entry ||
+      typeof entry !== "object" ||
+      Array.isArray(entry) ||
+      JSON.stringify(Object.keys(entry).sort()) !==
+        JSON.stringify(PREDECESSOR_KEYS) ||
+      JSON.stringify(entry) !== JSON.stringify(expected[index])
+    )
+      throw new Error(
+        "Slice 2 predecessor ledger is reordered, substituted, or not closed.",
+      );
+  }
+}
+
 export function mergeSlice2ChangedPaths({
   committedPaths,
   workingPaths,

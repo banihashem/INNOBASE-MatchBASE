@@ -18,8 +18,8 @@ import {
   validateExternalClosure,
 } from "./lib/external-closure-policy.mjs";
 import {
-  slice2AuditSourceRef,
   slice2ClosureSourceRef,
+  slice2DashboardAuditSourceRef,
   validateSlice2ExternalClosure,
 } from "./lib/slice2-external-closure-policy.mjs";
 import { validateSlice2DashboardClosure } from "./lib/slice2-dashboard-closure-policy.mjs";
@@ -186,17 +186,10 @@ if (actual) {
         observedAt: slice2Closure.observedAt,
       }
     : slice2ClosureSourceRef(slice2Closure);
-  const slice2AuditRef = anchorOnly
-    ? {
-        sourceId:
-          "matchbase://ci-snapshot/governance/slice2-rejected-candidate-attestation-v1.json",
-        path: resolve(
-          "governance/slice2-rejected-candidate-attestation-v1.json",
-        ),
-        sha256: slice2Closure.auditSource.sha256,
-        observedAt: slice2Closure.observedAt,
-      }
-    : slice2AuditSourceRef(slice2Closure);
+  const slice2AuditRef = slice2DashboardAuditSourceRef(slice2Closure, {
+    anchorOnly,
+    anchorSourceRef: slice2ClosureRef,
+  });
   const slice2PredecessorRef = {
     sourceId: anchorOnly
       ? "matchbase://ci-snapshot/governance/slice2-external-closure-anchor-v1.json"

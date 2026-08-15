@@ -5,6 +5,7 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import {
   mergeSlice2ChangedPaths,
   validateSlice2AuditBindings,
+  validateSlice2PredecessorParity,
 } from "./lib/slice2-audit-policy.mjs";
 
 const root = realpathSync(".");
@@ -24,6 +25,12 @@ const evidence = JSON.parse(
 );
 const manifestPath = resolve(root, "evidence/slice2/candidate-manifest.json");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+const closureAnchor = JSON.parse(
+  readFileSync(
+    resolve(root, "governance/slice2-external-closure-anchor-v1.json"),
+    "utf8",
+  ),
+);
 const expected = Array.from(
   { length: 34 },
   (_, index) => `S2-AC-${String(index + 1).padStart(3, "0")}`,
@@ -73,6 +80,10 @@ if (
   evidence.environment?.liveOauthCalls !== 0
 )
   throw new Error("Prohibited external activity was claimed.");
+validateSlice2PredecessorParity(
+  evidence.hostedPredecessors,
+  closureAnchor.predecessors,
+);
 
 const artifacts = new Map();
 for (const artifact of evidence.artifacts ?? []) {

@@ -791,7 +791,7 @@
       "role": "Slice 2 Role 3 executor and evidence orchestrator",
       "model": "gpt-5.6-sol",
       "reasoningEffort": "xhigh",
-      "executionStatus": "IN_PROGRESS",
+      "executionStatus": "COMPLETED",
       "scope": "Slice 2 integration, local validation, independent audit and successor release gates",
       "independent": false,
       "allowedTargets": [
@@ -803,8 +803,13 @@
       "deliverables": [
         {
           "target": "evidence/slice2/local-validation.json",
-          "status": "IN_PROGRESS",
-          "outputHashes": []
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "evidence/slice2/local-validation.json",
+              "sha256": "742CEAB0337FF0E537E970B0387DBD2918394EF600CF9139FAA97A4D088F8AD5"
+            }
+          ]
         }
       ],
       "testEvidence": [
@@ -815,7 +820,7 @@
           "evidenceRefs": [
             {
               "path": "evidence/slice2/local-validation.json",
-              "sha256": "95F93207225A5280A49908D1DB9FF07EA21C6D70DB9FD076C55048651816B167"
+              "sha256": "742CEAB0337FF0E537E970B0387DBD2918394EF600CF9139FAA97A4D088F8AD5"
             }
           ]
         }
@@ -832,7 +837,7 @@
         "evidenceRefs": [
           {
             "path": "evidence/slice2/local-validation.json",
-            "sha256": "95F93207225A5280A49908D1DB9FF07EA21C6D70DB9FD076C55048651816B167"
+            "sha256": "742CEAB0337FF0E537E970B0387DBD2918394EF600CF9139FAA97A4D088F8AD5"
           }
         ]
       }

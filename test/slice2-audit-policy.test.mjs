@@ -5,6 +5,7 @@ import {
   SLICE2_AUDIT_IDS,
   mergeSlice2ChangedPaths,
   validateSlice2AuditBindings,
+  validateSlice2PredecessorParity,
 } from "../scripts/lib/slice2-audit-policy.mjs";
 
 const manifestSha = "A".repeat(64);
@@ -62,6 +63,41 @@ test("binds the closed ordered Slice 2 audit set to one exact candidate", () => 
     assert.throws(() =>
       validateSlice2AuditBindings(mutate(records()), manifestSha, aggregateSha),
     );
+});
+
+test("binds the audit ledger to the exact ordered hosted predecessor set", () => {
+  const expected = [
+    {
+      runId: 1,
+      jobId: 2,
+      commit: "a".repeat(40),
+      tree: "b".repeat(40),
+      conclusion: "failure",
+      reason: "FIRST_FAILURE",
+    },
+    {
+      runId: 3,
+      jobId: 4,
+      commit: "c".repeat(40),
+      tree: "d".repeat(40),
+      conclusion: "success",
+      reason: "HISTORICAL_SUCCESS",
+    },
+  ];
+  assert.doesNotThrow(() =>
+    validateSlice2PredecessorParity(structuredClone(expected), expected),
+  );
+  for (const mutation of [
+    (value) => value.pop(),
+    (value) => value.reverse(),
+    (value) => (value[0].runId += 1),
+    (value) => (value[0].reason = "SUBSTITUTED"),
+    (value) => (value[0].unknown = true),
+  ]) {
+    const forged = structuredClone(expected);
+    mutation(forged);
+    assert.throws(() => validateSlice2PredecessorParity(forged, expected));
+  }
 });
 
 test("reconciles both uncommitted and clean committed successor paths", () => {

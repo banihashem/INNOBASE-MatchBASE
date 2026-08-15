@@ -79,6 +79,14 @@
       "tree": "1c41f4a68c0f8c448a9ad0216003c3dfc494cbc9",
       "conclusion": "success",
       "reason": "ROLE2_REJECTED_TWO_MAJOR_DEFECTS"
+    },
+    {
+      "runId": 31886484933,
+      "jobId": 95016417693,
+      "commit": "e87f73e3bd740ae3e72e9886884c1570d9cec50a",
+      "tree": "96b678707906d39db13cc6e56a72b09ca1dcf67e",
+      "conclusion": "failure",
+      "reason": "ANCHOR_ONLY_CI_AUDIT_SOURCE_PARITY"
     }
   ],
   "candidate": {

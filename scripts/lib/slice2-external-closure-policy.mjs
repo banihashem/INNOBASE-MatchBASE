@@ -106,6 +106,14 @@ const EXPECTED_PREDECESSORS = Object.freeze([
     "success",
     "ROLE2_REJECTED_TWO_MAJOR_DEFECTS",
   ],
+  [
+    31886484933,
+    95016417693,
+    "e87f73e3bd740ae3e72e9886884c1570d9cec50a",
+    "96b678707906d39db13cc6e56a72b09ca1dcf67e",
+    "failure",
+    "ANCHOR_ONLY_CI_AUDIT_SOURCE_PARITY",
+  ],
 ]);
 const ACCEPTANCE_IDS = Object.freeze([
   "L2-C1-AT-01",
@@ -462,6 +470,22 @@ export function slice2AuditSourceRef(value) {
     sha256: value.source.sha256,
     observedAt: value.observedAt,
   };
+}
+
+export function slice2DashboardAuditSourceRef(
+  value,
+  { anchorOnly = false, anchorSourceRef } = {},
+) {
+  if (!anchorOnly) return slice2AuditSourceRef(value);
+  if (
+    !anchorSourceRef ||
+    typeof anchorSourceRef.sourceId !== "string" ||
+    typeof anchorSourceRef.path !== "string" ||
+    !SHA256.test(anchorSourceRef.sha256) ||
+    anchorSourceRef.observedAt !== value.observedAt
+  )
+    throw new Error("Slice 2 CI audit anchor source identity is invalid.");
+  return { ...anchorSourceRef };
 }
 
 export function slice2Role2SourceRef(value) {

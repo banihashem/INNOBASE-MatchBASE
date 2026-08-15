@@ -10,7 +10,7 @@
     "governance/artifact-index.json"
   ],
   "fileCount": 98,
-  "aggregateSha256": "CDD2951D136827B08ADF84C3AEA9A12C97512A01A64FEB68FF62F07794CDA6B8",
+  "aggregateSha256": "BE3D7FF48E6085A0D62E5D2D2B484BEFED6136B9FFEFA98F0C03A24CCEFEC717",
   "files": [
     {
       "path": "apps/web/app/globals.css",
@@ -322,7 +322,7 @@
     },
     {
       "path": "scripts/lib/semantic-dashboard.mjs",
-      "sha256": "F39664E36CB2BBC6673142D5312C5A1B58AF56ECF5D9322125CBF3A18AC5911D"
+      "sha256": "17F9474824E04B82FF8455AFD218E1F74F293B6A12B3BBA26A22CF9129ADC459"
     },
     {
       "path": "scripts/lib/slice2-audit-policy.mjs",
@@ -330,7 +330,7 @@
     },
     {
       "path": "scripts/lib/slice2-dashboard-closure-policy.mjs",
-      "sha256": "ACC904A855A44FC3B89711B27C286D7D3D68E38DFEB7A7D40E25E87AC05CE303"
+      "sha256": "04DDA476599F5F765782A03410A26C9233E40BB8DAB929D0C6037D1B2F731094"
     },
     {
       "path": "scripts/lib/slice2-external-closure-policy.mjs",
@@ -378,7 +378,7 @@
     },
     {
       "path": "test/slice2-dashboard-closure-policy.test.mjs",
-      "sha256": "E57F8ABB2BC74DF0E52407B4297DD78216DAF79850C967A9804653D3C33567B6"
+      "sha256": "707D357CCB49C42512A9CF1D79AE92CADD1B8280C66C2DB13945FC48A6C005CC"
     },
     {
       "path": "test/slice2-external-closure-policy.test.mjs",

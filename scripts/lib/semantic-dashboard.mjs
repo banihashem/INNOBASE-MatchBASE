@@ -472,6 +472,33 @@ export function buildSemanticViews(documents) {
     ...slice2Facts,
     evidenceRefs: slice2Evidence,
   });
+  const slice2AuditGate = (item) => ({
+    ...item,
+    status: slice2Ready ? "PASS" : "ACTIVE",
+    summary: slice2Ready
+      ? `All seven independent audits passed on ${slice2Closure.candidate.manifestSha256}; Role 2 ${slice2Closure.role2.status}.`
+      : item.summary,
+    ...slice2Facts,
+    evidenceRefs: slice2Evidence,
+  });
+  const slice2Orchestrator = (item) => ({
+    ...item,
+    executionStatus: slice2Ready ? "COMPLETED" : "IN_PROGRESS",
+    summary: slice2Ready
+      ? `Slice 2 execution and independent audit orchestration completed on ${slice2Closure.candidate.manifestSha256}; Role 2 ${slice2Closure.role2.status}.`
+      : item.summary,
+    deliverables: (item.deliverables ?? []).map((deliverable) => ({
+      ...deliverable,
+      status: slice2Ready ? "COMPLETED" : deliverable.status,
+      outputHashes: slice2Ready ? slice2Evidence : deliverable.outputHashes,
+    })),
+    independentAudit: {
+      ...item.independentAudit,
+      disposition: slice2Ready ? "PASS" : "PENDING",
+      evidenceRefs: slice2Evidence,
+    },
+    evidenceRefs: slice2Evidence,
+  });
   const slice2Acceptance = (item) => ({
     ...item,
     status: slice2Closure.acceptance[item.id],
@@ -523,13 +550,17 @@ export function buildSemanticViews(documents) {
     ),
     gates: (documents.gates.value.gates ?? []).map((item, index) =>
       record(
-        ["S2-G2", "S2-G9"].includes(item.id) && slice2Closure
-          ? slice2Gate(item)
-          : ["AG1", "AG6"].includes(item.id) && closure
-            ? closureGate(item)
-            : item,
-        ["S2-G2", "S2-G9"].includes(item.id) && slice2Closure
-          ? slice2SourceRef
+        item.id === "S2-G1" && slice2Closure
+          ? slice2AuditGate(item)
+          : ["S2-G2", "S2-G9"].includes(item.id) && slice2Closure
+            ? slice2Gate(item)
+            : ["AG1", "AG6"].includes(item.id) && closure
+              ? closureGate(item)
+              : item,
+        ["S2-G1", "S2-G2", "S2-G9"].includes(item.id) && slice2Closure
+          ? item.id === "S2-G1"
+            ? slice2AuditSourceRef
+            : slice2SourceRef
           : ["AG1", "AG6"].includes(item.id) && closure
             ? documents.externalClosure.sourceRef
             : documents.gates.sourceRef,
@@ -628,7 +659,17 @@ export function buildSemanticViews(documents) {
       record(item, documents.registers.sourceRef, index, "COST", catalog),
     ),
     agents: (documents.agents.value.agents ?? []).map((item, index) =>
-      record(item, documents.agents.sourceRef, index, "AGENT", catalog),
+      record(
+        item.id === "AGENT-S2-ORCHESTRATOR" && slice2Closure
+          ? slice2Orchestrator(item)
+          : item,
+        item.id === "AGENT-S2-ORCHESTRATOR" && slice2Closure
+          ? slice2AuditSourceRef
+          : documents.agents.sourceRef,
+        index,
+        "AGENT",
+        catalog,
+      ),
     ),
     loops: [
       ...(registers.loops ?? []).map((item, index) =>

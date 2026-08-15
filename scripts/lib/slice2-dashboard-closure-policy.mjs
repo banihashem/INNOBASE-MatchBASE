@@ -54,6 +54,15 @@ export function validateSlice2DashboardClosure(
   )
     throw new Error("Slice 2 portfolio lifecycle is stale.");
 
+  const auditGate = one(views.gates.records, "S2-G1", "S2-G1 gate");
+  closureFacts(auditGate, closure, "S2-G1");
+  hasSource(auditGate, auditSourceRef, "S2-G1");
+  if (
+    auditGate.facts.lifecycleStatus !== (ready ? "PASS" : "ACTIVE") ||
+    (ready && auditGate.status !== "PASS")
+  )
+    throw new Error("S2-G1 audit lifecycle is stale.");
+
   for (const id of ["S2-G2", "S2-G9"]) {
     const record = one(views.gates.records, id, `${id} gate`);
     closureFacts(record, closure, id);
@@ -127,6 +136,20 @@ export function validateSlice2DashboardClosure(
       throw new Error(`${id} dashboard audit binding is stale.`);
   }
 
+  const orchestrator = one(
+    views.agents.records,
+    "AGENT-S2-ORCHESTRATOR",
+    "Slice 2 orchestrator",
+  );
+  hasSource(orchestrator, auditSourceRef, "Slice 2 orchestrator");
+  if (
+    orchestrator.facts.executionStatus !==
+      (ready ? "COMPLETED" : "IN_PROGRESS") ||
+    orchestrator.facts.auditDisposition !== (ready ? "PASS" : "PENDING") ||
+    (ready && orchestrator.status !== "PASS")
+  )
+    throw new Error("Slice 2 orchestrator lifecycle is stale.");
+
   for (const [id, allowed] of [
     ["EXT-GCP", ["BLOCKED", "UNKNOWN"]],
     ["EXT-CLOUDFLARE", ["BLOCKED", "UNKNOWN"]],
@@ -141,6 +164,7 @@ export function validateSlice2DashboardClosure(
     const serialized = JSON.stringify({
       portfolio: portfolio,
       gates: [
+        auditGate,
         one(views.gates.records, "S2-G2", "S2-G2"),
         one(views.gates.records, "S2-G9", "S2-G9"),
       ],
@@ -148,6 +172,7 @@ export function validateSlice2DashboardClosure(
         one(views.tests.records, id, id),
       ),
       closure: success,
+      orchestrator,
     });
     if (
       /LOCAL_UNCOMMITTED|PENDING_SUCCESSOR_RUN|UNKNOWN|BLOCKED/u.test(

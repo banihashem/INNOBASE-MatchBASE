@@ -147,6 +147,41 @@
       "testIds": ["TEST-S1-LOCAL-ACCEPTANCE"],
       "gateIds": ["AG4", "AG5", "AG6"],
       "deploymentId": "DEPLOY-S1-LOCAL"
+    },
+    {
+      "id": "TRACE-S2-001",
+      "sourceRefs": [
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_IMPLEMENTATION_PROMPT_PO_001_SLICE_2.md",
+          "sha256": "0F4EECB000BA3399E734996309A572B415F508BBD520DB050C6AC8990338B6DF"
+        },
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\SLICE_2_SPECIFICATION_STANDARD_STRUCTURED_REQUEST_AND_EVIDENCE_WORKSPACE_V1.md",
+          "sha256": "A699CCFC3E5A6D94E3E43066D66918E5B47CD4CE83F1EE57D92B6A1A18DB7EBD"
+        }
+      ],
+      "decisionRefs": [
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\OWNER_DECISION_DISPOSITION_REGISTER_PO_001.json",
+          "sha256": "817029411A8D0E67318CF9FCE9E9C925BB3A261D9F8ED581EF43AC886919E112"
+        }
+      ],
+      "requirementId": "REQ-S2-001",
+      "riskIds": ["RISK-S2-001"],
+      "designRefs": [
+        {
+          "path": "config/slice2/domain-pack-registry.v1.json",
+          "sha256": "B4E4B139ADF84A890DDBA8F123517949ED28FD92D9C27CE516BE38E66884F92F"
+        },
+        {
+          "path": "packages/data/migrations/0002_slice_2_standard_workspace.up.sql",
+          "sha256": "EC2B58D7506EA8F81FEB5007BB6B6B1F2B887C34F80A6E9D6FAF7DCF845BB423"
+        }
+      ],
+      "backlogIds": ["S2-001"],
+      "testIds": ["TEST-S2-LOCAL-ACCEPTANCE"],
+      "gateIds": ["S2-G0", "S2-G1", "S2-G2"],
+      "deploymentId": "DEPLOY-S2-LOCAL"
     }
   ]
 }

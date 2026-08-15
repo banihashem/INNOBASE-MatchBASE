@@ -35,6 +35,13 @@
       "status": "ACTIVE",
       "summary": "All S1-AC-001 through S1-AC-022 for the local-only, fixture-backed authenticated Demo product path.",
       "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "REQ-S2-001",
+      "title": "Standard structured request and evidence workspace",
+      "status": "ACTIVE",
+      "summary": "All S2-AC-001 through S2-AC-034 for the owner-scoped, deterministic, local-synthetic Standard workspace.",
+      "traceabilityIds": ["TRACE-S2-001"]
     }
   ],
   "tests": [
@@ -78,6 +85,15 @@
       "command": "pnpm test:ci",
       "evidenceRefs": ["evidence/slice1/local-validation.json"],
       "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "TEST-S2-LOCAL-ACCEPTANCE",
+      "title": "Slice 2 frozen local acceptance matrix",
+      "status": "ACTIVE",
+      "summary": "The exact Slice 2 local runner covers the 34 acceptance criteria; frozen full rerun, independent audits, hosted successor and Role 2 remain gated.",
+      "command": "pnpm slice2:validate:local",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
     },
     {
       "id": "S1-AC-001",
@@ -232,6 +248,244 @@
       "status": "PENDING",
       "evidenceRefs": ["evidence/slice1/local-validation.json"],
       "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S2-AC-001",
+      "title": "Reproducible install, migration, build, standalone and dashboard startup",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-002",
+      "title": "Database-only Standard entitlement resolution",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-003",
+      "title": "Exact tier and Admin sub-role endpoint matrix",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-004",
+      "title": "Standard rolling quota and shared execution cap",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-005",
+      "title": "Versioned domain-pack activation and complete intake",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-006",
+      "title": "Immutable typed constraints and transient conditional source validation",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-007",
+      "title": "Four-language canonical English and source-canary absence",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-008",
+      "title": "Canonical confirmation, immutable edits and owner contradiction resolution",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-009",
+      "title": "Attachment absence and audited uniform refusal",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-010",
+      "title": "Deterministic zero through three candidate projection without padding",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-011",
+      "title": "Closed recursive Standard projection and hidden-result separation",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-012",
+      "title": "Six deterministic score dimensions, drivers and gaps",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-013",
+      "title": "Independent score, fit-band and ceiling calculation",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-014",
+      "title": "Exact citation identity, dates, access time and extracted support",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-015",
+      "title": "Evidence referential integrity and visible degraded states",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-016",
+      "title": "Value-level evidence and natural-person contact denial",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-017",
+      "title": "Complete Standard limitations and advisory boundary",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-018",
+      "title": "Non-reconstructive gate elimination disclosure",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-019",
+      "title": "Durable owner-scoped request and run history",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-020",
+      "title": "Uniform cross-owner and guessed-identifier refusal",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-021",
+      "title": "Read-time staleness without stored-result mutation",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-022",
+      "title": "Fail-closed export, share, rescore and reresearch surfaces",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-023",
+      "title": "Exact immutable projection and denial audit events",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-024",
+      "title": "Fully attributed synthetic-zero capability costs",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-025",
+      "title": "Six-run shared lease contention and exactly-once completion",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-026",
+      "title": "Worker-independent reads and ETag-governed polling",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-027",
+      "title": "Real Chrome responsive and accessible Standard reference path",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-028",
+      "title": "Persistent synthetic warning and production fixture refusal",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-029",
+      "title": "Slice 0 and Slice 1 regression and repository controls",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-030",
+      "title": "Current Slice 2 traceability and thirteen-view dashboard reconciliation",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-031",
+      "title": "Migration rollback to accepted Slice 1 schema",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-032",
+      "title": "Same-byte independent discipline audits",
+      "status": "PENDING",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-033",
+      "title": "Clean successor parity and exact hosted CI success",
+      "status": "PENDING",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-AC-034",
+      "title": "Authoritative, planning and pre-Slice-2 history preservation",
+      "status": "PASS",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
     }
   ],
   "risks": [
@@ -262,6 +516,13 @@
       "status": "OPEN",
       "summary": "Live OAuth, provider routing, infrastructure, and production readiness are deliberately absent and must remain fail-closed.",
       "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "RISK-S2-001",
+      "severity": "major",
+      "status": "OPEN",
+      "summary": "Live research, OAuth, infrastructure, deployment, PDF, Consultant, Admin, rescore and reresearch remain outside Slice 2 and must stay fail-closed.",
+      "traceabilityIds": ["TRACE-S2-001"]
     }
   ],
   "defects": [
@@ -309,6 +570,15 @@
       "artifact": "apps/web/.next/BUILD_ID",
       "rollback": "Stop only the named local processes, run docker compose down --volumes after exact target verification, and remove only ignored generated outputs; no external state exists to roll back.",
       "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "DEPLOY-S2-LOCAL",
+      "target": "local synthetic Standard structured request workspace",
+      "status": "NOT_APPLICABLE",
+      "reason": "Slice 2 permits local and hosted repository-only synthetic validation and explicitly prohibits deployment mutations.",
+      "artifact": "apps/web/.next/BUILD_ID",
+      "rollback": "Revert only the bounded Slice 2 successor commit and apply the 0002 down migration on a verified disposable PostgreSQL database; no external state exists to roll back.",
+      "traceabilityIds": ["TRACE-S2-001"]
     }
   ],
   "costs": [
@@ -321,6 +591,11 @@
       "scope": "Slice 1",
       "status": "ACTIVE",
       "reason": "Every fixture capability attempt records explicit zero synthetic cost; live/deployed cost remains UNKNOWN and release-blocking."
+    },
+    {
+      "scope": "Slice 2",
+      "status": "ACTIVE",
+      "reason": "Every synthetic capability attempt records one fully attributed explicit-zero event; deterministic internal scoring creates no provider attempt and live/deployed cost remains UNKNOWN."
     }
   ],
   "loops": [
@@ -333,6 +608,13 @@
     },
     {
       "id": "PO-001-R3-S1",
+      "status": "IN_PROGRESS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0
+    },
+    {
+      "id": "PO-001-R3-S2",
       "status": "IN_PROGRESS",
       "critical": 0,
       "major": 0,
@@ -391,6 +673,13 @@
       "status": "ACTIVE",
       "summary": "Current local root gate passes across 119 unit/integration/policy tests and 14 real-browser scenarios; all six required independent reviews pass 0/0/0; exact commit, hosted CI, and Role 2 remain pending.",
       "evidenceRefs": ["evidence/slice1/local-validation.json"]
+    },
+    {
+      "id": "EVIDENCE-S2-LOCAL",
+      "title": "Slice 2 frozen local validation",
+      "status": "ACTIVE",
+      "summary": "Targeted technical gates and the correction re-audit pass; the exact full runner, final same-byte discipline audits, hosted successor and Role 2 remain pending.",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"]
     }
   ]
 }

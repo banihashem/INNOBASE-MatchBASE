@@ -103,6 +103,21 @@
       "gateIds": ["AG4", "AG5", "AG6"],
       "deploymentId": "DEPLOY-S1-LOCAL",
       "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S2-001",
+      "slice": "SLICE-2",
+      "title": "Standard structured request and evidence workspace",
+      "status": "IN_PROGRESS",
+      "owner": "Role 3 and Slice 2 discipline agents",
+      "priority": "MUST",
+      "dependencies": ["S1-001"],
+      "requirementIds": ["REQ-S2-001"],
+      "riskIds": ["RISK-S2-001"],
+      "acceptanceTestIds": ["TEST-S2-LOCAL-ACCEPTANCE"],
+      "gateIds": ["S2-G0", "S2-G1", "S2-G2"],
+      "deploymentId": "DEPLOY-S2-LOCAL",
+      "traceabilityIds": ["TRACE-S2-001"]
     }
   ]
 }

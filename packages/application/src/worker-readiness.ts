@@ -5,6 +5,7 @@ export type WorkerReadinessReason =
   | "database_probe_failed"
   | "database_probe_timeout"
   | "database_operation_failed"
+  | "schema_not_ready"
   | "shutdown";
 
 export interface WorkerReadinessSnapshot {

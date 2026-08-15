@@ -1,8 +1,14 @@
-import { createHash, createHmac, randomUUID } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
 import {
   API_MINOR_VERSION,
   ApplicationFault,
   MatchBaseApplication,
+  StandardWorkspaceApplication,
   assertSlice1EndpointAuthorized,
   type CanonicalRevisionInput,
   type IntakeInput,
@@ -30,6 +36,11 @@ import {
   type TransactionClient,
 } from "@matchbase/data";
 import { loadWebConfig, type WebConfig } from "./config";
+import {
+  handleStandardRoute,
+  isSharedWorkspaceMutation,
+  isStandardMutationIntent,
+} from "./standard-route-core";
 
 const HOST_SESSION_COOKIE = "__Host-matchbase_session";
 const LOCAL_SESSION_COOKIE = "matchbase_session";
@@ -45,6 +56,7 @@ interface Services {
   config: WebConfig;
   pool: ConnectionPool;
   application: MatchBaseApplication;
+  standardApplication: StandardWorkspaceApplication;
   googleProvider?: ReturnType<typeof createGoogleOidcAdapter>;
 }
 
@@ -70,9 +82,13 @@ function sessionCookieAttributes(config: WebConfig, httpOnly: boolean): string {
   return `Path=/; ${httpOnly ? "HttpOnly; " : ""}${config.environment === "production" ? "Secure; " : ""}SameSite=Lax`;
 }
 
-function simulatorTicket(config: WebConfig, state: string): string {
+function simulatorTicket(
+  config: WebConfig,
+  state: string,
+  fixture: "demo" | "standard",
+): string {
   return createHmac("sha256", config.digestKey)
-    .update(`demo\u0000${state}`, "utf8")
+    .update(`${fixture}\u0000${state}`, "utf8")
     .digest("base64url");
 }
 
@@ -120,7 +136,23 @@ function openTransaction(
   }
 }
 
+function sameSecret(left: string, right: string): boolean {
+  const leftBytes = Buffer.from(left, "utf8");
+  const rightBytes = Buffer.from(right, "utf8");
+  return (
+    leftBytes.byteLength === rightBytes.byteLength &&
+    timingSafeEqual(leftBytes, rightBytes)
+  );
+}
+
 let singleton: Services | undefined;
+
+/** Releases the lazily-created Fetch runtime pool during controlled shutdowns and isolated tests. */
+export async function closeFetchRuntime(): Promise<void> {
+  const current = singleton;
+  singleton = undefined;
+  if (current) await current.pool.end();
+}
 
 function services(): Services {
   if (singleton) return singleton;
@@ -165,6 +197,10 @@ function services(): Services {
     application: new MatchBaseApplication({
       pool,
       canonicalizer,
+      privacyKey: config.digestKey,
+    }),
+    standardApplication: new StandardWorkspaceApplication({
+      pool,
       privacyKey: config.digestKey,
     }),
     ...(googleProvider ? { googleProvider } : {}),
@@ -565,6 +601,7 @@ async function simulatorSession(
     emailVerified?: boolean;
     hostedDomain?: string;
     simulator: boolean;
+    tier: "demo" | "standard";
   },
 ): Promise<{ handle: string; csrf: string }> {
   const existing = await client.query<{
@@ -595,12 +632,27 @@ async function simulatorSession(
         identity.hostedDomain ?? null,
       ],
     );
-    await client.query(
-      `INSERT INTO entitlement_grant
+    if (identity.tier === "demo") {
+      await client.query(
+        `INSERT INTO entitlement_grant
            (grant_id, account_id, user_id, tier, grant_actor_kind, justification, effective_from)
          VALUES ($1,$2,$3,'demo','system','default simulator grant',clock_timestamp())`,
-      [randomUUID(), accountId, userId],
-    );
+        [randomUUID(), accountId, userId],
+      );
+    } else {
+      const grantorId = randomUUID();
+      await client.query(
+        `INSERT INTO app_user(user_id,account_id,google_sub,email_verified,status)
+         VALUES($1,$2,$3,true,'active')`,
+        [grantorId, accountId, `${identity.subject}:grantor`],
+      );
+      await client.query(
+        `INSERT INTO entitlement_grant
+           (grant_id,account_id,user_id,tier,grant_actor_kind,granted_by_user_id,justification,effective_from)
+         VALUES($1,$2,$3,'standard','user',$4,'signed standard simulator fixture',clock_timestamp())`,
+        [randomUUID(), accountId, userId, grantorId],
+      );
+    }
   }
   const issued = issueSession();
   await client.query(
@@ -618,7 +670,7 @@ async function simulatorSession(
   await appendAuditEvent(client, {
     accountId,
     actorUserId: userId,
-    actorTier: "demo",
+    actorTier: identity.tier,
     eventType: "session.created",
     resourceKind: "app_user",
     resourceId: userId,
@@ -666,6 +718,9 @@ export async function handleRoute(request: Request): Promise<Response> {
       : randomUUID();
   const url = new URL(request.url);
   const path = url.pathname;
+  let parsedBody: Promise<Record<string, unknown>> | undefined;
+  const readRequestBody = (): Promise<Record<string, unknown>> =>
+    (parsedBody ??= requestBody(request));
   let session: SessionContext | null = null;
   try {
     const pinned = request.headers.get("mb-api-version");
@@ -680,7 +735,9 @@ export async function handleRoute(request: Request): Promise<Response> {
     if (request.method === "GET" && path === "/api/v1/health")
       return json(current.config, correlationId, { status: "ok" });
     if (request.method === "GET" && path === "/api/v1/readiness") {
-      const ready = await current.application.readiness();
+      const ready =
+        (await current.application.readiness()) &&
+        (await current.standardApplication.readiness());
       return json(
         current.config,
         correlationId,
@@ -700,6 +757,14 @@ export async function handleRoute(request: Request): Promise<Response> {
           "Route not found.",
         );
       }
+      const fixture = url.searchParams.get("fixture") ?? "demo";
+      if (fixture !== "demo" && fixture !== "standard")
+        throw new ApplicationFault(
+          404,
+          "route-not-found",
+          "MB-404-ROUTE",
+          "Route not found.",
+        );
       const transaction = createPkceTransaction();
       await current.pool.query(
         `INSERT INTO oauth_transaction
@@ -716,11 +781,11 @@ export async function handleRoute(request: Request): Promise<Response> {
         ],
       );
       const headers = responseHeaders(current.config, correlationId, {
-        Location: `/auth/simulator/callback?fixture=demo&state=${encodeURIComponent(transaction.state)}&ticket=${encodeURIComponent(simulatorTicket(current.config, transaction.state))}`,
+        Location: `/auth/simulator/callback?fixture=${fixture}&state=${encodeURIComponent(transaction.state)}&ticket=${encodeURIComponent(simulatorTicket(current.config, transaction.state, fixture))}`,
       });
       headers.append(
         "Set-Cookie",
-        `${SIMULATOR_TRANSACTION_COOKIE}=${encodeURIComponent(JSON.stringify({ nonce: transaction.nonce, verifier: transaction.verifier }))}; ${sessionCookieAttributes(current.config, true)}; Max-Age=300`,
+        `${SIMULATOR_TRANSACTION_COOKIE}=${encodeURIComponent(sealedTransaction(current.config, transaction))}; ${sessionCookieAttributes(current.config, true)}; Max-Age=300`,
       );
       return new Response(null, {
         status: 302,
@@ -730,21 +795,19 @@ export async function handleRoute(request: Request): Promise<Response> {
     if (request.method === "GET" && path === "/auth/simulator/callback") {
       const state = url.searchParams.get("state") ?? "";
       const ticket = url.searchParams.get("ticket") ?? "";
-      let transactionSecrets: { nonce: string; verifier: string } | null = null;
-      try {
-        transactionSecrets = JSON.parse(
-          cookie(request, SIMULATOR_TRANSACTION_COOKIE) ?? "null",
-        ) as { nonce: string; verifier: string } | null;
-      } catch {
-        transactionSecrets = null;
-      }
+      const fixture = url.searchParams.get("fixture");
+      const transactionSecrets = openTransaction(
+        current.config,
+        cookie(request, SIMULATOR_TRANSACTION_COOKIE),
+      );
       if (
         !current.config.oidcSimulatorEnabled ||
         current.config.environment === "production" ||
-        url.searchParams.get("fixture") !== "demo" ||
+        (fixture !== "demo" && fixture !== "standard") ||
         !state ||
         !transactionSecrets ||
-        ticket !== simulatorTicket(current.config, state)
+        transactionSecrets.state !== state ||
+        !sameSecret(ticket, simulatorTicket(current.config, state, fixture))
       ) {
         throw new ApplicationFault(
           404,
@@ -808,11 +871,13 @@ export async function handleRoute(request: Request): Promise<Response> {
           [transaction.oauth_transaction_id],
         );
         return simulatorSession(current, correlationId, client, {
-          subject: `simulator-demo-subject-v1:${current.config.deploymentId}`,
-          displayName: "Synthetic Demo",
-          email: "demo@example.invalid",
+          subject: `simulator-${fixture}-subject-v1:${current.config.deploymentId}`,
+          displayName:
+            fixture === "standard" ? "Synthetic Standard" : "Synthetic Demo",
+          email: `${fixture}@example.invalid`,
           emailVerified: true,
           simulator: true,
+          tier: fixture,
         });
       });
       const headers = responseHeaders(current.config, correlationId, {
@@ -946,6 +1011,7 @@ export async function handleRoute(request: Request): Promise<Response> {
           ...identity,
           displayName: "Google user",
           simulator: false,
+          tier: "demo",
         });
       });
       const headers = responseHeaders(current.config, correlationId, {
@@ -1024,12 +1090,51 @@ export async function handleRoute(request: Request): Promise<Response> {
       );
       return json(current.config, correlationId, body);
     }
+    const standardMutationIntent =
+      session.requestContext.tier === "demo" &&
+      isSharedWorkspaceMutation(request.method, path) &&
+      isStandardMutationIntent(request.method, path, await readRequestBody());
+    if (
+      session.requestContext.tier !== "demo" ||
+      path.startsWith("/api/v1/domain-packs/") ||
+      standardMutationIntent
+    ) {
+      const standard = await handleStandardRoute({
+        method: request.method,
+        pathname: path,
+        searchParams: url.searchParams,
+        headers: request.headers,
+        body: readRequestBody,
+        context: session.requestContext,
+        idempotencyKey,
+        application: current.standardApplication,
+      });
+      if (standard) {
+        if (standard.status === 304) {
+          return new Response(null, {
+            status: 304,
+            headers: responseHeaders(
+              current.config,
+              correlationId,
+              standard.headers,
+            ),
+          });
+        }
+        return json(
+          current.config,
+          correlationId,
+          standard.body,
+          standard.status,
+          standard.headers,
+        );
+      }
+    }
     if (request.method === "POST" && path === "/api/v1/requests") {
       assertSlice1EndpointAuthorized(
         session.requestContext,
         "POST /api/v1/requests",
       );
-      const input = await requestBody(request);
+      const input = await readRequestBody();
       assertClosedDto(
         input,
         ["source_text", "presented_fields", "unknown_fields"],
@@ -1124,7 +1229,7 @@ export async function handleRoute(request: Request): Promise<Response> {
         session.requestContext,
         requestId,
       );
-      const input = await requestBody(request);
+      const input = await readRequestBody();
       assertClosedDto(
         input,
         ["canonical_text", "fields", "readiness"],
@@ -1169,7 +1274,7 @@ export async function handleRoute(request: Request): Promise<Response> {
         session.requestContext,
         requestId,
       );
-      const input = await requestBody(request);
+      const input = await readRequestBody();
       assertClosedDto(input, ["accepted"], "Confirmation is invalid.");
       if (typeof input.accepted !== "boolean")
         schemaFault("Confirmation is invalid.");
@@ -1189,7 +1294,7 @@ export async function handleRoute(request: Request): Promise<Response> {
         session.requestContext,
         "POST /api/v1/runs",
       );
-      const input = await requestBody(request);
+      const input = await readRequestBody();
       assertClosedDto(
         input,
         ["request_id", "version"],
@@ -1324,7 +1429,7 @@ export async function handleRoute(request: Request): Promise<Response> {
             "The request could not be completed.",
             true,
           );
-    if (session) {
+    if (session && !fault.auditRecorded) {
       try {
         await auditDenied(current, session, path, fault);
       } catch {

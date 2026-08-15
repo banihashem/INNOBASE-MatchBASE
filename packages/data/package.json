@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test ../../test/slice1/data/*.test.mjs",
+    "test": "npm run build && node --test --test-concurrency=1 ../../test/slice1/data/*.test.mjs ../../test/slice2/data/*.test.mjs",
     "migrate": "node dist/cli.js up",
     "migrate:down": "node dist/cli.js down",
     "seed:local": "node dist/seed-local.js"

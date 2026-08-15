@@ -135,6 +135,30 @@ for (const acceptance of slice1Evidence.acceptance ?? []) {
   if (!test.evidenceRefs?.includes("evidence/slice1/local-validation.json"))
     throw new Error(`${acceptance.id} lacks exact local evidence linkage.`);
 }
+const slice2Evidence = JSON.parse(
+  readFileSync(resolve("evidence/slice2/local-validation.json"), "utf8"),
+);
+const slice2Tests = new Map(
+  registers.tests
+    .filter((test) => /^S2-AC-\d{3}$/u.test(test.id))
+    .map((test) => [test.id, test]),
+);
+if (slice2Tests.size !== 34)
+  throw new Error("Governance must expose all 34 Slice 2 criteria.");
+for (const acceptance of slice2Evidence.acceptance ?? []) {
+  const test = slice2Tests.get(acceptance.id);
+  if (!test || test.status !== acceptance.status)
+    throw new Error(`${acceptance.id} governance status is not reconciled.`);
+  if (!test.evidenceRefs?.includes("evidence/slice2/local-validation.json"))
+    throw new Error(`${acceptance.id} lacks exact Slice 2 evidence linkage.`);
+}
+const slices = JSON.parse(
+  readFileSync(resolve("governance/slices.json"), "utf8"),
+).slices;
+if (!slices.some((slice) => slice.id === "SLICE-2"))
+  throw new Error("Slice 2 governance record is missing.");
+if (!["S2-G0", "S2-G1", "S2-G2"].every((id) => gateIds.includes(id)))
+  throw new Error("Slice 2 gate record is missing.");
 const backlog = JSON.parse(
   readFileSync(resolve("governance/backlog.json"), "utf8"),
 ).items;

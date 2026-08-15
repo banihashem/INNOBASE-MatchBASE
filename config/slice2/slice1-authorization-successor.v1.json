@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scope": "PO-001-SLICE-2",
+  "governingSpecSha256": "A699CCFC3E5A6D94E3E43066D66918E5B47CD4CE83F1EE57D92B6A1A18DB7EBD",
+  "predecessor": {
+    "artifactId": "S1-AUTHORIZATION-MATRIX",
+    "path": "apps/web/src/authorization-matrix.postgres.test.ts",
+    "sha256": "AEF402AEBB0A714FC8775DC1D64D552CF81ADB2B342EA5037DB6FE5E05A12A3C"
+  },
+  "successor": {
+    "artifactId": "S2-STANDARD-RUNTIME-MATRIX",
+    "path": "apps/web/src/standard-runtime.postgres.test.ts",
+    "sha256": "A6E551FAAFB568D76798D73C15DA2E977A8C79CA627A3EB43A1BCF24C4ACFED7"
+  },
+  "activationBoundary": "EXPLICIT_STANDARD_WORKSPACE_APPLICATION"
+}

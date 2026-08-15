@@ -14,8 +14,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test ../../test/slice1/application/*.test.mjs",
-    "worker:synthetic": "node dist/synthetic-worker.js"
+    "test": "npm run build && node --test --test-concurrency=1 ../../test/slice1/application/*.test.mjs ../../test/slice2/application/*.test.mjs",
+    "worker:synthetic": "node dist/combined-synthetic-worker.js"
   },
   "dependencies": {
     "@matchbase/ai-evidence": "workspace:*",

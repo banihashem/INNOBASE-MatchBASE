@@ -51,6 +51,8 @@
     "slices": "governance/slices.json",
     "externalState": "governance/external-state.json",
     "traceability": "governance/traceability.json",
-    "slice1LocalValidation": "evidence/slice1/local-validation.json"
+    "slice1LocalValidation": "evidence/slice1/local-validation.json",
+    "slice2LocalValidation": "evidence/slice2/local-validation.json",
+    "slice2CandidateManifest": "evidence/slice2/candidate-manifest.json"
   }
 }

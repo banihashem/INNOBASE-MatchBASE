@@ -164,7 +164,7 @@ export async function admitRunWithinQuota(
         WHERE v.canonical_request_version_id = $1
           AND v.account_id = $2
           AND r.created_by_user_id = $3
-          AND v.match_readiness = 'ready'
+          AND v.match_readiness IN ('ready', 'partially_ready')
           AND EXISTS (
             SELECT 1 FROM canonical_confirmation c
              WHERE c.canonical_request_version_id = v.canonical_request_version_id
@@ -174,11 +174,17 @@ export async function admitRunWithinQuota(
             SELECT 1 FROM canonical_contradiction x
              WHERE x.canonical_request_version_id = v.canonical_request_version_id
                AND x.blocking = true AND x.resolved_at IS NULL
+               AND NOT EXISTS (
+                 SELECT 1 FROM canonical_contradiction_resolution xr
+                  WHERE xr.account_id = x.account_id
+                    AND xr.contradiction_id = x.contradiction_id
+                    AND xr.resolving_canonical_request_version_id = v.canonical_request_version_id
+               )
           )`,
       [input.canonicalRequestVersionId, input.accountId, input.userId],
     );
     if (canonical.rowCount !== 1) {
-      throw new Error("Canonical request is not confirmed and ready");
+      throw new Error("Canonical request is not confirmed and runnable");
     }
 
     const tier = await resolveTier(

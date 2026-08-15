@@ -1,9 +1,15 @@
-import { createHash, randomUUID } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   ApplicationFault,
   API_MINOR_VERSION,
   MatchBaseApplication,
+  StandardWorkspaceApplication,
   assertSlice1EndpointAuthorized,
   type CanonicalRevisionInput,
   type IntakeInput,
@@ -23,6 +29,11 @@ import {
   type ConnectionPool,
 } from "@matchbase/data";
 import type { WebConfig } from "./config";
+import {
+  handleStandardRoute,
+  isSharedWorkspaceMutation,
+  isStandardMutationIntent,
+} from "./standard-route-core";
 
 const SESSION_COOKIE = "__Host-matchbase_session";
 const OIDC_COOKIE = "__Host-matchbase_oidc";
@@ -50,6 +61,7 @@ interface RuntimeOptions {
   config: WebConfig;
   pool: ConnectionPool;
   application: MatchBaseApplication;
+  standardApplication?: StandardWorkspaceApplication;
   googleProvider?: GoogleOidcProvider;
 }
 
@@ -65,6 +77,33 @@ interface PendingOidc {
   nonce: string;
   verifier: string;
   expiresAt: Date;
+}
+
+interface PendingSimulator {
+  fixture: "demo" | "standard";
+  expiresAt: Date;
+}
+
+const SIMULATOR_TRANSACTION_COOKIE = "__Host-matchbase_simulator_transaction";
+
+function simulatorSignature(
+  config: WebConfig,
+  purpose: "cookie" | "ticket",
+  state: string,
+  fixture: "demo" | "standard",
+): string {
+  return createHmac("sha256", config.digestKey)
+    .update(`${purpose}\0${state}\0${fixture}`, "utf8")
+    .digest("base64url");
+}
+
+function equalText(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left, "utf8");
+  const rightBuffer = Buffer.from(right, "utf8");
+  return (
+    leftBuffer.length === rightBuffer.length &&
+    timingSafeEqual(leftBuffer, rightBuffer)
+  );
 }
 
 function cookieValue(request: IncomingMessage, name: string): string | null {
@@ -263,6 +302,8 @@ export function createWebRuntime(
   options: RuntimeOptions,
 ): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   const pendingOidc = new Map<string, PendingOidc>();
+  const pendingSimulator = new Map<string, PendingSimulator>();
+  const standardApplication = options.standardApplication;
 
   async function resolveSession(
     request: IncomingMessage,
@@ -393,6 +434,7 @@ export function createWebRuntime(
       hostedDomain?: string;
     },
     correlationId: string,
+    tier: "demo" | "standard" = "demo",
   ): Promise<{ cookie: string; csrfToken: string }> {
     return inTransaction(options.pool, async (client) => {
       const found = await client.query<{ user_id: string; account_id: string }>(
@@ -405,8 +447,11 @@ export function createWebRuntime(
         userId = randomUUID();
         accountId = randomUUID();
         await client.query(
-          "INSERT INTO account (account_id, display_name, status) VALUES ($1,'Demo account','active')",
-          [accountId],
+          "INSERT INTO account (account_id, display_name, status) VALUES ($1,$2,'active')",
+          [
+            accountId,
+            tier === "standard" ? "Standard account" : "Demo account",
+          ],
         );
         await client.query(
           `INSERT INTO app_user
@@ -421,12 +466,26 @@ export function createWebRuntime(
             attributes.hostedDomain ?? null,
           ],
         );
-        await client.query(
-          `INSERT INTO entitlement_grant
-             (grant_id, account_id, user_id, tier, grant_actor_kind, justification, effective_from)
-           VALUES ($1,$2,$3,'demo','system','default verified subject grant',clock_timestamp())`,
-          [randomUUID(), accountId, userId],
-        );
+        if (tier === "demo") {
+          await client.query(
+            `INSERT INTO entitlement_grant
+               (grant_id, account_id, user_id, tier, grant_actor_kind, justification, effective_from)
+             VALUES ($1,$2,$3,'demo','system','default verified subject grant',clock_timestamp())`,
+            [randomUUID(), accountId, userId],
+          );
+        } else {
+          const grantorId = randomUUID();
+          await client.query(
+            "INSERT INTO app_user(user_id,account_id,google_sub,email_verified,status) VALUES($1,$2,$3,true,'active')",
+            [grantorId, accountId, `${subject}:grantor`],
+          );
+          await client.query(
+            `INSERT INTO entitlement_grant
+               (grant_id,account_id,user_id,tier,grant_actor_kind,granted_by_user_id,justification,effective_from)
+             VALUES($1,$2,$3,'standard','user',$4,'signed Standard simulator fixture',clock_timestamp())`,
+            [randomUUID(), accountId, userId, grantorId],
+          );
+        }
       }
       const issued = issueSession();
       await client.query(
@@ -444,7 +503,7 @@ export function createWebRuntime(
       await appendAuditEvent(client, {
         accountId,
         actorUserId: userId,
-        actorTier: "demo",
+        actorTier: tier,
         eventType: "session.created",
         resourceKind: "app_user",
         resourceId: userId,
@@ -492,6 +551,9 @@ export function createWebRuntime(
     response.setHeader("X-Content-Type-Options", "nosniff");
     const url = new URL(request.url ?? "/", options.config.origin);
     const path = url.pathname;
+    let parsedBody: Promise<unknown> | undefined;
+    const readRequestBody = (): Promise<unknown> =>
+      (parsedBody ??= body(request));
     let session: SessionContext | null = null;
     try {
       const requestedVersion = request.headers["mb-api-version"];
@@ -521,7 +583,9 @@ export function createWebRuntime(
         return;
       }
       if (request.method === "GET" && path === "/api/v1/readiness") {
-        const ready = await options.application.readiness();
+        const ready =
+          (await options.application.readiness()) &&
+          (!standardApplication || (await standardApplication.readiness()));
         json(response, ready ? 200 : 503, {
           status: ready ? "ready" : "not_ready",
         });
@@ -539,8 +603,22 @@ export function createWebRuntime(
             "Route not found.",
           );
         }
+        const fixture = url.searchParams.get("fixture") ?? "demo";
+        if (fixture !== "demo" && fixture !== "standard")
+          throw new ApplicationFault(
+            404,
+            "route-not-found",
+            "MB-404-ROUTE",
+            "Route not found.",
+          );
+        const transaction = createPkceTransaction();
+        pendingSimulator.set(transaction.state, {
+          fixture,
+          expiresAt: new Date(Date.now() + 5 * 60_000),
+        });
         response.writeHead(302, {
-          Location: "/auth/simulator/callback?fixture=demo",
+          Location: `/auth/simulator/callback?fixture=${fixture}&state=${encodeURIComponent(transaction.state)}&ticket=${encodeURIComponent(simulatorSignature(options.config, "ticket", transaction.state, fixture))}`,
+          "Set-Cookie": `${SIMULATOR_TRANSACTION_COOKIE}=${encodeURIComponent(`${transaction.state}.${simulatorSignature(options.config, "cookie", transaction.state, fixture)}`)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=300`,
         });
         response.end();
         return;
@@ -549,7 +627,7 @@ export function createWebRuntime(
         if (
           !options.config.oidcSimulatorEnabled ||
           options.config.environment === "production" ||
-          url.searchParams.get("fixture") !== "demo"
+          !["demo", "standard"].includes(url.searchParams.get("fixture") ?? "")
         ) {
           throw new ApplicationFault(
             404,
@@ -558,10 +636,36 @@ export function createWebRuntime(
             "Route not found.",
           );
         }
+        const fixture = url.searchParams.get("fixture") as "demo" | "standard";
+        const state = url.searchParams.get("state") ?? "";
+        const ticket = url.searchParams.get("ticket") ?? "";
+        const transactionCookie =
+          cookieValue(request, SIMULATOR_TRANSACTION_COOKIE) ?? "";
+        const transaction = pendingSimulator.get(state);
+        const expectedCookie = `${state}.${simulatorSignature(options.config, "cookie", state, fixture)}`;
+        if (
+          !state ||
+          !transaction ||
+          transaction.fixture !== fixture ||
+          transaction.expiresAt.getTime() <= Date.now() ||
+          !equalText(
+            ticket,
+            simulatorSignature(options.config, "ticket", state, fixture),
+          ) ||
+          !equalText(transactionCookie, expectedCookie)
+        )
+          throw new ApplicationFault(
+            404,
+            "route-not-found",
+            "MB-404-ROUTE",
+            "Route not found.",
+          );
+        pendingSimulator.delete(state);
         const created = await createSubjectSession(
-          "simulator-demo-subject-v1",
-          { email: "demo@example.invalid", emailVerified: true },
+          `simulator-${fixture}-subject-v1:${options.config.deploymentId}`,
+          { email: `${fixture}@example.invalid`, emailVerified: true },
           correlationId,
+          fixture,
         );
         json(
           response,
@@ -704,7 +808,8 @@ export function createWebRuntime(
       }
 
       session = await resolveSession(request, correlationId);
-      if (request.method === "POST") assertUnsafe(request, session);
+      const idempotencyKey =
+        request.method === "POST" ? assertUnsafe(request, session) : null;
 
       if (request.method === "POST" && path === "/auth/logout") {
         await inTransaction(options.pool, async (client) => {
@@ -742,12 +847,60 @@ export function createWebRuntime(
         });
         return;
       }
+      const standardMutationIntent =
+        standardApplication &&
+        session.requestContext.tier === "demo" &&
+        isSharedWorkspaceMutation(request.method ?? "GET", path) &&
+        isStandardMutationIntent(
+          request.method ?? "GET",
+          path,
+          await readRequestBody(),
+        );
+      if (
+        standardApplication &&
+        (session.requestContext.tier !== "demo" ||
+          path.startsWith("/api/v1/domain-packs/") ||
+          standardMutationIntent)
+      ) {
+        const standard = await handleStandardRoute({
+          method: request.method ?? "GET",
+          pathname: path,
+          searchParams: url.searchParams,
+          headers: {
+            get(name) {
+              const value = request.headers[name.toLocaleLowerCase("en")];
+              return Array.isArray(value) ? value.join(",") : (value ?? null);
+            },
+          },
+          body: readRequestBody,
+          context: session.requestContext,
+          idempotencyKey,
+          application: standardApplication,
+        });
+        if (standard) {
+          if (standard.status === 304) {
+            response.writeHead(304, {
+              "Cache-Control": "private, no-store",
+              Vary: "Cookie",
+              ...standard.headers,
+            });
+            response.end();
+            return;
+          }
+          json(response, standard.status, standard.body, {
+            "Cache-Control": "private, no-store",
+            Vary: "Cookie",
+            ...standard.headers,
+          });
+          return;
+        }
+      }
       if (request.method === "POST" && path === "/api/v1/requests") {
         assertSlice1EndpointAuthorized(
           session.requestContext,
           "POST /api/v1/requests",
         );
-        const input = intakeDto(await body(request));
+        const input = intakeDto(await readRequestBody());
         const result = await options.application.createRequest(
           session.requestContext,
           request.headers["idempotency-key"] as string,
@@ -791,7 +944,7 @@ export function createWebRuntime(
           await options.application.createVersion(
             session.requestContext,
             visibleUuid(versionMatch[1]),
-            revisionDto(await body(request)),
+            revisionDto(await readRequestBody()),
           ),
         );
         return;
@@ -810,7 +963,7 @@ export function createWebRuntime(
           session.requestContext,
           requestId,
         );
-        const input = object(await body(request));
+        const input = object(await readRequestBody());
         assertClosedDto(input, ["accepted"], "Confirmation is invalid.");
         if (typeof input.accepted !== "boolean")
           schemaFault("Confirmation is invalid.");
@@ -831,7 +984,7 @@ export function createWebRuntime(
           session.requestContext,
           "POST /api/v1/runs",
         );
-        const input = object(await body(request));
+        const input = object(await readRequestBody());
         assertClosedDto(
           input,
           ["request_id", "version"],
@@ -963,7 +1116,7 @@ export function createWebRuntime(
           true,
         );
       }
-      if (session) {
+      if (session && !fault.auditRecorded) {
         try {
           await auditDenied(session, correlationId, path);
         } catch {

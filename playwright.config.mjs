@@ -18,7 +18,7 @@ export default defineConfig({
     },
     {
       name: "product-reference",
-      testMatch: /product-(?:live-)?reference-path\.spec\.mjs/u,
+      testMatch: /product-(?:(?:live|standard)-)?reference-path\.spec\.mjs/u,
       use: { baseURL: "http://127.0.0.1:3010" },
     },
   ],
@@ -32,12 +32,13 @@ export default defineConfig({
     },
     {
       command:
-        "pnpm --filter @matchbase/data seed:local && pnpm --filter @matchbase/web start",
+        "pnpm --filter @matchbase/data migrate && pnpm --filter @matchbase/data seed:local && pnpm --filter @matchbase/web start",
       url: "http://127.0.0.1:3010",
       reuseExistingServer: false,
       timeout: 60_000,
       env: {
         DATABASE_URL: process.env.DATABASE_URL ?? "",
+        MATCHBASE_DATABASE_URL: process.env.DATABASE_URL ?? "",
         MATCHBASE_ENVIRONMENT: "test",
         MATCHBASE_OIDC_SIMULATOR: "true",
         MATCHBASE_SYNTHETIC_FIXTURE: "true",

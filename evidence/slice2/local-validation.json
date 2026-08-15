@@ -1,0 +1,444 @@
+{
+  "schemaVersion": 1,
+  "slice": "SLICE-2",
+  "observedAt": "2026-08-15T00:00:00+04:00",
+  "candidateStatus": "LOCAL_UNCOMMITTED_FROZEN",
+  "environment": {
+    "scope": "LOCAL_SYNTHETIC_ONLY",
+    "postgresql": "18",
+    "database": "DISPOSABLE_LOCAL_DROPPED",
+    "providerNetworkCalls": 0,
+    "liveOauthCalls": 0,
+    "externalMutations": 0
+  },
+  "externalState": {
+    "liveProviders": "NOT_STARTED",
+    "liveOauth": "BLOCKED",
+    "gcp": "BLOCKED",
+    "cloudflare": "BLOCKED",
+    "deployment": "NOT_STARTED",
+    "hostedCi": "PENDING_SUCCESSOR_RUN"
+  },
+  "localGate": {
+    "status": "PASS",
+    "basis": "Exact pnpm slice2:validate:local completed on the frozen local candidate in 314.5 seconds with a disposable PostgreSQL 18.1 lifecycle and cleanup.",
+    "testCounts": {
+      "applicationPostgresql": 7,
+      "webPostgresql": 28,
+      "aiEvidence": 32,
+      "browserChrome": 2,
+      "slice1Criteria": 22,
+      "slice1Artifacts": 60,
+      "contracts": 6,
+      "dataPostgresql": 18,
+      "applicationWorker": 6,
+      "web": 28,
+      "rootPolicy": 100,
+      "standaloneRepeat": 1,
+      "browserTotal": 17,
+      "runtimeArtifactsScanned": 5278,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "artifacts": [
+    {
+      "id": "S2-EVIDENCE-VALIDATOR",
+      "path": "scripts/validate-slice2-evidence.mjs",
+      "sha256": "D7BDBDDE54AE3C701C9FC646DF259C317FB4EA3C2F76BF570A22C3A43061B545"
+    },
+    {
+      "id": "S2-LOCAL-RUNNER",
+      "path": "scripts/validate-slice2-local.mjs",
+      "sha256": "CC2BF5D1D528755C86CDC3ECDF52C24B6C9DABA30626EE47EAFAA981486E7957"
+    },
+    {
+      "id": "S2-MIGRATION-UP",
+      "path": "packages/data/migrations/0002_slice_2_standard_workspace.up.sql",
+      "sha256": "EC2B58D7506EA8F81FEB5007BB6B6B1F2B887C34F80A6E9D6FAF7DCF845BB423"
+    },
+    {
+      "id": "S2-MIGRATION-DOWN",
+      "path": "packages/data/migrations/0002_slice_2_standard_workspace.down.sql",
+      "sha256": "41022119F002ADA62869A99E399DD80919A8F91D03EAFFCCFA9E53AB9155B5FD"
+    },
+    {
+      "id": "S2-CONTRACT-SCHEMA",
+      "path": "packages/contracts/schemas/v1/contracts.schema.json",
+      "sha256": "BAB5F6F4DC0BECDA3630759C45D45D9CF961701B55B282F942AE16B8FCAEEFC2"
+    },
+    {
+      "id": "S2-AI-TEST",
+      "path": "packages/ai-evidence/test/standard-slice2.test.ts",
+      "sha256": "D2A1BF1FD10F62CEE9AC1DF057C3E48D24A1D6A254FAAD8F99C730CF9B4B3B14"
+    },
+    {
+      "id": "S2-APP-PG",
+      "path": "test/slice2/api/standard-application-postgres.test.mjs",
+      "sha256": "561B54364B24E67521D3F362C5C4643E4C22734B262C9E24E6C37A10F9D9291C"
+    },
+    {
+      "id": "S2-WEB-PG",
+      "path": "apps/web/src/standard-runtime.postgres.test.ts",
+      "sha256": "A6E551FAAFB568D76798D73C15DA2E977A8C79CA627A3EB43A1BCF24C4ACFED7"
+    },
+    {
+      "id": "S2-BROWSER",
+      "path": "test/browser/product-standard-reference-path.spec.mjs",
+      "sha256": "26DC78FDF3E63A32D46E8652C0BCE16B3A84D354CDA82C7E6E5C6AA149E54199"
+    },
+    {
+      "id": "S2-MIGRATION-TEST",
+      "path": "test/slice2/data/migration-contract.test.mjs",
+      "sha256": "4E95DBB53E2E897884D91DDE59F20ECCE2D92FA51522B400E4F11DBDACB176FF"
+    },
+    {
+      "id": "S2-DATA-PG",
+      "path": "test/slice2/data/standard-workspace-postgres.test.mjs",
+      "sha256": "44C3D65FEEB9F9BCD004F2825BD889288BDDD7B4DA38E46BCB0109961A9F59CA"
+    },
+    {
+      "id": "S2-WORKER-PG",
+      "path": "test/slice2/application/combined-worker-postgres.test.mjs",
+      "sha256": "B40F7F683A936ECF184AECAB58541E5D7EE68EE17FD231C18748F1D0115993CB"
+    },
+    {
+      "id": "S2-S1-SUCCESSOR",
+      "path": "test/slice2/repository/slice1-authorization-successor.test.mjs",
+      "sha256": "26E0D4FE3FDF3503EFB442ED1FBB38FC0D442033DABA7B1FA09791FB761F1626"
+    },
+    {
+      "id": "S1-ACCEPTED-EVIDENCE",
+      "path": "evidence/slice1/local-validation.json",
+      "sha256": "068BB94CCAFBBA5D99033F0DA33FE3E8E85447B97003E0AD3E561C2B1AEAFCB6"
+    }
+  ],
+  "independentAudits": [
+    {
+      "id": "S2-AUDIT-SECURITY-PRIVACY",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
+      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "method": "Independent frozen-byte authorization, privacy, cursor, cache and denial audit"
+    },
+    {
+      "id": "S2-AUDIT-DATA-MIGRATION",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
+      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "method": "Independent PostgreSQL 18 migration, rollback, quota, lease and immutability audit"
+    },
+    {
+      "id": "S2-AUDIT-AI-EVIDENCE",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
+      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "method": "Independent deterministic scoring, evidence, citation, projection and no-network audit"
+    },
+    {
+      "id": "S2-AUDIT-QA-ACCESSIBILITY",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
+      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "method": "Independent HTTP matrix and real Chrome desktop/mobile/accessibility audit"
+    },
+    {
+      "id": "S2-AUDIT-SRE-COST",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
+      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "method": "Independent worker, concurrency, replay, readiness and cost-reconciliation audit"
+    },
+    {
+      "id": "S2-AUDIT-REPOSITORY-RELEASE",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
+      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "method": "Independent predecessor-preservation and local repository-boundary audit; hosted closure excluded"
+    },
+    {
+      "id": "S2-AUDIT-INTEGRATION-CRITIC",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
+      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "method": "Independent semantic reconciliation on the frozen local candidate"
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "S2-AC-001",
+      "status": "PASS",
+      "command": "pnpm slice2:validate:local",
+      "artifactIds": [
+        "S2-LOCAL-RUNNER",
+        "S2-MIGRATION-UP",
+        "S2-MIGRATION-DOWN"
+      ],
+      "gateId": "S2-G0"
+    },
+    {
+      "id": "S2-AC-002",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/web test",
+      "artifactIds": ["S2-WEB-PG"],
+      "gateId": "S2-G5"
+    },
+    {
+      "id": "S2-AC-003",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/web test",
+      "artifactIds": ["S2-WEB-PG"],
+      "gateId": "S2-G5"
+    },
+    {
+      "id": "S2-AC-004",
+      "status": "PASS",
+      "command": "node --test test/slice2/data/*.test.mjs",
+      "artifactIds": ["S2-DATA-PG"],
+      "gateId": "S2-G7"
+    },
+    {
+      "id": "S2-AC-005",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/web test",
+      "artifactIds": ["S2-WEB-PG", "S2-CONTRACT-SCHEMA"],
+      "gateId": "S2-G3"
+    },
+    {
+      "id": "S2-AC-006",
+      "status": "PASS",
+      "command": "node --test test/slice2/api/*.test.mjs",
+      "artifactIds": ["S2-APP-PG"],
+      "gateId": "S2-G2"
+    },
+    {
+      "id": "S2-AC-007",
+      "status": "PASS",
+      "command": "node --test test/slice2/api/*.test.mjs",
+      "artifactIds": ["S2-APP-PG", "S2-AI-TEST"],
+      "gateId": "S2-G2"
+    },
+    {
+      "id": "S2-AC-008",
+      "status": "PASS",
+      "command": "node --test test/slice2/api/*.test.mjs",
+      "artifactIds": ["S2-APP-PG"],
+      "gateId": "S2-G3"
+    },
+    {
+      "id": "S2-AC-009",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/web test",
+      "artifactIds": ["S2-WEB-PG"],
+      "gateId": "S2-G5"
+    },
+    {
+      "id": "S2-AC-010",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test",
+      "artifactIds": ["S2-AI-TEST", "S2-APP-PG"],
+      "gateId": "S2-G4"
+    },
+    {
+      "id": "S2-AC-011",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/contracts test",
+      "artifactIds": ["S2-CONTRACT-SCHEMA", "S2-WEB-PG"],
+      "gateId": "S2-G1"
+    },
+    {
+      "id": "S2-AC-012",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test",
+      "artifactIds": ["S2-AI-TEST"],
+      "gateId": "S2-G4"
+    },
+    {
+      "id": "S2-AC-013",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test",
+      "artifactIds": ["S2-AI-TEST"],
+      "gateId": "S2-G4"
+    },
+    {
+      "id": "S2-AC-014",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test",
+      "artifactIds": ["S2-AI-TEST"],
+      "gateId": "S2-G4"
+    },
+    {
+      "id": "S2-AC-015",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test",
+      "artifactIds": ["S2-AI-TEST"],
+      "gateId": "S2-G4"
+    },
+    {
+      "id": "S2-AC-016",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test",
+      "artifactIds": ["S2-AI-TEST", "S2-BROWSER"],
+      "gateId": "S2-G4"
+    },
+    {
+      "id": "S2-AC-017",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test",
+      "artifactIds": ["S2-AI-TEST"],
+      "gateId": "S2-G4"
+    },
+    {
+      "id": "S2-AC-018",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test",
+      "artifactIds": ["S2-AI-TEST", "S2-WEB-PG"],
+      "gateId": "S2-G4"
+    },
+    {
+      "id": "S2-AC-019",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/web test",
+      "artifactIds": ["S2-WEB-PG"],
+      "gateId": "S2-G3"
+    },
+    {
+      "id": "S2-AC-020",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/web test",
+      "artifactIds": ["S2-WEB-PG"],
+      "gateId": "S2-G5"
+    },
+    {
+      "id": "S2-AC-021",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test",
+      "artifactIds": ["S2-AI-TEST"],
+      "gateId": "S2-G4"
+    },
+    {
+      "id": "S2-AC-022",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/web test",
+      "artifactIds": ["S2-WEB-PG"],
+      "gateId": "S2-G5"
+    },
+    {
+      "id": "S2-AC-023",
+      "status": "PASS",
+      "command": "node --test test/slice2/api/*.test.mjs",
+      "artifactIds": ["S2-APP-PG", "S2-WEB-PG"],
+      "gateId": "S2-G5"
+    },
+    {
+      "id": "S2-AC-024",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/ai-evidence test",
+      "artifactIds": ["S2-AI-TEST", "S2-APP-PG"],
+      "gateId": "S2-G7"
+    },
+    {
+      "id": "S2-AC-025",
+      "status": "PASS",
+      "command": "node --test test/slice2/application/*.test.mjs",
+      "artifactIds": ["S2-WORKER-PG", "S2-DATA-PG"],
+      "gateId": "S2-G7"
+    },
+    {
+      "id": "S2-AC-026",
+      "status": "PASS",
+      "command": "pnpm --filter @matchbase/web test",
+      "artifactIds": ["S2-WORKER-PG", "S2-WEB-PG"],
+      "gateId": "S2-G7"
+    },
+    {
+      "id": "S2-AC-027",
+      "status": "PASS",
+      "command": "pnpm test:browser",
+      "artifactIds": ["S2-BROWSER"],
+      "gateId": "S2-G6"
+    },
+    {
+      "id": "S2-AC-028",
+      "status": "PASS",
+      "command": "pnpm test:browser && pnpm --filter @matchbase/web test",
+      "artifactIds": ["S2-BROWSER", "S2-WEB-PG"],
+      "gateId": "S2-G6"
+    },
+    {
+      "id": "S2-AC-029",
+      "status": "PASS",
+      "command": "pnpm slice1:evidence:check && pnpm protected:check",
+      "artifactIds": ["S1-ACCEPTED-EVIDENCE", "S2-S1-SUCCESSOR"],
+      "gateId": "S2-G0"
+    },
+    {
+      "id": "S2-AC-030",
+      "status": "PASS",
+      "command": "pnpm slice2:evidence:check && pnpm snapshot:verify-sources",
+      "artifactIds": ["S2-EVIDENCE-VALIDATOR"],
+      "gateId": "S2-G8"
+    },
+    {
+      "id": "S2-AC-031",
+      "status": "PASS",
+      "command": "node --test test/slice2/data/migration-contract.test.mjs",
+      "artifactIds": [
+        "S2-MIGRATION-UP",
+        "S2-MIGRATION-DOWN",
+        "S2-MIGRATION-TEST"
+      ],
+      "gateId": "S2-G2"
+    },
+    {
+      "id": "S2-AC-032",
+      "status": "PENDING",
+      "command": "independent frozen-byte discipline audits",
+      "artifactIds": ["S2-EVIDENCE-VALIDATOR"],
+      "gateId": "S2-G8"
+    },
+    {
+      "id": "S2-AC-033",
+      "status": "PENDING",
+      "command": "commit/push parity and hosted CI on exact successor",
+      "artifactIds": ["S2-EVIDENCE-VALIDATOR"],
+      "gateId": "S2-G9"
+    },
+    {
+      "id": "S2-AC-034",
+      "status": "PASS",
+      "command": "pnpm protected:check && pnpm slice1:evidence:check",
+      "artifactIds": ["S1-ACCEPTED-EVIDENCE", "S2-S1-SUCCESSOR"],
+      "gateId": "S2-G0"
+    }
+  ],
+  "defects": {
+    "critical": 0,
+    "major": 0,
+    "minor": 0
+  },
+  "role2": {
+    "status": "PENDING"
+  }
+}

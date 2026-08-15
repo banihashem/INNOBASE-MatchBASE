@@ -1,0 +1,377 @@
+{
+  "schema_version": "domain-pack.v1",
+  "registry_version": "2026-08-15.1",
+  "pack_version": "2026-08-15.1",
+  "category_id": "synthetic_industrial_components",
+  "category_label": "Synthetic Industrial Components",
+  "macro_parameters": [
+    "product_specification",
+    "supplier_producer_profile",
+    "trade_structure_commercial_execution"
+  ],
+  "core_fields": [
+    {
+      "field_id": "FLD-CORE-PS-01",
+      "macro_parameter": "product_specification",
+      "label": "product_category",
+      "description": "Domain-invariant canonical field product_category.",
+      "kind": "single_select",
+      "requirement": "required",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-PS-02",
+      "macro_parameter": "product_specification",
+      "label": "product_subcategory",
+      "description": "Domain-invariant canonical field product_subcategory.",
+      "kind": "single_select",
+      "requirement": "conditional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-PS-03",
+      "macro_parameter": "product_specification",
+      "label": "product_name_raw",
+      "description": "Domain-invariant canonical field product_name_raw.",
+      "kind": "text",
+      "requirement": "required",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-PS-04",
+      "macro_parameter": "product_specification",
+      "label": "manufacturer",
+      "description": "Domain-invariant canonical field manufacturer.",
+      "kind": "text",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-PS-05",
+      "macro_parameter": "product_specification",
+      "label": "brand",
+      "description": "Domain-invariant canonical field brand.",
+      "kind": "text",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-PS-06",
+      "macro_parameter": "product_specification",
+      "label": "model_names",
+      "description": "Domain-invariant canonical field model_names.",
+      "kind": "multi_select",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-PS-07",
+      "macro_parameter": "product_specification",
+      "label": "variants",
+      "description": "Domain-invariant canonical field variants.",
+      "kind": "multi_select",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-PS-08",
+      "macro_parameter": "product_specification",
+      "label": "technical_requirements",
+      "description": "Domain-invariant canonical field technical_requirements.",
+      "kind": "multi_select",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-PS-09",
+      "macro_parameter": "product_specification",
+      "label": "conditional_requirements",
+      "description": "Domain-invariant canonical field conditional_requirements.",
+      "kind": "multi_select",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-PS-10",
+      "macro_parameter": "product_specification",
+      "label": "packaging_requirements",
+      "description": "Domain-invariant canonical field packaging_requirements.",
+      "kind": "multi_select",
+      "requirement": "conditional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-PS-11",
+      "macro_parameter": "product_specification",
+      "label": "certification_requirements",
+      "description": "Domain-invariant canonical field certification_requirements.",
+      "kind": "multi_select",
+      "requirement": "conditional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-PS-12",
+      "macro_parameter": "product_specification",
+      "label": "intended_market_use",
+      "description": "Domain-invariant canonical field intended_market_use.",
+      "kind": "text",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-PS-13",
+      "macro_parameter": "product_specification",
+      "label": "hs_code_and_edition",
+      "description": "Domain-invariant canonical field hs_code_and_edition.",
+      "kind": "text",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-SP-01",
+      "macro_parameter": "supplier_producer_profile",
+      "label": "required_origin",
+      "description": "Domain-invariant canonical field required_origin.",
+      "kind": "multi_select",
+      "requirement": "conditional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-SP-02",
+      "macro_parameter": "supplier_producer_profile",
+      "label": "excluded_origin",
+      "description": "Domain-invariant canonical field excluded_origin.",
+      "kind": "multi_select",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-SP-03",
+      "macro_parameter": "supplier_producer_profile",
+      "label": "producer_vs_intermediary",
+      "description": "Domain-invariant canonical field producer_vs_intermediary.",
+      "kind": "single_select",
+      "requirement": "required",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-SP-04",
+      "macro_parameter": "supplier_producer_profile",
+      "label": "required_capacity",
+      "description": "Domain-invariant canonical field required_capacity.",
+      "kind": "quantity",
+      "requirement": "conditional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-SP-05",
+      "macro_parameter": "supplier_producer_profile",
+      "label": "market_access_requirements",
+      "description": "Domain-invariant canonical field market_access_requirements.",
+      "kind": "multi_select",
+      "requirement": "conditional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-SP-06",
+      "macro_parameter": "supplier_producer_profile",
+      "label": "commercial_reliability_requirements",
+      "description": "Domain-invariant canonical field commercial_reliability_requirements.",
+      "kind": "multi_select",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-SP-07",
+      "macro_parameter": "supplier_producer_profile",
+      "label": "positioning_requirements",
+      "description": "Domain-invariant canonical field positioning_requirements.",
+      "kind": "multi_select",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-SP-08",
+      "macro_parameter": "supplier_producer_profile",
+      "label": "named_exclusions",
+      "description": "Domain-invariant canonical field named_exclusions.",
+      "kind": "multi_select",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-TR-01",
+      "macro_parameter": "trade_structure_commercial_execution",
+      "label": "demand_volume",
+      "description": "Domain-invariant canonical field demand_volume.",
+      "kind": "quantity",
+      "requirement": "required",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-TR-02",
+      "macro_parameter": "trade_structure_commercial_execution",
+      "label": "destination_market",
+      "description": "Domain-invariant canonical field destination_market.",
+      "kind": "text",
+      "requirement": "required",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-TR-03",
+      "macro_parameter": "trade_structure_commercial_execution",
+      "label": "target_price_and_basis",
+      "description": "Domain-invariant canonical field target_price_and_basis.",
+      "kind": "quantity",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-TR-04",
+      "macro_parameter": "trade_structure_commercial_execution",
+      "label": "incoterm",
+      "description": "Domain-invariant canonical field incoterm.",
+      "kind": "single_select",
+      "requirement": "conditional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-TR-05",
+      "macro_parameter": "trade_structure_commercial_execution",
+      "label": "payment_terms",
+      "description": "Domain-invariant canonical field payment_terms.",
+      "kind": "text",
+      "requirement": "conditional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-TR-06",
+      "macro_parameter": "trade_structure_commercial_execution",
+      "label": "port_of_discharge",
+      "description": "Domain-invariant canonical field port_of_discharge.",
+      "kind": "text",
+      "requirement": "conditional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-TR-07",
+      "macro_parameter": "trade_structure_commercial_execution",
+      "label": "timing",
+      "description": "Domain-invariant canonical field timing.",
+      "kind": "text",
+      "requirement": "conditional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-TR-08",
+      "macro_parameter": "trade_structure_commercial_execution",
+      "label": "relationship_design",
+      "description": "Domain-invariant canonical field relationship_design.",
+      "kind": "text",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-TR-09",
+      "macro_parameter": "trade_structure_commercial_execution",
+      "label": "relaxable_constraints",
+      "description": "Domain-invariant canonical field relaxable_constraints.",
+      "kind": "multi_select",
+      "requirement": "required",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-TR-10",
+      "macro_parameter": "trade_structure_commercial_execution",
+      "label": "non_relaxable_constraints",
+      "description": "Domain-invariant canonical field non_relaxable_constraints.",
+      "kind": "multi_select",
+      "requirement": "required",
+      "allowed_units": [],
+      "allowed_values": []
+    },
+    {
+      "field_id": "FLD-CORE-TR-11",
+      "macro_parameter": "trade_structure_commercial_execution",
+      "label": "risk_constraints",
+      "description": "Domain-invariant canonical field risk_constraints.",
+      "kind": "multi_select",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": []
+    }
+  ],
+  "domain_fields": [
+    {
+      "field_id": "component_material",
+      "macro_parameter": "product_specification",
+      "label": "Component material",
+      "description": "Required synthetic material family.",
+      "kind": "single_select",
+      "requirement": "required",
+      "allowed_units": [],
+      "allowed_values": ["alloy", "polymer", "composite"]
+    },
+    {
+      "field_id": "dimensional_tolerance",
+      "macro_parameter": "product_specification",
+      "label": "Dimensional tolerance",
+      "description": "Required tolerance for the synthetic component.",
+      "kind": "quantity",
+      "requirement": "optional",
+      "allowed_units": ["mm", "micrometre"],
+      "allowed_values": []
+    },
+    {
+      "field_id": "quality_certification",
+      "macro_parameter": "supplier_producer_profile",
+      "label": "Quality certification",
+      "description": "Requested synthetic quality-system certification.",
+      "kind": "multi_select",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": ["ISO_9001", "IATF_16949", "AS9100"]
+    },
+    {
+      "field_id": "incoterm",
+      "macro_parameter": "trade_structure_commercial_execution",
+      "label": "Incoterm",
+      "description": "Preferred synthetic trade term.",
+      "kind": "single_select",
+      "requirement": "optional",
+      "allowed_units": [],
+      "allowed_values": ["EXW", "FCA", "FOB", "CIF", "DAP"]
+    }
+  ],
+  "synthetic": true
+}

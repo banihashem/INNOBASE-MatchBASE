@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-14T22:12:00+04:00",
+  "updatedAt": "2026-08-15T07:00:00+04:00",
   "gates": [
     {
       "id": "AG0",
@@ -95,6 +95,89 @@
       "evidence": ["evidence/slice1/local-validation.json"],
       "summary": "The current Slice 1 candidate is not committed or pushed; exact hosted CI is PENDING_SUCCESSOR_RUN.",
       "traceabilityIds": ["TRACE-S1-003"]
+    },
+    {
+      "id": "S2-G0",
+      "name": "Slice 2 local acceptance",
+      "status": "PASS",
+      "owner": "Role 3",
+      "evidence": ["evidence/slice2/local-validation.json"],
+      "summary": "The exact local runner passed on the frozen candidate with PostgreSQL 18.1, standalone, Chrome, privacy and repository controls; audits and hosted closure remain pending.",
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-G1",
+      "name": "Slice 2 same-byte independent audits",
+      "status": "ACTIVE",
+      "owner": "Independent discipline auditors",
+      "evidence": ["evidence/slice2/local-validation.json"],
+      "summary": "Technical semantic correction audit passed; final frozen security, AI, QA, SRE, repository and critic dispositions remain pending.",
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-G2",
+      "name": "Slice 2 hosted closure",
+      "status": "BLOCKED",
+      "owner": "Repository safety",
+      "evidence": ["evidence/slice2/local-validation.json"],
+      "summary": "The candidate is uncommitted; exact successor push, hosted CI success, closure evidence and Role 2 are pending.",
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-G3",
+      "name": "Slice 2 application and API",
+      "status": "PASS",
+      "owner": "Application/Data",
+      "evidence": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-G4",
+      "name": "Slice 2 AI, scoring and evidence",
+      "status": "PASS",
+      "owner": "AI/Evidence",
+      "evidence": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-G5",
+      "name": "Slice 2 authorization and projection",
+      "status": "PASS",
+      "owner": "Security/Application",
+      "evidence": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-G6",
+      "name": "Slice 2 Chrome accessibility and responsive UX",
+      "status": "PASS",
+      "owner": "QA/Accessibility",
+      "evidence": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-G7",
+      "name": "Slice 2 PostgreSQL, worker and cost integrity",
+      "status": "PASS",
+      "owner": "Data/SRE",
+      "evidence": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-G8",
+      "name": "Slice 2 evidence and dashboard reconciliation",
+      "status": "PASS",
+      "owner": "Repository safety",
+      "evidence": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S2-G9",
+      "name": "Slice 2 exact successor hosted closure",
+      "status": "BLOCKED",
+      "owner": "Repository safety",
+      "evidence": ["evidence/slice2/local-validation.json"],
+      "traceabilityIds": ["TRACE-S2-001"]
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { ProductFlow } from "../components/ProductFlow";
+import { ProductRouter } from "../components/ProductRouter";
 
 export const dynamic = "force-dynamic";
 
@@ -7,5 +7,5 @@ export default function Page() {
     process.env.MATCHBASE_OIDC_SIMULATOR === "true"
       ? "/auth/simulator/start"
       : "/auth/google/start";
-  return <ProductFlow authPath={authPath} />;
+  return <ProductRouter authPath={authPath} />;
 }

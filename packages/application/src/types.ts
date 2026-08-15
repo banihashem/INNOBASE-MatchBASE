@@ -78,6 +78,7 @@ export class ApplicationFault extends Error {
     message: string,
     readonly retryable = false,
     readonly headers: Readonly<Record<string, string>> = {},
+    readonly auditRecorded = false,
   ) {
     super(message);
     this.name = "ApplicationFault";

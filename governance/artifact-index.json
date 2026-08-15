@@ -6,6 +6,12 @@
       "status": "ACTIVE",
       "summary": "All nine workspace projects and the Next.js 16.3.0 standalone product application build locally; hosted successor is pending.",
       "evidenceRefs": ["evidence/slice1/local-validation.json"]
+    },
+    {
+      "id": "BUILD-SLICE-2-LOCAL",
+      "status": "ACTIVE",
+      "summary": "The Standard workspace builds locally; the frozen full runner, exact successor commit and hosted CI remain pending.",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"]
     }
   ],
   "artifacts": [
@@ -15,6 +21,13 @@
       "path": "evidence/slice1/local-validation.json",
       "sha256": "068BB94CCAFBBA5D99033F0DA33FE3E8E85447B97003E0AD3E561C2B1AEAFCB6",
       "evidenceRefs": ["evidence/slice1/local-validation.json"]
+    },
+    {
+      "id": "ARTIFACT-SLICE-2-LOCAL-VALIDATION",
+      "status": "ACTIVE",
+      "path": "evidence/slice2/local-validation.json",
+      "sha256": "748BF33D8C989A4F01469032FEBED74FA969BB1165A049EF9AA81E0797BBD29C",
+      "evidenceRefs": ["evidence/slice2/local-validation.json"]
     }
   ],
   "sboms": [
@@ -27,6 +40,11 @@
       "id": "SBOM-SLICE-1",
       "status": "NOT_GENERATED",
       "reason": "Slice 1 is a private local reference path, not a deployable release; dependency and license gates are exact and a release SBOM remains a later release gate."
+    },
+    {
+      "id": "SBOM-SLICE-2",
+      "status": "NOT_GENERATED",
+      "reason": "Slice 2 is a private local synthetic candidate, not a deployable release; dependency and license gates remain mandatory."
     }
   ],
   "provenance": [
@@ -41,6 +59,12 @@
       "status": "IN_PROGRESS",
       "source": "local uncommitted Slice 1 candidate derived from cb9ecc2f12c3a4e1cb6bec801c57b88c595c5285",
       "note": "Local gates pass; commit, push, exact hosted run, and independent final audit remain pending."
+    },
+    {
+      "id": "PROV-SLICE-2-LOCAL",
+      "status": "IN_PROGRESS",
+      "source": "local uncommitted Slice 2 candidate derived from 832fa68244eefa0dae4c079b9b94ecaea4b6a872",
+      "note": "Local technical gates pass; frozen full validation, same-byte audits, successor push, hosted CI and Role 2 remain pending."
     }
   ],
   "deployments": []

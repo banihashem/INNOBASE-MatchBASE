@@ -4,7 +4,10 @@ import {
   DeterministicFixtureLanguageIdentifier,
   type CanonicalizationCapability,
 } from "@matchbase/ai-evidence";
-import { MatchBaseApplication } from "@matchbase/application";
+import {
+  MatchBaseApplication,
+  StandardWorkspaceApplication,
+} from "@matchbase/application";
 import { createPool } from "@matchbase/data";
 import { loadWebConfig } from "./config";
 import { createWebRuntime } from "./runtime";
@@ -28,7 +31,16 @@ const application = new MatchBaseApplication({
   canonicalizer,
   privacyKey: config.digestKey,
 });
-const listener = createWebRuntime({ config, pool, application });
+const standardApplication = new StandardWorkspaceApplication({
+  pool,
+  privacyKey: config.digestKey,
+});
+const listener = createWebRuntime({
+  config,
+  pool,
+  application,
+  standardApplication,
+});
 const server = createServer(
   (request, response) => void listener(request, response),
 );

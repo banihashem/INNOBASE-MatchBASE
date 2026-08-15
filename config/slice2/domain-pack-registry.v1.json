@@ -1,0 +1,13 @@
+{
+  "schema_version": "domain-pack-registry.v1",
+  "registry_version": "2026-08-15.1",
+  "resolver_version": "synthetic-category-resolver.v1",
+  "confidence_threshold": 0.8,
+  "packs": [
+    {
+      "category_id": "synthetic_industrial_components",
+      "pack_version": "2026-08-15.1",
+      "fixture_path": "config/slice2/synthetic-industrial-components.domain-pack.v1.json"
+    }
+  ]
+}

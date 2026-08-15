@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-14T15:28:04.0357204+04:00",
+  "updatedAt": "2026-08-15T07:00:00+04:00",
   "slices": [
     {
       "id": "SLICE-0",
@@ -42,6 +42,32 @@
       ],
       "terminal": "READY_FOR_ROLE2",
       "blockedBy": ["exact pushed-commit hosted CI"]
+    },
+    {
+      "id": "SLICE-2",
+      "name": "Standard structured request and evidence workspace",
+      "status": "IN_PROGRESS",
+      "scope": [
+        "Standard structured intake and canonical-English confirmation",
+        "deterministic synthetic evidence, scoring, projection and owner history",
+        "PostgreSQL 18 additive migration and Slice 1 rollback boundary",
+        "local real-Chrome and repository-only validation"
+      ],
+      "exclusions": [
+        "Consultant and PDF workflows",
+        "Admin product workflows",
+        "live provider or web fetch",
+        "real Google OAuth",
+        "GCP, Cloudflare, DNS and production deployment",
+        "re-score and re-research",
+        "real user data"
+      ],
+      "terminal": "READY_FOR_ROLE2",
+      "blockedBy": [
+        "frozen full local validation",
+        "same-byte independent audits",
+        "exact successor commit and hosted CI"
+      ]
     }
   ]
 }

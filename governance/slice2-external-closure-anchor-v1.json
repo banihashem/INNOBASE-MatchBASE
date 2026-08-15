@@ -1,27 +1,33 @@
 {
-  "schemaVersion": "matchbase.slice2-external-closure/v2",
+  "schemaVersion": "matchbase.slice2-external-closure/v3",
   "closureLoop": "ROLE2_LOOP_2",
   "repository": "banihashem/INNOBASE-MatchBASE",
-  "commit": "865bc91a55abba2c20b6951a32061c9a448a9285",
-  "tree": "f0422bf46e01446116b42205523a2dc7d53609d0",
+  "commit": "0c9b24e0281f195aac240a10d115c570b903c5da",
+  "tree": "b734676c6d2a16daa16d1c83648595a11395b605",
   "workflow": "ci",
-  "runId": 31884237075,
-  "jobId": 95011068050,
+  "runId": 31892595424,
+  "jobId": 95031000541,
   "conclusion": "success",
-  "observedAt": "2026-08-15T12:22:57Z",
+  "observedAt": "2026-08-15T15:32:36Z",
   "source": {
     "kind": "management_artifact",
-    "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_CORRECTION_VALIDATION_PO_001_SLICE_2_ROLE2_LOOP_2.md",
-    "sha256": "0F7684A613BB7DA68AE1D5557D53E16A31BE29214C88F88C690359DE52185DC7",
+    "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_CORRECTION_VALIDATION_PO_001_SLICE_2_ROLE2_LOOP_2_V2.md",
+    "sha256": "6DD97F28A10B29A49E3A83F5FBC092FEC9BA73F9458F166A65CC466523D129A1",
     "method": "Authenticated hosted Slice 2 Role 2 Loop 2 correction closure recorded by Role 3"
+  },
+  "hostedSource": {
+    "kind": "management_artifact",
+    "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_GITHUB_HOSTED_OBSERVATION_PO_001_SLICE_2_ROLE2_LOOP_2_V2.json",
+    "sha256": "C998620DF1E214BE6B959CADD618DA40993D40E79DEBFB35D4789DE19F2AA09B",
+    "method": "Authenticated GitHub Actions hosted observation recorded by Role 3"
   },
   "auditSource": {
     "kind": "repository_git_object",
     "path": "evidence/slice2/local-validation.json",
-    "sha256": "62B8625EFC2539D83209BEA8A1E841067C891EF75E585975D2F60D4E8F81BCB5",
+    "sha256": "5599BAE3BEB3F9C7A978253FA623A4841389E809247F36DC909142D10E0EC085",
     "method": "Exact frozen-candidate discipline audit ledger from successor Git object",
-    "commit": "865bc91a55abba2c20b6951a32061c9a448a9285",
-    "gitObject": "4a6cd876d5f33d849e3ad34ab94997862e71b33c"
+    "commit": "0c9b24e0281f195aac240a10d115c570b903c5da",
+    "gitObject": "4d74050888edc3ac42d49107bef7833a73c28c7d"
   },
   "predecessors": [
     {
@@ -81,6 +87,14 @@
       "reason": "ROLE2_REJECTED_TWO_MAJOR_DEFECTS"
     },
     {
+      "runId": 31884237075,
+      "jobId": 95011068050,
+      "commit": "865bc91a55abba2c20b6951a32061c9a448a9285",
+      "tree": "f0422bf46e01446116b42205523a2dc7d53609d0",
+      "conclusion": "success",
+      "reason": "PRE_TIMEOUT_CORRECTION_CLOSURE"
+    },
+    {
       "runId": 31886484933,
       "jobId": 95016417693,
       "commit": "e87f73e3bd740ae3e72e9886884c1570d9cec50a",
@@ -123,9 +137,9 @@
   ],
   "candidate": {
     "manifestPath": "evidence/slice2/candidate-manifest.json",
-    "manifestSha256": "B79BE7FF137CA8B7B16606BE08BC3BF9C36A729E3DA24EC90B6D2BEBE8824FF4",
-    "aggregateSha256": "F5C31E26F56196BF72EDF0CE7A56F9F0E99D88FB37B98D79F79B3F408BC0AAFE",
-    "fileCount": 109
+    "manifestSha256": "D14B84B858C667CA31E1640FF7505BB24B44E9D86CB4B1367918EA481AD0A9FA",
+    "aggregateSha256": "5DE817B7BDBA1E4CF421E47C6E2D474F8E6A924B620407684013C37CAD9B767E",
+    "fileCount": 110
   },
   "role3Disposition": "READY_FOR_ROLE2",
   "role2": {

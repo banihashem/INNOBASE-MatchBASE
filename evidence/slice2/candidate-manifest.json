@@ -10,7 +10,7 @@
     "governance/artifact-index.json"
   ],
   "fileCount": 110,
-  "aggregateSha256": "5DE817B7BDBA1E4CF421E47C6E2D474F8E6A924B620407684013C37CAD9B767E",
+  "aggregateSha256": "D1EA1A77545602B5A67F288A5570C94E2A5F4514A1FC7804D8A236212138AD7B",
   "files": [
     {
       "path": "apps/dashboard/src/App.tsx",
@@ -154,7 +154,7 @@
     },
     {
       "path": "governance/slice2-external-closure-anchor-v1.json",
-      "sha256": "3DB02E94AE574772643590C8ECEB8D2D4950B29113557AF13BD85A51528C7CCD"
+      "sha256": "83B7BC7D6469F1C923353C06C4F7498262B017C4A16912B1C1FEF4EDCEF62C33"
     },
     {
       "path": "governance/slice2-rejected-candidate-attestation-v1.json",
@@ -366,7 +366,7 @@
     },
     {
       "path": "scripts/lib/slice2-external-closure-policy.mjs",
-      "sha256": "896531134B9B8131C3D6654AE966F9A6C746DF657DF0D17D5661F6962BB2C19E"
+      "sha256": "CAD5394B59F5411F89B73DB4C85A2F3990FFBD682372734C7030FC5E7B751333"
     },
     {
       "path": "scripts/lib/slice2-lifecycle-policy.mjs",
@@ -430,7 +430,7 @@
     },
     {
       "path": "test/slice2-external-closure-policy.test.mjs",
-      "sha256": "2CEC585632683DEEDC656379AD1875966281910FAD1AFBB0019CBCA74510B86E"
+      "sha256": "2AB2843B727E2954DEEA14CDB4D25AE0099275C0586FBAFCAFA6F621021BE74D"
     },
     {
       "path": "test/slice2/api/standard-application-postgres.test.mjs",

@@ -36,7 +36,66 @@ function exactAuditLedger(value) {
   });
 }
 
-test("accepts the exact v2 Loop 2 anchor locally and in ANCHOR_ONLY_CI", () => {
+function exactReport(value = anchor) {
+  return [
+    `Commit: \`${value.commit}\``,
+    `Tree: \`${value.tree}\``,
+    `Run: \`${value.runId}\``,
+    `Job: \`${value.jobId}\``,
+    `Candidate manifest SHA-256: \`${value.candidate.manifestSha256}\``,
+    `Candidate aggregate SHA-256: \`${value.candidate.aggregateSha256}\``,
+    `Candidate files: \`${value.candidate.fileCount}\``,
+    `commit \`${value.auditSource.commit}\`, blob \`${value.auditSource.gitObject}\`, SHA-256 \`${value.auditSource.sha256}\``,
+    "`READY_FOR_ROLE2`",
+    "`PENDING_ROLE2_LOOP_2_REAUDIT`",
+  ].join("\n");
+}
+
+function exactHostedObservation(value = anchor) {
+  const runUrl = `https://github.com/${value.repository}/actions/runs/${value.runId}`;
+  return JSON.stringify({
+    schemaVersion: "matchbase.github-hosted-observation/v1",
+    repository: value.repository,
+    commit: value.commit,
+    tree: value.tree,
+    workflow: value.workflow,
+    runId: value.runId,
+    jobId: value.jobId,
+    conclusion: value.conclusion,
+    observedAt: value.observedAt,
+    runUrl,
+    jobUrl: `${runUrl}/job/${value.jobId}`,
+  });
+}
+
+function exactLocalResolvers(value = anchor) {
+  const sources = new Map([
+    [value.source.path, [value.source.sha256, exactReport(value)]],
+    [
+      value.hostedSource.path,
+      [value.hostedSource.sha256, exactHostedObservation(value)],
+    ],
+    [value.role2.auditPath, [value.role2.auditSha256, "role2"]],
+  ]);
+  return {
+    regularSourceResolver(source) {
+      const expected = sources.get(source.path);
+      if (!expected || expected[0] !== source.sha256)
+        throw new Error("substituted source");
+      return expected[1];
+    },
+    gitAuditResolver(source) {
+      assert.deepEqual(source, value.auditSource);
+      return exactAuditLedger(value);
+    },
+    gitCommitResolver(candidate) {
+      assert.equal(candidate.commit, value.commit);
+      return value.tree;
+    },
+  };
+}
+
+test("accepts the exact v3 Loop 2 anchor locally and in ANCHOR_ONLY_CI", () => {
   const verified = [];
   assert.equal(
     validateSlice2ExternalClosure(structuredClone(anchor), {
@@ -56,10 +115,18 @@ test("accepts the exact v2 Loop 2 anchor locally and in ANCHOR_ONLY_CI", () => {
         assert.equal(source.gitObject, expectedGitObject);
         return exactAuditLedger(anchor);
       },
+      gitCommitResolver(value) {
+        assert.equal(value.commit, anchor.commit);
+        return anchor.tree;
+      },
     }).role2.status,
     "PENDING",
   );
-  assert.deepEqual(verified, [anchor.source.path, anchor.role2.auditPath]);
+  assert.deepEqual(verified, [
+    anchor.source.path,
+    anchor.hostedSource.path,
+    anchor.role2.auditPath,
+  ]);
   assert.equal(
     validateSlice2ExternalClosure(structuredClone(anchor), { anchorOnly: true })
       .role3Disposition,
@@ -79,6 +146,40 @@ test("accepts the exact v2 Loop 2 anchor locally and in ANCHOR_ONLY_CI", () => {
     },
     role2: { status: "FAIL" },
   });
+});
+
+test("accepts one post-hosted successor without a tracked identity edit", () => {
+  const value = structuredClone(anchor);
+  value.commit = "a".repeat(40);
+  value.tree = "b".repeat(40);
+  value.runId = 31900000001;
+  value.jobId = 95100000001;
+  value.observedAt = "2026-08-16T00:00:00Z";
+  value.source.path = value.source.path.replace("_V2.md", "_V3.md");
+  value.source.sha256 = "C".repeat(64);
+  value.hostedSource.path = value.hostedSource.path.replace(
+    "_V2.json",
+    "_V3.json",
+  );
+  value.hostedSource.sha256 = "D".repeat(64);
+  value.auditSource.commit = value.commit;
+  value.auditSource.gitObject = "e".repeat(40);
+  value.auditSource.sha256 = "F".repeat(64);
+  value.candidate.manifestSha256 = "1".repeat(64);
+  value.candidate.aggregateSha256 = "2".repeat(64);
+  value.candidate.fileCount = 111;
+  value.predecessors.push({
+    runId: anchor.runId,
+    jobId: anchor.jobId,
+    commit: anchor.commit,
+    tree: anchor.tree,
+    conclusion: "success",
+    reason: "PRE_SELF_BOUND_CLOSURE_POLICY",
+  });
+  assert.equal(
+    validateSlice2ExternalClosure(value, exactLocalResolvers(value)).commit,
+    value.commit,
+  );
 });
 
 test("fails closed when the immutable audit Git object is unavailable", () => {
@@ -209,6 +310,10 @@ test("rejects stale loop, source, audit, candidate, lifecycle, and unknown keys"
     (v) => (v.source.sha256 = "F".repeat(64)),
     (v) => (v.source.method = "forged"),
     (v) => (v.source.unknown = true),
+    (v) => (v.hostedSource.path = "C:\\outside\\forged.json"),
+    (v) => (v.hostedSource.sha256 = "F".repeat(64)),
+    (v) => (v.hostedSource.method = "forged"),
+    (v) => (v.hostedSource.unknown = true),
     (v) => (v.auditSource.kind = "repository_artifact"),
     (v) => (v.auditSource.path = "evidence/slice1/local-validation.json"),
     (v) => (v.auditSource.sha256 = "F".repeat(64)),
@@ -235,7 +340,7 @@ test("rejects stale loop, source, audit, candidate, lifecycle, and unknown keys"
     const value = structuredClone(anchor);
     mutate(value);
     assert.throws(
-      () => validateSlice2ExternalClosure(value, { anchorOnly: true }),
+      () => validateSlice2ExternalClosure(value, exactLocalResolvers()),
       `mutation ${index} must fail closed`,
     );
   }

@@ -5,7 +5,7 @@ import { resolve, win32 } from "node:path";
 import { isPathWithinRoot } from "./dashboard-source-policy.mjs";
 
 export const SLICE2_EXTERNAL_CLOSURE_SCHEMA =
-  "matchbase.slice2-external-closure/v2";
+  "matchbase.slice2-external-closure/v3";
 export const SLICE2_AUDIT_IDS = Object.freeze([
   "S2-AUDIT-SECURITY-PRIVACY",
   "S2-AUDIT-DATA-MIGRATION",
@@ -21,21 +21,22 @@ export const SLICE2_REPOSITORY_ROOT =
   "C:\\INNOBASE\\MatchBASE\\03_Implementation\\INNOBASE-MatchBASE";
 
 const SHA256 = /^[A-F0-9]{64}$/u;
+const GIT_ID = /^[a-f0-9]{40}$/u;
 const CURRENT = Object.freeze({
   repository: "banihashem/INNOBASE-MatchBASE",
-  commit: "865bc91a55abba2c20b6951a32061c9a448a9285",
-  tree: "f0422bf46e01446116b42205523a2dc7d53609d0",
-  runId: 31884237075,
-  jobId: 95011068050,
+  commit: "0c9b24e0281f195aac240a10d115c570b903c5da",
+  tree: "b734676c6d2a16daa16d1c83648595a11395b605",
+  runId: 31892595424,
+  jobId: 95031000541,
   sourceSha256:
-    "0F7684A613BB7DA68AE1D5557D53E16A31BE29214C88F88C690359DE52185DC7",
+    "6DD97F28A10B29A49E3A83F5FBC092FEC9BA73F9458F166A65CC466523D129A1",
   auditSha256:
-    "62B8625EFC2539D83209BEA8A1E841067C891EF75E585975D2F60D4E8F81BCB5",
-  auditObject: "4a6cd876d5f33d849e3ad34ab94997862e71b33c",
+    "5599BAE3BEB3F9C7A978253FA623A4841389E809247F36DC909142D10E0EC085",
+  auditObject: "4d74050888edc3ac42d49107bef7833a73c28c7d",
   manifestSha256:
-    "B79BE7FF137CA8B7B16606BE08BC3BF9C36A729E3DA24EC90B6D2BEBE8824FF4",
+    "D14B84B858C667CA31E1640FF7505BB24B44E9D86CB4B1367918EA481AD0A9FA",
   aggregateSha256:
-    "F5C31E26F56196BF72EDF0CE7A56F9F0E99D88FB37B98D79F79B3F408BC0AAFE",
+    "5DE817B7BDBA1E4CF421E47C6E2D474F8E6A924B620407684013C37CAD9B767E",
   role2Sha256:
     "551391A0EE4AF9D73248372DB6A3BF9AA9E903C7EC6858883BE5271DD43B5C70",
 });
@@ -107,6 +108,14 @@ const EXPECTED_PREDECESSORS = Object.freeze([
     "ROLE2_REJECTED_TWO_MAJOR_DEFECTS",
   ],
   [
+    31884237075,
+    95011068050,
+    "865bc91a55abba2c20b6951a32061c9a448a9285",
+    "f0422bf46e01446116b42205523a2dc7d53609d0",
+    "success",
+    "PRE_TIMEOUT_CORRECTION_CLOSURE",
+  ],
+  [
     31886484933,
     95016417693,
     "e87f73e3bd740ae3e72e9886884c1570d9cec50a",
@@ -146,6 +155,14 @@ const EXPECTED_PREDECESSORS = Object.freeze([
     "failure",
     "HOSTED_STANDARD_MULTI_SCENARIO_TIMEOUT",
   ],
+]);
+const SUCCESSOR_PREDECESSOR = Object.freeze([
+  CURRENT.runId,
+  CURRENT.jobId,
+  CURRENT.commit,
+  CURRENT.tree,
+  "success",
+  "PRE_SELF_BOUND_CLOSURE_POLICY",
 ]);
 const ACCEPTANCE_IDS = Object.freeze([
   "L2-C1-AT-01",
@@ -212,12 +229,11 @@ export function verifyRegularManagementSource(
   const real = realpathSync(path);
   if (!isPathWithinRoot(root, real))
     throw new Error("Management source escapes its configured root.");
-  const digest = createHash("sha256")
-    .update(readFileSync(real))
-    .digest("hex")
-    .toUpperCase();
+  const bytes = readFileSync(real);
+  const digest = createHash("sha256").update(bytes).digest("hex").toUpperCase();
   if (digest !== source.sha256)
     throw new Error("Management source hash mismatch.");
+  return bytes.toString("utf8");
 }
 
 function regularSource(
@@ -233,8 +249,8 @@ function regularSource(
     !source.method
   )
     throw new Error(`${label} is invalid.`);
-  if (anchorOnly) return;
-  (regularSourceResolver ?? verifyRegularManagementSource)(source, {
+  if (anchorOnly) return null;
+  return (regularSourceResolver ?? verifyRegularManagementSource)(source, {
     managementRoot,
     sourceRoot: SLICE2_MANAGEMENT_ROOT,
     label,
@@ -243,7 +259,7 @@ function regularSource(
 
 function gitAuditText(
   source,
-  { anchorOnly, repositoryRoot, gitAuditResolver },
+  { anchorOnly, repositoryRoot, gitAuditResolver, value },
 ) {
   closed(
     source,
@@ -253,9 +269,9 @@ function gitAuditText(
   if (
     source.kind !== "repository_git_object" ||
     source.path !== "evidence/slice2/local-validation.json" ||
-    source.commit !== CURRENT.commit ||
-    source.gitObject !== CURRENT.auditObject ||
-    source.sha256 !== CURRENT.auditSha256 ||
+    source.commit !== value.commit ||
+    !GIT_ID.test(source.gitObject) ||
+    !SHA256.test(source.sha256) ||
     source.method !==
       "Exact frozen-candidate discipline audit ledger from successor Git object"
   )
@@ -264,8 +280,8 @@ function gitAuditText(
   if (gitAuditResolver)
     return gitAuditResolver(source, {
       repositoryRoot,
-      expectedCommit: CURRENT.commit,
-      expectedGitObject: CURRENT.auditObject,
+      expectedCommit: value.commit,
+      expectedGitObject: source.gitObject,
     });
   const resolved = spawnSync(
     "git",
@@ -288,7 +304,11 @@ function gitAuditText(
   return blob.stdout.toString("utf8");
 }
 
-function validatePredecessors(predecessors) {
+function validatePredecessors(predecessors, value) {
+  const expected =
+    value.commit === CURRENT.commit
+      ? EXPECTED_PREDECESSORS
+      : [...EXPECTED_PREDECESSORS, SUCCESSOR_PREDECESSOR];
   exactArray(
     predecessors?.map((item) =>
       [
@@ -300,7 +320,7 @@ function validatePredecessors(predecessors) {
         item.reason,
       ].join("/"),
     ),
-    EXPECTED_PREDECESSORS.map((item) => item.join("/")),
+    expected.map((item) => item.join("/")),
     "Slice 2 predecessor history",
   );
   for (const predecessor of predecessors)
@@ -308,6 +328,95 @@ function validatePredecessors(predecessors) {
       predecessor,
       ["runId", "jobId", "commit", "tree", "conclusion", "reason"],
       "Slice 2 predecessor",
+    );
+}
+
+function validateReportMarkers(text, value) {
+  if (text === null || text === undefined) return;
+  if (typeof text !== "string")
+    throw new Error(
+      "Slice 2 closure report resolver returned invalid content.",
+    );
+  const markers = [
+    `Commit: \`${value.commit}\``,
+    `Tree: \`${value.tree}\``,
+    `Run: \`${value.runId}\``,
+    `Job: \`${value.jobId}\``,
+    `Candidate manifest SHA-256: \`${value.candidate.manifestSha256}\``,
+    `Candidate aggregate SHA-256: \`${value.candidate.aggregateSha256}\``,
+    `Candidate files: \`${value.candidate.fileCount}\``,
+    `commit \`${value.auditSource.commit}\`, blob \`${value.auditSource.gitObject}\`, SHA-256 \`${value.auditSource.sha256}\``,
+    "`READY_FOR_ROLE2`",
+    "`PENDING_ROLE2_LOOP_2_REAUDIT`",
+  ];
+  if (markers.some((marker) => !text.includes(marker)))
+    throw new Error(
+      "Slice 2 closure report is missing an exact identity marker.",
+    );
+}
+
+function validateHostedObservation(text, value) {
+  if (text === null || text === undefined) return;
+  let observation;
+  try {
+    observation = JSON.parse(text);
+  } catch {
+    throw new Error("Slice 2 hosted observation is invalid JSON.");
+  }
+  closed(
+    observation,
+    [
+      "schemaVersion",
+      "repository",
+      "commit",
+      "tree",
+      "workflow",
+      "runId",
+      "jobId",
+      "conclusion",
+      "observedAt",
+      "runUrl",
+      "jobUrl",
+    ],
+    "Slice 2 hosted observation",
+  );
+  const runUrl = `https://github.com/${value.repository}/actions/runs/${value.runId}`;
+  if (
+    observation.schemaVersion !== "matchbase.github-hosted-observation/v1" ||
+    observation.repository !== value.repository ||
+    observation.commit !== value.commit ||
+    observation.tree !== value.tree ||
+    observation.workflow !== value.workflow ||
+    observation.runId !== value.runId ||
+    observation.jobId !== value.jobId ||
+    observation.conclusion !== value.conclusion ||
+    observation.observedAt !== value.observedAt ||
+    observation.runUrl !== runUrl ||
+    observation.jobUrl !== `${runUrl}/job/${value.jobId}`
+  )
+    throw new Error("Slice 2 hosted observation is stale or substituted.");
+}
+
+function verifyCommitTree(
+  value,
+  { anchorOnly, repositoryRoot, gitCommitResolver },
+) {
+  if (anchorOnly) return;
+  const actual = gitCommitResolver
+    ? gitCommitResolver(value, { repositoryRoot })
+    : spawnSync("git", ["rev-parse", `${value.commit}^{tree}`], {
+        cwd: repositoryRoot,
+        encoding: "utf8",
+      });
+  const tree =
+    typeof actual === "string"
+      ? actual.trim()
+      : actual?.status === 0
+        ? actual.stdout.trim()
+        : "";
+  if (tree !== value.tree)
+    throw new Error(
+      "Slice 2 closure commit/tree identity is unavailable or stale.",
     );
 }
 
@@ -359,6 +468,7 @@ export function validateSlice2ExternalClosure(
     repositoryRoot = SLICE2_REPOSITORY_ROOT,
     regularSourceResolver,
     gitAuditResolver,
+    gitCommitResolver,
   } = {},
 ) {
   closed(
@@ -375,6 +485,7 @@ export function validateSlice2ExternalClosure(
       "conclusion",
       "observedAt",
       "source",
+      "hostedSource",
       "auditSource",
       "predecessors",
       "candidate",
@@ -391,35 +502,52 @@ export function validateSlice2ExternalClosure(
     value.schemaVersion !== SLICE2_EXTERNAL_CLOSURE_SCHEMA ||
     value.closureLoop !== "ROLE2_LOOP_2" ||
     value.repository !== CURRENT.repository ||
-    value.commit !== CURRENT.commit ||
-    value.tree !== CURRENT.tree ||
+    !GIT_ID.test(value.commit) ||
+    !GIT_ID.test(value.tree) ||
     value.workflow !== "ci" ||
-    value.runId !== CURRENT.runId ||
-    value.jobId !== CURRENT.jobId ||
+    !Number.isSafeInteger(value.runId) ||
+    value.runId <= 0 ||
+    !Number.isSafeInteger(value.jobId) ||
+    value.jobId <= 0 ||
     value.conclusion !== "success" ||
     Number.isNaN(Date.parse(value.observedAt))
   )
     throw new Error("Slice 2 external closure identity is invalid or stale.");
   if (
     value.source?.kind !== "management_artifact" ||
-    win32.basename(value.source.path) !==
-      "ROLE3_CORRECTION_VALIDATION_PO_001_SLICE_2_ROLE2_LOOP_2.md" ||
-    value.source.sha256 !== CURRENT.sourceSha256 ||
+    !/^ROLE3_CORRECTION_VALIDATION_PO_001_SLICE_2_ROLE2_LOOP_2_V[23]\.md$/u.test(
+      win32.basename(value.source.path),
+    ) ||
     value.source.method !==
       "Authenticated hosted Slice 2 Role 2 Loop 2 correction closure recorded by Role 3"
   )
     throw new Error("Slice 2 closure source identity is invalid.");
-  regularSource(
+  const reportText = regularSource(
     value.source,
     { anchorOnly, managementRoot, regularSourceResolver },
     "Slice 2 closure source",
+  );
+  if (
+    value.hostedSource?.kind !== "management_artifact" ||
+    !/^ROLE3_GITHUB_HOSTED_OBSERVATION_PO_001_SLICE_2_ROLE2_LOOP_2_V[23]\.json$/u.test(
+      win32.basename(value.hostedSource.path),
+    ) ||
+    value.hostedSource.method !==
+      "Authenticated GitHub Actions hosted observation recorded by Role 3"
+  )
+    throw new Error("Slice 2 hosted source identity is invalid.");
+  const hostedText = regularSource(
+    value.hostedSource,
+    { anchorOnly, managementRoot, regularSourceResolver },
+    "Slice 2 hosted source",
   );
   const auditText = gitAuditText(value.auditSource, {
     anchorOnly,
     repositoryRoot,
     gitAuditResolver,
+    value,
   });
-  validatePredecessors(value.predecessors);
+  validatePredecessors(value.predecessors, value);
   closed(
     value.candidate,
     ["manifestPath", "manifestSha256", "aggregateSha256", "fileCount"],
@@ -428,9 +556,10 @@ export function validateSlice2ExternalClosure(
   if (
     value.candidate.manifestPath !==
       "evidence/slice2/candidate-manifest.json" ||
-    value.candidate.manifestSha256 !== CURRENT.manifestSha256 ||
-    value.candidate.aggregateSha256 !== CURRENT.aggregateSha256 ||
-    value.candidate.fileCount !== 109
+    !SHA256.test(value.candidate.manifestSha256) ||
+    !SHA256.test(value.candidate.aggregateSha256) ||
+    !Number.isSafeInteger(value.candidate.fileCount) ||
+    value.candidate.fileCount <= 0
   )
     throw new Error("Slice 2 candidate identity is invalid.");
   closed(
@@ -508,11 +637,18 @@ export function validateSlice2ExternalClosure(
   )
     throw new Error("Slice 2 closure claims prohibited external mutation.");
   if (!anchorOnly) validateAuditLedger(auditText, value);
+  validateReportMarkers(reportText, value);
+  validateHostedObservation(hostedText, value);
+  verifyCommitTree(value, {
+    anchorOnly,
+    repositoryRoot,
+    gitCommitResolver,
+  });
   return value;
 }
 
 export function slice2HistoricalLocalClosure(value) {
-  validatePredecessors(value.predecessors);
+  validatePredecessors(value.predecessors, value);
   if (Date.parse(HISTORICAL.observedAt) >= Date.parse(value.observedAt))
     throw new Error("Slice 2 historical closure violates temporal causality.");
   return {

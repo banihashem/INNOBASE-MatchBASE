@@ -113,23 +113,6 @@ function verifyHashReference(reference, context) {
     throw new Error(
       `${context.label} escapes repository root: ${reference.path}`,
     );
-  if (!existsSync(evidencePath)) {
-    throw new Error(`${context.label} is missing: ${reference.path}`);
-  }
-  const stat = lstatSync(evidencePath);
-  if (stat.isSymbolicLink() || !stat.isFile())
-    throw new Error(
-      `${context.label} must be a regular file: ${reference.path}`,
-    );
-  const realPath = realpathSync(evidencePath);
-  const insideRepository = withinRoot(realpathSync(context.repoRoot), realPath);
-  const insideManagement =
-    existsSync(context.managementRoot) &&
-    withinRoot(realpathSync(context.managementRoot), realPath);
-  if (!insideRepository && !insideManagement)
-    throw new Error(
-      `${context.label} resolves outside repository and management roots: ${reference.path}`,
-    );
   if (reference.gitCommit !== undefined || reference.gitBlob !== undefined) {
     if (
       windowsAbsolute ||
@@ -158,6 +141,51 @@ function verifyHashReference(reference, context) {
       throw new Error(`${context.label} immutable Git bytes mismatch.`);
     return;
   }
+  if (context.regularSourceResolver && windowsAbsolute) {
+    if (typeof context.regularSourceResolver !== "function")
+      throw new Error("Agent regular source resolver must be callable.");
+    if (!context.regularSourceRoot)
+      throw new Error("Agent regular source resolver requires a fixture root.");
+    const fixturePath = resolve(context.regularSourceResolver(reference));
+    if (!withinRoot(context.regularSourceRoot, fixturePath))
+      throw new Error(`${context.label} resolver escaped its fixture root.`);
+    if (!existsSync(fixturePath))
+      throw new Error(`${context.label} resolver source is missing.`);
+    const fixtureStat = lstatSync(fixturePath);
+    if (fixtureStat.isSymbolicLink() || !fixtureStat.isFile())
+      throw new Error(
+        `${context.label} resolver source must be a regular file.`,
+      );
+    const realFixturePath = realpathSync(fixturePath);
+    if (!withinRoot(realpathSync(context.regularSourceRoot), realFixturePath))
+      throw new Error(
+        `${context.label} resolver source escaped after resolution.`,
+      );
+    const fixtureSha = createHash("sha256")
+      .update(readFileSync(realFixturePath))
+      .digest("hex")
+      .toUpperCase();
+    if (fixtureSha !== reference.sha256)
+      throw new Error(`${context.label} resolver source hash mismatch.`);
+    return;
+  }
+  if (!existsSync(evidencePath)) {
+    throw new Error(`${context.label} is missing: ${reference.path}`);
+  }
+  const stat = lstatSync(evidencePath);
+  if (stat.isSymbolicLink() || !stat.isFile())
+    throw new Error(
+      `${context.label} must be a regular file: ${reference.path}`,
+    );
+  const realPath = realpathSync(evidencePath);
+  const insideRepository = withinRoot(realpathSync(context.repoRoot), realPath);
+  const insideManagement =
+    existsSync(context.managementRoot) &&
+    withinRoot(realpathSync(context.managementRoot), realPath);
+  if (!insideRepository && !insideManagement)
+    throw new Error(
+      `${context.label} resolves outside repository and management roots: ${reference.path}`,
+    );
   const actual = createHash("sha256")
     .update(readFileSync(realPath))
     .digest("hex")
@@ -173,6 +201,8 @@ export function validateAgentRoster(
     anchorOnly = false,
     managementRoot = "C:\\INNOBASE\\MatchBASE\\01_Product_Management",
     managementWindowsRoot = "C:\\INNOBASE\\MatchBASE\\01_Product_Management",
+    regularSourceResolver,
+    regularSourceRoot,
   } = {},
 ) {
   if (roster?.schemaVersion !== 1 || !Array.isArray(roster.agents))
@@ -237,6 +267,8 @@ export function validateAgentRoster(
           anchorOnly,
           managementRoot,
           managementWindowsRoot,
+          regularSourceResolver,
+          regularSourceRoot,
           label: `${agent.id} output`,
           toString: () =>
             `${agent.id}.deliverables[${index}].outputHashes[${hashIndex}]`,
@@ -272,6 +304,8 @@ export function validateAgentRoster(
           anchorOnly,
           managementRoot,
           managementWindowsRoot,
+          regularSourceResolver,
+          regularSourceRoot,
           label: `${agent.id} test evidence`,
         });
       if (test.status === "PASS" && test.evidenceRefs.length === 0)
@@ -296,6 +330,8 @@ export function validateAgentRoster(
         anchorOnly,
         managementRoot,
         managementWindowsRoot,
+        regularSourceResolver,
+        regularSourceRoot,
         label: `${agent.id} audit evidence`,
       });
     if (audit.disposition === "PASS") {

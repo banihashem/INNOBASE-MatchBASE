@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "slice": "SLICE-3",
-  "observedAt": "2026-08-15T22:13:25.741Z",
+  "observedAt": "2026-08-15T22:57:50.987Z",
   "candidateStatus": "LOCAL_REPOSITORY_IMPLEMENTATION_FROZEN_LIVE_BLOCKED",
   "repositoryImplementation": "PASS",
   "liveQualification": "BLOCKED_PREREQUISITE",
@@ -38,8 +38,8 @@
   },
   "candidate": {
     "manifestPath": "evidence/slice3/candidate-manifest.json",
-    "manifestSha256": "2557A2985F49ED8058B0D99D06410994224A63FCE15E6F8335E9F9DF123F0C80",
-    "aggregateSha256": "86F96A2022D13FBF01E21C3C6A6A6E2A5898549BF3C68E6C957BDDB5AECBBAF4",
+    "manifestSha256": "DD3B041BDEDC695D27598526903483A13018A46FF1B593F6A471A3EB89D73ECA",
+    "aggregateSha256": "AFBC13EA182B3E30E2CD4086B0F7DFBAF7A2C76EFC638744080C49FF586CE1EB",
     "fileCount": 88
   },
   "localGate": {
@@ -1117,7 +1117,7 @@
     },
     {
       "id": "integration_critic",
-      "status": "PENDING",
+      "status": "PASS",
       "critical": 0,
       "major": 0,
       "minor": 0
@@ -1125,15 +1125,25 @@
   ],
   "postReview": {
     "schemaVersion": "slice3-post-review.v1",
-    "observedAt": "2026-08-15T22:29:55.697Z",
-    "integrationCritic": {
+    "observedAt": "2026-08-15T22:57:51.151Z",
+    "priorIntegrationCritic": {
       "status": "PASS",
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "reviewedCandidateManifestSha256": "2557A2985F49ED8058B0D99D06410994224A63FCE15E6F8335E9F9DF123F0C80",
-      "reviewedCandidateAggregateSha256": "86F96A2022D13FBF01E21C3C6A6A6E2A5898549BF3C68E6C957BDDB5AECBBAF4"
+      "reviewedCandidateManifestSha256": "10307CF9474F842A238763B8D9ACAD19BDD815CBAF70B5F879A42CD92B7D2603",
+      "reviewedCandidateAggregateSha256": "73FA7D23F62486A60DB85654CC5B2B0761BA878B1528AECBA2815F38E3076089"
     },
+    "hostedPredecessors": [
+      {
+        "runId": 31912344570,
+        "jobId": 95079230396,
+        "commit": "bd144bf178ac29c509379a66e72c8a771a8e44ad",
+        "tree": "6bba37c7812c2bd51861ca9c90bdc39d1cb7d1c8",
+        "conclusion": "failure",
+        "reason": "UBUNTU_AGENT_POLICY_HISTORICAL_WINDOWS_SOURCE_DEREFERENCE"
+      }
+    ],
     "repositoryRelease": "READY_FOR_REPOSITORY_RELEASE",
     "slice3Overall": "BLOCKED_PREREQUISITE"
   },

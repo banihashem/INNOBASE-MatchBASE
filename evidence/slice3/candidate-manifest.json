@@ -11,7 +11,7 @@
     "apps/dashboard/dist/current-snapshot.json"
   ],
   "fileCount": 88,
-  "aggregateSha256": "86F96A2022D13FBF01E21C3C6A6A6E2A5898549BF3C68E6C957BDDB5AECBBAF4",
+  "aggregateSha256": "AFBC13EA182B3E30E2CD4086B0F7DFBAF7A2C76EFC638744080C49FF586CE1EB",
   "files": [
     {
       "path": "apps/web/app/globals.css",
@@ -79,7 +79,7 @@
     },
     {
       "path": "governance/gates.json",
-      "sha256": "94C5C68E7859754A7B4BAD9B6E61AB0A60BCC8089EE2386EF2B3C519EC91D720"
+      "sha256": "620724DF52EA8744A856796B3DE17BB48B1313E887DE6BD5025636EC69DE50F4"
     },
     {
       "path": "governance/slices.json",
@@ -271,7 +271,7 @@
     },
     {
       "path": "scripts/lib/agent-policy.mjs",
-      "sha256": "7549253B32B2B559B16E9C96CC6A3767E4D7E0B54D33DFD3413C22A00D4633F5"
+      "sha256": "CF341A6FE73C7DC428777BD015D8385BFFD265DAE1D4C1ADE57A6FEC72832742"
     },
     {
       "path": "scripts/lib/slice3-dashboard-policy.mjs",
@@ -299,7 +299,7 @@
     },
     {
       "path": "test/agent-policy.test.mjs",
-      "sha256": "A7E7CE5E22998802422A14DDBE1C4E0BB81FC50EE2B6B62A7BF2A10AF6E8B1D7"
+      "sha256": "CE6EB2C40A041221A811D3CA8ABEE9F627BD594C85BDA81A30124583467C165C"
     },
     {
       "path": "test/browser/product-live-reference-path.spec.mjs",

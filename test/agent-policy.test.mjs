@@ -63,6 +63,18 @@ function fixture() {
   };
 }
 
+function useWindowsSource(roster, sha256) {
+  const reference = {
+    path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\evidence.md",
+    sha256,
+  };
+  roster.agents[0].allowedTargets = [reference.path];
+  roster.agents[0].deliverables[0].target = reference.path;
+  roster.agents[0].deliverables[0].outputHashes = [reference];
+  roster.agents[0].testEvidence[0].evidenceRefs = [reference];
+  return reference;
+}
+
 test("validates exact output and test-evidence hashes", () => {
   const value = fixture();
   try {
@@ -230,16 +242,96 @@ test("binds historical agent outputs to immutable Git objects while current path
   const roster = JSON.parse(
     readFileSync(new URL("../governance/agents.json", import.meta.url), "utf8"),
   );
-  assert.doesNotThrow(() => validateAgentRoster(roster, { repoRoot: root }));
-  const mutated = structuredClone(roster);
-  const reference = mutated.agents
-    .flatMap((agent) => agent.deliverables)
-    .flatMap((deliverable) => deliverable.outputHashes)
-    .find((output) => output.gitBlob);
-  assert.ok(reference);
-  reference.gitBlob = "0".repeat(40);
-  assert.throws(
-    () => validateAgentRoster(mutated, { repoRoot: root }),
-    /Git object binding is invalid/,
-  );
+  const source = fixture();
+  try {
+    for (const reference of roster.agents.flatMap((agent) => [
+      ...agent.deliverables.flatMap((deliverable) => deliverable.outputHashes),
+      ...agent.testEvidence.flatMap((item) => item.evidenceRefs),
+      ...agent.independentAudit.evidenceRefs,
+    ])) {
+      if (reference.path.startsWith("C:\\") && reference.gitBlob === undefined)
+        reference.sha256 = source.evidence.sha256;
+    }
+    const options = {
+      repoRoot: root,
+      regularSourceRoot: source.root,
+      regularSourceResolver: () => source.evidence.path,
+    };
+    assert.doesNotThrow(() => validateAgentRoster(roster, options));
+    const mutated = structuredClone(roster);
+    const reference = mutated.agents
+      .flatMap((agent) => agent.deliverables)
+      .flatMap((deliverable) => deliverable.outputHashes)
+      .find((output) => output.gitBlob);
+    assert.ok(reference);
+    reference.gitBlob = "0".repeat(40);
+    assert.throws(
+      () => validateAgentRoster(mutated, options),
+      /Git object binding is invalid/,
+    );
+  } finally {
+    rmSync(source.root, { recursive: true, force: true });
+  }
+});
+
+test("resolves a Windows identity through a contained regular fixture", () => {
+  const value = fixture();
+  try {
+    useWindowsSource(value.roster, value.evidence.sha256);
+    assert.doesNotThrow(() =>
+      validateAgentRoster(value.roster, {
+        repoRoot: value.root,
+        regularSourceRoot: value.root,
+        regularSourceResolver: () => value.evidence.path,
+      }),
+    );
+  } finally {
+    rmSync(value.root, { recursive: true, force: true });
+  }
+});
+
+for (const [name, resolver, pattern] of [
+  ["missing", (value) => join(value.root, "missing.md"), /source is missing/u],
+  ["nonregular", (value) => value.root, /must be a regular file/u],
+  [
+    "traversal",
+    (value) => join(value.root, "..", "outside.md"),
+    /escaped its fixture root/u,
+  ],
+]) {
+  test(`rejects a ${name} injected Windows source`, () => {
+    const value = fixture();
+    try {
+      useWindowsSource(value.roster, value.evidence.sha256);
+      assert.throws(
+        () =>
+          validateAgentRoster(value.roster, {
+            repoRoot: value.root,
+            regularSourceRoot: value.root,
+            regularSourceResolver: () => resolver(value),
+          }),
+        pattern,
+      );
+    } finally {
+      rmSync(value.root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("rejects an injected Windows source hash substitution", () => {
+  const value = fixture();
+  try {
+    useWindowsSource(value.roster, "0".repeat(64));
+    assert.throws(
+      () =>
+        validateAgentRoster(value.roster, {
+          repoRoot: value.root,
+          regularSourceRoot: value.root,
+          regularSourceResolver: () => value.evidence.path,
+        }),
+      /resolver source hash mismatch/u,
+    );
+  } finally {
+    rmSync(value.root, { recursive: true, force: true });
+  }
 });

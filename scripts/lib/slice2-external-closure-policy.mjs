@@ -164,6 +164,14 @@ const SUCCESSOR_PREDECESSOR = Object.freeze([
   "success",
   "PRE_SELF_BOUND_CLOSURE_POLICY",
 ]);
+const V3_POLICY_FAILURE = Object.freeze([
+  31894375236,
+  95035271889,
+  "62b69cd00c3bd24df37c97826299b865819848ef",
+  "c8a11c9e9610779d1377f9b04dba8589db3f0659",
+  "failure",
+  "V3_CLOSURE_HOSTED_CHROME_OVERFLOW_AND_SCARCITY_PHASE_TIMEOUT",
+]);
 const ACCEPTANCE_IDS = Object.freeze([
   "L2-C1-AT-01",
   "L2-C1-AT-02",
@@ -307,8 +315,8 @@ function gitAuditText(
 function validatePredecessors(predecessors, value) {
   const expected =
     value.commit === CURRENT.commit
-      ? EXPECTED_PREDECESSORS
-      : [...EXPECTED_PREDECESSORS, SUCCESSOR_PREDECESSOR];
+      ? [...EXPECTED_PREDECESSORS, V3_POLICY_FAILURE]
+      : [...EXPECTED_PREDECESSORS, SUCCESSOR_PREDECESSOR, V3_POLICY_FAILURE];
   exactArray(
     predecessors?.map((item) =>
       [

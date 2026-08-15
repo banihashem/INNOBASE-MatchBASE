@@ -10,7 +10,7 @@
     "governance/artifact-index.json"
   ],
   "fileCount": 110,
-  "aggregateSha256": "D1EA1A77545602B5A67F288A5570C94E2A5F4514A1FC7804D8A236212138AD7B",
+  "aggregateSha256": "D5BA73173D9570E79B4C7C9879091FD72E14AC2C80BDE8058651AF178030301A",
   "files": [
     {
       "path": "apps/dashboard/src/App.tsx",
@@ -26,7 +26,7 @@
     },
     {
       "path": "apps/dashboard/src/styles.css",
-      "sha256": "3FB7A27C3CE81A20A26A8398CB50DFEB614E3C513F248A1AD8C88AF82303D875"
+      "sha256": "FC85234D6F2425892DEFE075D050345702D3EC6DBBAB0BA74FB2768304BBC9A2"
     },
     {
       "path": "apps/dashboard/src/types.ts",
@@ -154,7 +154,7 @@
     },
     {
       "path": "governance/slice2-external-closure-anchor-v1.json",
-      "sha256": "83B7BC7D6469F1C923353C06C4F7498262B017C4A16912B1C1FEF4EDCEF62C33"
+      "sha256": "C495894CDAA33A44F1022EC56B753AA9EAC5CCD78E5103A35F6CED19BCE2D88B"
     },
     {
       "path": "governance/slice2-rejected-candidate-attestation-v1.json",
@@ -366,7 +366,7 @@
     },
     {
       "path": "scripts/lib/slice2-external-closure-policy.mjs",
-      "sha256": "CAD5394B59F5411F89B73DB4C85A2F3990FFBD682372734C7030FC5E7B751333"
+      "sha256": "737E7CA45949501279A86B3DE1DBEED4386236E6EB856A84BE9729996B512AD8"
     },
     {
       "path": "scripts/lib/slice2-lifecycle-policy.mjs",
@@ -402,11 +402,11 @@
     },
     {
       "path": "test/browser/dashboard.spec.mjs",
-      "sha256": "5E511085CD663C86D5CD36A891CE3FB7F1D0C615E50BD7BEE8D4E64DBC1E50A1"
+      "sha256": "18CB4BAE37EE0DAB6CD2B56DAE5FF5D764A1CE4B8288F288D3E2F50A580F9BBE"
     },
     {
       "path": "test/browser/product-standard-reference-path.spec.mjs",
-      "sha256": "1112B7ED7D5C718EF6F63D7A93F0641B5DD19D5D2D4128CCA21627B97F229682"
+      "sha256": "D5A4738771AEFF826C117C3E5B7764BB0CD269E02708EC8D03F094199216CAC2"
     },
     {
       "path": "test/dashboard-provenance-policy.test.mjs",
@@ -430,7 +430,7 @@
     },
     {
       "path": "test/slice2-external-closure-policy.test.mjs",
-      "sha256": "2AB2843B727E2954DEEA14CDB4D25AE0099275C0586FBAFCAFA6F621021BE74D"
+      "sha256": "07DEED7132CC54871266980CAA3DE65504FEC4692EF88988F1E11A25BFA01558"
     },
     {
       "path": "test/slice2/api/standard-application-postgres.test.mjs",

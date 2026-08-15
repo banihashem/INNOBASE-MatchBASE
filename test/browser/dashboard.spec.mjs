@@ -51,7 +51,15 @@ async function horizontalOverflowState(page) {
           element.id ? `#${element.id}` : "",
           ...[...element.classList].map((name) => `.${name}`),
         ].join("");
-        return `${identity}[${rect.left.toFixed(1)},${rect.right.toFixed(1)}]`;
+        const style = getComputedStyle(element);
+        const text = (element.textContent ?? "")
+          .trim()
+          .replaceAll(/\s+/gu, " ")
+          .slice(0, 96);
+        const parent = element.parentElement
+          ? `${element.parentElement.tagName.toLowerCase()}.${String(element.parentElement.className ?? "")}`
+          : "none";
+        return `${identity}[${rect.left.toFixed(1)},${rect.right.toFixed(1)}] text=${JSON.stringify(text)} parent=${parent} white-space=${style.whiteSpace} overflow-wrap=${style.overflowWrap} word-break=${style.wordBreak}`;
       });
     return {
       body: document.body.scrollWidth,

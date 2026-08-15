@@ -81,17 +81,62 @@ async function createScenarioRequest(
 ) {
   let canonical;
   for (let notAskedCount = 0; notAskedCount <= 12; notAskedCount += 1) {
+    const lifecycleResponses = [];
+    const lifecycleFailures = [];
+    const recordResponse = (response) => {
+      const url = new URL(response.url());
+      if (url.origin === "http://127.0.0.1:3010")
+        lifecycleResponses.push({
+          method: response.request().method(),
+          path: url.pathname,
+          status: response.status(),
+        });
+    };
+    const recordFailure = (request) => {
+      lifecycleFailures.push({
+        method: request.method(),
+        path: new URL(request.url()).pathname,
+        failure: request.failure()?.errorText ?? "unknown",
+      });
+    };
+    page.on("response", recordResponse);
+    page.on("requestfailed", recordFailure);
     const newRequest = page.getByRole("button", {
       name: "New structured request",
     });
-    await newRequest.focus();
-    await page.keyboard.press("Enter");
-    await expect(page.locator("h1.sr-only")).toBeFocused();
     const sourceLanguage = page.getByLabel("Source language");
-    await expect(
-      sourceLanguage,
-      `${phase}: source-language control did not become visible`,
-    ).toBeVisible({ timeout: 20_000 });
+    try {
+      await newRequest.press("Enter");
+      await expect(page.locator("h1.sr-only")).toHaveText(
+        "Standard workspace: intake",
+      );
+      await expect(page.locator("h1.sr-only")).toBeFocused();
+      await expect(
+        sourceLanguage,
+        `${phase}: source-language control did not become visible`,
+      ).toBeVisible({ timeout: 20_000 });
+    } catch (cause) {
+      const state = await page.evaluate(() => ({
+        url: window.location.href,
+        screen: document.querySelector("h1.sr-only")?.textContent?.trim(),
+        heading: document.querySelector("main h1:not(.sr-only), main h2")
+          ?.textContent,
+        sourceLanguageCount: document.querySelectorAll(
+          "#standard-source-language",
+        ).length,
+        newRequestCount: [...document.querySelectorAll("button")].filter(
+          (button) => button.textContent?.trim() === "New structured request",
+        ).length,
+        body: document.body.innerText.slice(0, 1_200),
+      }));
+      throw new Error(
+        `${phase}: intake lifecycle failed ${JSON.stringify({ state, responses: lifecycleResponses.slice(-24), failures: lifecycleFailures.slice(-12) })}`,
+        { cause },
+      );
+    } finally {
+      page.off("response", recordResponse);
+      page.off("requestfailed", recordFailure);
+    }
     await sourceLanguage.selectOption("en");
     await page
       .getByLabel("Source-language input")

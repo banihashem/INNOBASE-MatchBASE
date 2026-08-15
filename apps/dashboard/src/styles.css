@@ -545,6 +545,12 @@ footer {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+footer > span {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 
 .drawer-backdrop {
   position: fixed;

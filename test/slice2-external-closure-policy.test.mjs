@@ -168,7 +168,7 @@ test("accepts one post-hosted successor without a tracked identity edit", () => 
   value.candidate.manifestSha256 = "1".repeat(64);
   value.candidate.aggregateSha256 = "2".repeat(64);
   value.candidate.fileCount = 111;
-  value.predecessors.push({
+  value.predecessors.splice(value.predecessors.length - 1, 0, {
     runId: anchor.runId,
     jobId: anchor.jobId,
     commit: anchor.commit,

@@ -82,6 +82,7 @@ export const STATUS_ORDER: EvidenceState[] = [
   "BLOCKED",
   "STALE",
   "UNKNOWN",
+  "HISTORICAL",
   "ACTIVE",
   "PASS",
 ];

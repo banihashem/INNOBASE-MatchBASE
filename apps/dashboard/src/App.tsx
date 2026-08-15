@@ -125,9 +125,9 @@ export default function App() {
     });
   }, [query, status, view]);
   const counts = useMemo(() => {
-    const all = Object.values(snapshot?.views ?? {}).flatMap(
-      (item) => item.records,
-    );
+    const all = Object.values(snapshot?.views ?? {})
+      .flatMap((item) => item.records)
+      .filter((item) => item.status !== "HISTORICAL");
     return {
       total: all.length,
       pass: all.filter((item) => item.status === "PASS").length,
@@ -199,9 +199,9 @@ export default function App() {
 
         <section className="metrics" aria-label="Snapshot metrics">
           <div className="metric">
-            <span>All records</span>
+            <span>Current records</span>
             <strong>{counts.total}</strong>
-            <small>across 13 control views</small>
+            <small>excluding superseded history</small>
           </div>
           <div className="metric metric--pass">
             <span>Verified</span>

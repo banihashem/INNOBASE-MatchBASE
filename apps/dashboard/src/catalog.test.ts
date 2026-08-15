@@ -47,6 +47,14 @@ describe("dashboard snapshot contract", () => {
     expect(() => normalizeSnapshot(snapshot)).toThrow(/status is invalid/i);
   });
 
+  it("accepts explicitly historical records without treating them as current", () => {
+    const snapshot = fixtureSnapshot();
+    snapshot.views.portfolio.records[0]!.status = "HISTORICAL";
+    expect(normalizeSnapshot(snapshot).views.portfolio.records[0]!.status).toBe(
+      "HISTORICAL",
+    );
+  });
+
   it("rejects weak or relative source references", () => {
     const snapshot = fixtureSnapshot();
     snapshot.views.portfolio.records[0]!.sourceRefs[0]!.path = "relative.md";

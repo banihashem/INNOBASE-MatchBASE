@@ -38,6 +38,14 @@
       "reason": "UBUNTU_200_PERCENT_TEXT_OVERFLOW"
     },
     {
+      "runId": 31873727149,
+      "jobId": 94986166204,
+      "commit": "ac729b1081d4125afe0677b895e93f8f3747c65b",
+      "tree": "8dcb4447c01b6e1879075ba7bde97773308ef5a2",
+      "conclusion": "success",
+      "reason": "PRE_LIFECYCLE_CORRECTION_CLOSURE"
+    },
+    {
       "runId": 31875408324,
       "jobId": 94990271627,
       "commit": "2b9d2686ba02f7f0435a56213d4ee4e274bfc4bb",
@@ -52,6 +60,14 @@
       "tree": "f1f7d9692a89326e26c7a0b2e9406b8934e4b782",
       "conclusion": "failure",
       "reason": "QUOTA_DECISION_CLOCK_BEFORE_ACCOUNT_LOCK"
+    },
+    {
+      "runId": 31878810882,
+      "jobId": 94998368632,
+      "commit": "5e1bf6dc4f7a573220bc74210b65cb9c18401159",
+      "tree": "1c41f4a68c0f8c448a9ad0216003c3dfc494cbc9",
+      "conclusion": "success",
+      "reason": "ROLE2_REJECTED_TWO_MAJOR_DEFECTS"
     }
   ],
   "candidate": {

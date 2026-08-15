@@ -14,6 +14,11 @@ import {
   validateStandardEvidenceGraph,
 } from "../evidence/standard.js";
 import { scoreStandardCandidate } from "../scoring/standard.js";
+import {
+  assertStandardPiiReleaseSafe,
+  sanitizeStandardEvidenceGraphForRelease,
+  type StandardPiiSecurityEvent,
+} from "./standard-privacy.js";
 
 export const STANDARD_SYNTHETIC_WARNING =
   "Synthetic evaluation data only. No live supplier research, restricted-party screening, compliance verification, quotation, or sourcing recommendation has been performed.";
@@ -119,9 +124,10 @@ function projectCitation(
 export interface StandardProjectionContext {
   now: Date;
   volatilityPolicy?: EvidenceVolatilityPolicyV1;
+  onSecurityEvent?: (event: StandardPiiSecurityEvent) => void;
 }
 
-export function projectStandardResult(
+function buildStandardResultProjection(
   graph: StandardEvidenceGraphV1,
   context: StandardProjectionContext,
 ): StandardResultProjectionV1 {
@@ -201,23 +207,39 @@ export function projectStandardResult(
             );
           }),
         )
-        .map((value): StandardEvidencedValueProjectionV1 =>
-          value.kind === "organization_contact"
-            ? {
-                kind: value.kind,
-                channel_type: value.channel_type,
-                value: value.value,
-                organization_domain: value.organization_domain,
-                verification_status: value.verification_status,
-                evidence_ids: [...value.evidence_ids],
-              }
-            : {
-                kind: value.kind,
-                value: value.value,
-                verification_status: value.verification_status,
-                evidence_ids: [...value.evidence_ids],
-              },
-        );
+        .map((value): StandardEvidencedValueProjectionV1 => {
+          if (
+            value.kind === "organization_contact" &&
+            value.channel_type === "organization_web"
+          )
+            return {
+              kind: value.kind,
+              channel_type: value.channel_type,
+              value: value.value,
+              organization_domain: value.organization_domain,
+              organization_web_policy_version:
+                value.organization_web_policy_version,
+              organization_web_purpose: value.organization_web_purpose,
+              organization_web_form: value.organization_web_form,
+              verification_status: value.verification_status,
+              evidence_ids: [...value.evidence_ids],
+            };
+          if (value.kind === "organization_contact")
+            return {
+              kind: value.kind,
+              channel_type: value.channel_type,
+              value: value.value,
+              organization_domain: value.organization_domain,
+              verification_status: value.verification_status,
+              evidence_ids: [...value.evidence_ids],
+            };
+          return {
+            kind: value.kind,
+            value: value.value,
+            verification_status: value.verification_status,
+            evidence_ids: [...value.evidence_ids],
+          };
+        });
       const byKind = (kind: (typeof evidencedValues)[number]["kind"]) =>
         evidencedValues.filter((value) => value.kind === kind);
       const contactDetails = byKind("organization_contact");
@@ -330,6 +352,35 @@ export function projectStandardResult(
   assertStandardProjectionEvidenceLinks(projection, graph);
   assertStandardProjectionSafe(projection);
   return projection;
+}
+
+export interface PreparedStandardRelease {
+  projection: StandardResultProjectionV1;
+  persistence_graph: StandardEvidenceGraphV1;
+  security_events: StandardPiiSecurityEvent[];
+}
+
+export function prepareStandardRelease(
+  graph: StandardEvidenceGraphV1,
+  context: StandardProjectionContext,
+): PreparedStandardRelease {
+  validateStandardEvidenceGraph(graph);
+  const prepared = sanitizeStandardEvidenceGraphForRelease(graph);
+  const projection = buildStandardResultProjection(prepared.graph, context);
+  assertStandardPiiReleaseSafe(projection);
+  prepared.security_events.forEach((event) => context.onSecurityEvent?.(event));
+  return {
+    projection,
+    persistence_graph: prepared.graph,
+    security_events: prepared.security_events,
+  };
+}
+
+export function projectStandardResult(
+  graph: StandardEvidenceGraphV1,
+  context: StandardProjectionContext,
+): StandardResultProjectionV1 {
+  return prepareStandardRelease(graph, context).projection;
 }
 
 export function assertStandardProjectionEvidenceLinks(

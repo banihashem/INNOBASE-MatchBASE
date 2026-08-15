@@ -103,7 +103,7 @@ for (const item of evidence.acceptance)
 const requiredCounts = {
   applicationPostgresql: 8,
   webPostgresql: 28,
-  aiEvidence: 37,
+  aiEvidence: 44,
   browserChrome: 2,
   slice1Criteria: 22,
   slice1Artifacts: 60,

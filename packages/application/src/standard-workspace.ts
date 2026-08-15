@@ -14,6 +14,7 @@ import {
   canonicalizeStandardFieldValue,
   canonicalizeStandardRequiredResult,
   projectStandardResult,
+  prepareStandardRelease,
   requireSyntheticDomainPackActivation,
   resolveSyntheticDomainPack,
   type StandardSyntheticScenario,
@@ -2054,10 +2055,12 @@ export class StandardWorkspaceApplication {
       };
       const scenarioDigest = jsonHash(scenarioMaterial);
       const scenario = scenarios[scenarioDigest[0]! % scenarios.length]!;
-      const graph = buildStandardSyntheticEvidenceGraph(runId, scenario);
-      const projection = projectStandardResult(graph, {
+      const rawGraph = buildStandardSyntheticEvidenceGraph(runId, scenario);
+      const preparedRelease = prepareStandardRelease(rawGraph, {
         now: new Date("2026-08-15T00:00:00Z"),
       });
+      const graph = preparedRelease.persistence_graph;
+      const projection = preparedRelease.projection;
       await inTransaction(this.pool, async (client) => {
         const locked = await client.query<{ state: string }>(
           "SELECT state FROM research_run WHERE run_id=$1 AND account_id=$2 FOR UPDATE",
@@ -2287,6 +2290,15 @@ export class StandardWorkspaceApplication {
                       value: value.value,
                       channel_type: value.channel_type,
                       organization_domain: value.organization_domain,
+                      ...(value.channel_type === "organization_web"
+                        ? {
+                            organization_web_policy_version:
+                              value.organization_web_policy_version,
+                            organization_web_purpose:
+                              value.organization_web_purpose,
+                            organization_web_form: value.organization_web_form,
+                          }
+                        : {}),
                     }
                   : { value: value.value },
               ),
@@ -2357,6 +2369,23 @@ export class StandardWorkspaceApplication {
             eligibleCandidates: eligibleCount,
           }),
         );
+        for (const event of preparedRelease.security_events)
+          await appendAuditEvent(
+            client,
+            this.audit(
+              context,
+              event.event_type,
+              "research_run",
+              runId,
+              "allow",
+              {
+                policyVersion: event.policy_version,
+                fieldPath: event.field_path,
+                action: event.action,
+                findingCount: event.finding_count,
+              },
+            ),
+          );
       });
       return true;
     } catch (error) {
@@ -2754,6 +2783,9 @@ export class StandardWorkspaceApplication {
             "value",
             "channel_type",
             "organization_domain",
+            "organization_web_policy_version",
+            "organization_web_purpose",
+            "organization_web_form",
             "verification_status",
             "evidence_ids",
           ]);

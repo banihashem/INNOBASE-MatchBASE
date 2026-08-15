@@ -158,7 +158,7 @@
           "outputHashes": [
             {
               "path": "apps/dashboard/src/App.tsx",
-              "sha256": "E17224B4462EF5B2AB8AA245670DD63A929BA5E04F8B91E89981B0F5EB8800BF"
+              "sha256": "6531FBEFD29EA693C338DE96B74673CE528877D6B3B57C1C0490DEA1B0770548"
             }
           ]
         },
@@ -815,7 +815,7 @@
           "evidenceRefs": [
             {
               "path": "evidence/slice2/local-validation.json",
-              "sha256": "01C1E6D10822315D08032133E8901152E264856583E89C6C1E37439A1D965A10"
+              "sha256": "62B8625EFC2539D83209BEA8A1E841067C891EF75E585975D2F60D4E8F81BCB5"
             }
           ]
         }
@@ -832,7 +832,7 @@
         "evidenceRefs": [
           {
             "path": "evidence/slice2/local-validation.json",
-            "sha256": "01C1E6D10822315D08032133E8901152E264856583E89C6C1E37439A1D965A10"
+            "sha256": "62B8625EFC2539D83209BEA8A1E841067C891EF75E585975D2F60D4E8F81BCB5"
           }
         ]
       }

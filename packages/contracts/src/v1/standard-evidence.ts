@@ -85,13 +85,49 @@ interface StandardEvidencedValueBaseV1 {
 export type StandardOrganizationContactChannel =
   "role_email" | "organization_phone" | "organization_web";
 
+export const STANDARD_ORGANIZATION_WEB_POLICY_VERSION =
+  "organization-web-channel.v1" as const;
+export const STANDARD_ORGANIZATION_WEB_PURPOSES = [
+  "about",
+  "business",
+  "commercial",
+  "company",
+  "contact",
+  "export",
+  "info",
+  "office",
+  "operations",
+  "orders",
+  "partnerships",
+  "procurement",
+  "purchasing",
+  "rfq",
+  "sales",
+  "sourcing",
+  "support",
+  "tenders",
+] as const;
+export type StandardOrganizationWebPurpose =
+  "organization_root" | (typeof STANDARD_ORGANIZATION_WEB_PURPOSES)[number];
+export type StandardOrganizationWebForm =
+  "root" | "role_path" | "role_subdomain" | "contact_role_path";
+
 export type StandardEvidencedValueV1 = StandardEvidencedValueBaseV1 &
   (
     | {
         kind: "organization_contact";
-        channel_type: StandardOrganizationContactChannel;
+        channel_type: "role_email" | "organization_phone";
         value: string;
         organization_domain: string;
+      }
+    | {
+        kind: "organization_contact";
+        channel_type: "organization_web";
+        value: string;
+        organization_domain: string;
+        organization_web_policy_version: typeof STANDARD_ORGANIZATION_WEB_POLICY_VERSION;
+        organization_web_purpose: StandardOrganizationWebPurpose;
+        organization_web_form: StandardOrganizationWebForm;
       }
     | {
         kind: "plant" | "approval" | "capacity";

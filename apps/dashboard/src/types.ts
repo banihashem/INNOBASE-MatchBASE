@@ -16,7 +16,7 @@ export const VIEW_KEYS = [
 
 export type ViewKey = (typeof VIEW_KEYS)[number];
 export type EvidenceState =
-  "PASS" | "ACTIVE" | "BLOCKED" | "UNKNOWN" | "STALE" | "ERROR";
+  "PASS" | "ACTIVE" | "HISTORICAL" | "BLOCKED" | "UNKNOWN" | "STALE" | "ERROR";
 
 export interface SourceReference {
   sourceId: string;

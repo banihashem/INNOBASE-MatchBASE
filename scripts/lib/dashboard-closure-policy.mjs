@@ -125,7 +125,20 @@ export function validateDashboardClosure(
   )
     throw new Error("Role 2 correction-loop disposition is not decisive.");
 
-  const serialized = JSON.stringify(views);
+  const currentViews = Object.fromEntries(
+    Object.entries(views).map(([key, value]) => [
+      key,
+      {
+        ...value,
+        records: (value.records ?? []).filter(
+          (record) =>
+            record.status !== "HISTORICAL" &&
+            record.facts?.historyDisposition !== "HISTORICAL",
+        ),
+      },
+    ]),
+  );
+  const serialized = JSON.stringify(currentViews);
   if (/LOCAL_UNCOMMITTED|PENDING_SUCCESSOR_RUN/u.test(serialized))
     throw new Error("Dashboard contains a stale pre-hosted closure state.");
 }

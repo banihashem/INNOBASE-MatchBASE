@@ -148,3 +148,24 @@ test("separates transient conditional input from canonical review metadata", () 
   };
   assert.deepEqual(demo.properties.projection_version.enum, [1]);
 });
+
+test("closes organization web contacts over a versioned purpose and form tuple", () => {
+  const bundle = generateContractSchemas() as {
+    schemas: Record<string, unknown>;
+  };
+  const serialized = JSON.stringify({
+    graph: bundle.schemas.standardEvidenceGraph,
+    projection: bundle.schemas.standardResultProjection,
+  });
+  for (const field of [
+    "organization_web_policy_version",
+    "organization_web_purpose",
+    "organization_web_form",
+    "organization-web-channel.v1",
+    "organization_root",
+    "role_path",
+    "role_subdomain",
+    "contact_role_path",
+  ])
+    assert.match(serialized, new RegExp(field.replaceAll(".", "\\."), "u"));
+});

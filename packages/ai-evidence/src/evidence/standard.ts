@@ -3,7 +3,13 @@ import type {
   StandardClaimV1,
   StandardEvidenceGraphV1,
   StandardEvidenceItemV1,
+  StandardOrganizationWebForm,
+  StandardOrganizationWebPurpose,
   StandardVerificationStatus,
+} from "@matchbase/contracts";
+import {
+  STANDARD_ORGANIZATION_WEB_POLICY_VERSION,
+  STANDARD_ORGANIZATION_WEB_PURPOSES,
 } from "@matchbase/contracts";
 import { assertStandardDimensions } from "../scoring/standard.js";
 
@@ -51,27 +57,9 @@ const ROLE_EMAIL_LOCAL_PARTS = new Set([
   "support",
   "tenders",
 ]);
-const ORGANIZATION_WEB_WORDS = new Set([
-  "about",
-  "business",
-  "commercial",
-  "company",
-  "contact",
-  "department",
-  "export",
-  "info",
-  "office",
-  "operations",
-  "orders",
-  "partnerships",
-  "procurement",
-  "purchasing",
-  "rfq",
-  "sales",
-  "sourcing",
-  "support",
-  "tenders",
-]);
+const ORGANIZATION_WEB_PURPOSES = new Set<string>(
+  STANDARD_ORGANIZATION_WEB_PURPOSES,
+);
 
 function assertClosedKeys(
   value: object,
@@ -134,8 +122,8 @@ function containsExactContact(
 
   const continuation =
     channel === "organization_phone"
-      ? /[+0-9]/u
-      : /[A-Za-z0-9.!#$%&'*+/=?^_`{|}~@-]/u;
+      ? /[+\p{N}]/u
+      : /[\p{L}\p{N}.!#$%&'*+/=?^_`{|}~@-]/u;
   let offset = 0;
   while (offset <= extract.length - contact.length) {
     const index = extract.indexOf(contact, offset);
@@ -146,11 +134,50 @@ function containsExactContact(
     if (
       (!before || !continuation.test(before)) &&
       (!after || !continuation.test(after))
-    )
+    ) {
+      if (channel !== "organization_phone") return true;
+      const prefix = extract
+        .slice(Math.max(0, index - 32), index)
+        .normalize("NFKC");
+      const suffix = extract
+        .slice(afterIndex, afterIndex + 32)
+        .normalize("NFKC");
+      if (/(?:tel|telephone|phone)\s*:?\s*$/iu.test(prefix)) {
+        offset = index + 1;
+        continue;
+      }
+      if (
+        /^(?:[\s,;:().-]*(?:ext(?:ension)?\.?|x|#|;ext=)\s*\p{N})/iu.test(
+          suffix,
+        )
+      ) {
+        offset = index + 1;
+        continue;
+      }
       return true;
+    }
     offset = index + 1;
   }
   return false;
+}
+
+function expectedOrganizationWebUrl(
+  domain: string,
+  purpose: StandardOrganizationWebPurpose,
+  form: StandardOrganizationWebForm,
+): string | null {
+  if (form === "root")
+    return purpose === "organization_root" ? `https://${domain}/` : null;
+  if (
+    purpose === "organization_root" ||
+    !ORGANIZATION_WEB_PURPOSES.has(purpose)
+  )
+    return null;
+  if (form === "role_path") return `https://${domain}/${purpose}`;
+  if (form === "role_subdomain") return `https://${purpose}.${domain}/`;
+  if (form === "contact_role_path")
+    return `https://contact.${domain}/${purpose}`;
+  return null;
 }
 
 function validateOrganizationContact(
@@ -160,16 +187,30 @@ function validateOrganizationContact(
   if (value.kind !== "organization_contact") return;
   assertClosedKeys(
     value,
-    [
-      "value_id",
-      "candidate_id",
-      "kind",
-      "channel_type",
-      "value",
-      "organization_domain",
-      "verification_status",
-      "evidence_ids",
-    ],
+    value.channel_type === "organization_web"
+      ? [
+          "value_id",
+          "candidate_id",
+          "kind",
+          "channel_type",
+          "value",
+          "organization_domain",
+          "organization_web_policy_version",
+          "organization_web_purpose",
+          "organization_web_form",
+          "verification_status",
+          "evidence_ids",
+        ]
+      : [
+          "value_id",
+          "candidate_id",
+          "kind",
+          "channel_type",
+          "value",
+          "organization_domain",
+          "verification_status",
+          "evidence_ids",
+        ],
     `Evidenced value ${value.value_id}`,
   );
   if (
@@ -221,27 +262,18 @@ function validateOrganizationContact(
     return;
   }
   if (value.channel_type === "organization_web") {
-    try {
-      const url = new URL(value.value);
-      if (
-        url.protocol !== "https:" ||
-        url.username ||
-        url.password ||
-        (url.hostname !== value.organization_domain &&
-          !url.hostname.endsWith(`.${value.organization_domain}`))
-      )
-        throw new Error();
-      const organizationPrefix =
-        url.hostname === value.organization_domain
-          ? ""
-          : url.hostname.slice(0, -(value.organization_domain.length + 1));
-      const decoded = decodeURIComponent(
-        `${organizationPrefix} ${url.pathname} ${url.search} ${url.hash}`,
-      ).normalize("NFKC");
-      const words = decoded.match(/\p{L}+/gu) ?? [];
-      if (words.some((word) => !ORGANIZATION_WEB_WORDS.has(word.toLowerCase())))
-        throw new Error();
-    } catch {
+    const expected = expectedOrganizationWebUrl(
+      value.organization_domain,
+      value.organization_web_purpose,
+      value.organization_web_form,
+    );
+    if (
+      value.organization_web_policy_version !==
+        STANDARD_ORGANIZATION_WEB_POLICY_VERSION ||
+      expected === null ||
+      value.value !== expected ||
+      value.value.normalize("NFKC") !== value.value
+    ) {
       throw new Error(
         `Evidenced value ${value.value_id} is not an organization web channel.`,
       );

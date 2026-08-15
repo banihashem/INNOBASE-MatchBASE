@@ -3,30 +3,30 @@
   "builds": [
     {
       "id": "BUILD-SLICE-1-LOCAL",
-      "status": "ACTIVE",
-      "summary": "All nine workspace projects and the Next.js 16.3.0 standalone product application build locally; hosted successor is pending.",
+      "status": "SUPERSEDED",
+      "summary": "The local Slice 1 build was historical validation evidence and was superseded by its exact hosted closure.",
       "evidenceRefs": ["evidence/slice1/local-validation.json"]
     },
     {
       "id": "BUILD-SLICE-2-LOCAL",
-      "status": "ACTIVE",
-      "summary": "The Standard workspace builds locally; the frozen full runner, exact successor commit and hosted CI remain pending.",
+      "status": "SUPERSEDED",
+      "summary": "The local Slice 2 build was historical validation evidence and was superseded by its exact hosted closure.",
       "evidenceRefs": ["evidence/slice2/local-validation.json"]
     }
   ],
   "artifacts": [
     {
       "id": "ARTIFACT-SLICE-1-LOCAL-VALIDATION",
-      "status": "ACTIVE",
+      "status": "SUPERSEDED",
       "path": "evidence/slice1/local-validation.json",
       "sha256": "068BB94CCAFBBA5D99033F0DA33FE3E8E85447B97003E0AD3E561C2B1AEAFCB6",
       "evidenceRefs": ["evidence/slice1/local-validation.json"]
     },
     {
       "id": "ARTIFACT-SLICE-2-LOCAL-VALIDATION",
-      "status": "ACTIVE",
+      "status": "SUPERSEDED",
       "path": "evidence/slice2/local-validation.json",
-      "sha256": "01C1E6D10822315D08032133E8901152E264856583E89C6C1E37439A1D965A10",
+      "sha256": "62B8625EFC2539D83209BEA8A1E841067C891EF75E585975D2F60D4E8F81BCB5",
       "evidenceRefs": ["evidence/slice2/local-validation.json"]
     }
   ],
@@ -56,15 +56,25 @@
     },
     {
       "id": "PROV-SLICE-1-LOCAL",
-      "status": "IN_PROGRESS",
-      "source": "local uncommitted Slice 1 candidate derived from cb9ecc2f12c3a4e1cb6bec801c57b88c595c5285",
-      "note": "Local gates pass; commit, push, exact hosted run, and independent final audit remain pending."
+      "status": "SUPERSEDED",
+      "historicalCandidate": {
+        "kind": "LOCAL_UNCOMMITTED",
+        "baseCommit": "cb9ecc2f12c3a4e1cb6bec801c57b88c595c5285",
+        "evidencePath": "evidence/slice1/local-validation.json",
+        "evidenceSha256": "068BB94CCAFBBA5D99033F0DA33FE3E8E85447B97003E0AD3E561C2B1AEAFCB6"
+      }
     },
     {
       "id": "PROV-SLICE-2-LOCAL",
-      "status": "IN_PROGRESS",
-      "source": "local uncommitted Slice 2 candidate derived from 832fa68244eefa0dae4c079b9b94ecaea4b6a872",
-      "note": "Local technical gates pass; frozen full validation, same-byte audits, successor push, hosted CI and Role 2 remain pending."
+      "status": "SUPERSEDED",
+      "historicalCandidate": {
+        "kind": "LOCAL_UNCOMMITTED",
+        "baseCommit": "832fa68244eefa0dae4c079b9b94ecaea4b6a872",
+        "hostedCandidateCommit": "58ed065f8a8e2ac5c60812b13cd4607c1a8d9cb6",
+        "evidencePath": "evidence/slice2/local-validation.json",
+        "evidenceGitObject": "e8672b4e23f76d5c7434019a5e2c542e24facb9d",
+        "evidenceSha256": "A501000DC67ECCDEDC9314D31FE17B0570B331B3FCD30EADDFA95F557D91ACAD"
+      }
     }
   ],
   "deployments": []

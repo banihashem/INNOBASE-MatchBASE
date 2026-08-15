@@ -5,6 +5,7 @@ import { buildArtifactSnapshot } from "../packages/artifact-indexer/dist/src/ind
 import { replaceRegularFileTransactionally } from "./lib/replace-regular-file.mjs";
 import { validateAgentRoster } from "./lib/agent-policy.mjs";
 import { buildSemanticViews } from "./lib/semantic-dashboard.mjs";
+import { validateSlice2HistoricalGitObject } from "./lib/dashboard-provenance-policy.mjs";
 import {
   externalClosurePredecessorSourceRef,
   externalClosureRole2SourceRef,
@@ -170,6 +171,15 @@ const agentsDocument = await indexedDocument(
   "implementation-governance",
   "agents.json",
 );
+const artifactIndexDocument = await indexedDocument(
+  "implementation-governance",
+  "artifact-index.json",
+);
+validateSlice2HistoricalGitObject(
+  artifactIndexDocument.value,
+  slice2ClosureValue,
+  { repoRoot: process.cwd() },
+);
 validateAgentRoster(agentsDocument.value, { repoRoot: process.cwd() });
 const trustedAgentEvidenceRefs = agentsDocument.value.agents.flatMap((agent) =>
   [
@@ -207,10 +217,7 @@ const semantic = buildSemanticViews({
     "registers.json",
   ),
   agents: agentsDocument,
-  artifactIndex: await indexedDocument(
-    "implementation-governance",
-    "artifact-index.json",
-  ),
+  artifactIndex: artifactIndexDocument,
   externalState: await indexedDocument(
     "implementation-governance",
     "external-state.json",

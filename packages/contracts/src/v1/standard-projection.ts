@@ -2,8 +2,11 @@ import type {
   StandardDimensionScoreV1,
   StandardEvidenceConfidence,
   StandardFitBand,
+  StandardOrganizationWebForm,
+  StandardOrganizationWebPurpose,
   StandardVerificationStatus,
 } from "./standard-evidence.js";
+import { STANDARD_ORGANIZATION_WEB_POLICY_VERSION } from "./standard-evidence.js";
 import type { StructuredStandardRequestV1 } from "./structured-request.js";
 
 export const STANDARD_RESULT_PROJECTION_SCHEMA_VERSION =
@@ -56,10 +59,18 @@ export type StandardEvidencedValueProjectionV1 =
     (
       | {
           kind: "organization_contact";
-          channel_type:
-            "role_email" | "organization_phone" | "organization_web";
+          channel_type: "role_email" | "organization_phone";
           value: string;
           organization_domain: string;
+        }
+      | {
+          kind: "organization_contact";
+          channel_type: "organization_web";
+          value: string;
+          organization_domain: string;
+          organization_web_policy_version: typeof STANDARD_ORGANIZATION_WEB_POLICY_VERSION;
+          organization_web_purpose: StandardOrganizationWebPurpose;
+          organization_web_form: StandardOrganizationWebForm;
         }
       | {
           kind: "plant" | "approval" | "capacity";

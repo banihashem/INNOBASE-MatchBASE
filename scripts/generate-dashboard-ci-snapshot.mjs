@@ -7,6 +7,12 @@ import {
 } from "./lib/external-closure-policy.mjs";
 import { validateSlice2ExternalClosure } from "./lib/slice2-external-closure-policy.mjs";
 import { slice2LifecycleProjection } from "./lib/slice2-lifecycle-policy.mjs";
+import { validateSlice2DashboardClosure } from "./lib/slice2-dashboard-closure-policy.mjs";
+import {
+  projectHistoricalLocalRecord,
+  validateDashboardHistoricalProvenance,
+  validateSlice2HistoricalGitObject,
+} from "./lib/dashboard-provenance-policy.mjs";
 import {
   assertExactPredecessorHistory,
   validatePredecessorAttestation,
@@ -79,6 +85,8 @@ const [
   registers,
   agents,
   artifactIndex,
+  slice1LocalEvidence,
+  slice2LocalEvidence,
   predecessorHistory,
   slice2AuditEvidence,
   externalState,
@@ -90,11 +98,16 @@ const [
   document("governance/registers.json"),
   document("governance/agents.json"),
   document("governance/artifact-index.json"),
+  document("evidence/slice1/local-validation.json"),
+  document("evidence/slice2/local-validation.json"),
   document("governance/predecessor-failures-v1.json"),
   document("governance/slice2-rejected-candidate-attestation-v1.json"),
   document("governance/external-state.json"),
 ]);
 slice2AuditEvidence.sourceRef.observedAt = slice2Closure.observedAt;
+validateSlice2HistoricalGitObject(artifactIndex.value, slice2Closure, {
+  repoRoot: REPOSITORY_ROOT,
+});
 const predecessorAttestation = validatePredecessorAttestation(
   predecessorHistory.value,
   {
@@ -268,8 +281,17 @@ const slice2Predecessors = slice2Closure.predecessors.map((item) => ({
   id: `EXT-S2-GITHUB-PREDECESSOR-${item.runId}`,
   title: `Preserved Slice 2 workflow run ${item.runId}`,
   summary: `${item.conclusion}; ${item.reason}.`,
-  status: "ACTIVE",
-  facts: { lifecycleStatus: "PASS", ...item, reasonCode: item.reason },
+  status: "PASS",
+  facts: {
+    lifecycleStatus: "PASS",
+    runId: item.runId,
+    jobId: item.jobId,
+    commit: item.commit,
+    tree: item.tree,
+    conclusion: item.conclusion,
+    reasonCode: item.reason,
+    evidenceIntegrity: "VERIFIED",
+  },
   sourceRefs: [slice2ClosureDocument.sourceRef],
 }));
 const slice2Defects = slice2Closure.role2.defects.map((item) =>
@@ -306,6 +328,18 @@ const slice2Orchestrator = {
     ...slice2Facts,
   },
   sourceRefs: [slice2AuditEvidence.sourceRef],
+};
+
+const historicalProvenanceOptions = {
+  artifactIndexSourceRef: artifactIndex.sourceRef,
+  candidateSourceRefs: {
+    "SLICE-1": slice1LocalEvidence.sourceRef,
+    "SLICE-2": slice2LocalEvidence.sourceRef,
+  },
+  slice1Closure: closure,
+  slice1ClosureSourceRef: closureDocument.sourceRef,
+  slice2Closure,
+  slice2ClosureSourceRef: slice2ClosureDocument.sourceRef,
 };
 
 const collections = {
@@ -428,8 +462,13 @@ const collections = {
       ...(artifactIndex.value.artifacts ?? []),
       ...(artifactIndex.value.sboms ?? []),
       ...(artifactIndex.value.provenance ?? []),
-    ].map((item, index) =>
-      record(item, artifactIndex.sourceRef, "EVIDENCE", index),
+    ].map(
+      (item, index) =>
+        projectHistoricalLocalRecord(
+          item,
+          artifactIndex.value,
+          historicalProvenanceOptions,
+        ) ?? record(item, artifactIndex.sourceRef, "EVIDENCE", index),
     ),
   ],
 };
@@ -450,6 +489,16 @@ const views = Object.fromEntries(
     },
   ]),
 );
+validateDashboardHistoricalProvenance(
+  views,
+  artifactIndex.value,
+  historicalProvenanceOptions,
+);
+validateSlice2DashboardClosure(views, slice2Closure, {
+  closureSourceRef: slice2ClosureDocument.sourceRef,
+  auditSourceRef: slice2AuditEvidence.sourceRef,
+  predecessorSourceRef: slice2ClosureDocument.sourceRef,
+});
 const dashboard = {
   schemaVersion: "1.0",
   generatedAt: closure.observedAt,

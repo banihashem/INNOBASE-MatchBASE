@@ -1,3 +1,8 @@
+import {
+  STANDARD_ORGANIZATION_WEB_POLICY_VERSION,
+  STANDARD_ORGANIZATION_WEB_PURPOSES,
+} from "./v1/standard-evidence.js";
+
 export type JsonSchema = Readonly<Record<string, unknown>>;
 
 const closedObject = (
@@ -614,13 +619,47 @@ export function generateContractSchemas(): JsonSchema {
           value_id: string(),
           candidate_id: string(),
           kind: string(["organization_contact"]),
-          channel_type: string([
-            "role_email",
-            "organization_phone",
-            "organization_web",
-          ]),
+          channel_type: string(["role_email", "organization_phone"]),
           value: string(),
           organization_domain: string(),
+          verification_status: standardVerificationStatus,
+          evidence_ids: strings,
+        },
+      ),
+      closedObject(
+        [
+          "value_id",
+          "candidate_id",
+          "kind",
+          "channel_type",
+          "value",
+          "organization_domain",
+          "organization_web_policy_version",
+          "organization_web_purpose",
+          "organization_web_form",
+          "verification_status",
+          "evidence_ids",
+        ],
+        {
+          value_id: string(),
+          candidate_id: string(),
+          kind: string(["organization_contact"]),
+          channel_type: string(["organization_web"]),
+          value: string(),
+          organization_domain: string(),
+          organization_web_policy_version: string([
+            STANDARD_ORGANIZATION_WEB_POLICY_VERSION,
+          ]),
+          organization_web_purpose: string([
+            "organization_root",
+            ...STANDARD_ORGANIZATION_WEB_PURPOSES,
+          ]),
+          organization_web_form: string([
+            "root",
+            "role_path",
+            "role_subdomain",
+            "contact_role_path",
+          ]),
           verification_status: standardVerificationStatus,
           evidence_ids: strings,
         },
@@ -745,13 +784,43 @@ export function generateContractSchemas(): JsonSchema {
         ],
         {
           kind: string(["organization_contact"]),
-          channel_type: string([
-            "role_email",
-            "organization_phone",
-            "organization_web",
-          ]),
+          channel_type: string(["role_email", "organization_phone"]),
           value: string(),
           organization_domain: string(),
+          verification_status: standardVerificationStatus,
+          evidence_ids: strings,
+        },
+      ),
+      closedObject(
+        [
+          "kind",
+          "channel_type",
+          "value",
+          "organization_domain",
+          "organization_web_policy_version",
+          "organization_web_purpose",
+          "organization_web_form",
+          "verification_status",
+          "evidence_ids",
+        ],
+        {
+          kind: string(["organization_contact"]),
+          channel_type: string(["organization_web"]),
+          value: string(),
+          organization_domain: string(),
+          organization_web_policy_version: string([
+            STANDARD_ORGANIZATION_WEB_POLICY_VERSION,
+          ]),
+          organization_web_purpose: string([
+            "organization_root",
+            ...STANDARD_ORGANIZATION_WEB_PURPOSES,
+          ]),
+          organization_web_form: string([
+            "root",
+            "role_path",
+            "role_subdomain",
+            "contact_role_path",
+          ]),
           verification_status: standardVerificationStatus,
           evidence_ids: strings,
         },

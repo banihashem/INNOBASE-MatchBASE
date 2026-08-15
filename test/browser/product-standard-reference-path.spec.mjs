@@ -2,6 +2,14 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { createHash, randomUUID } from "node:crypto";
 
+const PERSON_RELEASE_CANARIES = [
+  "Jane Mary Smith",
+  "John Q. Public",
+  "Jean Claude Van Damme",
+  "علی رضا حسینی",
+  "السيد أحمد محمد علي",
+];
+
 function stableJson(value) {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   if (value !== null && typeof value === "object") {
@@ -173,6 +181,14 @@ test("completes the signed Standard workspace through the real HTTP, PostgreSQL,
     }),
   ).toBeVisible();
   await expect(page.getByText(/partially ready/u)).toBeVisible();
+  const resultResponse = page.waitForResponse((response) => {
+    const path = new URL(response.url()).pathname;
+    return (
+      response.status() === 200 &&
+      response.request().method() === "GET" &&
+      /\/api\/v1\/runs\/[^/]+\/result$/u.test(path)
+    );
+  });
   await page
     .getByRole("button", { name: "Confirm and start synthetic research" })
     .click();
@@ -182,6 +198,15 @@ test("completes the signed Standard workspace through the real HTTP, PostgreSQL,
   await expect(
     page.getByText("Synthetic evaluation data — not a sourcing result"),
   ).toBeVisible();
+  const releasedResponse = await resultResponse;
+  const releasedBody = await releasedResponse.text();
+  const visibleBody = await page.locator("body").innerText();
+  const browserState = JSON.stringify(await context.storageState());
+  for (const canary of PERSON_RELEASE_CANARIES) {
+    expect(releasedBody).not.toContain(canary);
+    expect(visibleBody).not.toContain(canary);
+    expect(browserState).not.toContain(canary);
+  }
   await expect(
     page.getByText(/not probabilities or guarantees/u),
   ).toBeVisible();

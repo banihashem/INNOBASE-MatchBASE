@@ -1,4 +1,9 @@
 import { slice2LifecycleProjection } from "./slice2-lifecycle-policy.mjs";
+import { validateSlice2DashboardClosure } from "./slice2-dashboard-closure-policy.mjs";
+import {
+  projectHistoricalLocalRecord,
+  validateDashboardHistoricalProvenance,
+} from "./dashboard-provenance-policy.mjs";
 
 const VIEW_KEYS = [
   "portfolio",
@@ -16,7 +21,15 @@ const VIEW_KEYS = [
   "evidence",
 ];
 
-const STATE_ORDER = ["ERROR", "BLOCKED", "STALE", "UNKNOWN", "ACTIVE", "PASS"];
+const STATE_ORDER = [
+  "ERROR",
+  "BLOCKED",
+  "STALE",
+  "UNKNOWN",
+  "HISTORICAL",
+  "ACTIVE",
+  "PASS",
+];
 
 function exactSourceRef(value) {
   return (
@@ -320,6 +333,36 @@ export function buildSemanticViews(documents) {
     documents.slice2Closure?.predecessorSourceRef ?? slice2SourceRef;
   const slice2Lifecycle = slice2LifecycleProjection(slice2Closure);
   const slice2Ready = slice2Lifecycle.ready;
+  const historicalProvenanceOptions =
+    closure && slice2Closure
+      ? {
+          artifactIndexSourceRef: documents.artifactIndex.sourceRef,
+          candidateSourceRefs: {
+            "SLICE-1": matchingReference(
+              {
+                path: "evidence/slice1/local-validation.json",
+                sha256: artifactIndex.artifacts?.find(
+                  ({ id }) => id === "ARTIFACT-SLICE-1-LOCAL-VALIDATION",
+                )?.sha256,
+              },
+              catalog,
+            ),
+            "SLICE-2": matchingReference(
+              {
+                path: "evidence/slice2/local-validation.json",
+                sha256: artifactIndex.artifacts?.find(
+                  ({ id }) => id === "ARTIFACT-SLICE-2-LOCAL-VALIDATION",
+                )?.sha256,
+              },
+              catalog,
+            ),
+          },
+          slice1Closure: closure,
+          slice1ClosureSourceRef: documents.externalClosure.sourceRef,
+          slice2Closure,
+          slice2ClosureSourceRef: slice2SourceRef,
+        }
+      : null;
   const slice2Evidence = slice2Closure
     ? [
         {
@@ -743,13 +786,26 @@ export function buildSemanticViews(documents) {
         ...(artifactIndex.sboms ?? []),
         ...(artifactIndex.provenance ?? []),
       ].map((item, index) =>
-        record(
-          item,
-          documents.artifactIndex.sourceRef,
-          index,
-          "EVIDENCE-ARTIFACT",
-          catalog,
-        ),
+        historicalProvenanceOptions
+          ? (projectHistoricalLocalRecord(
+              item,
+              artifactIndex,
+              historicalProvenanceOptions,
+            ) ??
+            record(
+              item,
+              documents.artifactIndex.sourceRef,
+              index,
+              "EVIDENCE-ARTIFACT",
+              catalog,
+            ))
+          : record(
+              item,
+              documents.artifactIndex.sourceRef,
+              index,
+              "EVIDENCE-ARTIFACT",
+              catalog,
+            ),
       ),
       ...documents.artifactRecords,
       ...(closure
@@ -820,10 +876,23 @@ export function buildSemanticViews(documents) {
     ],
   };
 
-  return Object.fromEntries(
+  const views = Object.fromEntries(
     VIEW_KEYS.map((key) => {
       const records = collections[key];
       return [key, { records, status: aggregate(records) }];
     }),
   );
+  if (historicalProvenanceOptions)
+    validateDashboardHistoricalProvenance(
+      views,
+      artifactIndex,
+      historicalProvenanceOptions,
+    );
+  if (slice2Closure)
+    validateSlice2DashboardClosure(views, slice2Closure, {
+      closureSourceRef: slice2SourceRef,
+      auditSourceRef: slice2AuditSourceRef,
+      predecessorSourceRef: slice2PredecessorSourceRef,
+    });
+  return views;
 }

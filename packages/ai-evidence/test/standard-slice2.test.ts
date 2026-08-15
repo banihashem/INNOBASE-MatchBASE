@@ -24,8 +24,13 @@ import {
 import {
   assertStandardProjectionEvidenceLinks,
   findForbiddenStandardProjectionKeys,
+  prepareStandardRelease,
   projectStandardResult,
 } from "../src/projection/standard.js";
+import {
+  assertStandardPiiReleaseSafe,
+  standardPiiFindings,
+} from "../src/projection/standard-privacy.js";
 import {
   buildStandardSyntheticEvidenceGraph,
   STANDARD_SYNTHETIC_SCENARIO_COUNTS,
@@ -321,10 +326,30 @@ test("permits only closed organization channels with matching value-level eviden
     {
       channel_type: "organization_web",
       value: "https://publisher-01.example.invalid/",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "organization_root",
+      organization_web_form: "root",
     },
     {
       channel_type: "organization_web",
       value: "https://contact.publisher-01.example.invalid/procurement",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "procurement",
+      organization_web_form: "contact_role_path",
+    },
+    {
+      channel_type: "organization_web",
+      value: "https://publisher-01.example.invalid/sales",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "sales",
+      organization_web_form: "role_path",
+    },
+    {
+      channel_type: "organization_web",
+      value: "https://support.publisher-01.example.invalid/",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "support",
+      organization_web_form: "role_subdomain",
     },
   ] as const) {
     const graph = buildStandardSyntheticEvidenceGraph("RUN-ORG", "one");
@@ -359,14 +384,23 @@ test("rejects organization channels without exact value-level provenance", () =>
     {
       channel_type: "organization_web",
       value: "https://publisher-01.example.invalid/procurement",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "procurement",
+      organization_web_form: "role_path",
     },
     {
       channel_type: "organization_web",
       value: "https://arbitrary.publisher-01.example.invalid/contact",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "contact",
+      organization_web_form: "contact_role_path",
     },
     {
       channel_type: "organization_web",
       value: "https://publisher-01.example.invalid/contact?person=Jane-Smith",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "contact",
+      organization_web_form: "role_path",
     },
   ] as const;
   for (const channel of channels) {
@@ -405,6 +439,9 @@ test("rejects evidenced person names embedded in organization web URLs", () => {
       kind: "organization_contact",
       channel_type: "organization_web",
       value: url,
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "contact",
+      organization_web_form: "role_path",
       organization_domain: evidence.publisher_domain,
       verification_status: "claimed",
       evidence_ids: [evidence.evidence_id],
@@ -445,36 +482,54 @@ test("requires exact contact boundaries and closed organization web locations", 
     {
       channel_type: "organization_web",
       value: "https://jane-smith.publisher-01.example.invalid/",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "contact",
+      organization_web_form: "role_subdomain",
       evidenced: "https://jane-smith.publisher-01.example.invalid/",
       message: /organization web channel/iu,
     },
     {
       channel_type: "organization_web",
       value: "https://publisher-01.example.invalid/contact",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "contact",
+      organization_web_form: "role_path",
       evidenced: "xhttps://publisher-01.example.invalid/contact",
       message: /contact evidence/iu,
     },
     {
       channel_type: "organization_web",
       value: "https://arbitrary.publisher-01.example.invalid/contact",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "contact",
+      organization_web_form: "contact_role_path",
       evidenced: "https://arbitrary.publisher-01.example.invalid/contact",
       message: /organization web channel/iu,
     },
     {
       channel_type: "organization_web",
       value: "https://publisher-01.example.invalid/arbitrary-path",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "contact",
+      organization_web_form: "role_path",
       evidenced: "https://publisher-01.example.invalid/arbitrary-path",
       message: /organization web channel/iu,
     },
     {
       channel_type: "organization_web",
       value: "https://publisher-01.example.invalid/contact?arbitrary=value",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "contact",
+      organization_web_form: "role_path",
       evidenced: "https://publisher-01.example.invalid/contact?arbitrary=value",
       message: /organization web channel/iu,
     },
     {
       channel_type: "organization_web",
       value: "https://publisher-01.example.invalid/contact#Jane-Smith",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "contact",
+      organization_web_form: "role_path",
       evidenced: "https://publisher-01.example.invalid/contact#Jane-Smith",
       message: /organization web channel/iu,
     },
@@ -484,16 +539,26 @@ test("requires exact contact boundaries and closed organization web locations", 
     const evidence = graph.evidence[0]!;
     evidence.extract = `${evidence.extract} Contact: ${item.evidenced}`;
     evidence.content_sha256 = standardContentSha256(evidence.extract);
-    graph.evidenced_values[0] = {
+    const common = {
       value_id: graph.evidenced_values[0]!.value_id,
       candidate_id: graph.evidenced_values[0]!.candidate_id,
-      kind: "organization_contact",
-      channel_type: item.channel_type,
+      kind: "organization_contact" as const,
       value: item.value,
       organization_domain: evidence.publisher_domain,
-      verification_status: "claimed",
+      verification_status: "claimed" as const,
       evidence_ids: [evidence.evidence_id],
     };
+    graph.evidenced_values[0] =
+      item.channel_type === "organization_web"
+        ? {
+            ...common,
+            channel_type: item.channel_type,
+            organization_web_policy_version:
+              item.organization_web_policy_version,
+            organization_web_purpose: item.organization_web_purpose,
+            organization_web_form: item.organization_web_form,
+          }
+        : { ...common, channel_type: item.channel_type };
     assert.throws(() => validateStandardEvidenceGraph(graph), item.message);
   }
 });
@@ -519,6 +584,9 @@ test("rejects every RFC 3986 continuation and encoded Unicode web suffix", () =>
       kind: "organization_contact",
       channel_type: "organization_web",
       value: claimed,
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "contact",
+      organization_web_form: "role_path",
       organization_domain: evidence.publisher_domain,
       verification_status: "claimed",
       evidence_ids: [evidence.evidence_id],
@@ -529,4 +597,355 @@ test("rejects every RFC 3986 continuation and encoded Unicode web suffix", () =>
       `continuation ${JSON.stringify(suffix)} must not attest the shorter URL`,
     );
   }
+});
+
+test("rejects arbitrary RFC 3986 components under the versioned organization web grammar", () => {
+  const rejected = [
+    "https://123.publisher-01.example.invalid/123?123=456#789",
+    "https://publisher-01.example.invalid/%31%32%33",
+    "https://publisher-01.example.invalid/%2531%2532%2533",
+    "https://publisher-01.example.invalid/contact?123=456",
+    "https://publisher-01.example.invalid/---",
+    "https://publisher-01.example.invalid/contact;person=Jane-Smith",
+    "https://publisher-01.example.invalid/contact?name=Jane-Smith",
+    "https://publisher-01.example.invalid/contact#Jane-Smith",
+    "https://publisher-01.example.invalid./contact",
+    "https://publisher-01.example.invalid:443/contact",
+    "https://user@publisher-01.example.invalid/contact",
+    "https://127.0.0.1/contact",
+    "https://arbitrary.publisher-01.example.invalid/contact",
+    "https://publisher-01.example.invalid//contact",
+    "https://publisher-01.example.invalid/%63ontact",
+    "https://publisher-01.example.invalid/%2563ontact",
+    "https://publisher-01.example.invalid/cοntact",
+    "https://publisher-01.example.invalid/contact%2Fprocurement",
+    "https://publisher-01.example.invalid/contact%252Fprocurement",
+  ];
+  for (const value of rejected) {
+    const graph = buildStandardSyntheticEvidenceGraph("RUN-WEB-GRAMMAR", "one");
+    const evidence = graph.evidence[0]!;
+    evidence.extract = `${evidence.extract} Contact: ${value}`;
+    evidence.content_sha256 = standardContentSha256(evidence.extract);
+    graph.evidenced_values[0] = {
+      value_id: graph.evidenced_values[0]!.value_id,
+      candidate_id: graph.evidenced_values[0]!.candidate_id,
+      kind: "organization_contact",
+      channel_type: "organization_web",
+      value,
+      organization_domain: evidence.publisher_domain,
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "contact",
+      organization_web_form: "role_path",
+      verification_status: "claimed",
+      evidence_ids: [evidence.evidence_id],
+    };
+    assert.throws(
+      () => validateStandardEvidenceGraph(graph),
+      /organization web channel/iu,
+      value,
+    );
+  }
+});
+
+test("rejects phone prefixes, longer tokens, Unicode digits, and extensions", () => {
+  const claimed = "+971501234567";
+  const rejectedEvidence = [
+    "tel:+971501234567ext123",
+    "phone +971501234567 x99",
+    "+971501234567 extension 99",
+    "+971501234567 ext. 99",
+    "+971501234567 x 99",
+    "+971501234567 #99",
+    "+971501234567;ext=99",
+    "+9715012345678",
+    `+971501234567\u0661`,
+    `\u0661+971501234567`,
+  ];
+  for (const evidenced of rejectedEvidence) {
+    const graph = buildStandardSyntheticEvidenceGraph(
+      "RUN-PHONE-GRAMMAR",
+      "one",
+    );
+    const evidence = graph.evidence[0]!;
+    evidence.extract = `${evidence.extract} Contact: ${evidenced}`;
+    evidence.content_sha256 = standardContentSha256(evidence.extract);
+    graph.evidenced_values[0] = {
+      value_id: graph.evidenced_values[0]!.value_id,
+      candidate_id: graph.evidenced_values[0]!.candidate_id,
+      kind: "organization_contact",
+      channel_type: "organization_phone",
+      value: claimed,
+      organization_domain: evidence.publisher_domain,
+      verification_status: "claimed",
+      evidence_ids: [evidence.evidence_id],
+    };
+    assert.throws(
+      () => validateStandardEvidenceGraph(graph),
+      /contact evidence/iu,
+      evidenced,
+    );
+  }
+});
+
+test("redacts person names adjacent to every valid organization channel before projection and persistence", () => {
+  const people = [
+    "Jane Mary Smith",
+    "John Q. Public",
+    "Jean Claude Van Damme",
+    "Mary-Jane O'Neil",
+    "Dr. Samir A. Haddad",
+    "علی رضا حسینی",
+    "دکتر محمد علی رضایی",
+    "السيد أحمد محمد علي",
+  ];
+  const channels = [
+    {
+      channel_type: "role_email",
+      value: "sales@publisher-01.example.invalid",
+    },
+    { channel_type: "organization_phone", value: "+971501234567" },
+    {
+      channel_type: "organization_web",
+      value: "https://publisher-01.example.invalid/contact",
+      organization_web_policy_version: "organization-web-channel.v1",
+      organization_web_purpose: "contact",
+      organization_web_form: "role_path",
+    },
+  ] as const;
+  for (const person of people) {
+    for (const channel of channels) {
+      const graph = buildStandardSyntheticEvidenceGraph(
+        "RUN-PII-RELEASE",
+        "one",
+      );
+      const evidence = graph.evidence[0]!;
+      evidence.extract = `${evidence.extract} Contact: ${channel.value} ${person}`;
+      evidence.content_sha256 = standardContentSha256(evidence.extract);
+      const common = {
+        value_id: graph.evidenced_values[0]!.value_id,
+        candidate_id: graph.evidenced_values[0]!.candidate_id,
+        kind: "organization_contact" as const,
+        value: channel.value,
+        organization_domain: evidence.publisher_domain,
+        verification_status: "claimed" as const,
+        evidence_ids: [evidence.evidence_id],
+      };
+      graph.evidenced_values[0] =
+        channel.channel_type === "organization_web"
+          ? { ...common, ...channel }
+          : { ...common, channel_type: channel.channel_type };
+      const events: unknown[] = [];
+      const prepared = prepareStandardRelease(graph, {
+        now: NOW,
+        onSecurityEvent: (event) => events.push(event),
+      });
+      assert.equal(JSON.stringify(prepared.projection).includes(person), false);
+      assert.equal(
+        JSON.stringify(prepared.persistence_graph).includes(person),
+        false,
+      );
+      assert.equal(
+        prepared.projection.candidates[0]!.contact_details![0]!.value,
+        channel.value,
+      );
+      assert.match(
+        prepared.projection.candidates[0]!.citations[0]!.extract,
+        /personal data withheld/iu,
+      );
+      assert.doesNotThrow(() =>
+        assertStandardPiiReleaseSafe(prepared.projection),
+      );
+      assert.equal(events.length, 1);
+      assert.equal(JSON.stringify(events).includes(person), false);
+    }
+  }
+});
+
+test("recursively denies personal data outside redactable evidence excerpts", () => {
+  const mutations = [
+    (graph: ReturnType<typeof buildStandardSyntheticEvidenceGraph>) => {
+      graph.candidates[0]!.display_name = "Jane Mary Smith";
+    },
+    (graph: ReturnType<typeof buildStandardSyntheticEvidenceGraph>) => {
+      graph.candidates[0]!.rationale_extended = "John Q. Public";
+    },
+    (graph: ReturnType<typeof buildStandardSyntheticEvidenceGraph>) => {
+      graph.claims[0]!.text = "Mary-Jane O'Neil";
+    },
+    (graph: ReturnType<typeof buildStandardSyntheticEvidenceGraph>) => {
+      graph.evidence[0]!.title = "Dr. Samir A. Haddad";
+    },
+    (graph: ReturnType<typeof buildStandardSyntheticEvidenceGraph>) => {
+      graph.gate_evaluations[0]!.label = "علی رضا حسینی";
+    },
+  ];
+  for (const mutate of mutations) {
+    const graph = buildStandardSyntheticEvidenceGraph("RUN-PII-DENY", "one");
+    mutate(graph);
+    assert.throws(
+      () => projectStandardResult(graph, { now: NOW }),
+      /PII release membrane/iu,
+    );
+  }
+  assert.throws(
+    () =>
+      assertStandardPiiReleaseSafe({
+        nested: [{ value: "sales@example.invalid Jane Mary Smith" }],
+      }),
+    /PII release membrane/iu,
+  );
+});
+
+test("maps compatibility-expanded and controlled person text back to original spans", () => {
+  const values = [
+    "Jane Mary Smiﬁth",
+    "Ｊａｎｅ Ｍａｒｙ Ｓｍｉｔｈ",
+    "Ja\u0301ne Mary Smith",
+    "Jane\u200f Mary Smith",
+    "Jane\u202e Mary Smith",
+    "ﻋﻠﻲ ﺭﺿﺎ ﺣﺴﻴﻨﻲ",
+    "Jаne Mary Smiﬁth",
+    "jane\u200Bmary smith",
+    "jane\u200Cmary smith",
+    "jane\u200Dmary smith",
+    "john\u200Eq public",
+    "jane\u2066mary smith\u2069",
+    "jane\u202Emary smith",
+    "علی\u200Dرضا حسینی",
+    "Ja\u034Fne Mary Smith",
+    "Ja\uFE0Fne Mary Smith",
+    "Ja\u00ADne Mary Smith",
+  ];
+  for (const value of values) {
+    const findings = standardPiiFindings(value);
+    assert.ok(findings.length > 0, value);
+    assert.ok(
+      findings.every(({ start, end }) => start >= 0 && end <= value.length),
+    );
+    assert.throws(
+      () => assertStandardPiiReleaseSafe({ value }),
+      /PII release membrane/iu,
+      value,
+    );
+    const encoded = encodeURIComponent(value);
+    assert.throws(
+      () => assertStandardPiiReleaseSafe({ value: encoded }),
+      /PII release membrane/iu,
+      encoded,
+    );
+  }
+});
+
+test("withholds the complete excerpt for ambiguous controls and denies entity-encoded variants", () => {
+  const controlled = [
+    "jane\u200Bmary smith",
+    "jane\u200Dmary smith",
+    "john\u200Eq public",
+    "علی\u200Dرضا حسینی",
+    "Ja\u034Fne Mary Smith",
+    "Ja\uFE0Fne Mary Smith",
+    "Ja\u00ADne Mary Smith",
+  ];
+  for (const person of controlled) {
+    const graph = buildStandardSyntheticEvidenceGraph("RUN-CONTROL-PII", "one");
+    const evidence = graph.evidence[0]!;
+    evidence.extract = `${evidence.extract} Contact ${person}`;
+    evidence.content_sha256 = standardContentSha256(evidence.extract);
+    const prepared = prepareStandardRelease(graph, { now: NOW });
+    assert.equal(
+      prepared.persistence_graph.evidence[0]!.extract,
+      "[personal data withheld]",
+      person,
+    );
+    assert.equal(JSON.stringify(prepared.projection).includes(person), false);
+  }
+  for (const encoded of [
+    "jane&#8203;mary smith",
+    "jane&#x200D;mary smith",
+    "علی&#8204;رضا حسینی",
+    "jane%26%238203%3Bmary%20smith",
+  ])
+    assert.throws(
+      () => assertStandardPiiReleaseSafe({ value: encoded }),
+      /PII release membrane/iu,
+      encoded,
+    );
+});
+
+test("fails closed on unsupported and mixed Unicode letter scripts", () => {
+  const unsupportedOrMixed = [
+    "jօhn q public",
+    "joհn q public",
+    "jane marу smith",
+    "jane mаry smith",
+    "jane μαry smith",
+    "jane მary smith",
+    "jane מary smith",
+    "jane 張ary smith",
+    "јоһո q public",
+    "jane مary smith",
+  ];
+
+  for (const person of unsupportedOrMixed) {
+    assert.throws(
+      () => assertStandardPiiReleaseSafe({ person }),
+      /PII release membrane rejected personal data/,
+    );
+    assert.throws(
+      () =>
+        assertStandardPiiReleaseSafe({
+          person: encodeURIComponent(person),
+        }),
+      /PII release membrane rejected personal data/,
+    );
+
+    const graph = buildStandardSyntheticEvidenceGraph(
+      "RUN-CLOSED-SCRIPT-PII",
+      "one",
+    );
+    graph.evidence[0]!.extract = person;
+    graph.evidence[0]!.content_sha256 = standardContentSha256(person);
+    const release = prepareStandardRelease(graph, { now: NOW });
+    assert.equal(
+      release.persistence_graph.evidence[0]!.extract,
+      "[personal data withheld]",
+    );
+    assert.equal(JSON.stringify(release.projection).includes(person), false);
+    assert.doesNotThrow(() =>
+      assertStandardPiiReleaseSafe(release.persistence_graph),
+    );
+  }
+
+  const contactGraph = buildStandardSyntheticEvidenceGraph(
+    "RUN-CLOSED-SCRIPT-CONTACT",
+    "one",
+  );
+  const contactEvidence = contactGraph.evidence[0]!;
+  const contactValue = "sales@publisher-01.example.invalid";
+  contactEvidence.extract = `${contactValue} jane marу smith`;
+  contactEvidence.content_sha256 = standardContentSha256(
+    contactEvidence.extract,
+  );
+  contactGraph.evidenced_values[0] = {
+    value_id: contactGraph.evidenced_values[0]!.value_id,
+    candidate_id: contactGraph.evidenced_values[0]!.candidate_id,
+    kind: "organization_contact",
+    channel_type: "role_email",
+    value: contactValue,
+    organization_domain: contactEvidence.publisher_domain,
+    verification_status: "claimed",
+    evidence_ids: [contactEvidence.evidence_id],
+  };
+  assert.throws(
+    () => prepareStandardRelease(contactGraph, { now: NOW }),
+    /exact value-level contact evidence/,
+  );
+
+  assert.doesNotThrow(() =>
+    assertStandardPiiReleaseSafe({
+      latin: "Procurement team",
+      arabic: "فريق المشتريات",
+      fullwidth: "Ｐｒｏｃｕｒｅｍｅｎｔ",
+    }),
+  );
 });

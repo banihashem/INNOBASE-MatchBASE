@@ -2412,17 +2412,106 @@
                   },
                   "channel_type": {
                     "type": "string",
-                    "enum": [
-                      "role_email",
-                      "organization_phone",
-                      "organization_web"
-                    ]
+                    "enum": ["role_email", "organization_phone"]
                   },
                   "value": {
                     "type": "string"
                   },
                   "organization_domain": {
                     "type": "string"
+                  },
+                  "verification_status": {
+                    "type": "string",
+                    "enum": [
+                      "claimed",
+                      "externally_verified",
+                      "inferred",
+                      "stale",
+                      "conflicting",
+                      "unknown"
+                    ]
+                  },
+                  "evidence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "value_id",
+                  "candidate_id",
+                  "kind",
+                  "channel_type",
+                  "value",
+                  "organization_domain",
+                  "organization_web_policy_version",
+                  "organization_web_purpose",
+                  "organization_web_form",
+                  "verification_status",
+                  "evidence_ids"
+                ],
+                "properties": {
+                  "value_id": {
+                    "type": "string"
+                  },
+                  "candidate_id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": ["organization_contact"]
+                  },
+                  "channel_type": {
+                    "type": "string",
+                    "enum": ["organization_web"]
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "organization_domain": {
+                    "type": "string"
+                  },
+                  "organization_web_policy_version": {
+                    "type": "string",
+                    "enum": ["organization-web-channel.v1"]
+                  },
+                  "organization_web_purpose": {
+                    "type": "string",
+                    "enum": [
+                      "organization_root",
+                      "about",
+                      "business",
+                      "commercial",
+                      "company",
+                      "contact",
+                      "export",
+                      "info",
+                      "office",
+                      "operations",
+                      "orders",
+                      "partnerships",
+                      "procurement",
+                      "purchasing",
+                      "rfq",
+                      "sales",
+                      "sourcing",
+                      "support",
+                      "tenders"
+                    ]
+                  },
+                  "organization_web_form": {
+                    "type": "string",
+                    "enum": [
+                      "root",
+                      "role_path",
+                      "role_subdomain",
+                      "contact_role_path"
+                    ]
                   },
                   "verification_status": {
                     "type": "string",
@@ -2981,17 +3070,98 @@
                         },
                         "channel_type": {
                           "type": "string",
-                          "enum": [
-                            "role_email",
-                            "organization_phone",
-                            "organization_web"
-                          ]
+                          "enum": ["role_email", "organization_phone"]
                         },
                         "value": {
                           "type": "string"
                         },
                         "organization_domain": {
                           "type": "string"
+                        },
+                        "verification_status": {
+                          "type": "string",
+                          "enum": [
+                            "claimed",
+                            "externally_verified",
+                            "inferred",
+                            "stale",
+                            "conflicting",
+                            "unknown"
+                          ]
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "channel_type",
+                        "value",
+                        "organization_domain",
+                        "organization_web_policy_version",
+                        "organization_web_purpose",
+                        "organization_web_form",
+                        "verification_status",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["organization_contact"]
+                        },
+                        "channel_type": {
+                          "type": "string",
+                          "enum": ["organization_web"]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "organization_domain": {
+                          "type": "string"
+                        },
+                        "organization_web_policy_version": {
+                          "type": "string",
+                          "enum": ["organization-web-channel.v1"]
+                        },
+                        "organization_web_purpose": {
+                          "type": "string",
+                          "enum": [
+                            "organization_root",
+                            "about",
+                            "business",
+                            "commercial",
+                            "company",
+                            "contact",
+                            "export",
+                            "info",
+                            "office",
+                            "operations",
+                            "orders",
+                            "partnerships",
+                            "procurement",
+                            "purchasing",
+                            "rfq",
+                            "sales",
+                            "sourcing",
+                            "support",
+                            "tenders"
+                          ]
+                        },
+                        "organization_web_form": {
+                          "type": "string",
+                          "enum": [
+                            "root",
+                            "role_path",
+                            "role_subdomain",
+                            "contact_role_path"
+                          ]
                         },
                         "verification_status": {
                           "type": "string",
@@ -3073,17 +3243,98 @@
                         },
                         "channel_type": {
                           "type": "string",
-                          "enum": [
-                            "role_email",
-                            "organization_phone",
-                            "organization_web"
-                          ]
+                          "enum": ["role_email", "organization_phone"]
                         },
                         "value": {
                           "type": "string"
                         },
                         "organization_domain": {
                           "type": "string"
+                        },
+                        "verification_status": {
+                          "type": "string",
+                          "enum": [
+                            "claimed",
+                            "externally_verified",
+                            "inferred",
+                            "stale",
+                            "conflicting",
+                            "unknown"
+                          ]
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "channel_type",
+                        "value",
+                        "organization_domain",
+                        "organization_web_policy_version",
+                        "organization_web_purpose",
+                        "organization_web_form",
+                        "verification_status",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["organization_contact"]
+                        },
+                        "channel_type": {
+                          "type": "string",
+                          "enum": ["organization_web"]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "organization_domain": {
+                          "type": "string"
+                        },
+                        "organization_web_policy_version": {
+                          "type": "string",
+                          "enum": ["organization-web-channel.v1"]
+                        },
+                        "organization_web_purpose": {
+                          "type": "string",
+                          "enum": [
+                            "organization_root",
+                            "about",
+                            "business",
+                            "commercial",
+                            "company",
+                            "contact",
+                            "export",
+                            "info",
+                            "office",
+                            "operations",
+                            "orders",
+                            "partnerships",
+                            "procurement",
+                            "purchasing",
+                            "rfq",
+                            "sales",
+                            "sourcing",
+                            "support",
+                            "tenders"
+                          ]
+                        },
+                        "organization_web_form": {
+                          "type": "string",
+                          "enum": [
+                            "root",
+                            "role_path",
+                            "role_subdomain",
+                            "contact_role_path"
+                          ]
                         },
                         "verification_status": {
                           "type": "string",
@@ -3165,17 +3416,98 @@
                         },
                         "channel_type": {
                           "type": "string",
-                          "enum": [
-                            "role_email",
-                            "organization_phone",
-                            "organization_web"
-                          ]
+                          "enum": ["role_email", "organization_phone"]
                         },
                         "value": {
                           "type": "string"
                         },
                         "organization_domain": {
                           "type": "string"
+                        },
+                        "verification_status": {
+                          "type": "string",
+                          "enum": [
+                            "claimed",
+                            "externally_verified",
+                            "inferred",
+                            "stale",
+                            "conflicting",
+                            "unknown"
+                          ]
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "channel_type",
+                        "value",
+                        "organization_domain",
+                        "organization_web_policy_version",
+                        "organization_web_purpose",
+                        "organization_web_form",
+                        "verification_status",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["organization_contact"]
+                        },
+                        "channel_type": {
+                          "type": "string",
+                          "enum": ["organization_web"]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "organization_domain": {
+                          "type": "string"
+                        },
+                        "organization_web_policy_version": {
+                          "type": "string",
+                          "enum": ["organization-web-channel.v1"]
+                        },
+                        "organization_web_purpose": {
+                          "type": "string",
+                          "enum": [
+                            "organization_root",
+                            "about",
+                            "business",
+                            "commercial",
+                            "company",
+                            "contact",
+                            "export",
+                            "info",
+                            "office",
+                            "operations",
+                            "orders",
+                            "partnerships",
+                            "procurement",
+                            "purchasing",
+                            "rfq",
+                            "sales",
+                            "sourcing",
+                            "support",
+                            "tenders"
+                          ]
+                        },
+                        "organization_web_form": {
+                          "type": "string",
+                          "enum": [
+                            "root",
+                            "role_path",
+                            "role_subdomain",
+                            "contact_role_path"
+                          ]
                         },
                         "verification_status": {
                           "type": "string",
@@ -3257,17 +3589,98 @@
                         },
                         "channel_type": {
                           "type": "string",
-                          "enum": [
-                            "role_email",
-                            "organization_phone",
-                            "organization_web"
-                          ]
+                          "enum": ["role_email", "organization_phone"]
                         },
                         "value": {
                           "type": "string"
                         },
                         "organization_domain": {
                           "type": "string"
+                        },
+                        "verification_status": {
+                          "type": "string",
+                          "enum": [
+                            "claimed",
+                            "externally_verified",
+                            "inferred",
+                            "stale",
+                            "conflicting",
+                            "unknown"
+                          ]
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "channel_type",
+                        "value",
+                        "organization_domain",
+                        "organization_web_policy_version",
+                        "organization_web_purpose",
+                        "organization_web_form",
+                        "verification_status",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["organization_contact"]
+                        },
+                        "channel_type": {
+                          "type": "string",
+                          "enum": ["organization_web"]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "organization_domain": {
+                          "type": "string"
+                        },
+                        "organization_web_policy_version": {
+                          "type": "string",
+                          "enum": ["organization-web-channel.v1"]
+                        },
+                        "organization_web_purpose": {
+                          "type": "string",
+                          "enum": [
+                            "organization_root",
+                            "about",
+                            "business",
+                            "commercial",
+                            "company",
+                            "contact",
+                            "export",
+                            "info",
+                            "office",
+                            "operations",
+                            "orders",
+                            "partnerships",
+                            "procurement",
+                            "purchasing",
+                            "rfq",
+                            "sales",
+                            "sourcing",
+                            "support",
+                            "tenders"
+                          ]
+                        },
+                        "organization_web_form": {
+                          "type": "string",
+                          "enum": [
+                            "root",
+                            "role_path",
+                            "role_subdomain",
+                            "contact_role_path"
+                          ]
                         },
                         "verification_status": {
                           "type": "string",

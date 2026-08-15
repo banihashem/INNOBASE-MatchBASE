@@ -5,7 +5,10 @@ import {
   externalClosureSourceRef,
   validateExternalClosure,
 } from "./lib/external-closure-policy.mjs";
-import { validateSlice2ExternalClosure } from "./lib/slice2-external-closure-policy.mjs";
+import {
+  slice2HistoricalLocalClosure,
+  validateSlice2ExternalClosure,
+} from "./lib/slice2-external-closure-policy.mjs";
 import { slice2LifecycleProjection } from "./lib/slice2-lifecycle-policy.mjs";
 import { validateSlice2DashboardClosure } from "./lib/slice2-dashboard-closure-policy.mjs";
 import {
@@ -105,9 +108,13 @@ const [
   document("governance/external-state.json"),
 ]);
 slice2AuditEvidence.sourceRef.observedAt = slice2Closure.observedAt;
-validateSlice2HistoricalGitObject(artifactIndex.value, slice2Closure, {
-  repoRoot: REPOSITORY_ROOT,
-});
+validateSlice2HistoricalGitObject(
+  artifactIndex.value,
+  slice2HistoricalLocalClosure(slice2Closure),
+  {
+    repoRoot: REPOSITORY_ROOT,
+  },
+);
 const predecessorAttestation = validatePredecessorAttestation(
   predecessorHistory.value,
   {
@@ -338,7 +345,7 @@ const historicalProvenanceOptions = {
   },
   slice1Closure: closure,
   slice1ClosureSourceRef: closureDocument.sourceRef,
-  slice2Closure,
+  slice2Closure: slice2HistoricalLocalClosure(slice2Closure),
   slice2ClosureSourceRef: slice2ClosureDocument.sourceRef,
 };
 
@@ -375,13 +382,18 @@ const collections = {
   requirements: registers.value.requirements.map((item, index) =>
     record(item, registers.sourceRef, "REQ", index),
   ),
-  tests: registers.value.tests.map((item, index) =>
-    Object.hasOwn(slice2Closure.acceptance, item.id)
-      ? slice2Record(item.id, item.title, slice2Closure.acceptance[item.id])
-      : item.id === "S1-AC-022"
-        ? closureTest
-        : record(item, registers.sourceRef, "TEST", index),
-  ),
+  tests: [
+    ...registers.value.tests.map((item, index) =>
+      Object.hasOwn(slice2Closure.acceptance, item.id)
+        ? slice2Record(item.id, item.title, slice2Closure.acceptance[item.id])
+        : item.id === "S1-AC-022"
+          ? closureTest
+          : record(item, registers.sourceRef, "TEST", index),
+    ),
+    ...Object.entries(slice2Closure.acceptance)
+      .filter(([id]) => !registers.value.tests.some((item) => item.id === id))
+      .map(([id, status]) => slice2Record(id, id, status)),
+  ],
   defects: [...defectRecords, ...slice2Defects],
   deployments: [
     ...registers.value.deployments.map((item, index) =>

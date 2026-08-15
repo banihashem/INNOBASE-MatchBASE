@@ -1,24 +1,27 @@
 {
-  "schemaVersion": "matchbase.slice2-external-closure/v1",
+  "schemaVersion": "matchbase.slice2-external-closure/v2",
+  "closureLoop": "ROLE2_LOOP_2",
   "repository": "banihashem/INNOBASE-MatchBASE",
-  "commit": "58ed065f8a8e2ac5c60812b13cd4607c1a8d9cb6",
-  "tree": "358606112d663ac15e2e065557cbbed6f00cae86",
+  "commit": "865bc91a55abba2c20b6951a32061c9a448a9285",
+  "tree": "f0422bf46e01446116b42205523a2dc7d53609d0",
   "workflow": "ci",
-  "runId": 31867699009,
-  "jobId": 94971277544,
+  "runId": 31884237075,
+  "jobId": 95011068050,
   "conclusion": "success",
-  "observedAt": "2026-08-15T10:08:43+04:00",
+  "observedAt": "2026-08-15T12:22:57Z",
   "source": {
     "kind": "management_artifact",
-    "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_IMPLEMENTATION_VALIDATION_PO_001_SLICE_2.md",
-    "sha256": "63A88216B18FF696DCF7084C9D86EABA53523CFAD93400639AF222BEC16A4725",
-    "method": "Authenticated hosted Slice 2 closure recorded by Role 3"
+    "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_CORRECTION_VALIDATION_PO_001_SLICE_2_ROLE2_LOOP_2.md",
+    "sha256": "0F7684A613BB7DA68AE1D5557D53E16A31BE29214C88F88C690359DE52185DC7",
+    "method": "Authenticated hosted Slice 2 Role 2 Loop 2 correction closure recorded by Role 3"
   },
   "auditSource": {
-    "kind": "repository_artifact",
-    "path": "C:\\INNOBASE\\MatchBASE\\03_Implementation\\INNOBASE-MatchBASE\\governance\\slice2-rejected-candidate-attestation-v1.json",
-    "sha256": "152B60D766D6796BD265CA8EE82D3B75203372BA2191ECAF37EC426BCE05FC03",
-    "method": "Immutable rejected-candidate discipline audit attestation"
+    "kind": "repository_git_object",
+    "path": "evidence/slice2/local-validation.json",
+    "sha256": "62B8625EFC2539D83209BEA8A1E841067C891EF75E585975D2F60D4E8F81BCB5",
+    "method": "Exact frozen-candidate discipline audit ledger from successor Git object",
+    "commit": "865bc91a55abba2c20b6951a32061c9a448a9285",
+    "gitObject": "4a6cd876d5f33d849e3ad34ab94997862e71b33c"
   },
   "predecessors": [
     {
@@ -36,6 +39,14 @@
       "tree": "956d8857c6a670b7d98ebb5393d03b1da48f52a1",
       "conclusion": "failure",
       "reason": "UBUNTU_200_PERCENT_TEXT_OVERFLOW"
+    },
+    {
+      "runId": 31867699009,
+      "jobId": 94971277544,
+      "commit": "58ed065f8a8e2ac5c60812b13cd4607c1a8d9cb6",
+      "tree": "358606112d663ac15e2e065557cbbed6f00cae86",
+      "conclusion": "success",
+      "reason": "ROLE2_REJECTED_THREE_MAJOR_DEFECTS"
     },
     {
       "runId": 31873727149,
@@ -72,37 +83,31 @@
   ],
   "candidate": {
     "manifestPath": "evidence/slice2/candidate-manifest.json",
-    "manifestSha256": "F667088C27DE3333F3CB4FF880364C42248B114CE7EF3EFB1A2ECDE773FC30CB",
-    "aggregateSha256": "B7A0F5AF16BDFFFA69FD65483E92CA2E00D420B0A9F64999AF2CD453D4737FE2",
-    "fileCount": 84
+    "manifestSha256": "B79BE7FF137CA8B7B16606BE08BC3BF9C36A729E3DA24EC90B6D2BEBE8824FF4",
+    "aggregateSha256": "F5C31E26F56196BF72EDF0CE7A56F9F0E99D88FB37B98D79F79B3F408BC0AAFE",
+    "fileCount": 109
   },
-  "role3Disposition": "CORRECTION_IN_PROGRESS",
+  "role3Disposition": "READY_FOR_ROLE2",
   "role2": {
-    "status": "FAIL",
-    "disposition": "PENDING_ROLE2_CORRECTION_REAUDIT",
-    "auditPath": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_2.md",
-    "auditSha256": "A2664F01F43C074B9485136687E05DD6180D5A76E4C5CDEB68C9DA1B1E5EB6F6",
+    "status": "PENDING",
+    "disposition": "PENDING_ROLE2_LOOP_2_REAUDIT",
+    "auditPath": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_REAUDIT_PO_001_SLICE_2_LOOP_1.md",
+    "auditSha256": "551391A0EE4AF9D73248372DB6A3BF9AA9E903C7EC6858883BE5271DD43B5C70",
     "critical": 0,
-    "major": 3,
+    "major": 0,
     "minor": 0,
     "defects": [
       {
-        "id": "S2-R2-D001",
+        "id": "S2-R2-L1-D001",
         "severity": "major",
-        "status": "OPEN",
-        "title": "Standard disclosure projection version mismatch"
+        "status": "CORRECTED_PENDING_ROLE2",
+        "title": "Permissive organization-contact disclosure membrane"
       },
       {
-        "id": "S2-R2-D002",
+        "id": "S2-R2-L1-D002",
         "severity": "major",
-        "status": "OPEN",
-        "title": "Natural-person organization contact disclosure bypass"
-      },
-      {
-        "id": "S2-R2-D003",
-        "severity": "major",
-        "status": "OPEN",
-        "title": "Stale post-closure PM dashboard semantics"
+        "status": "CORRECTED_PENDING_ROLE2",
+        "title": "Contradictory active local dashboard provenance"
       }
     ]
   },
@@ -116,15 +121,19 @@
     "S2-AUDIT-INTEGRATION-CRITIC"
   ],
   "gates": {
-    "S2-G2": "REOPENED",
-    "S2-G9": "REOPENED"
+    "S2-G2": "PASS",
+    "S2-G9": "PASS"
   },
   "acceptance": {
-    "S2-AC-016": "FAIL",
-    "S2-AC-023": "FAIL",
-    "S2-AC-030": "FAIL",
-    "S2-AC-032": "FAIL",
-    "S2-AC-033": "REOPENED"
+    "L2-C1-AT-01": "PASS",
+    "L2-C1-AT-02": "PASS",
+    "L2-C1-AT-03": "PASS",
+    "L2-C1-AT-04": "PASS",
+    "L2-C2-AT-01": "PASS",
+    "L2-C2-AT-02": "PASS",
+    "L2-C3-AT-01": "PASS",
+    "L2-C3-AT-02": "PASS",
+    "L2-C3-AT-03": "PASS"
   },
   "externalMutations": {
     "gcp": "NONE",

@@ -60,7 +60,9 @@ const record = (
 
 function views() {
   return {
-    portfolio: { records: [record("SLICE-2", "IN_PROGRESS")] },
+    portfolio: {
+      records: [record("SLICE-2", ready ? "READY_FOR_ROLE2" : "IN_PROGRESS")],
+    },
     gates: {
       records: [
         {
@@ -160,10 +162,8 @@ test("rejects omission, duplicate, reorder, substitution, and stale lifecycle", 
     (value) => (value.deployments.records[1].facts.jobId += 1),
     (value) => (value.deployments.records[1].facts.tree = "f".repeat(40)),
     (value) => (value.deployments.records[1].facts.reasonCode = "FORGED"),
-    (value) => (value.tests.records[0].facts.lifecycleStatus = "PASS"),
-    (value) =>
-      (value.defects.records[0].facts.lifecycleStatus =
-        "CORRECTED_PENDING_ROLE2"),
+    (value) => (value.tests.records[0].facts.lifecycleStatus = "ACTIVE"),
+    (value) => (value.defects.records[0].facts.lifecycleStatus = "OPEN"),
     (value) => (value.evidence.records[0].facts.major = 1),
     (value) =>
       (value.evidence.records[0].sourceRefs[0].sha256 = "F".repeat(64)),
@@ -201,18 +201,6 @@ test("binds every predecessor tuple to the exact anchor document", () => {
 
 function readyFixture() {
   const readyClosure = structuredClone(closure);
-  readyClosure.role3Disposition = "READY_FOR_ROLE2";
-  readyClosure.role2.status = "PENDING";
-  readyClosure.role2.disposition = "PENDING_ROLE2_CORRECTION_REAUDIT";
-  readyClosure.role2.critical = 0;
-  readyClosure.role2.major = 0;
-  readyClosure.role2.minor = 0;
-  for (const defect of readyClosure.role2.defects)
-    defect.status = "CORRECTED_PENDING_ROLE2";
-  readyClosure.gates = { "S2-G2": "PASS", "S2-G9": "PASS" };
-  readyClosure.acceptance = Object.fromEntries(
-    Object.keys(readyClosure.acceptance).map((id) => [id, "PASS"]),
-  );
 
   const value = views();
   for (const view of Object.values(value)) {
@@ -234,7 +222,7 @@ function readyFixture() {
   for (const item of value.defects.records) {
     item.facts.lifecycleStatus = "CORRECTED_PENDING_ROLE2";
     item.facts.role2Status = "PENDING";
-    item.facts.role2Disposition = "PENDING_ROLE2_CORRECTION_REAUDIT";
+    item.facts.role2Disposition = "PENDING_ROLE2_LOOP_2_REAUDIT";
   }
   value.agents.records[0].facts.executionStatus = "COMPLETED";
   value.agents.records[0].facts.auditDisposition = "PASS";
@@ -275,13 +263,13 @@ test("requires terminal audit gate and orchestrator lifecycle on READY closure",
 
 test("keeps local and CI lifecycle derivation identical for pending and READY closures", () => {
   assert.deepEqual(slice2LifecycleProjection(closure), {
-    ready: false,
-    portfolioStatus: "IN_PROGRESS",
-    auditGateStatus: "ACTIVE",
-    orchestratorStatus: "ACTIVE",
-    orchestratorExecutionStatus: "IN_PROGRESS",
-    orchestratorAuditDisposition: "PENDING",
-    orchestratorDeliverableStatus: "IN_PROGRESS",
+    ready: true,
+    portfolioStatus: "READY_FOR_ROLE2",
+    auditGateStatus: "PASS",
+    orchestratorStatus: "PASS",
+    orchestratorExecutionStatus: "COMPLETED",
+    orchestratorAuditDisposition: "PASS",
+    orchestratorDeliverableStatus: "COMPLETED",
   });
   const readyClosure = readyFixture().readyClosure;
   assert.deepEqual(slice2LifecycleProjection(readyClosure), {

@@ -15,6 +15,7 @@ import {
 import {
   slice2AuditSourceRef,
   slice2ClosureSourceRef,
+  slice2HistoricalLocalClosure,
   slice2Role2SourceRef,
   validateSlice2ExternalClosure,
 } from "./lib/slice2-external-closure-policy.mjs";
@@ -177,7 +178,7 @@ const artifactIndexDocument = await indexedDocument(
 );
 validateSlice2HistoricalGitObject(
   artifactIndexDocument.value,
-  slice2ClosureValue,
+  slice2HistoricalLocalClosure(slice2ClosureValue),
   { repoRoot: process.cwd() },
 );
 validateAgentRoster(agentsDocument.value, { repoRoot: process.cwd() });

@@ -8,6 +8,7 @@ import {
   validateHistoricalProvenanceIndex,
   validateSlice2HistoricalGitObject,
 } from "../scripts/lib/dashboard-provenance-policy.mjs";
+import { slice2HistoricalLocalClosure } from "../scripts/lib/slice2-external-closure-policy.mjs";
 
 const sha = (letter) => letter.repeat(64);
 const source = (sourceId, path, digest) => ({
@@ -264,8 +265,9 @@ test("binds Slice 2 history to immutable Git bytes with temporal causality", () 
   const closure = JSON.parse(
     readFileSync("governance/slice2-external-closure-anchor-v1.json", "utf8"),
   );
+  const historicalClosure = slice2HistoricalLocalClosure(closure);
   assert.doesNotThrow(() =>
-    validateSlice2HistoricalGitObject(index, closure, {
+    validateSlice2HistoricalGitObject(index, historicalClosure, {
       repoRoot: process.cwd(),
     }),
   );
@@ -291,14 +293,14 @@ test("binds Slice 2 history to immutable Git bytes with temporal causality", () 
     mutate(candidate, value);
     assert.throws(
       () =>
-        validateSlice2HistoricalGitObject(value, closure, {
+        validateSlice2HistoricalGitObject(value, historicalClosure, {
           repoRoot: process.cwd(),
         }),
       `Git binding mutation ${position} must fail closed`,
     );
   }
 
-  const earlyClosure = structuredClone(closure);
+  const earlyClosure = structuredClone(historicalClosure);
   earlyClosure.observedAt = "2026-08-15T08:00:00+04:00";
   assert.throws(
     () =>

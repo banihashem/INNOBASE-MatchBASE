@@ -4,6 +4,7 @@ import {
   projectHistoricalLocalRecord,
   validateDashboardHistoricalProvenance,
 } from "./dashboard-provenance-policy.mjs";
+import { slice2HistoricalLocalClosure } from "./slice2-external-closure-policy.mjs";
 
 const VIEW_KEYS = [
   "portfolio",
@@ -332,6 +333,9 @@ export function buildSemanticViews(documents) {
   const slice2PredecessorSourceRef =
     documents.slice2Closure?.predecessorSourceRef ?? slice2SourceRef;
   const slice2Lifecycle = slice2LifecycleProjection(slice2Closure);
+  const slice2HistoricalClosure = slice2Closure
+    ? slice2HistoricalLocalClosure(slice2Closure)
+    : null;
   const slice2Ready = slice2Lifecycle.ready;
   const historicalProvenanceOptions =
     closure && slice2Closure
@@ -359,8 +363,8 @@ export function buildSemanticViews(documents) {
           },
           slice1Closure: closure,
           slice1ClosureSourceRef: documents.externalClosure.sourceRef,
-          slice2Closure,
-          slice2ClosureSourceRef: slice2SourceRef,
+          slice2Closure: slice2HistoricalClosure,
+          slice2ClosureSourceRef: slice2PredecessorSourceRef,
         }
       : null;
   const slice2Evidence = slice2Closure
@@ -651,6 +655,19 @@ export function buildSemanticViews(documents) {
           catalog,
         ),
       ),
+      ...Object.entries(slice2Closure?.acceptance ?? {})
+        .filter(
+          ([id]) => !(registers.tests ?? []).some((item) => item.id === id),
+        )
+        .map(([id, status], index) =>
+          record(
+            slice2Acceptance({ id, title: id, status }),
+            slice2SourceRef,
+            index,
+            "S2-LOOP2-TEST",
+            catalog,
+          ),
+        ),
       ...(documents.artifactRecordsByView.tests ?? []),
     ],
     defects: [

@@ -114,6 +114,14 @@ const EXPECTED_PREDECESSORS = Object.freeze([
     "failure",
     "ANCHOR_ONLY_CI_AUDIT_SOURCE_PARITY",
   ],
+  [
+    31888215566,
+    95020492397,
+    "71df2efe5aef78f3e7f8b2a9b784b77c4d00473f",
+    "cb934371ff505da432c15891fab32700e89615e9",
+    "failure",
+    "POSIX_HOSTED_CLOSURE_TEST_WINDOWS_SOURCE_PATH",
+  ],
 ]);
 const ACCEPTANCE_IDS = Object.freeze([
   "L2-C1-AT-01",
@@ -150,7 +158,49 @@ function exactArray(actual, expected, label) {
     );
 }
 
-function regularSource(source, { anchorOnly, managementRoot }, label) {
+export function verifyRegularManagementSource(
+  source,
+  {
+    managementRoot = SLICE2_MANAGEMENT_ROOT,
+    sourceRoot = SLICE2_MANAGEMENT_ROOT,
+  } = {},
+) {
+  if (
+    !source ||
+    typeof source !== "object" ||
+    !win32.isAbsolute(source.path) ||
+    !SHA256.test(source.sha256)
+  )
+    throw new Error("Management source identity is invalid.");
+  const relative = win32.relative(sourceRoot, source.path);
+  if (
+    relative.length === 0 ||
+    win32.isAbsolute(relative) ||
+    relative === ".." ||
+    relative.startsWith(`..${win32.sep}`)
+  )
+    throw new Error("Management source escapes its declared Windows root.");
+  const root = realpathSync(managementRoot);
+  const path = resolve(managementRoot, ...relative.split(/[\\/]+/u));
+  const stat = lstatSync(path);
+  if (stat.isSymbolicLink() || !stat.isFile())
+    throw new Error("Management source must be a regular file.");
+  const real = realpathSync(path);
+  if (!isPathWithinRoot(root, real))
+    throw new Error("Management source escapes its configured root.");
+  const digest = createHash("sha256")
+    .update(readFileSync(real))
+    .digest("hex")
+    .toUpperCase();
+  if (digest !== source.sha256)
+    throw new Error("Management source hash mismatch.");
+}
+
+function regularSource(
+  source,
+  { anchorOnly, managementRoot, regularSourceResolver },
+  label,
+) {
   closed(source, ["kind", "path", "sha256", "method"], label);
   if (
     source.kind !== "management_artifact" ||
@@ -160,19 +210,11 @@ function regularSource(source, { anchorOnly, managementRoot }, label) {
   )
     throw new Error(`${label} is invalid.`);
   if (anchorOnly) return;
-  const root = realpathSync(managementRoot);
-  const path = resolve(source.path);
-  const stat = lstatSync(path);
-  if (stat.isSymbolicLink() || !stat.isFile())
-    throw new Error(`${label} must be a regular file.`);
-  const real = realpathSync(path);
-  if (!isPathWithinRoot(root, real))
-    throw new Error(`${label} escapes its configured root.`);
-  const digest = createHash("sha256")
-    .update(readFileSync(real))
-    .digest("hex")
-    .toUpperCase();
-  if (digest !== source.sha256) throw new Error(`${label} hash mismatch.`);
+  (regularSourceResolver ?? verifyRegularManagementSource)(source, {
+    managementRoot,
+    sourceRoot: SLICE2_MANAGEMENT_ROOT,
+    label,
+  });
 }
 
 function gitAuditText(source, { anchorOnly, repositoryRoot }) {
@@ -282,6 +324,7 @@ export function validateSlice2ExternalClosure(
     anchorOnly = false,
     managementRoot = SLICE2_MANAGEMENT_ROOT,
     repositoryRoot = SLICE2_REPOSITORY_ROOT,
+    regularSourceResolver,
   } = {},
 ) {
   closed(
@@ -334,7 +377,7 @@ export function validateSlice2ExternalClosure(
     throw new Error("Slice 2 closure source identity is invalid.");
   regularSource(
     value.source,
-    { anchorOnly, managementRoot },
+    { anchorOnly, managementRoot, regularSourceResolver },
     "Slice 2 closure source",
   );
   const auditText = gitAuditText(value.auditSource, {
@@ -406,7 +449,7 @@ export function validateSlice2ExternalClosure(
       sha256: value.role2.auditSha256,
       method: "Independent Slice 2 Role 2 Loop 1 re-audit",
     },
-    { anchorOnly, managementRoot },
+    { anchorOnly, managementRoot, regularSourceResolver },
     "Slice 2 Role 2 source",
   );
   exactArray(value.audits, SLICE2_AUDIT_IDS, "Slice 2 audit identities");

@@ -1,10 +1,20 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   slice2DashboardAuditSourceRef,
   slice2HistoricalLocalClosure,
   validateSlice2ExternalClosure,
+  verifyRegularManagementSource,
 } from "../scripts/lib/slice2-external-closure-policy.mjs";
 
 const anchor = JSON.parse(
@@ -12,10 +22,24 @@ const anchor = JSON.parse(
 );
 
 test("accepts the exact v2 Loop 2 anchor locally and in ANCHOR_ONLY_CI", () => {
+  const verified = [];
   assert.equal(
-    validateSlice2ExternalClosure(structuredClone(anchor)).role2.status,
+    validateSlice2ExternalClosure(structuredClone(anchor), {
+      regularSourceResolver(source, { sourceRoot }) {
+        assert.match(
+          source.path,
+          /^C:\\INNOBASE\\MatchBASE\\01_Product_Management\\/u,
+        );
+        assert.equal(
+          sourceRoot,
+          "C:\\INNOBASE\\MatchBASE\\01_Product_Management",
+        );
+        verified.push(source.path);
+      },
+    }).role2.status,
     "PENDING",
   );
+  assert.deepEqual(verified, [anchor.source.path, anchor.role2.auditPath]);
   assert.equal(
     validateSlice2ExternalClosure(structuredClone(anchor), { anchorOnly: true })
       .role3Disposition,
@@ -35,6 +59,54 @@ test("accepts the exact v2 Loop 2 anchor locally and in ANCHOR_ONLY_CI", () => {
     },
     role2: { status: "FAIL" },
   });
+});
+
+test("resolves Windows source identity inside a platform-neutral fixture root", () => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "matchbase-s2-source-"));
+  try {
+    mkdirSync(join(fixtureRoot, "reports"));
+    const content = Buffer.from("immutable closure evidence\n", "utf8");
+    writeFileSync(join(fixtureRoot, "reports", "closure.md"), content);
+    const source = {
+      path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\reports\\closure.md",
+      sha256: createHash("sha256").update(content).digest("hex").toUpperCase(),
+    };
+    assert.doesNotThrow(() =>
+      verifyRegularManagementSource(source, { managementRoot: fixtureRoot }),
+    );
+    assert.throws(() =>
+      verifyRegularManagementSource(
+        { ...source, path: "/tmp/reports/closure.md" },
+        { managementRoot: fixtureRoot },
+      ),
+    );
+    assert.throws(() =>
+      verifyRegularManagementSource(
+        {
+          ...source,
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\..\\outside.md",
+        },
+        { managementRoot: fixtureRoot },
+      ),
+    );
+    assert.throws(() =>
+      verifyRegularManagementSource(
+        {
+          ...source,
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\reports",
+        },
+        { managementRoot: fixtureRoot },
+      ),
+    );
+    assert.throws(() =>
+      verifyRegularManagementSource(
+        { ...source, sha256: "F".repeat(64) },
+        { managementRoot: fixtureRoot },
+      ),
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
 });
 
 test("derives one fail-closed audit source policy for local and CI snapshots", () => {

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "slice": "SLICE-2",
   "observedAt": "2026-08-15T00:00:00+04:00",
-  "candidateStatus": "LOCAL_UNCOMMITTED_FROZEN",
+  "candidateStatus": "LOCAL_CORRECTION_UNCOMMITTED_FROZEN",
   "environment": {
     "scope": "LOCAL_SYNTHETIC_ONLY",
     "postgresql": "18",
@@ -17,11 +17,21 @@
     "gcp": "BLOCKED",
     "cloudflare": "BLOCKED",
     "deployment": "NOT_STARTED",
-    "hostedCi": "PENDING_SUCCESSOR_RUN"
+    "hostedCi": "FAILED_PREDECESSOR_PRESERVED_SUCCESSOR_PENDING"
   },
+  "hostedPredecessors": [
+    {
+      "runId": 31866040582,
+      "jobId": 94967154804,
+      "commit": "e81fb9894f3ce1e37c4ec03989987f8d7b920671",
+      "tree": "1f8bcb7e153497d875b14364cfb1a870fe5cff87",
+      "conclusion": "failure",
+      "reason": "CLEAN_CHECKOUT_CHANGED_SET_RECONCILIATION"
+    }
+  ],
   "localGate": {
     "status": "PASS",
-    "basis": "Exact pnpm slice2:validate:local completed on the frozen local candidate in 314.5 seconds with a disposable PostgreSQL 18.1 lifecycle and cleanup.",
+    "basis": "Exact pnpm slice2:validate:local completed on the frozen local correction candidate in 320.7 seconds with a disposable PostgreSQL 18.1 lifecycle and cleanup.",
     "testCounts": {
       "applicationPostgresql": 7,
       "webPostgresql": 28,
@@ -33,10 +43,10 @@
       "dataPostgresql": 18,
       "applicationWorker": 6,
       "web": 28,
-      "rootPolicy": 100,
+      "rootPolicy": 101,
       "standaloneRepeat": 1,
       "browserTotal": 17,
-      "runtimeArtifactsScanned": 5278,
+      "runtimeArtifactsScanned": 5314,
       "failed": 0,
       "skipped": 0
     }
@@ -45,7 +55,7 @@
     {
       "id": "S2-EVIDENCE-VALIDATOR",
       "path": "scripts/validate-slice2-evidence.mjs",
-      "sha256": "D7BDBDDE54AE3C701C9FC646DF259C317FB4EA3C2F76BF570A22C3A43061B545"
+      "sha256": "A55E3C887597AFAA38028A1FB2082753C8887E03C9F7F51742A90BDF47ACA84D"
     },
     {
       "id": "S2-LOCAL-RUNNER",
@@ -120,8 +130,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
-      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "candidateManifestSha256": "887837BBD2A77C5495CBEFE7623A2CC15486F9833D19E7B0BF5721CEE202A950",
+      "candidateAggregateSha256": "F593D01D185CC1A68E2E01F8EB8010FF8FBB962BF4527F5DF26CC5944B877AE9",
       "method": "Independent frozen-byte authorization, privacy, cursor, cache and denial audit"
     },
     {
@@ -130,8 +140,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
-      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "candidateManifestSha256": "887837BBD2A77C5495CBEFE7623A2CC15486F9833D19E7B0BF5721CEE202A950",
+      "candidateAggregateSha256": "F593D01D185CC1A68E2E01F8EB8010FF8FBB962BF4527F5DF26CC5944B877AE9",
       "method": "Independent PostgreSQL 18 migration, rollback, quota, lease and immutability audit"
     },
     {
@@ -140,8 +150,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
-      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "candidateManifestSha256": "887837BBD2A77C5495CBEFE7623A2CC15486F9833D19E7B0BF5721CEE202A950",
+      "candidateAggregateSha256": "F593D01D185CC1A68E2E01F8EB8010FF8FBB962BF4527F5DF26CC5944B877AE9",
       "method": "Independent deterministic scoring, evidence, citation, projection and no-network audit"
     },
     {
@@ -150,8 +160,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
-      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "candidateManifestSha256": "887837BBD2A77C5495CBEFE7623A2CC15486F9833D19E7B0BF5721CEE202A950",
+      "candidateAggregateSha256": "F593D01D185CC1A68E2E01F8EB8010FF8FBB962BF4527F5DF26CC5944B877AE9",
       "method": "Independent HTTP matrix and real Chrome desktop/mobile/accessibility audit"
     },
     {
@@ -160,8 +170,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
-      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "candidateManifestSha256": "887837BBD2A77C5495CBEFE7623A2CC15486F9833D19E7B0BF5721CEE202A950",
+      "candidateAggregateSha256": "F593D01D185CC1A68E2E01F8EB8010FF8FBB962BF4527F5DF26CC5944B877AE9",
       "method": "Independent worker, concurrency, replay, readiness and cost-reconciliation audit"
     },
     {
@@ -170,8 +180,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
-      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "candidateManifestSha256": "887837BBD2A77C5495CBEFE7623A2CC15486F9833D19E7B0BF5721CEE202A950",
+      "candidateAggregateSha256": "F593D01D185CC1A68E2E01F8EB8010FF8FBB962BF4527F5DF26CC5944B877AE9",
       "method": "Independent predecessor-preservation and local repository-boundary audit; hosted closure excluded"
     },
     {
@@ -180,8 +190,8 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "candidateManifestSha256": "F4207D61DAFA9BB9A3C9F5770063B04CF6265A08081C6BA0260D07D564F4CBE6",
-      "candidateAggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+      "candidateManifestSha256": "887837BBD2A77C5495CBEFE7623A2CC15486F9833D19E7B0BF5721CEE202A950",
+      "candidateAggregateSha256": "F593D01D185CC1A68E2E01F8EB8010FF8FBB962BF4527F5DF26CC5944B877AE9",
       "method": "Independent semantic reconciliation on the frozen local candidate"
     }
   ],

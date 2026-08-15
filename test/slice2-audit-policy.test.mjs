@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   SLICE2_AUDIT_IDS,
+  mergeSlice2ChangedPaths,
   validateSlice2AuditBindings,
 } from "../scripts/lib/slice2-audit-policy.mjs";
 
@@ -56,5 +57,49 @@ test("binds the closed ordered Slice 2 audit set to one exact candidate", () => 
   for (const mutate of mutations)
     assert.throws(() =>
       validateSlice2AuditBindings(mutate(records()), manifestSha, aggregateSha),
+    );
+});
+
+test("reconciles both uncommitted and clean committed successor paths", () => {
+  assert.deepEqual(
+    mergeSlice2ChangedPaths({
+      committedPaths: [],
+      workingPaths: ["packages/application/src/index.ts"],
+      untrackedPaths: ["evidence/slice2/local-validation.json"],
+    }),
+    [
+      "evidence/slice2/local-validation.json",
+      "packages/application/src/index.ts",
+    ],
+  );
+  assert.deepEqual(
+    mergeSlice2ChangedPaths({
+      committedPaths: [
+        "packages/application/src/index.ts",
+        "evidence/slice2/local-validation.json",
+      ],
+      workingPaths: [],
+      untrackedPaths: [],
+    }),
+    [
+      "evidence/slice2/local-validation.json",
+      "packages/application/src/index.ts",
+    ],
+  );
+  assert.deepEqual(
+    mergeSlice2ChangedPaths({
+      committedPaths: ["a.txt"],
+      workingPaths: ["a.txt", "b.txt"],
+      untrackedPaths: ["c.txt"],
+    }),
+    ["a.txt", "b.txt", "c.txt"],
+  );
+  for (const path of ["../escape", "/absolute", "windows\\path"])
+    assert.throws(() =>
+      mergeSlice2ChangedPaths({
+        committedPaths: [path],
+        workingPaths: [],
+        untrackedPaths: [],
+      }),
     );
 });

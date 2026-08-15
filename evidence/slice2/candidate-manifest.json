@@ -10,7 +10,7 @@
     "governance/artifact-index.json"
   ],
   "fileCount": 84,
-  "aggregateSha256": "23B98F93BBEA06089AEE3067DDD16C27AB37EECE16F2C70DBB817290263631AA",
+  "aggregateSha256": "F593D01D185CC1A68E2E01F8EB8010FF8FBB962BF4527F5DF26CC5944B877AE9",
   "files": [
     {
       "path": "apps/web/app/globals.css",
@@ -294,11 +294,11 @@
     },
     {
       "path": "scripts/generate-slice2-candidate.mjs",
-      "sha256": "C218D59504D2B8172EF55EB504A9CF7CD9CB7791FC2F619FB826FBA50906F6D8"
+      "sha256": "EBAE6E595E16807AB0CE8FAFE902B4E9F77F82043CAE63DA11F01CC56282BEDD"
     },
     {
       "path": "scripts/lib/slice2-audit-policy.mjs",
-      "sha256": "F6C6E767E7AC24D244025CE7D0185B2F2949E0806F47A65E0D184AFD509C911A"
+      "sha256": "E64778785400AA8DC5AD10629F028E09B57A778707FB097B6361249D9FB44233"
     },
     {
       "path": "scripts/sync-governance-agent-hashes.mjs",
@@ -314,7 +314,7 @@
     },
     {
       "path": "scripts/validate-slice2-evidence.mjs",
-      "sha256": "D7BDBDDE54AE3C701C9FC646DF259C317FB4EA3C2F76BF570A22C3A43061B545"
+      "sha256": "A55E3C887597AFAA38028A1FB2082753C8887E03C9F7F51742A90BDF47ACA84D"
     },
     {
       "path": "scripts/validate-slice2-local.mjs",
@@ -326,7 +326,7 @@
     },
     {
       "path": "test/slice2-audit-policy.test.mjs",
-      "sha256": "14E513D1C51ED679EB42511DE27025975CFD3162DD34A205F8E665C5AF593754"
+      "sha256": "8427550694F7D7A354779C5CB01CDB81906404A3328B5532CD943B24989A58E9"
     },
     {
       "path": "test/slice2/api/standard-application-postgres.test.mjs",

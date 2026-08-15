@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
+import { mergeSlice2ChangedPaths } from "./lib/slice2-audit-policy.mjs";
 
 const root = resolve(".");
 const exclusions = [
@@ -10,6 +11,7 @@ const exclusions = [
   "governance/agents.json",
   "governance/artifact-index.json",
 ];
+const baselineCommit = "832fa68244eefa0dae4c079b9b94ecaea4b6a872";
 const gitPaths = (args) => {
   const result = spawnSync("git", args, { cwd: root, encoding: "buffer" });
   if (result.status !== 0) throw new Error(result.stderr.toString("utf8"));
@@ -19,12 +21,29 @@ const gitPaths = (args) => {
     .filter(Boolean)
     .map((path) => path.replaceAll("\\", "/"));
 };
-const paths = [
-  ...new Set([
-    ...gitPaths(["diff", "--name-only", "-z", "HEAD"]),
-    ...gitPaths(["ls-files", "--others", "--exclude-standard", "-z"]),
+const ancestry = spawnSync(
+  "git",
+  ["merge-base", "--is-ancestor", baselineCommit, "HEAD"],
+  { cwd: root, encoding: "buffer" },
+);
+if (ancestry.status !== 0)
+  throw new Error("Slice 2 baseline is not an ancestor of HEAD.");
+const paths = mergeSlice2ChangedPaths({
+  committedPaths: gitPaths([
+    "diff",
+    "--name-only",
+    "-z",
+    baselineCommit,
+    "HEAD",
   ]),
-]
+  workingPaths: gitPaths(["diff", "--name-only", "-z", "HEAD"]),
+  untrackedPaths: gitPaths([
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+    "-z",
+  ]),
+})
   .filter((path) => !exclusions.includes(path))
   .sort();
 const sha = (path) =>
@@ -44,7 +63,7 @@ for (const entry of files)
 const manifest = {
   schemaVersion: 1,
   candidateId: "PO-001-SLICE-2-LOCAL-CANDIDATE",
-  baselineCommit: "832fa68244eefa0dae4c079b9b94ecaea4b6a872",
+  baselineCommit,
   algorithm: "SHA256(PATH_NUL_SHA256_LF)",
   excludedSelfReferentialMutableArtifacts: exclusions,
   fileCount: files.length,

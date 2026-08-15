@@ -10,6 +10,30 @@ export const SLICE2_AUDIT_IDS = Object.freeze([
   "S2-AUDIT-INTEGRATION-CRITIC",
 ]);
 
+export function mergeSlice2ChangedPaths({
+  committedPaths,
+  workingPaths,
+  untrackedPaths,
+}) {
+  for (const paths of [committedPaths, workingPaths, untrackedPaths])
+    if (
+      !Array.isArray(paths) ||
+      paths.some(
+        (path) =>
+          typeof path !== "string" ||
+          !path ||
+          path.includes("\\") ||
+          path.startsWith("/") ||
+          path.split("/").includes(".."),
+      )
+    )
+      throw new Error("Slice 2 Git changed paths are invalid.");
+
+  return [
+    ...new Set([...committedPaths, ...workingPaths, ...untrackedPaths]),
+  ].sort();
+}
+
 const AUDIT_KEYS = Object.freeze([
   "candidateAggregateSha256",
   "candidateManifestSha256",

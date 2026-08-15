@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import { validateSlice2AuditBindings } from "./lib/slice2-audit-policy.mjs";
+import {
+  mergeSlice2ChangedPaths,
+  validateSlice2AuditBindings,
+} from "./lib/slice2-audit-policy.mjs";
 
 const root = realpathSync(".");
 const sha = (path) =>
@@ -127,6 +130,7 @@ const exclusions = [
 if (
   manifest.schemaVersion !== 1 ||
   manifest.candidateId !== "PO-001-SLICE-2-LOCAL-CANDIDATE" ||
+  manifest.baselineCommit !== "832fa68244eefa0dae4c079b9b94ecaea4b6a872" ||
   manifest.algorithm !== "SHA256(PATH_NUL_SHA256_LF)" ||
   JSON.stringify(manifest.excludedSelfReferentialMutableArtifacts) !==
     JSON.stringify(exclusions) ||
@@ -167,12 +171,29 @@ const gitPaths = (args) => {
     .filter(Boolean)
     .map((path) => path.replaceAll("\\", "/"));
 };
-const actualChanged = [
-  ...new Set([
-    ...gitPaths(["diff", "--name-only", "-z", "HEAD"]),
-    ...gitPaths(["ls-files", "--others", "--exclude-standard", "-z"]),
+const ancestry = spawnSync(
+  "git",
+  ["merge-base", "--is-ancestor", manifest.baselineCommit, "HEAD"],
+  { cwd: root, encoding: "buffer" },
+);
+if (ancestry.status !== 0)
+  throw new Error("Slice 2 baseline is not an ancestor of HEAD.");
+const actualChanged = mergeSlice2ChangedPaths({
+  committedPaths: gitPaths([
+    "diff",
+    "--name-only",
+    "-z",
+    manifest.baselineCommit,
+    "HEAD",
   ]),
-].sort();
+  workingPaths: gitPaths(["diff", "--name-only", "-z", "HEAD"]),
+  untrackedPaths: gitPaths([
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+    "-z",
+  ]),
+});
 const expectedChanged = [
   ...manifest.files.map((entry) => entry.path),
   ...exclusions,

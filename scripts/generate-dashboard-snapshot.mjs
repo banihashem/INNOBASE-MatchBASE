@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join, resolve, win32 } from "node:path";
 import { buildArtifactSnapshot } from "../packages/artifact-indexer/dist/src/indexer.js";
@@ -68,14 +69,24 @@ if (
   throw new Error(
     "Slice 2 closure overlay must be an absolute local management path and cannot override CI anchor mode.",
   );
+const slice2ClosureBytes = await readFile(slice2ClosurePath);
 const slice2ClosureValue = validateSlice2ExternalClosure(
-  JSON.parse(await readFile(slice2ClosurePath, "utf8")),
+  JSON.parse(slice2ClosureBytes.toString("utf8")),
   { anchorOnly },
 );
 const slice2ClosureDocument = {
   value: slice2ClosureValue,
   sourceRef: slice2ClosureSourceRef(slice2ClosureValue),
   auditSourceRef: slice2AuditSourceRef(slice2ClosureValue),
+  predecessorSourceRef: {
+    sourceId: "matchbase://slice2-external-closure/predecessor-anchor",
+    path: slice2ClosurePath,
+    sha256: createHash("sha256")
+      .update(slice2ClosureBytes)
+      .digest("hex")
+      .toUpperCase(),
+    observedAt: slice2ClosureValue.observedAt,
+  },
 };
 const rootMap = new Map(
   config.roots.map((root) => [root.id, root.absolutePath]),
@@ -183,6 +194,7 @@ trustedAgentEvidenceRefs.push(
 trustedAgentEvidenceRefs.push(
   slice2ClosureDocument.sourceRef,
   slice2ClosureDocument.auditSourceRef,
+  slice2ClosureDocument.predecessorSourceRef,
   slice2Role2SourceRef(slice2ClosureValue),
 );
 

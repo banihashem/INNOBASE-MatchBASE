@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import test from "node:test";
 import { validateSlice2DashboardClosure } from "../scripts/lib/slice2-dashboard-closure-policy.mjs";
+import { slice2LifecycleProjection } from "../scripts/lib/slice2-lifecycle-policy.mjs";
 
 const closure = JSON.parse(
   readFileSync("governance/slice2-external-closure-anchor-v1.json", "utf8"),
@@ -16,6 +19,16 @@ const auditSourceRef = {
   sourceId: "audits",
   path: closure.auditSource.path,
   sha256: closure.auditSource.sha256,
+  observedAt: closure.observedAt,
+};
+const anchorPath = resolve("governance/slice2-external-closure-anchor-v1.json");
+const predecessorSourceRef = {
+  sourceId: "predecessor-anchor",
+  path: anchorPath,
+  sha256: createHash("sha256")
+    .update(readFileSync(anchorPath))
+    .digest("hex")
+    .toUpperCase(),
   observedAt: closure.observedAt,
 };
 const facts = {
@@ -73,7 +86,7 @@ function views() {
           record(
             `EXT-S2-GITHUB-PREDECESSOR-${item.runId}`,
             "PASS",
-            closureSourceRef,
+            predecessorSourceRef,
             { ...item, reasonCode: item.reason },
           ),
         ),
@@ -117,6 +130,7 @@ const validate = (value) =>
   validateSlice2DashboardClosure(value, closure, {
     closureSourceRef,
     auditSourceRef,
+    predecessorSourceRef,
   });
 
 test("accepts exact current Slice 2 dashboard closure semantics", () => {
@@ -159,6 +173,30 @@ test("rejects omission, duplicate, reorder, substitution, and stale lifecycle", 
     mutate(value);
     assert.throws(() => validate(value), `mutation ${index} must fail closed`);
   }
+});
+
+test("binds every predecessor tuple to the exact anchor document", () => {
+  const exact = views();
+  for (const predecessor of exact.deployments.records.filter(({ id }) =>
+    id.startsWith("EXT-S2-GITHUB-PREDECESSOR-"),
+  )) {
+    assert.deepEqual(predecessor.sourceRefs, [predecessorSourceRef]);
+  }
+  const staleSharedSource = views();
+  for (const predecessor of staleSharedSource.deployments.records.filter(
+    ({ id }) => id.startsWith("EXT-S2-GITHUB-PREDECESSOR-"),
+  )) {
+    predecessor.sourceRefs = [{ ...closureSourceRef }];
+  }
+  assert.throws(() => validate(staleSharedSource));
+
+  const sameCountSubstitution = views();
+  const first = sameCountSubstitution.deployments.records.find(({ id }) =>
+    id.startsWith("EXT-S2-GITHUB-PREDECESSOR-"),
+  );
+  first.facts.runId += 1;
+  first.id = `EXT-S2-GITHUB-PREDECESSOR-${first.facts.runId}`;
+  assert.throws(() => validate(sameCountSubstitution));
 });
 
 function readyFixture() {
@@ -210,6 +248,7 @@ test("requires terminal audit gate and orchestrator lifecycle on READY closure",
     validateSlice2DashboardClosure(exact.value, exact.readyClosure, {
       closureSourceRef,
       auditSourceRef,
+      predecessorSourceRef,
     }),
   );
   const mutations = [
@@ -227,9 +266,36 @@ test("requires terminal audit gate and orchestrator lifecycle on READY closure",
         validateSlice2DashboardClosure(
           candidate.value,
           candidate.readyClosure,
-          { closureSourceRef, auditSourceRef },
+          { closureSourceRef, auditSourceRef, predecessorSourceRef },
         ),
       `READY lifecycle mutation ${index} must fail closed`,
     );
   }
+});
+
+test("keeps local and CI lifecycle derivation identical for pending and READY closures", () => {
+  assert.deepEqual(slice2LifecycleProjection(closure), {
+    ready: false,
+    portfolioStatus: "IN_PROGRESS",
+    auditGateStatus: "ACTIVE",
+    orchestratorStatus: "ACTIVE",
+    orchestratorExecutionStatus: "IN_PROGRESS",
+    orchestratorAuditDisposition: "PENDING",
+    orchestratorDeliverableStatus: "IN_PROGRESS",
+  });
+  const readyClosure = readyFixture().readyClosure;
+  assert.deepEqual(slice2LifecycleProjection(readyClosure), {
+    ready: true,
+    portfolioStatus: "READY_FOR_ROLE2",
+    auditGateStatus: "PASS",
+    orchestratorStatus: "PASS",
+    orchestratorExecutionStatus: "COMPLETED",
+    orchestratorAuditDisposition: "PASS",
+    orchestratorDeliverableStatus: "COMPLETED",
+  });
+  readyClosure.role2.status = "PASS";
+  assert.throws(
+    () => slice2LifecycleProjection(readyClosure),
+    /must keep Role 2 pending/u,
+  );
 });

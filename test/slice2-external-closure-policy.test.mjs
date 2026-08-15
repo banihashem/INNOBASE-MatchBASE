@@ -25,8 +25,8 @@ function readyFixture() {
   const value = structuredClone(anchor);
   value.commit = "a".repeat(40);
   value.tree = "b".repeat(40);
-  value.runId = 31870000001;
-  value.jobId = 94980000001;
+  value.runId = 31880000001;
+  value.jobId = 95000000001;
   value.observedAt = "2026-08-16T00:00:00.000Z";
   value.predecessors.push({
     runId: anchor.runId,
@@ -36,6 +36,7 @@ function readyFixture() {
     conclusion: "success",
     reason: "ROLE2_REJECTED_THREE_MAJOR_DEFECTS",
   });
+  value.predecessors.sort((left, right) => left.runId - right.runId);
   value.candidate = {
     manifestPath: "evidence/slice2/candidate-manifest.json",
     manifestSha256: "C".repeat(64),

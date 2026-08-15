@@ -815,7 +815,7 @@
           "evidenceRefs": [
             {
               "path": "evidence/slice2/local-validation.json",
-              "sha256": "191D4436CC16A4DD93EE77EBB3A5212A8917557E8770A38BC1046190A603FDD9"
+              "sha256": "AF84B82534C864C6940F7D6F6E9A6BFBABD798C16B68FFC251F9DB24E63698AA"
             }
           ]
         }
@@ -832,7 +832,7 @@
         "evidenceRefs": [
           {
             "path": "evidence/slice2/local-validation.json",
-            "sha256": "191D4436CC16A4DD93EE77EBB3A5212A8917557E8770A38BC1046190A603FDD9"
+            "sha256": "AF84B82534C864C6940F7D6F6E9A6BFBABD798C16B68FFC251F9DB24E63698AA"
           }
         ]
       }

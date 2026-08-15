@@ -36,6 +36,14 @@
       "tree": "956d8857c6a670b7d98ebb5393d03b1da48f52a1",
       "conclusion": "failure",
       "reason": "UBUNTU_200_PERCENT_TEXT_OVERFLOW"
+    },
+    {
+      "runId": 31875408324,
+      "jobId": 94990271627,
+      "commit": "2b9d2686ba02f7f0435a56213d4ee4e274bfc4bb",
+      "tree": "293949e3a447df986a9e2c4f44cd1a9a6d492f54",
+      "conclusion": "failure",
+      "reason": "ANCHOR_ONLY_CI_LIFECYCLE_PARITY"
     }
   ],
   "candidate": {

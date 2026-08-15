@@ -6,6 +6,7 @@ import {
   validateExternalClosure,
 } from "./lib/external-closure-policy.mjs";
 import { validateSlice2ExternalClosure } from "./lib/slice2-external-closure-policy.mjs";
+import { slice2LifecycleProjection } from "./lib/slice2-lifecycle-policy.mjs";
 import {
   assertExactPredecessorHistory,
   validatePredecessorAttestation,
@@ -68,6 +69,7 @@ const slice2Closure = validateSlice2ExternalClosure(
     anchorOnly: true,
   },
 );
+const slice2Lifecycle = slice2LifecycleProjection(slice2Closure);
 slice2ClosureDocument.sourceRef.observedAt = slice2Closure.observedAt;
 const [
   slices,
@@ -250,9 +252,12 @@ function slice2Record(id, title, status, extra = {}, audit = false) {
     id,
     title,
     summary: `${slice2Closure.commit}; run ${slice2Closure.runId}; job ${slice2Closure.jobId}; ${slice2Closure.role3Disposition}; Role 2 ${slice2Closure.role2.status}.`,
-    status: ["FAIL", "REOPENED", "OPEN"].includes(status)
-      ? "BLOCKED"
-      : "ACTIVE",
+    status:
+      status === "PASS"
+        ? "PASS"
+        : ["FAIL", "REOPENED", "OPEN"].includes(status)
+          ? "BLOCKED"
+          : "ACTIVE",
     facts: { lifecycleStatus: status, ...slice2Facts, ...extra },
     sourceRefs: [
       audit ? slice2AuditEvidence.sourceRef : slice2ClosureDocument.sourceRef,
@@ -288,21 +293,43 @@ const slice2Audits = slice2Closure.audits.map((id) =>
     true,
   ),
 );
+const slice2Orchestrator = {
+  id: "AGENT-S2-ORCHESTRATOR",
+  title: "Slice 2 Role 3 executor and evidence orchestrator",
+  summary: slice2Lifecycle.ready
+    ? `Slice 2 execution and independent audit orchestration completed on ${slice2Closure.candidate.manifestSha256}; Role 2 ${slice2Closure.role2.status}.`
+    : "Slice 2 execution and independent audit orchestration remain in progress.",
+  status: slice2Lifecycle.orchestratorStatus,
+  facts: {
+    executionStatus: slice2Lifecycle.orchestratorExecutionStatus,
+    auditDisposition: slice2Lifecycle.orchestratorAuditDisposition,
+    ...slice2Facts,
+  },
+  sourceRefs: [slice2AuditEvidence.sourceRef],
+};
 
 const collections = {
   portfolio: slices.value.slices.map((item, index) =>
     item.id === "SLICE-2"
-      ? slice2Record("SLICE-2", item.name, "IN_PROGRESS")
+      ? slice2Record("SLICE-2", item.name, slice2Lifecycle.portfolioStatus)
       : record(item, slices.sourceRef, "SLICE", index),
   ),
   gates: gates.value.gates.map((item, index) =>
-    ["S2-G2", "S2-G9"].includes(item.id)
-      ? slice2Record(item.id, item.name, slice2Closure.gates[item.id])
-      : item.id === "AG6"
-        ? closureGate
-        : item.id === "AG1"
-          ? { ...closureGate, id: "AG1", title: item.name }
-          : record(item, gates.sourceRef, "GATE", index),
+    item.id === "S2-G1"
+      ? slice2Record(
+          item.id,
+          item.name,
+          slice2Lifecycle.auditGateStatus,
+          {},
+          true,
+        )
+      : ["S2-G2", "S2-G9"].includes(item.id)
+        ? slice2Record(item.id, item.name, slice2Closure.gates[item.id])
+        : item.id === "AG6"
+          ? closureGate
+          : item.id === "AG1"
+            ? { ...closureGate, id: "AG1", title: item.name }
+            : record(item, gates.sourceRef, "GATE", index),
   ),
   backlog: backlog.value.items.map((item, index) =>
     record(item, backlog.sourceRef, "WORK", index),
@@ -367,7 +394,9 @@ const collections = {
     record(item, registers.sourceRef, "COST", index),
   ),
   agents: agents.value.agents.map((item, index) =>
-    record(item, agents.sourceRef, "AGENT", index),
+    item.id === "AGENT-S2-ORCHESTRATOR"
+      ? slice2Orchestrator
+      : record(item, agents.sourceRef, "AGENT", index),
   ),
   loops: [
     ...registers.value.loops.map((item, index) =>

@@ -38,7 +38,7 @@ function closureFacts(record, closure, label) {
 export function validateSlice2DashboardClosure(
   views,
   closure,
-  { closureSourceRef, auditSourceRef },
+  { closureSourceRef, auditSourceRef, predecessorSourceRef = closureSourceRef },
 ) {
   const ready = closure.role3Disposition === "READY_FOR_ROLE2";
   const portfolio = one(
@@ -106,7 +106,7 @@ export function validateSlice2DashboardClosure(
       actual.facts.reasonCode !== expected.reason
     )
       throw new Error("Slice 2 predecessor dashboard tuple was substituted.");
-    hasSource(actual, closureSourceRef, actual.id);
+    hasSource(actual, predecessorSourceRef, actual.id);
   }
 
   for (const expected of closure.role2.defects) {

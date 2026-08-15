@@ -9,8 +9,8 @@
     "governance/agents.json",
     "governance/artifact-index.json"
   ],
-  "fileCount": 98,
-  "aggregateSha256": "BE3D7FF48E6085A0D62E5D2D2B484BEFED6136B9FFEFA98F0C03A24CCEFEC717",
+  "fileCount": 99,
+  "aggregateSha256": "2238CE9EFCE3D51B91A7AB853B9A3B991CB679060279EEB3429A8EF9D31B23B5",
   "files": [
     {
       "path": "apps/web/app/globals.css",
@@ -134,7 +134,7 @@
     },
     {
       "path": "governance/slice2-external-closure-anchor-v1.json",
-      "sha256": "55BAFFABBACF601344C47632A42BA8F94B377F4AAEFF66E7F0785D30D0A63ED9"
+      "sha256": "4E058E9CA01E8CA84AC58FF4EB6A78AB639A39C9E76F21F4D3F08C177DFAD080"
     },
     {
       "path": "governance/slice2-rejected-candidate-attestation-v1.json",
@@ -302,11 +302,11 @@
     },
     {
       "path": "scripts/generate-dashboard-ci-snapshot.mjs",
-      "sha256": "4DD815D3DB5F979FA560557219FDA1DC363BE4752D530C63092CED0AB2BCC33C"
+      "sha256": "8646FADFF2DA999546CD3530199CC9EB2041AE52C32BC4B901A40CDCF5CB9256"
     },
     {
       "path": "scripts/generate-dashboard-snapshot.mjs",
-      "sha256": "3585AE0B436E33F23F03FDDAE014DB1D5033D745EFBD2060F798F02CA7D26EF8"
+      "sha256": "415C6AA2137C613EF17525E7A8B9D52A5A398200835CCB3A824877AC3807DF01"
     },
     {
       "path": "scripts/generate-slice2-candidate.mjs",
@@ -322,7 +322,7 @@
     },
     {
       "path": "scripts/lib/semantic-dashboard.mjs",
-      "sha256": "17F9474824E04B82FF8455AFD218E1F74F293B6A12B3BBA26A22CF9129ADC459"
+      "sha256": "639DB03AB44823A412A2B4C55C30E2C024AF9883A3F657C8917164E408DBFF77"
     },
     {
       "path": "scripts/lib/slice2-audit-policy.mjs",
@@ -330,11 +330,15 @@
     },
     {
       "path": "scripts/lib/slice2-dashboard-closure-policy.mjs",
-      "sha256": "04DDA476599F5F765782A03410A26C9233E40BB8DAB929D0C6037D1B2F731094"
+      "sha256": "8981D3FF6A4047BEC86EBB88CCED451567901868D4C92635E3295131AD4A39F3"
     },
     {
       "path": "scripts/lib/slice2-external-closure-policy.mjs",
       "sha256": "F7F244EF95EF8E22CEACC305DE0291CAE064E91651A4EB4EB065F18429BE62BD"
+    },
+    {
+      "path": "scripts/lib/slice2-lifecycle-policy.mjs",
+      "sha256": "751F55270794DE7F16404E17D5C9D15C0B2136438C1CC7473CBDD1F72068FCEE"
     },
     {
       "path": "scripts/sync-governance-agent-hashes.mjs",
@@ -346,7 +350,7 @@
     },
     {
       "path": "scripts/validate-dashboard-snapshot.mjs",
-      "sha256": "ACC9888D2EB69FA5144CD335CD1DBD3B987F3EF62B6F0BB177D01AEE24A945AB"
+      "sha256": "0BAF394E79CEA8EF659AB5729FA341227B68498F422779B3E31BE29D59B862CE"
     },
     {
       "path": "scripts/validate-governance.mjs",
@@ -378,11 +382,11 @@
     },
     {
       "path": "test/slice2-dashboard-closure-policy.test.mjs",
-      "sha256": "707D357CCB49C42512A9CF1D79AE92CADD1B8280C66C2DB13945FC48A6C005CC"
+      "sha256": "8A76ABA93874707A43B08FB4A135EA3A256A7500776EEF4D14264A91133DC8D7"
     },
     {
       "path": "test/slice2-external-closure-policy.test.mjs",
-      "sha256": "7E9CE2D0C75A9973C18F7EEB4CF0FB9DECBBB2F453B55081D54F651F95ECC41B"
+      "sha256": "6FBAF79C58813F36B7BB4C7BC5A76612A492459643EA74A2CD1150D9E9862643"
     },
     {
       "path": "test/slice2/api/standard-application-postgres.test.mjs",

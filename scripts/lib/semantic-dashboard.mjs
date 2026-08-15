@@ -1,3 +1,5 @@
+import { slice2LifecycleProjection } from "./slice2-lifecycle-policy.mjs";
+
 const VIEW_KEYS = [
   "portfolio",
   "gates",
@@ -314,7 +316,10 @@ export function buildSemanticViews(documents) {
   const slice2Closure = documents.slice2Closure?.value;
   const slice2SourceRef = documents.slice2Closure?.sourceRef;
   const slice2AuditSourceRef = documents.slice2Closure?.auditSourceRef;
-  const slice2Ready = slice2Closure?.role3Disposition === "READY_FOR_ROLE2";
+  const slice2PredecessorSourceRef =
+    documents.slice2Closure?.predecessorSourceRef ?? slice2SourceRef;
+  const slice2Lifecycle = slice2LifecycleProjection(slice2Closure);
+  const slice2Ready = slice2Lifecycle.ready;
   const slice2Evidence = slice2Closure
     ? [
         {
@@ -474,7 +479,7 @@ export function buildSemanticViews(documents) {
   });
   const slice2AuditGate = (item) => ({
     ...item,
-    status: slice2Ready ? "PASS" : "ACTIVE",
+    status: slice2Lifecycle.auditGateStatus,
     summary: slice2Ready
       ? `All seven independent audits passed on ${slice2Closure.candidate.manifestSha256}; Role 2 ${slice2Closure.role2.status}.`
       : item.summary,
@@ -483,18 +488,20 @@ export function buildSemanticViews(documents) {
   });
   const slice2Orchestrator = (item) => ({
     ...item,
-    executionStatus: slice2Ready ? "COMPLETED" : "IN_PROGRESS",
+    executionStatus: slice2Lifecycle.orchestratorExecutionStatus,
     summary: slice2Ready
       ? `Slice 2 execution and independent audit orchestration completed on ${slice2Closure.candidate.manifestSha256}; Role 2 ${slice2Closure.role2.status}.`
       : item.summary,
     deliverables: (item.deliverables ?? []).map((deliverable) => ({
       ...deliverable,
-      status: slice2Ready ? "COMPLETED" : deliverable.status,
+      status: slice2Ready
+        ? slice2Lifecycle.orchestratorDeliverableStatus
+        : deliverable.status,
       outputHashes: slice2Ready ? slice2Evidence : deliverable.outputHashes,
     })),
     independentAudit: {
       ...item.independentAudit,
-      disposition: slice2Ready ? "PASS" : "PENDING",
+      disposition: slice2Lifecycle.orchestratorAuditDisposition,
       evidenceRefs: slice2Evidence,
     },
     evidenceRefs: slice2Evidence,
@@ -524,7 +531,8 @@ export function buildSemanticViews(documents) {
           summary: `${predecessor.conclusion}; ${predecessor.reason}.`,
           ...predecessor,
           reasonCode: predecessor.reason,
-          evidenceRefs: slice2Evidence,
+          evidenceRefs: [slice2PredecessorSourceRef],
+          _sourceRef: slice2PredecessorSourceRef,
         })),
       ]
     : [];
@@ -534,7 +542,7 @@ export function buildSemanticViews(documents) {
         item.id === "SLICE-2" && slice2Closure
           ? {
               ...item,
-              status: slice2Ready ? "READY_FOR_ROLE2" : "IN_PROGRESS",
+              status: slice2Lifecycle.portfolioStatus,
               summary: `${item.name}; ${slice2Closure.role3Disposition}; Role 2 ${slice2Closure.role2.status}.`,
               ...slice2Facts,
               evidenceRefs: slice2Evidence,
@@ -652,7 +660,13 @@ export function buildSemanticViews(documents) {
       ),
       ...externalRecords,
       ...slice2DeploymentRecords.map((item, index) =>
-        record(item, slice2SourceRef, index, "S2-DEPLOY", catalog),
+        record(
+          item,
+          item._sourceRef ?? slice2SourceRef,
+          index,
+          "S2-DEPLOY",
+          catalog,
+        ),
       ),
     ],
     costs: (registers.costs ?? []).map((item, index) =>

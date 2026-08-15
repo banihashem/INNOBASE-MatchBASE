@@ -197,9 +197,18 @@ if (actual) {
         observedAt: slice2Closure.observedAt,
       }
     : slice2AuditSourceRef(slice2Closure);
+  const slice2PredecessorRef = {
+    sourceId: anchorOnly
+      ? "matchbase://ci-snapshot/governance/slice2-external-closure-anchor-v1.json"
+      : "matchbase://slice2-external-closure/predecessor-anchor",
+    path: slice2ClosurePath,
+    sha256: await sha256File(slice2ClosurePath),
+    observedAt: slice2Closure.observedAt,
+  };
   validateSlice2DashboardClosure(snapshot.views, slice2Closure, {
     closureSourceRef: slice2ClosureRef,
     auditSourceRef: slice2AuditRef,
+    predecessorSourceRef: slice2PredecessorRef,
   });
   if (requireSources && verifiedSources === 0)
     throw new Error("Current dashboard source verification was vacuous.");

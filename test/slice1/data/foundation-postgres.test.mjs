@@ -234,6 +234,167 @@ postgresTest(
       );
 
       await t.test(
+        "takes the quota decision clock only after the account lock is acquired",
+        async () => {
+          for (let repetition = 0; repetition < 3; repetition += 1) {
+            const fixture = await seedAdmissionFixture(pool, "demo");
+            const blocker = await pool.connect();
+            try {
+              await blocker.query("BEGIN");
+              await blocker.query(
+                "SELECT 1 FROM account WHERE account_id = $1 FOR UPDATE",
+                [fixture.accountId],
+              );
+              const pending = Promise.all(
+                Array.from({ length: 6 }, (_, index) =>
+                  admitRunWithinQuota(
+                    pool,
+                    admissionInput(
+                      fixture,
+                      `locked-demo-${repetition}-${index}`,
+                    ),
+                  ),
+                ),
+              );
+              await new Promise((resolve) => setTimeout(resolve, 50));
+              await blocker.query("COMMIT");
+              const results = await pending;
+              assert.equal(
+                results.filter(({ disposition }) => disposition === "accepted")
+                  .length,
+                3,
+              );
+              assert.equal(
+                results.filter(
+                  ({ disposition }) => disposition === "quota_exceeded",
+                ).length,
+                3,
+              );
+            } finally {
+              await blocker.query("ROLLBACK").catch(() => undefined);
+              blocker.release();
+            }
+          }
+
+          const boundaryFixture = await seedAdmissionFixture(pool, "demo");
+          for (let index = 0; index < 3; index += 1) {
+            const runId = randomUUID();
+            await pool.query(
+              `INSERT INTO research_run (
+                 run_id, account_id, canonical_request_version_id,
+                 requested_by_user_id, tier_at_submission, state,
+                 model_policy_version_id, scoring_config_version_id,
+                 idempotency_key_hash, queued_at
+               ) VALUES ($1,$2,$3,$4,'demo','queued',$5,$6,$7,
+                         clock_timestamp() - interval '168 hours' + interval '250 milliseconds')`,
+              [
+                runId,
+                boundaryFixture.accountId,
+                boundaryFixture.canonicalId,
+                boundaryFixture.userId,
+                boundaryFixture.modelPolicyId,
+                boundaryFixture.scoringConfigId,
+                digest(`expiring-run-${index}`),
+              ],
+            );
+            await pool.query(
+              `INSERT INTO quota_ledger (
+                 quota_entry_id, account_id, user_id, run_id, entry_kind,
+                 units, charged_at, reason_code
+               ) VALUES ($1,$2,$3,$4,'charge',1,
+                         clock_timestamp() - interval '168 hours' + interval '250 milliseconds',
+                         'test.expiring')`,
+              [
+                randomUUID(),
+                boundaryFixture.accountId,
+                boundaryFixture.userId,
+                runId,
+              ],
+            );
+          }
+          const blocker = await pool.connect();
+          try {
+            await blocker.query("BEGIN");
+            await blocker.query(
+              "SELECT 1 FROM account WHERE account_id = $1 FOR UPDATE",
+              [boundaryFixture.accountId],
+            );
+            const pending = admitRunWithinQuota(
+              pool,
+              admissionInput(boundaryFixture, "post-lock-boundary"),
+            );
+            await new Promise((resolve) => setTimeout(resolve, 400));
+            const releaseClock = await blocker.query(
+              "SELECT clock_timestamp() AS released_at",
+            );
+            await blocker.query("COMMIT");
+            const result = await pending;
+            assert.equal(result.disposition, "accepted");
+            const persisted = await pool.query(
+              `SELECT r.queued_at, q.charged_at
+                 FROM research_run r
+                 JOIN quota_ledger q ON q.run_id = r.run_id
+                WHERE r.run_id = $1 AND q.entry_kind = 'charge'`,
+              [result.runId],
+            );
+            const releasedAt = releaseClock.rows[0].released_at.getTime();
+            assert.ok(persisted.rows[0].queued_at.getTime() >= releasedAt);
+            assert.ok(persisted.rows[0].charged_at.getTime() >= releasedAt);
+          } finally {
+            await blocker.query("ROLLBACK").catch(() => undefined);
+            blocker.release();
+          }
+        },
+      );
+
+      await t.test(
+        "isolates repeated mixed-account Demo and Standard contention",
+        async () => {
+          for (let repetition = 0; repetition < 3; repetition += 1) {
+            const demo = await seedAdmissionFixture(pool, "demo");
+            const standard = await seedAdmissionFixture(pool, "standard");
+            const attempts = [
+              ...Array.from({ length: 6 }, (_, index) => ({
+                fixture: demo,
+                tier: "demo",
+                label: `mixed-demo-${repetition}-${index}`,
+              })),
+              ...Array.from({ length: 8 }, (_, index) => ({
+                fixture: standard,
+                tier: "standard",
+                label: `mixed-standard-${repetition}-${index}`,
+              })),
+            ];
+            const results = await Promise.all(
+              attempts.map(async ({ fixture, tier, label }) => ({
+                tier,
+                result: await admitRunWithinQuota(
+                  pool,
+                  admissionInput(fixture, label),
+                ),
+              })),
+            );
+            assert.equal(
+              results.filter(
+                ({ tier, result }) =>
+                  tier === "demo" && result.disposition === "accepted",
+              ).length,
+              3,
+            );
+            assert.equal(
+              results.filter(
+                ({ tier, result }) =>
+                  tier === "standard" && result.disposition === "accepted",
+              ).length,
+              5,
+            );
+            assert.equal(await quotaChargeCount(pool, demo.accountId), 3);
+            assert.equal(await quotaChargeCount(pool, standard.accountId), 5);
+          }
+        },
+      );
+
+      await t.test(
         "uses the strict (t-168h,t] window and the effective tier at submission",
         async () => {
           const boundary = await pool.query(

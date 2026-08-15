@@ -117,15 +117,19 @@ export async function admitRunWithinQuota(
   input: QuotaAdmissionInput,
 ): Promise<QuotaAdmissionResult> {
   return inTransaction(pool, async (client) => {
-    const account = await client.query<{ decision_at: Date }>(
-      `SELECT clock_timestamp() AS decision_at
+    const account = await client.query(
+      `SELECT 1
          FROM account
         WHERE account_id = $1 AND status = 'active'
         FOR UPDATE`,
       [input.accountId],
     );
-    const decisionAt = account.rows[0]?.decision_at;
-    if (!decisionAt) throw new Error("Active account not found");
+    if (account.rowCount !== 1) throw new Error("Active account not found");
+    const clock = await client.query<{ decision_at: Date }>(
+      "SELECT clock_timestamp() AS decision_at",
+    );
+    const decisionAt = clock.rows[0]?.decision_at;
+    if (!decisionAt) throw new Error("Quota decision clock is unavailable");
 
     const identity = await client.query(
       `SELECT 1 FROM app_user

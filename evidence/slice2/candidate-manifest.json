@@ -9,8 +9,8 @@
     "governance/agents.json",
     "governance/artifact-index.json"
   ],
-  "fileCount": 99,
-  "aggregateSha256": "2238CE9EFCE3D51B91A7AB853B9A3B991CB679060279EEB3429A8EF9D31B23B5",
+  "fileCount": 100,
+  "aggregateSha256": "0D557604F6D5D1D6D2ED5202A7F272D28A2CA5C381060EBDC0D508F70397A8C0",
   "files": [
     {
       "path": "apps/web/app/globals.css",
@@ -134,7 +134,7 @@
     },
     {
       "path": "governance/slice2-external-closure-anchor-v1.json",
-      "sha256": "4E058E9CA01E8CA84AC58FF4EB6A78AB639A39C9E76F21F4D3F08C177DFAD080"
+      "sha256": "2178F62AFE4D82F273DEAB1BFE6106F66C4680787238785EE813D9701E8E3159"
     },
     {
       "path": "governance/slice2-rejected-candidate-attestation-v1.json",
@@ -294,7 +294,7 @@
     },
     {
       "path": "packages/data/src/quota.ts",
-      "sha256": "A300FFD5B85F015923E715E00EEB25F80CFDC575CD3F17FA3C8DE268C7D327C3"
+      "sha256": "69C66D152F1C41E8FE0CF161E336CB69E002EFBFA282240E244AC30309920774"
     },
     {
       "path": "playwright.config.mjs",
@@ -375,6 +375,10 @@
     {
       "path": "test/historical-artifact-policy.test.mjs",
       "sha256": "8381DB0C1E1CB6E50F62A7446975769693817EBB79B352E14340792E08FAAE2B"
+    },
+    {
+      "path": "test/slice1/data/foundation-postgres.test.mjs",
+      "sha256": "2C2F292F3E505FEAED40D11CE817DB434A66EB9382929F2E1F58A2C298DC5105"
     },
     {
       "path": "test/slice2-audit-policy.test.mjs",

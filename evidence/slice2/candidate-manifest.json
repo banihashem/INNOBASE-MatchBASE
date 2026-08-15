@@ -9,8 +9,8 @@
     "governance/agents.json",
     "governance/artifact-index.json"
   ],
-  "fileCount": 109,
-  "aggregateSha256": "BE06FDA1BDAA58D53E88104AA091629E3E0CC8A51B7CF5DB051DBBB94250B6B7",
+  "fileCount": 110,
+  "aggregateSha256": "31C3DAD63D898E17F599E2AD068E26CABA5A02B569489C10C57B15057271B132",
   "files": [
     {
       "path": "apps/dashboard/src/App.tsx",
@@ -26,7 +26,7 @@
     },
     {
       "path": "apps/dashboard/src/styles.css",
-      "sha256": "DD1A75FFC1972802AE1EBDDF4C18FA54A00A37F28CA2F673E6AAC44EAE029BA4"
+      "sha256": "3FB7A27C3CE81A20A26A8398CB50DFEB614E3C513F248A1AD8C88AF82303D875"
     },
     {
       "path": "apps/dashboard/src/types.ts",
@@ -154,7 +154,7 @@
     },
     {
       "path": "governance/slice2-external-closure-anchor-v1.json",
-      "sha256": "DC7E1A2D582100E700477F692D262052AC73C0867078D00C86785CC673A0D345"
+      "sha256": "A38D3CA759950B234A6B13445F9CB3DA91F74300899C58B1F87E102CFD988AF6"
     },
     {
       "path": "governance/slice2-rejected-candidate-attestation-v1.json",
@@ -366,7 +366,7 @@
     },
     {
       "path": "scripts/lib/slice2-external-closure-policy.mjs",
-      "sha256": "6C65C31D0FB514EC1134315298534AA5A4FC7694174D8F630E70F21EE7FEA3A5"
+      "sha256": "69472519F091D13981BCC95063D7828A13100479A8C059FCB919699FF9EC0F1C"
     },
     {
       "path": "scripts/lib/slice2-lifecycle-policy.mjs",
@@ -399,6 +399,10 @@
     {
       "path": "scripts/validate-slice2-local.mjs",
       "sha256": "CC2BF5D1D528755C86CDC3ECDF52C24B6C9DABA30626EE47EAFAA981486E7957"
+    },
+    {
+      "path": "test/browser/dashboard.spec.mjs",
+      "sha256": "5E511085CD663C86D5CD36A891CE3FB7F1D0C615E50BD7BEE8D4E64DBC1E50A1"
     },
     {
       "path": "test/browser/product-standard-reference-path.spec.mjs",

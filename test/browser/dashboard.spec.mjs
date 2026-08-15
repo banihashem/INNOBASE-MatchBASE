@@ -16,6 +16,52 @@ const views = [
   "Evidence",
 ];
 
+async function horizontalOverflowState(page) {
+  return page.evaluate(() => {
+    const viewport = window.innerWidth;
+    const offenders = [...document.body.querySelectorAll("*")]
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        if (
+          rect.width === 0 ||
+          (rect.left >= -0.5 && rect.right <= viewport + 0.5)
+        )
+          return false;
+        for (
+          let ancestor = element.parentElement;
+          ancestor;
+          ancestor = ancestor.parentElement
+        ) {
+          const overflow = getComputedStyle(ancestor).overflowX;
+          if (!["auto", "scroll", "hidden", "clip"].includes(overflow))
+            continue;
+          const boundary = ancestor.getBoundingClientRect();
+          if (
+            rect.left < boundary.left - 0.5 ||
+            rect.right > boundary.right + 0.5
+          )
+            return false;
+        }
+        return true;
+      })
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        const identity = [
+          element.tagName.toLowerCase(),
+          element.id ? `#${element.id}` : "",
+          ...[...element.classList].map((name) => `.${name}`),
+        ].join("");
+        return `${identity}[${rect.left.toFixed(1)},${rect.right.toFixed(1)}]`;
+      });
+    return {
+      body: document.body.scrollWidth,
+      document: document.documentElement.scrollWidth,
+      viewport,
+      offenders,
+    };
+  });
+}
+
 test("renders every control view without horizontal mobile overflow", async ({
   page,
 }) => {
@@ -31,18 +77,24 @@ test("renders every control view without horizontal mobile overflow", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Portfolio");
-  for (const name of views) {
-    await page.getByRole("button", { name, exact: true }).click();
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(name);
+  for (const mode of ["mobile-390", "mobile-390-200%-text", "mobile-390-rtl"]) {
+    await page.evaluate((activeMode) => {
+      document.documentElement.dir = activeMode.endsWith("rtl") ? "rtl" : "ltr";
+      document.documentElement.style.fontSize = activeMode.includes("200%")
+        ? "200%"
+        : "100%";
+    }, mode);
+    for (const name of views) {
+      await page.getByRole("button", { name, exact: true }).click();
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(name);
+      const state = await horizontalOverflowState(page);
+      expect(state.offenders, `${mode}/${name} overflow offenders`).toEqual([]);
+      expect(
+        Math.max(state.body, state.document),
+        `${mode}/${name} document width`,
+      ).toBeLessThanOrEqual(state.viewport);
+    }
   }
-  const dimensions = await page.evaluate(() => ({
-    body: document.body.scrollWidth,
-    document: document.documentElement.scrollWidth,
-    viewport: window.innerWidth,
-  }));
-  expect(Math.max(dimensions.body, dimensions.document)).toBeLessThanOrEqual(
-    dimensions.viewport,
-  );
   const expectedSnapshotMisses = failedResponses.filter(
     ({ status, url }) =>
       status === 404 && new URL(url).pathname === "/current-snapshot.json",

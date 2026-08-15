@@ -6,7 +6,7 @@
       "role": "Role 3 executor/orchestrator",
       "model": "gpt-5.6-sol",
       "reasoningEffort": "high",
-      "executionStatus": "IN_PROGRESS",
+      "executionStatus": "COMPLETED",
       "scope": "integration, gates, append-only evidence",
       "independent": false,
       "allowedTargets": ["governance/traceability.json"],
@@ -355,7 +355,7 @@
           "outputHashes": [
             {
               "path": "test/browser/dashboard.spec.mjs",
-              "sha256": "271C73F26E94DC17B3ADA3BE5E498B4F147902D6DD9E7D35BE41EA2955A77839"
+              "sha256": "5E511085CD663C86D5CD36A891CE3FB7F1D0C615E50BD7BEE8D4E64DBC1E50A1"
             }
           ]
         }
@@ -791,7 +791,7 @@
       "role": "Slice 2 Role 3 executor and evidence orchestrator",
       "model": "gpt-5.6-sol",
       "reasoningEffort": "xhigh",
-      "executionStatus": "COMPLETED",
+      "executionStatus": "IN_PROGRESS",
       "scope": "Slice 2 integration, local validation, independent audit and successor release gates",
       "independent": false,
       "allowedTargets": [
@@ -807,7 +807,7 @@
           "outputHashes": [
             {
               "path": "evidence/slice2/local-validation.json",
-              "sha256": "78D5FA6D357671454C0BA9989EBEBBF0872EF39BC201E9C43AF56CC9C1AB2F66"
+              "sha256": "C7F246CF315BE233301163FDCC84B3307024B3F9CA352BD752E0806C9ADE5A02"
             }
           ]
         }
@@ -820,7 +820,7 @@
           "evidenceRefs": [
             {
               "path": "evidence/slice2/local-validation.json",
-              "sha256": "78D5FA6D357671454C0BA9989EBEBBF0872EF39BC201E9C43AF56CC9C1AB2F66"
+              "sha256": "C7F246CF315BE233301163FDCC84B3307024B3F9CA352BD752E0806C9ADE5A02"
             }
           ]
         }
@@ -837,7 +837,7 @@
         "evidenceRefs": [
           {
             "path": "evidence/slice2/local-validation.json",
-            "sha256": "78D5FA6D357671454C0BA9989EBEBBF0872EF39BC201E9C43AF56CC9C1AB2F66"
+            "sha256": "C7F246CF315BE233301163FDCC84B3307024B3F9CA352BD752E0806C9ADE5A02"
           }
         ]
       }

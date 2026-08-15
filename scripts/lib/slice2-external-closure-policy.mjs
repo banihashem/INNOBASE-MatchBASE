@@ -130,6 +130,14 @@ const EXPECTED_PREDECESSORS = Object.freeze([
     "failure",
     "SHALLOW_HOSTED_CLOSURE_TEST_GIT_OBJECT_UNAVAILABLE",
   ],
+  [
+    31889908697,
+    95024542251,
+    "33762f0aa1bb97c1aaf98bbd665a90464562eddb",
+    "1d68f6ac935b686a11ff00382742b765442068b8",
+    "failure",
+    "UBUNTU_DASHBOARD_390PX_OVERFLOW",
+  ],
 ]);
 const ACCEPTANCE_IDS = Object.freeze([
   "L2-C1-AT-01",

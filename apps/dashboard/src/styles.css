@@ -21,8 +21,23 @@
 body {
   margin: 0;
   min-width: 320px;
+  max-width: 100%;
   min-height: 100vh;
   background: #f4f3f1;
+}
+#root,
+.app-shell,
+.sidebar,
+.main,
+.topbar,
+.snapshot-state,
+.view-panel,
+.view-panel__heading,
+.filters,
+.record-grid,
+.record-card {
+  min-width: 0;
+  max-width: 100%;
 }
 button,
 input,
@@ -367,6 +382,7 @@ h1 {
 }
 .filters label {
   display: grid;
+  min-width: 0;
   gap: 5px;
 }
 .filters label span {
@@ -378,6 +394,9 @@ h1 {
 }
 .filters input,
 .filters select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 39px;
   padding: 8px 11px;
   border: 1px solid #aaa6a0;
@@ -685,6 +704,8 @@ footer {
   }
   .sidebar nav {
     display: flex;
+    min-width: 0;
+    max-width: 100%;
     margin: 0;
     overflow-x: auto;
     scrollbar-width: thin;
@@ -703,6 +724,8 @@ footer {
   }
   .topbar {
     align-items: start;
+    flex-wrap: wrap;
+    gap: 12px;
   }
   .snapshot-state {
     grid-template-columns: 1fr;
@@ -731,6 +754,18 @@ footer {
   }
   .record-card {
     min-height: 210px;
+  }
+  .record-card__header,
+  .record-context,
+  .view-panel__heading,
+  .source-button {
+    flex-wrap: wrap;
+  }
+  .record-card__header .status {
+    flex: 0 1 auto;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
   footer {
     flex-wrap: wrap;

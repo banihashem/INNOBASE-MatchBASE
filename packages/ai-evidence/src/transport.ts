@@ -9,6 +9,21 @@ export interface TransportRequest {
 export interface TransportResponse {
   status: number;
   body: unknown;
+  servedIdentity?: Readonly<{
+    providerId: string;
+    modelId: string;
+  }>;
+  accounting?: ProviderAccounting;
+}
+
+export interface ProviderAccounting {
+  readonly state: "priced" | "estimated";
+  readonly quantity: number;
+  readonly unit: string;
+  readonly amount: number;
+  readonly currency: string;
+  readonly pricingVersion: string;
+  readonly measurement: "measured" | "estimated";
 }
 
 export interface ProviderTransport {
@@ -16,10 +31,13 @@ export interface ProviderTransport {
 }
 
 export interface ProviderAttemptOutcome {
-  capabilityId: "CAP-STRUCTURED-GENERATION";
+  capabilityId: "CAP-SEARCH" | "CAP-STRUCTURED-GENERATION";
   routeId: string;
   providerId: string;
   modelId: string;
+  requestedModelId: string;
+  servedProviderId?: string;
+  servedModelId?: string;
   environment: string;
   routeKind: "real_data" | "synthetic_fixture";
   dataHandlingPosture:
@@ -34,6 +52,13 @@ export interface ProviderAttemptOutcome {
   backoffMs: number;
   startedAt: string;
   completedAt: string;
+  costState: "priced" | "estimated" | "unknown" | "not_incurred";
+  costAmount: number | null;
+  costCurrency: string | null;
+  costQuantity: number;
+  costUnit: string | null;
+  pricingVersion: string | null;
+  costMeasurement: "measured" | "estimated" | null;
 }
 
 export type AttemptObserver = (
@@ -41,7 +66,42 @@ export type AttemptObserver = (
 ) => void | Promise<void>;
 export type Backoff = (milliseconds: number) => Promise<void>;
 
+function validatedAccounting(
+  response: TransportResponse | undefined,
+  realData: boolean,
+): ProviderAccounting | undefined {
+  const value = response?.accounting;
+  if (!value) {
+    if (
+      realData &&
+      response &&
+      response.status >= 200 &&
+      response.status < 300
+    ) {
+      throw new Error(
+        "Successful live provider response omitted cost accounting.",
+      );
+    }
+    return undefined;
+  }
+  if (
+    !new Set(["priced", "estimated"]).has(value.state) ||
+    !Number.isFinite(value.quantity) ||
+    value.quantity <= 0 ||
+    !Number.isFinite(value.amount) ||
+    (realData ? value.amount <= 0 : value.amount < 0) ||
+    !value.unit ||
+    !/^[A-Z]{3}$/u.test(value.currency) ||
+    !value.pricingVersion ||
+    !new Set(["measured", "estimated"]).has(value.measurement)
+  ) {
+    throw new Error("Provider response cost accounting is invalid.");
+  }
+  return value;
+}
+
 export async function executeProviderRequest(input: {
+  capabilityId?: "CAP-SEARCH" | "CAP-STRUCTURED-GENERATION";
   route: ProviderRouteV1;
   transport: ProviderTransport;
   request: (signal: AbortSignal) => TransportRequest;
@@ -66,12 +126,28 @@ export async function executeProviderRequest(input: {
     const observe = async (
       outcome: ProviderAttemptOutcome["outcome"],
       status?: number,
+      servedIdentity?: TransportResponse["servedIdentity"],
+      response?: TransportResponse,
+      preflightCancelled = false,
     ) => {
+      let accounting: ProviderAccounting | undefined;
+      try {
+        accounting = validatedAccounting(response, input.route.realData);
+      } catch {
+        accounting = undefined;
+      }
       await input.onAttempt({
-        capabilityId: "CAP-STRUCTURED-GENERATION",
+        capabilityId: input.capabilityId ?? "CAP-STRUCTURED-GENERATION",
         routeId: input.route.routeId,
         providerId: input.route.providerId,
         modelId: input.route.modelId,
+        requestedModelId: input.route.modelId,
+        ...(servedIdentity
+          ? {
+              servedProviderId: servedIdentity.providerId,
+              servedModelId: servedIdentity.modelId,
+            }
+          : {}),
         environment: input.route.environment,
         routeKind: input.route.realData ? "real_data" : "synthetic_fixture",
         dataHandlingPosture:
@@ -92,14 +168,30 @@ export async function executeProviderRequest(input: {
         backoffMs: attemptNumber > 1 ? input.route.retry.backoffMs : 0,
         startedAt,
         completedAt: new Date().toISOString(),
+        costState:
+          accounting?.state ??
+          (preflightCancelled ? "not_incurred" : "unknown"),
+        costAmount: accounting?.amount ?? null,
+        costCurrency: accounting?.currency ?? null,
+        costQuantity: accounting?.quantity ?? 0,
+        costUnit: accounting?.unit ?? null,
+        pricingVersion: accounting?.pricingVersion ?? null,
+        costMeasurement: accounting?.measurement ?? null,
       });
     };
     if (input.signal.aborted) {
-      await observe("cancelled");
+      await observe("cancelled", undefined, undefined, undefined, true);
       throw new Error("Provider request was cancelled.");
     }
     const controller = new AbortController();
-    const abort = () => controller.abort();
+    let rejectCancellation!: (error: Error) => void;
+    const cancellation = new Promise<never>((_resolve, reject) => {
+      rejectCancellation = reject;
+    });
+    const abort = () => {
+      controller.abort();
+      rejectCancellation(new Error("Provider request was cancelled."));
+    };
     input.signal.addEventListener("abort", abort, { once: true });
     let timer: ReturnType<typeof setTimeout> | undefined;
     let response: TransportResponse;
@@ -113,6 +205,7 @@ export async function executeProviderRequest(input: {
       response = await Promise.race([
         input.transport.send(input.request(controller.signal)),
         timeout,
+        cancellation,
       ]);
     } catch (error) {
       lastError =
@@ -133,20 +226,32 @@ export async function executeProviderRequest(input: {
     }
     if (response.status >= 200 && response.status < 300) {
       try {
+        validatedAccounting(response, input.route.realData);
         input.validateResponse?.(response);
       } catch (error) {
         lastError =
           error instanceof Error
             ? error
             : new Error("Provider response validation failed.");
-        await observe("provider_error", response.status);
-        continue;
+        await observe(
+          "provider_error",
+          response.status,
+          response.servedIdentity,
+          response,
+        );
+        break;
       }
-      await observe("ok", response.status);
+      await observe("ok", response.status, response.servedIdentity, response);
       return response;
     }
     lastError = new Error(`Provider returned HTTP ${response.status}.`);
-    await observe("provider_error", response.status);
+    await observe(
+      "provider_error",
+      response.status,
+      response.servedIdentity,
+      response,
+    );
+    if (![408, 429, 500, 502, 503, 504].includes(response.status)) break;
   }
   throw lastError ?? new Error("Provider request failed.");
 }
@@ -166,7 +271,7 @@ export class RecordingFakeTransport implements ProviderTransport {
 
   constructor(
     private readonly response:
-      TransportResponse | readonly (TransportResponse | Error)[],
+      TransportResponse | Error | readonly (TransportResponse | Error)[],
   ) {}
 
   async send(request: TransportRequest): Promise<TransportResponse> {

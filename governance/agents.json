@@ -539,7 +539,9 @@
           "outputHashes": [
             {
               "path": "apps/web/components/ProductFlow.tsx",
-              "sha256": "EC5BECABCE8B58E053199E002E18F04227848925652AC1EDD303E5FEABC61ACE"
+              "sha256": "EC5BECABCE8B58E053199E002E18F04227848925652AC1EDD303E5FEABC61ACE",
+              "gitCommit": "f1a5429505616a61cdac87cf7f57c114fa5e43a6",
+              "gitBlob": "71c57404f0d86bdfdbb313dcdd10958d309d455b"
             }
           ]
         }
@@ -595,7 +597,9 @@
           "outputHashes": [
             {
               "path": "packages/application/src/service.ts",
-              "sha256": "810DEEC5F7309892BC6B54462AC0129375103BBE6645BDCAFCBE4E4F991F6D03"
+              "sha256": "810DEEC5F7309892BC6B54462AC0129375103BBE6645BDCAFCBE4E4F991F6D03",
+              "gitCommit": "f1a5429505616a61cdac87cf7f57c114fa5e43a6",
+              "gitBlob": "a3a4c0c89cb553f3c2edeef75df3e10bc92b2ca1"
             }
           ]
         }
@@ -641,7 +645,9 @@
           "outputHashes": [
             {
               "path": "packages/ai-evidence/src/index.ts",
-              "sha256": "2EFDD7FA16B03BC6CD775D9463F7694490014EF54BDF4B31563E2315A82F5D14"
+              "sha256": "2EFDD7FA16B03BC6CD775D9463F7694490014EF54BDF4B31563E2315A82F5D14",
+              "gitCommit": "f1a5429505616a61cdac87cf7f57c114fa5e43a6",
+              "gitBlob": "5da60a627dcb92b86aa166d6b156d46d1e08d70e"
             }
           ]
         }
@@ -697,7 +703,9 @@
           "outputHashes": [
             {
               "path": "packages/security/src/index.ts",
-              "sha256": "EA4B0D062C4DFA5B44F81ED0F93BF80409116A3B2C96E91F26B9254E41F0423B"
+              "sha256": "EA4B0D062C4DFA5B44F81ED0F93BF80409116A3B2C96E91F26B9254E41F0423B",
+              "gitCommit": "f1a5429505616a61cdac87cf7f57c114fa5e43a6",
+              "gitBlob": "f93d3a1d2694015994750d614aaae8f76358fcbe"
             }
           ]
         }

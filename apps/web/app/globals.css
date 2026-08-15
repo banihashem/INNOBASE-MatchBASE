@@ -460,6 +460,7 @@ a {
   z-index: 10;
   top: 0;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 0.55rem;
   padding: 0.6rem 1rem;
@@ -470,6 +471,12 @@ a {
   font-weight: 800;
   letter-spacing: 0.03em;
   text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.qualified-live-banner {
+  background: #dcefe7;
+  border-color: var(--forest-2);
 }
 
 .site-header,
@@ -479,6 +486,12 @@ footer {
   justify-content: space-between;
   width: min(1180px, calc(100% - 3rem));
   margin: auto;
+}
+
+.site-header > *,
+footer > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .site-header {
@@ -906,6 +919,11 @@ progress {
   margin-bottom: 2rem;
   border-color: #b28400;
   background: #fff6d4;
+}
+
+.results li {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .candidate-grid {

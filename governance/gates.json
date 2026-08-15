@@ -178,6 +178,78 @@
       "owner": "Repository safety",
       "evidence": ["evidence/slice2/local-validation.json"],
       "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "S3-G0",
+      "name": "Slice 3 accepted-baseline and preservation preflight",
+      "status": "PASS",
+      "owner": "Role 3",
+      "evidence": ["evidence/slice3/local-validation.json"],
+      "summary": "The accepted Slice 2 baseline, protected history and repository boundary are verified.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "S3-G1",
+      "name": "Slice 3 deterministic local implementation",
+      "status": "PASS",
+      "owner": "Role 3",
+      "evidence": ["evidence/slice3/local-validation.json"],
+      "summary": "Repository implementation, PostgreSQL 18, deterministic fixtures and real Chrome pass without provider calls.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "S3-G2",
+      "name": "Slice 3 independent discipline audits",
+      "status": "PASS",
+      "owner": "Independent reviewers",
+      "evidence": ["evidence/slice3/local-validation.json"],
+      "summary": "Six repository-implementation audits pass with zero findings; the final critic remains pending.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "S3-G3",
+      "name": "Slice 3 current provider-policy and capability qualification",
+      "status": "BLOCKED",
+      "owner": "Product owner and provider account owner",
+      "evidence": ["config/slice3/provider-evidence-register.v1.json"],
+      "summary": "Approved OpenRouter credentials, verified paid credit path, direct billing authorization and endpoint-specific qualification evidence are incomplete.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "S3-G4",
+      "name": "Slice 3 bounded live qualification",
+      "status": "BLOCKED",
+      "owner": "Role 3",
+      "evidence": ["evidence/slice3/local-validation.json"],
+      "summary": "Two-route live qualification is prohibited until S3-G3 passes; provider calls remain zero.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "S3-G5",
+      "name": "Slice 3 frozen release and hosted fixture CI",
+      "status": "PENDING",
+      "owner": "Repository safety",
+      "evidence": ["evidence/slice3/local-validation.json"],
+      "summary": "Commit, push and hosted fixture-only CI remain pending.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "S3-G6",
+      "name": "Slice 3 final integration critic",
+      "status": "PENDING",
+      "owner": "Independent critic",
+      "evidence": ["evidence/slice3/local-validation.json"],
+      "summary": "Six repository audits pass; the final integration critic remains pending.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "S3-G7",
+      "name": "Slice 3 Role 2 independent acceptance",
+      "status": "PENDING",
+      "owner": "Role 2",
+      "evidence": ["evidence/slice3/local-validation.json"],
+      "summary": "Role 2 acceptance is pending and cannot pass while live qualification is blocked.",
+      "traceabilityIds": []
     }
   ]
 }

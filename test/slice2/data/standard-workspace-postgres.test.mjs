@@ -225,9 +225,12 @@ postgresTest(
       await installFoundationOnly(pool);
       const foundationCatalog = await catalogSnapshot(pool);
       assert.deepEqual(await getMigrationStatus(pool), {
-        latestMigrationId: "0002_slice_2_standard_workspace",
+        latestMigrationId: "0003_slice_3_live_research",
         appliedMigrationIds: ["0001_slice_1_foundation"],
-        pendingMigrationIds: ["0002_slice_2_standard_workspace"],
+        pendingMigrationIds: [
+          "0002_slice_2_standard_workspace",
+          "0003_slice_3_live_research",
+        ],
         unknownMigrationIds: [],
         ready: false,
       });
@@ -565,6 +568,7 @@ postgresTest(
         },
       );
 
+      assert.equal(await migrateDownLatest(pool), "0003_slice_3_live_research");
       assert.equal(
         await migrateDownLatest(pool),
         "0002_slice_2_standard_workspace",

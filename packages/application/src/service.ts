@@ -36,6 +36,10 @@ import {
   type ResultDisclosure,
   type RunStatus,
 } from "./types.js";
+import {
+  syntheticResearchAdmission,
+  type ServerOwnedResearchAdmission,
+} from "./research-admission.js";
 
 function sha256(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
@@ -91,6 +95,7 @@ interface ServiceOptions {
   canonicalizer: CanonicalizationCapability;
   privacyKey: Uint8Array;
   canonicalizationBudgetMs?: number;
+  researchAdmission?: ServerOwnedResearchAdmission;
 }
 
 export class MatchBaseApplication {
@@ -98,6 +103,7 @@ export class MatchBaseApplication {
   private readonly canonicalizer: CanonicalizationCapability;
   private readonly canonicalizationBudgetMs: number;
   private readonly privacyKey: Buffer;
+  private readonly researchAdmission: ServerOwnedResearchAdmission;
 
   constructor(options: ServiceOptions) {
     this.pool = options.pool;
@@ -108,6 +114,8 @@ export class MatchBaseApplication {
       );
     this.privacyKey = Buffer.from(options.privacyKey);
     this.canonicalizationBudgetMs = options.canonicalizationBudgetMs ?? 20_000;
+    this.researchAdmission =
+      options.researchAdmission ?? syntheticResearchAdmission;
   }
 
   async readiness(): Promise<boolean> {
@@ -152,6 +160,7 @@ export class MatchBaseApplication {
       `SELECT count(*)::int AS active FROM execution_lease
         WHERE run_id IS NOT NULL AND expires_at > clock_timestamp()`,
     );
+    const researchMode = this.researchAdmission.decide(context.tier);
     return {
       display_name: identity.rows[0]?.display_name ?? "Demo account",
       subject: { user_id: context.userId, account_id: context.accountId },
@@ -167,6 +176,11 @@ export class MatchBaseApplication {
       execution: {
         active: execution.rows[0]?.active ?? 0,
         capacity: 3,
+      },
+      research_mode: {
+        id: researchMode.id,
+        label: researchMode.label,
+        live_qualified: researchMode.liveQualified,
       },
     };
   }
@@ -584,6 +598,7 @@ export class MatchBaseApplication {
         "The canonical request is not ready.",
       );
     }
+    const researchMode = this.researchAdmission.decide(context.tier);
     const result = await admitRunWithinQuota(this.pool, {
       accountId: context.accountId,
       userId: context.userId,
@@ -594,6 +609,7 @@ export class MatchBaseApplication {
       scoringConfigVersionId: configuration.scoringConfigVersionId,
       correlationId: context.correlationId,
       deploymentId: context.deploymentId,
+      researchMode: researchMode.id,
     });
     if (result.disposition === "quota_exceeded") {
       await inTransaction(this.pool, (client) =>
@@ -634,6 +650,28 @@ export class MatchBaseApplication {
         },
       );
     }
+    let admittedResearchMode = researchMode;
+    if (result.disposition === "replayed") {
+      const persistedMode = await this.pool.query<{
+        research_mode: "synthetic_reference" | "qualified_live_research";
+      }>(
+        `SELECT research_mode FROM research_run
+          WHERE run_id=$1 AND account_id=$2 AND requested_by_user_id=$3`,
+        [result.runId, context.accountId, context.userId],
+      );
+      admittedResearchMode =
+        persistedMode.rows[0]?.research_mode === "qualified_live_research"
+          ? {
+              id: "qualified_live_research",
+              label: "Qualified live research",
+              liveQualified: true,
+            }
+          : {
+              id: "synthetic_reference",
+              label: "Synthetic reference",
+              liveQualified: false,
+            };
+    }
     return {
       run_id: result.runId,
       state: "queued",
@@ -646,6 +684,11 @@ export class MatchBaseApplication {
         next_capacity_at: result.nextCapacityAt,
       },
       idempotent_replay: result.disposition === "replayed",
+      research_mode: {
+        id: admittedResearchMode.id,
+        label: admittedResearchMode.label,
+        live_qualified: admittedResearchMode.liveQualified,
+      },
     };
   }
 
@@ -842,8 +885,9 @@ export class MatchBaseApplication {
       const result = await client.query<{
         state: string;
         complete_result_document: EvidenceGraphV1 | null;
+        research_mode: "synthetic_reference" | "qualified_live_research";
       }>(
-        `SELECT rr.state, rs.complete_result_document
+        `SELECT rr.state, rr.research_mode, rs.complete_result_document
            FROM research_run rr LEFT JOIN run_result rs USING (run_id)
           WHERE rr.run_id = $1 AND rr.account_id = $2 AND rr.requested_by_user_id = $3 FOR SHARE OF rr`,
         [runId, context.accountId, context.userId],
@@ -862,7 +906,15 @@ export class MatchBaseApplication {
           true,
         );
       }
-      const projection = projectDemoResult(row.complete_result_document);
+      const projected = projectDemoResult(row.complete_result_document);
+      const projection =
+        row.research_mode === "qualified_live_research"
+          ? {
+              ...projected,
+              limitations_notice:
+                "Qualified live research used server-approved routes and source-bound external evidence. This remains advisory and is not supplier verification, a compliance conclusion, or a quotation.",
+            }
+          : projected;
       const fields = [
         "run_id",
         "outcome",

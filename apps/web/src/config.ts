@@ -2,6 +2,7 @@ import {
   assertRuntimeIdentityPolicy,
   type RuntimeEnvironment,
 } from "@matchbase/auth";
+import { isAbsolute } from "node:path";
 
 export interface WebConfig {
   environment: RuntimeEnvironment;
@@ -10,6 +11,8 @@ export interface WebConfig {
   databaseUrl: string;
   oidcSimulatorEnabled: boolean;
   syntheticFixtureEnabled: boolean;
+  liveResearchEnabled?: boolean;
+  testLivePolicyPath?: string;
   googleClientId?: string;
   googleClientSecret?: string;
   googleAuthorizationEndpoint?: string;
@@ -36,6 +39,16 @@ export function loadWebConfig(
   const syntheticFixtureEnabled = enabled(
     environment.MATCHBASE_SYNTHETIC_FIXTURE,
   );
+  const liveResearchEnabled = enabled(
+    environment.MATCHBASE_LIVE_RESEARCH_ENABLED,
+  );
+  const testLivePolicyPath = environment.MATCHBASE_TEST_LIVE_POLICY_PATH;
+  if (testLivePolicyPath && runtime !== "test") {
+    throw new Error("Test live policy override is prohibited outside test.");
+  }
+  if (testLivePolicyPath && !isAbsolute(testLivePolicyPath)) {
+    throw new Error("Test live policy override must be an absolute path.");
+  }
   assertRuntimeIdentityPolicy({
     environment: runtime,
     oidcSimulatorEnabled,
@@ -62,6 +75,8 @@ export function loadWebConfig(
     databaseUrl,
     oidcSimulatorEnabled,
     syntheticFixtureEnabled,
+    liveResearchEnabled,
+    ...(testLivePolicyPath ? { testLivePolicyPath } : {}),
     ...(environment.GOOGLE_CLIENT_ID
       ? { googleClientId: environment.GOOGLE_CLIENT_ID }
       : {}),

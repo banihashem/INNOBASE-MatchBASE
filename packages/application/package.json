@@ -15,12 +15,14 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test --test-concurrency=1 ../../test/slice1/application/*.test.mjs ../../test/slice2/application/*.test.mjs",
-    "worker:synthetic": "node dist/combined-synthetic-worker.js"
+    "worker:synthetic": "node dist/combined-synthetic-worker.js",
+    "worker:combined": "node dist/combined-worker.js"
   },
   "dependencies": {
     "@matchbase/ai-evidence": "workspace:*",
     "@matchbase/contracts": "workspace:*",
-    "@matchbase/data": "workspace:*"
+    "@matchbase/data": "workspace:*",
+    "@matchbase/security": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

@@ -82,6 +82,11 @@ async function installReferenceApi(
         execution: { active: 1, capacity: 3 },
         csrf_token: "fixture-csrf-value",
         environment: "test",
+        research_mode: {
+          id: "synthetic_reference",
+          label: "Synthetic reference",
+          live_qualified: false,
+        },
       });
     }
 

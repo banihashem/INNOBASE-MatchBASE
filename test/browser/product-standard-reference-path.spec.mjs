@@ -215,6 +215,20 @@ test("completes the signed Standard workspace through the real HTTP, PostgreSQL,
     page.getByRole("heading", { name: "Requests", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".tier-badge")).toHaveText("Standard");
+  await expect(
+    page.getByText("Synthetic reference", { exact: true }),
+  ).toBeVisible();
+  const modeResponse = await page.request.get("/api/v1/me");
+  expect(modeResponse.status()).toBe(200);
+  const modeBody = await modeResponse.json();
+  expect(modeBody.research_mode).toEqual({
+    id: "synthetic_reference",
+    label: "Synthetic reference",
+    live_qualified: false,
+  });
+  expect(JSON.stringify(modeBody)).not.toMatch(
+    /gemini|openrouter|providerId|modelId/iu,
+  );
   await page.getByRole("button", { name: "New structured request" }).click();
   await page.getByLabel("Source language").selectOption("en");
   await page.getByLabel("Source-language input").fill(transientSource);

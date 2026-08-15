@@ -1,6 +1,9 @@
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 
+export * from "./secure-fetch.js";
+export * from "./node-live-transport.js";
+
 const SAFE_TELEMETRY_KEYS = new Set([
   "account_id",
   "user_id",

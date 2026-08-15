@@ -41,6 +41,7 @@ import {
   isSharedWorkspaceMutation,
   isStandardMutationIntent,
 } from "./standard-route-core";
+import { loadServerOwnedResearchAdmission } from "./server-owned-research-admission";
 
 const HOST_SESSION_COOKIE = "__Host-matchbase_session";
 const LOCAL_SESSION_COOKIE = "matchbase_session";
@@ -198,6 +199,7 @@ function services(): Services {
       pool,
       canonicalizer,
       privacyKey: config.digestKey,
+      researchAdmission: loadServerOwnedResearchAdmission(config),
     }),
     standardApplication: new StandardWorkspaceApplication({
       pool,
@@ -1325,7 +1327,11 @@ export async function handleRoute(request: Request): Promise<Response> {
       return json(
         current.config,
         correlationId,
-        { ...status, quota: result.quota },
+        {
+          ...status,
+          quota: result.quota,
+          research_mode: result.research_mode,
+        },
         202,
         result.idempotent_replay
           ? { "MB-Idempotent-Replay": "true" }

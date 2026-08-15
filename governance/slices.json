@@ -68,6 +68,30 @@
         "same-byte independent audits",
         "exact successor commit and hosted CI"
       ]
+    },
+    {
+      "id": "SLICE-3",
+      "name": "Provider-neutral live research qualification",
+      "status": "BLOCKED_PREREQUISITE",
+      "scope": [
+        "closed direct Gemini and explicit OpenRouter route policy",
+        "secure public HTTPS evidence acquisition",
+        "append-only live attempt, source, identity, cost and terminal ledgers",
+        "deterministic fixture orchestration and accepted Demo and Standard regression"
+      ],
+      "exclusions": [
+        "live provider calls before explicit qualification gate",
+        "credential, billing or cloud mutation",
+        "real user or confidential data",
+        "Google OAuth, GCP, Cloudflare, DNS and production deployment",
+        "Consultant, PDF, Admin, re-score and re-research workflows"
+      ],
+      "terminal": "BLOCKED",
+      "blockedBy": [
+        "approved OpenRouter credential and paid credit path",
+        "explicit direct Gemini billing authorization",
+        "two-route bounded live qualification"
+      ]
     }
   ]
 }

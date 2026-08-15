@@ -1,11 +1,18 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { isAbsolute, join, resolve, win32 } from "node:path";
 import { buildArtifactSnapshot } from "../packages/artifact-indexer/dist/src/indexer.js";
 import { replaceRegularFileTransactionally } from "./lib/replace-regular-file.mjs";
 import { validateAgentRoster } from "./lib/agent-policy.mjs";
 import { buildSemanticViews } from "./lib/semantic-dashboard.mjs";
 import { validateSlice2HistoricalGitObject } from "./lib/dashboard-provenance-policy.mjs";
+import {
+  applySlice3DashboardProjection,
+  slice3EvidenceSourceRef,
+  validateSlice3Dashboard,
+  validateSlice3Evidence,
+  validateSlice3Governance,
+} from "./lib/slice3-dashboard-policy.mjs";
 import {
   externalClosurePredecessorSourceRef,
   externalClosureRole2SourceRef,
@@ -21,6 +28,7 @@ import {
 } from "./lib/slice2-external-closure-policy.mjs";
 import {
   SNAPSHOT_CONFIG_PATH,
+  SNAPSHOT_DIST_OUTPUT_PATH,
   SNAPSHOT_OUTPUT_PATH,
   assertSafeSnapshotOutput,
   validateGeneratorConfig,
@@ -37,6 +45,16 @@ if (Number.isNaN(Date.parse(effectiveAsOf)))
   throw new Error("as-of override must be ISO-8601");
 config.asOf = new Date(effectiveAsOf).toISOString();
 const artifactSnapshot = await buildArtifactSnapshot(config);
+const slice3EvidencePath = resolve("evidence/slice3/local-validation.json");
+const slice3EvidenceBytes = await readFile(slice3EvidencePath);
+const slice3Evidence = validateSlice3Evidence(
+  JSON.parse(slice3EvidenceBytes.toString("utf8")),
+);
+const slice3SourceRef = slice3EvidenceSourceRef(
+  slice3EvidencePath,
+  slice3EvidenceBytes,
+  slice3Evidence,
+);
 const anchorOnly =
   process.env.MATCHBASE_EXTERNAL_EVIDENCE_MODE === "ANCHOR_ONLY_CI";
 const externalClosurePath = process.env.MATCHBASE_EXTERNAL_CLOSURE_OVERLAY
@@ -189,21 +207,24 @@ const trustedAgentEvidenceRefs = agentsDocument.value.agents.flatMap((agent) =>
     ...agent.deliverables.flatMap((deliverable) => deliverable.outputHashes),
     ...agent.testEvidence.flatMap((test) => test.evidenceRefs),
     ...agent.independentAudit.evidenceRefs,
-  ].map((reference, index) => ({
-    sourceId: `matchbase://agent-evidence/${agent.id}/${index + 1}`,
-    path:
-      isAbsolute(reference.path) || win32.isAbsolute(reference.path)
-        ? reference.path
-        : resolve(reference.path),
-    sha256: reference.sha256,
-    observedAt: artifactSnapshot.generatedAt,
-  })),
+  ]
+    .filter((reference) => !reference.gitCommit)
+    .map((reference, index) => ({
+      sourceId: `matchbase://agent-evidence/${agent.id}/${index + 1}`,
+      path:
+        isAbsolute(reference.path) || win32.isAbsolute(reference.path)
+          ? reference.path
+          : resolve(reference.path),
+      sha256: reference.sha256,
+      observedAt: artifactSnapshot.generatedAt,
+    })),
 );
 trustedAgentEvidenceRefs.push(
   externalClosureDocument.sourceRef,
   externalClosureDocument.predecessorSourceRef,
   externalClosureRole2SourceRef(externalClosureValue),
 );
+trustedAgentEvidenceRefs.push(slice3SourceRef);
 trustedAgentEvidenceRefs.push(
   slice2ClosureDocument.sourceRef,
   slice2ClosureDocument.auditSourceRef,
@@ -245,6 +266,11 @@ const semantic = buildSemanticViews({
     }),
   ),
 });
+validateSlice3Governance(
+  (await indexedDocument("implementation-governance", "gates.json")).value
+    .gates,
+  slice3Evidence,
+);
 
 const views = Object.fromEntries(
   viewNames.map((view) => {
@@ -260,6 +286,8 @@ const views = Object.fromEntries(
     ];
   }),
 );
+applySlice3DashboardProjection(views, slice3Evidence, slice3SourceRef);
+validateSlice3Dashboard(views, slice3Evidence, slice3SourceRef);
 
 const dashboard = {
   schemaVersion: "1.0",
@@ -271,9 +299,13 @@ const dashboard = {
 };
 
 await assertSafeSnapshotOutput();
+const snapshotBytes = `${JSON.stringify(dashboard, null, 2)}\n`;
+await replaceRegularFileTransactionally(SNAPSHOT_OUTPUT_PATH, snapshotBytes);
+await mkdir(resolve(SNAPSHOT_DIST_OUTPUT_PATH, ".."), { recursive: true });
 await replaceRegularFileTransactionally(
-  SNAPSHOT_OUTPUT_PATH,
-  `${JSON.stringify(dashboard, null, 2)}\n`,
+  SNAPSHOT_DIST_OUTPUT_PATH,
+  snapshotBytes,
+  SNAPSHOT_DIST_OUTPUT_PATH,
 );
 console.log(
   `dashboard snapshot: PASS (${artifactSnapshot.summary.total} artifacts; ${artifactSnapshot.snapshotId})`,

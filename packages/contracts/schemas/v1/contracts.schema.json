@@ -343,6 +343,385 @@
         }
       }
     },
+    "researchRoutePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "policyVersion",
+        "capabilityPolicyVersion",
+        "environment",
+        "evaluatedAt",
+        "liveActivation",
+        "routes"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "enum": ["research-route-policy.v1"]
+        },
+        "policyVersion": {
+          "type": "string"
+        },
+        "capabilityPolicyVersion": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "string",
+          "enum": ["local", "test", "staging", "production"]
+        },
+        "evaluatedAt": {
+          "type": "string"
+        },
+        "liveActivation": {
+          "type": "string",
+          "enum": ["enabled", "blocked"]
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "routeId",
+              "adapterId",
+              "adapterVersion",
+              "path",
+              "providerId",
+              "requestedModelId",
+              "expectedServedModelId",
+              "enabled",
+              "liveQualified",
+              "fallbackPosition",
+              "capabilities",
+              "parameterPolicy",
+              "dataHandling",
+              "costPolicy"
+            ],
+            "properties": {
+              "routeId": {
+                "type": "string"
+              },
+              "adapterId": {
+                "type": "string",
+                "enum": ["gemini_direct", "openrouter"]
+              },
+              "adapterVersion": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string",
+                "enum": ["gemini_direct", "openrouter"]
+              },
+              "providerId": {
+                "type": "string"
+              },
+              "requestedModelId": {
+                "type": "string"
+              },
+              "expectedServedModelId": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "liveQualified": {
+                "type": "boolean"
+              },
+              "fallbackPosition": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "query_planning",
+                    "web_search_grounding",
+                    "retrieval",
+                    "structured_extraction",
+                    "advisory_synthesis"
+                  ]
+                }
+              },
+              "parameterPolicy": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "policyVersion",
+                  "searchMode",
+                  "structuredOutput",
+                  "requireParameters",
+                  "allowFallbacks",
+                  "maxOutputTokens",
+                  "temperature",
+                  "timeoutMs",
+                  "maxAttempts",
+                  "backoffMs"
+                ],
+                "properties": {
+                  "policyVersion": {
+                    "type": "string"
+                  },
+                  "searchMode": {
+                    "type": "string",
+                    "enum": [
+                      "provider_native_web_search",
+                      "external_sanitized_evidence"
+                    ]
+                  },
+                  "structuredOutput": {
+                    "type": "string",
+                    "enum": ["json_schema"]
+                  },
+                  "requireParameters": {
+                    "type": "boolean",
+                    "enum": [true]
+                  },
+                  "allowFallbacks": {
+                    "type": "boolean",
+                    "enum": [false]
+                  },
+                  "maxOutputTokens": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "temperature": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 2
+                  },
+                  "timeoutMs": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 120000
+                  },
+                  "maxAttempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3
+                  },
+                  "backoffMs": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
+                  }
+                }
+              },
+              "dataHandling": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "evidenceVersion",
+                  "evidenceRefs",
+                  "evidenceAccessedAt",
+                  "evidenceExpiresAt",
+                  "paidPath",
+                  "retentionTrainingPosture"
+                ],
+                "properties": {
+                  "evidenceVersion": {
+                    "type": "string"
+                  },
+                  "evidenceRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "evidenceAccessedAt": {
+                    "type": "string"
+                  },
+                  "evidenceExpiresAt": {
+                    "type": "string"
+                  },
+                  "paidPath": {
+                    "type": "string",
+                    "enum": ["verified", "unverified"]
+                  },
+                  "retentionTrainingPosture": {
+                    "type": "string",
+                    "enum": ["verified_no_training", "verified_zdr", "unknown"]
+                  }
+                }
+              },
+              "costPolicy": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "pricingState",
+                  "pricingVersion",
+                  "currency",
+                  "accountingMode"
+                ],
+                "properties": {
+                  "pricingState": {
+                    "type": "string",
+                    "enum": ["known", "unknown"]
+                  },
+                  "pricingVersion": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "accountingMode": {
+                    "type": "string",
+                    "enum": [
+                      "provider_reported",
+                      "conservative_estimate",
+                      "unavailable"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "researchRouteSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "snapshotId",
+        "runId",
+        "policyVersion",
+        "routeId",
+        "adapterId",
+        "adapterVersion",
+        "path",
+        "providerId",
+        "requestedModelId",
+        "servedProviderId",
+        "servedModelId",
+        "capabilityPolicyVersion",
+        "parameterPolicy",
+        "dataHandlingEvidenceVersion",
+        "fallbackPosition",
+        "capturedAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "enum": ["research-route-snapshot.v1"]
+        },
+        "snapshotId": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "policyVersion": {
+          "type": "string"
+        },
+        "routeId": {
+          "type": "string"
+        },
+        "adapterId": {
+          "type": "string",
+          "enum": ["gemini_direct", "openrouter"]
+        },
+        "adapterVersion": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "enum": ["gemini_direct", "openrouter"]
+        },
+        "providerId": {
+          "type": "string"
+        },
+        "requestedModelId": {
+          "type": "string"
+        },
+        "servedProviderId": {
+          "type": "string"
+        },
+        "servedModelId": {
+          "type": "string"
+        },
+        "capabilityPolicyVersion": {
+          "type": "string"
+        },
+        "parameterPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policyVersion",
+            "searchMode",
+            "structuredOutput",
+            "requireParameters",
+            "allowFallbacks",
+            "maxOutputTokens",
+            "temperature",
+            "timeoutMs",
+            "maxAttempts",
+            "backoffMs"
+          ],
+          "properties": {
+            "policyVersion": {
+              "type": "string"
+            },
+            "searchMode": {
+              "type": "string",
+              "enum": [
+                "provider_native_web_search",
+                "external_sanitized_evidence"
+              ]
+            },
+            "structuredOutput": {
+              "type": "string",
+              "enum": ["json_schema"]
+            },
+            "requireParameters": {
+              "type": "boolean",
+              "enum": [true]
+            },
+            "allowFallbacks": {
+              "type": "boolean",
+              "enum": [false]
+            },
+            "maxOutputTokens": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "temperature": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            },
+            "maxAttempts": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3
+            },
+            "backoffMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        },
+        "dataHandlingEvidenceVersion": {
+          "type": "string"
+        },
+        "fallbackPosition": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "capturedAt": {
+          "type": "string"
+        }
+      }
+    },
     "evidenceGraph": {
       "type": "object",
       "additionalProperties": false,
@@ -531,7 +910,12 @@
               },
               "sourceKind": {
                 "type": "string",
-                "enum": ["synthetic_fixture", "reserved_url", "local_fixture"]
+                "enum": [
+                  "synthetic_fixture",
+                  "reserved_url",
+                  "local_fixture",
+                  "external_url"
+                ]
               },
               "url": {
                 "type": "string"
@@ -572,6 +956,176 @@
         },
         "gateEvaluationCompletedAt": {
           "type": "string"
+        }
+      }
+    },
+    "evidenceLineageLedger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "accountId",
+        "runId",
+        "values",
+        "drivers",
+        "identityResolutions"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "enum": ["evidence-lineage-ledger.v1"]
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "valueId",
+              "accountId",
+              "runId",
+              "candidateId",
+              "claimId",
+              "evidenceId",
+              "fieldId",
+              "valueSha256"
+            ],
+            "properties": {
+              "valueId": {
+                "type": "string"
+              },
+              "accountId": {
+                "type": "string"
+              },
+              "runId": {
+                "type": "string"
+              },
+              "candidateId": {
+                "type": "string"
+              },
+              "claimId": {
+                "type": "string"
+              },
+              "evidenceId": {
+                "type": "string"
+              },
+              "fieldId": {
+                "type": "string"
+              },
+              "valueSha256": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "drivers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "driverId",
+              "accountId",
+              "runId",
+              "candidateId",
+              "claimId",
+              "valueId",
+              "evidenceId",
+              "dimensionId",
+              "direction"
+            ],
+            "properties": {
+              "driverId": {
+                "type": "string"
+              },
+              "accountId": {
+                "type": "string"
+              },
+              "runId": {
+                "type": "string"
+              },
+              "candidateId": {
+                "type": "string"
+              },
+              "claimId": {
+                "type": "string"
+              },
+              "valueId": {
+                "type": "string"
+              },
+              "evidenceId": {
+                "type": "string"
+              },
+              "dimensionId": {
+                "type": "string"
+              },
+              "direction": {
+                "type": "string",
+                "enum": ["supports", "contradicts", "limits"]
+              }
+            }
+          }
+        },
+        "identityResolutions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "resolutionId",
+              "accountId",
+              "runId",
+              "candidateId",
+              "canonicalIdentitySha256",
+              "disposition",
+              "mergedIntoCandidateId",
+              "resolverVersion",
+              "reasonCode"
+            ],
+            "properties": {
+              "resolutionId": {
+                "type": "string"
+              },
+              "accountId": {
+                "type": "string"
+              },
+              "runId": {
+                "type": "string"
+              },
+              "candidateId": {
+                "type": "string"
+              },
+              "canonicalIdentitySha256": {
+                "type": "string"
+              },
+              "disposition": {
+                "type": "string",
+                "enum": ["distinct", "duplicate", "rejected_ambiguous"]
+              },
+              "mergedIntoCandidateId": {
+                "type": ["string", "null"]
+              },
+              "resolverVersion": {
+                "type": "string",
+                "enum": ["candidate-identity-resolver.v1"]
+              },
+              "reasonCode": {
+                "type": "string",
+                "enum": [
+                  "unique_canonical_identity",
+                  "duplicate_canonical_identity",
+                  "insufficient_identity",
+                  "canonical_hash_collision"
+                ]
+              }
+            }
+          }
         }
       }
     },

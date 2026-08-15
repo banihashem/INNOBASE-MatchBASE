@@ -160,6 +160,9 @@ importers:
       "@matchbase/data":
         specifier: workspace:*
         version: link:../data
+      "@matchbase/security":
+        specifier: workspace:*
+        version: link:../security
     devDependencies:
       "@types/node":
         specifier: 24.13.3

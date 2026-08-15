@@ -13,6 +13,11 @@ const session = {
   tier: "standard" as const,
   quota: { limit: 5, used: 1, remaining: 4, next_capacity_at: null },
   execution: { active: 1, capacity: 3 },
+  research_mode: {
+    id: "synthetic_reference" as const,
+    label: "Synthetic reference" as const,
+    live_qualified: false,
+  },
   csrf_token: "fixture-csrf-value",
   environment: "test" as const,
 };

@@ -11,6 +11,7 @@ import {
 import { createPool } from "@matchbase/data";
 import { loadWebConfig } from "./config";
 import { createWebRuntime } from "./runtime";
+import { loadServerOwnedResearchAdmission } from "./server-owned-research-admission";
 
 const config = loadWebConfig();
 const pool = createPool({ connectionString: config.databaseUrl, max: 20 });
@@ -30,6 +31,7 @@ const application = new MatchBaseApplication({
   pool,
   canonicalizer,
   privacyKey: config.digestKey,
+  researchAdmission: loadServerOwnedResearchAdmission(config),
 });
 const standardApplication = new StandardWorkspaceApplication({
   pool,

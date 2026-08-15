@@ -13,6 +13,11 @@ const session = {
   tier: "demo" as const,
   quota: { limit: 3, used: 1, remaining: 2, next_capacity_at: null },
   execution: { active: 1, capacity: 3 },
+  research_mode: {
+    id: "synthetic_reference" as const,
+    label: "Synthetic reference" as const,
+    live_qualified: false,
+  },
   csrf_token: "fixture-csrf-value",
   environment: "test" as const,
 };
@@ -57,6 +62,29 @@ test("keeps the exact synthetic disclosure visible in signed-out and workspace s
   expect(
     screen.queryByRole("button", { name: /upload/i }),
   ).not.toBeInTheDocument();
+});
+
+test("renders the server-assigned qualified-live mode without provider topology", () => {
+  const qualifiedSession = {
+    ...session,
+    research_mode: {
+      id: "qualified_live_research" as const,
+      label: "Qualified live research" as const,
+      live_qualified: true,
+    },
+  };
+  const { container } = render(
+    <ProductFlow initialSession={qualifiedSession} />,
+  );
+  expect(
+    screen.getByText(
+      "Qualified live research — external evidence is fetched and verified for this run",
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText(SYNTHETIC_NOTICE)).not.toBeInTheDocument();
+  expect(container.textContent).not.toMatch(
+    /gemini|openrouter|provider|model/iu,
+  );
 });
 
 test("reports all three-part validation failures and focuses the summary", async () => {

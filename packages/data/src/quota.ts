@@ -22,6 +22,7 @@ export interface QuotaAdmissionInput {
   readonly correlationId: string;
   readonly deploymentId: string;
   readonly runId?: string;
+  readonly researchMode?: "synthetic_reference" | "qualified_live_research";
 }
 
 export type QuotaAdmissionResult =
@@ -227,8 +228,9 @@ export async function admitRunWithinQuota(
       `INSERT INTO research_run (
          run_id, account_id, canonical_request_version_id, requested_by_user_id,
          tier_at_submission, state, model_policy_version_id,
-         scoring_config_version_id, idempotency_key_hash, queued_at
-       ) VALUES ($1,$2,$3,$4,$5,'queued',$6,$7,$8,$9)`,
+         scoring_config_version_id, idempotency_key_hash, queued_at,
+         research_mode
+       ) VALUES ($1,$2,$3,$4,$5,'queued',$6,$7,$8,$9,$10)`,
       [
         runId,
         input.accountId,
@@ -239,6 +241,7 @@ export async function admitRunWithinQuota(
         input.scoringConfigVersionId,
         input.idempotencyKeyHash,
         decisionAt,
+        input.researchMode ?? "synthetic_reference",
       ],
     );
     await client.query(
@@ -275,7 +278,11 @@ export async function admitRunWithinQuota(
       outcome: "allow",
       correlationId: input.correlationId,
       deploymentId: input.deploymentId,
-      detail: { quotaLimit: limit, quotaUsed: current.used + 1 },
+      detail: {
+        quotaLimit: limit,
+        quotaUsed: current.used + 1,
+        researchMode: input.researchMode ?? "synthetic_reference",
+      },
     });
     return response;
   });

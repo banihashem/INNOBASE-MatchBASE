@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep, win32 } from "node:path";
 
@@ -129,6 +130,34 @@ function verifyHashReference(reference, context) {
     throw new Error(
       `${context.label} resolves outside repository and management roots: ${reference.path}`,
     );
+  if (reference.gitCommit !== undefined || reference.gitBlob !== undefined) {
+    if (
+      windowsAbsolute ||
+      nativeAbsolute ||
+      !/^[a-f0-9]{40}$/u.test(reference.gitCommit ?? "") ||
+      !/^[a-f0-9]{40}$/u.test(reference.gitBlob ?? "")
+    ) {
+      throw new Error(`${context.label} immutable Git identity is invalid.`);
+    }
+    const resolved = spawnSync(
+      "git",
+      ["rev-parse", `${reference.gitCommit}:${reference.path}`],
+      { cwd: context.repoRoot, encoding: "utf8" },
+    );
+    if (resolved.status !== 0 || resolved.stdout.trim() !== reference.gitBlob)
+      throw new Error(`${context.label} Git object binding is invalid.`);
+    const blob = spawnSync("git", ["cat-file", "blob", reference.gitBlob], {
+      cwd: context.repoRoot,
+      encoding: "buffer",
+    });
+    if (
+      blob.status !== 0 ||
+      createHash("sha256").update(blob.stdout).digest("hex").toUpperCase() !==
+        reference.sha256
+    )
+      throw new Error(`${context.label} immutable Git bytes mismatch.`);
+    return;
+  }
   const actual = createHash("sha256")
     .update(readFileSync(realPath))
     .digest("hex")

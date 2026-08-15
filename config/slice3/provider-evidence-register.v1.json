@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "provider-evidence-register.v1",
+  "registerVersion": "slice3-provider-evidence.2026-08-15",
+  "accessedAt": "2026-08-15T18:00:00.000Z",
+  "expiresAt": "2026-08-22T18:00:00.000Z",
+  "sources": [
+    {
+      "sourceId": "GOOGLE-GEMINI-MODEL-3.6-FLASH",
+      "authority": "google",
+      "url": "https://ai.google.dev/gemini-api/docs/models",
+      "supports": ["model_identity", "production_status"],
+      "confidence": "high"
+    },
+    {
+      "sourceId": "GOOGLE-GEMINI-PAID-DATA-HANDLING",
+      "authority": "google",
+      "url": "https://ai.google.dev/gemini-api/docs/zdr",
+      "supports": ["paid_no_training", "retention_constraints"],
+      "confidence": "high"
+    },
+    {
+      "sourceId": "GOOGLE-GEMINI-PRICING",
+      "authority": "google",
+      "url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "supports": ["pricing", "grounding_pricing"],
+      "confidence": "high"
+    },
+    {
+      "sourceId": "OPENROUTER-GEMINI-3.6-FLASH",
+      "authority": "openrouter",
+      "url": "https://openrouter.ai/google/gemini-3.6-flash",
+      "supports": ["model_identity", "pricing"],
+      "confidence": "high"
+    },
+    {
+      "sourceId": "OPENROUTER-PROVIDER-ROUTING",
+      "authority": "openrouter",
+      "url": "https://openrouter.ai/docs/guides/routing/provider-selection",
+      "supports": ["provider_order", "fallback_control", "parameter_control"],
+      "confidence": "high"
+    },
+    {
+      "sourceId": "OPENROUTER-ZDR",
+      "authority": "openrouter",
+      "url": "https://openrouter.ai/docs/guides/features/zdr",
+      "supports": ["zdr_control", "endpoint_policy_conservatism"],
+      "confidence": "high"
+    },
+    {
+      "sourceId": "OPENROUTER-USAGE-ACCOUNTING",
+      "authority": "openrouter",
+      "url": "https://openrouter.ai/docs/cookbook/administration/usage-accounting",
+      "supports": ["actual_cost", "token_accounting"],
+      "confidence": "high"
+    }
+  ],
+  "unresolved": [
+    "APPROVED_OPENROUTER_CREDENTIAL_ABSENT",
+    "OPENROUTER_PAID_CREDIT_PATH_NOT_VERIFIED",
+    "OPENROUTER_GOOGLE_ENDPOINT_ZDR_ELIGIBILITY_NOT_LIVE_VERIFIED",
+    "DIRECT_GEMINI_ACTIVE_BILLING_PROJECT_NOT_EXPLICITLY_APPROVED_FOR_QUALIFICATION",
+    "TWO_ROUTE_BOUNDED_LIVE_QUALIFICATION_NOT_EXECUTED"
+  ],
+  "externalMutations": {
+    "providerCalls": 0,
+    "credentialWrites": 0,
+    "billingMutations": 0,
+    "cloudMutations": 0
+  }
+}

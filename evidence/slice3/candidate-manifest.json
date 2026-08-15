@@ -1,0 +1,369 @@
+{
+  "schemaVersion": 1,
+  "candidateId": "PO-001-SLICE-3-LOCAL-BLOCKED-CANDIDATE",
+  "baselineCommit": "f1a5429505616a61cdac87cf7f57c114fa5e43a6",
+  "baselineTree": "a01673ade6cc08c8648b52d8ac560d9ba385906f",
+  "algorithm": "SHA256(PATH_NUL_SHA256_LF)",
+  "excludedSelfReferentialMutableArtifacts": [
+    "evidence/slice3/candidate-manifest.json",
+    "evidence/slice3/local-validation.json",
+    "apps/dashboard/public/current-snapshot.json",
+    "apps/dashboard/dist/current-snapshot.json"
+  ],
+  "fileCount": 88,
+  "aggregateSha256": "86F96A2022D13FBF01E21C3C6A6A6E2A5898549BF3C68E6C957BDDB5AECBBAF4",
+  "files": [
+    {
+      "path": "apps/web/app/globals.css",
+      "sha256": "BA165D2D9D6D2FAC7A0DDD2CAA7EF94192310A5B3FE580510BA94401D82E95CA"
+    },
+    {
+      "path": "apps/web/components/ProductFlow.accessibility.test.tsx",
+      "sha256": "F6C40BAC4BA7A0E8007D7B8DDEAFFA23CF483F470A3C5E52B114611B5E887AD4"
+    },
+    {
+      "path": "apps/web/components/ProductFlow.test.tsx",
+      "sha256": "FEF49F1E431660DDA3976244700EC3AAAC5AF14F7DA6D9E31D4C8C27CA736033"
+    },
+    {
+      "path": "apps/web/components/ProductFlow.tsx",
+      "sha256": "B5953ADBA314DD06E90A18B9DC1C5BBF56FCCE15D5EF90F54ABE4E56DEEA57AD"
+    },
+    {
+      "path": "apps/web/components/StandardWorkspace.test.tsx",
+      "sha256": "3F290ED2C311FC3360CED016DAED9F7FD06CF2D917725F65C895867A0D6F5495"
+    },
+    {
+      "path": "apps/web/components/standard/StandardWorkspace.tsx",
+      "sha256": "F57ADDB4A8F4A945D45FBF0A782855CE2B29E5A8D1202B3287BE6D7B86A7BAC1"
+    },
+    {
+      "path": "apps/web/components/standard/SyntheticNotice.tsx",
+      "sha256": "BC357591C7AD9A56CAD87D43985E24A93E76691F00AD784D2584C1D918A15130"
+    },
+    {
+      "path": "apps/web/components/standard/types.ts",
+      "sha256": "A2002331406A81C5539C78F6AFB2833B971FE9E2CF6D99ACA0F82972E99D223F"
+    },
+    {
+      "path": "apps/web/src/config.ts",
+      "sha256": "DACAA5E06C80C26EE1E021040A85901538B3FB9A7072044C81DC9DD7D23AD43C"
+    },
+    {
+      "path": "apps/web/src/fetch-runtime.simulator.test.ts",
+      "sha256": "3D217C9E6C2E1370204FBF582C245C807156056CFEFF5043479F26C5C80AC18D"
+    },
+    {
+      "path": "apps/web/src/fetch-runtime.ts",
+      "sha256": "EEDBCD0356BF9C0AEC82FFA3F33146DCFD51445F603E790C7A0026C01B9C0582"
+    },
+    {
+      "path": "apps/web/src/server-owned-research-admission.ts",
+      "sha256": "C3E6863754DAEC40307DBDFD1B495A2E2473AB5FF020DD8294AD723FA09A813D"
+    },
+    {
+      "path": "apps/web/src/server.ts",
+      "sha256": "37411ED6ABBB62217A5ADBF7973F0AC925576D0568B7139B8B3443CDDF904122"
+    },
+    {
+      "path": "config/slice3/provider-evidence-register.v1.json",
+      "sha256": "9FBBE6B242B5820677FA69350C0CA0E53E23B78AA4AB363CBF5C8E826F12B965"
+    },
+    {
+      "path": "config/slice3/research-route-policy.v1.json",
+      "sha256": "0FA33DA02CB345511F04514D247FABCE055AEDF24EE6FD709B782507CED122C9"
+    },
+    {
+      "path": "governance/agents.json",
+      "sha256": "8B79E5608895C0CBD848C68809081A2AEDD852235FF40C0E6DCA472F5264C66D"
+    },
+    {
+      "path": "governance/gates.json",
+      "sha256": "94C5C68E7859754A7B4BAD9B6E61AB0A60BCC8089EE2386EF2B3C519EC91D720"
+    },
+    {
+      "path": "governance/slices.json",
+      "sha256": "A64C506B32A6544C3AD49FEC0A55CEBA1D9C82548F842FA098EA3800B581AC9D"
+    },
+    {
+      "path": "package.json",
+      "sha256": "C72C78AAA0C501838C9B35D0B3978EC017B845EE18718973F9AD3FB8915AABC2"
+    },
+    {
+      "path": "packages/ai-evidence/src/adapters/gemini-direct.ts",
+      "sha256": "63A7BECC25D7B6682A3FADD4D640C797623068237637F2BF059846185501B822"
+    },
+    {
+      "path": "packages/ai-evidence/src/adapters/openrouter.ts",
+      "sha256": "927A80094E2E30351B4A183F4F26205B17777B0591E98251268DF170302DB47C"
+    },
+    {
+      "path": "packages/ai-evidence/src/evidence/candidate-identity.ts",
+      "sha256": "94B757E21F6877AE268CA023F50E77C2F4B9B80414DCC65042EDCFA9D8F95EA5"
+    },
+    {
+      "path": "packages/ai-evidence/src/evidence/integrity.ts",
+      "sha256": "67D6F1A87882AC5D307560D3A66609EA796A9965135FE3F027D0BC64539E1FDC"
+    },
+    {
+      "path": "packages/ai-evidence/src/evidence/lineage.ts",
+      "sha256": "70699E5BB3154A432AC22F4AE9DA11580A00D4B6B8A4E5B0D93F77E19893D3FB"
+    },
+    {
+      "path": "packages/ai-evidence/src/index.ts",
+      "sha256": "7E878A03742C3F3834AF532ABF41EE99A43FE3898FBF240BA25C34262158F80A"
+    },
+    {
+      "path": "packages/ai-evidence/src/qualified-research-input.ts",
+      "sha256": "14EFC0F13C855522C178F48E4E47452B4165FBA43A93EBCCE7313B19639B202F"
+    },
+    {
+      "path": "packages/ai-evidence/src/research-orchestrator.ts",
+      "sha256": "93A6D35BB30B9AC8C039FFA85347726307B6C9E019CB08F7B6E11A99DB137CB1"
+    },
+    {
+      "path": "packages/ai-evidence/src/research-route-policy.ts",
+      "sha256": "BF15090E3448A7B395BAFAC6E5093A1478D563A7978A65F1F35B863185855B3C"
+    },
+    {
+      "path": "packages/ai-evidence/src/transport.ts",
+      "sha256": "86CDDCFEFA4742155C57C241FC3C1E40C0D7E6C49A3FBFE2F7E7918BF74159CA"
+    },
+    {
+      "path": "packages/ai-evidence/test/evidence-lineage.test.ts",
+      "sha256": "81BE23BEF7C71CD60F465F4DA60DC861D4BB3CDD3FEA2FAADB02509CF8F1E6BC"
+    },
+    {
+      "path": "packages/ai-evidence/test/fixtures/research-route-policy.ts",
+      "sha256": "5172F6FEE6FD44094C35B595D36A69E2273FFEBE91DF59497DD061F06262E1AA"
+    },
+    {
+      "path": "packages/ai-evidence/test/provider-evidence-integrity.test.ts",
+      "sha256": "387757969B4D484BC48B9D0217AAF032B16B6308244E913D2905C128FB74768B"
+    },
+    {
+      "path": "packages/ai-evidence/test/research-adapters.test.ts",
+      "sha256": "CCC2FF11D3570CD7D9A2F3CCF9275239DC86BBEB7D70CC195C7C1A98CA77F75F"
+    },
+    {
+      "path": "packages/ai-evidence/test/research-orchestrator.test.ts",
+      "sha256": "BEC88F59074C894F6B62388D1416EFD3055F65413F0D25B28E1C488D888ADFFF"
+    },
+    {
+      "path": "packages/ai-evidence/test/research-route-policy.test.ts",
+      "sha256": "C2A2553FCAA4B032F702E1288E5EB82452C2A36F8523E078A0752B666FC16FCC"
+    },
+    {
+      "path": "packages/application/package.json",
+      "sha256": "F4D99BE1B30A2EBBA82120E335BFE7BD6B26E2E961ED70B1CACC89643A58FB51"
+    },
+    {
+      "path": "packages/application/src/combined-worker.ts",
+      "sha256": "850388B2CFCD69191BB5C902FD0602C6AD20947F8C443D831F841D87BA585CC9"
+    },
+    {
+      "path": "packages/application/src/index.ts",
+      "sha256": "B01B43057C308EE059D4A0AA292A941CF0129D4DC9C520555D98738598A5D493"
+    },
+    {
+      "path": "packages/application/src/live-research-environment-runtime.ts",
+      "sha256": "7FC740C9C4FA16DD0855BDBD848AB4230988F1A0B8E07FD5509C3F39F7360D9D"
+    },
+    {
+      "path": "packages/application/src/live-research-execution.ts",
+      "sha256": "5E249F46BCF1284FCD9057D4D3DF20B82D4283516D6A9EB3B0230659D3835F45"
+    },
+    {
+      "path": "packages/application/src/live-research-worker.ts",
+      "sha256": "EA64EF49D077ECB041C3B4733E9B9298579CBE1E434670E341480BE519CD846A"
+    },
+    {
+      "path": "packages/application/src/research-admission.ts",
+      "sha256": "E2E3DC0633704C5BA7FF95C2FB8F13A6163D65345942BBEF2C009D83F0A8859C"
+    },
+    {
+      "path": "packages/application/src/service.ts",
+      "sha256": "BD68922003C3B924C407364479149FABB5C928723CA01B0DE467C31E3C951594"
+    },
+    {
+      "path": "packages/contracts/schemas/v1/contracts.schema.json",
+      "sha256": "296590E8CFC1744830AAC6B2526A7A4B9D57A71B1F7C426F3C0F1ED31EEC5AE8"
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "sha256": "7764D50847A44A322CEA6AB2F2D4CC4AD6DDE337E15F766A4049E58F94D02FA1"
+    },
+    {
+      "path": "packages/contracts/src/schema.ts",
+      "sha256": "4B49E5F9945BD9A7460BFAFF2295A6CD73F2FDCD5B93F5EFCDCB3D032750A8E0"
+    },
+    {
+      "path": "packages/contracts/src/v1/evidence-lineage.ts",
+      "sha256": "67DF98F8381BA2CFF201499DBC2148598141305164E398B7BA64602ABF7B62B5"
+    },
+    {
+      "path": "packages/contracts/src/v1/evidence.ts",
+      "sha256": "914D1FBEB1D6DF3C9744C87B3E41AC5C23C6376331531834FA3B7EB8FCDF1FDE"
+    },
+    {
+      "path": "packages/contracts/src/v1/research-route.ts",
+      "sha256": "2009EC6E548FD89ADF2759DF41680C5616340A8A881A93A1D0012EDEB59B3284"
+    },
+    {
+      "path": "packages/data/migrations/0003_slice_3_live_research.down.sql",
+      "sha256": "5023859FB8727FF196181D82BD340F83B2980D34F6869603C8BD0E5102E331CA"
+    },
+    {
+      "path": "packages/data/migrations/0003_slice_3_live_research.up.sql",
+      "sha256": "CB895D8C18F31D9B6741719BCF30D6168D5FBEC02E6F51B86B2F34F463F5A383"
+    },
+    {
+      "path": "packages/data/package.json",
+      "sha256": "3BD3158DF17EA259E6A611983FD9C3898EF50C7CCFAAA3C87854579901168453"
+    },
+    {
+      "path": "packages/data/src/migrations.ts",
+      "sha256": "6A6C76052C95BBD05A9B26E8D869A23DD0041906AFD39FEB89F40407D6C3A6D4"
+    },
+    {
+      "path": "packages/data/src/quota.ts",
+      "sha256": "F6A1FF4E4A1E37C65DB286730F76AA72235F0959DB8338E19CD628A93D89B1D2"
+    },
+    {
+      "path": "packages/security/package.json",
+      "sha256": "5FB38C19587A5F827DE8CDE9156867FE68672E6F2946040927A13E5A7F5E5308"
+    },
+    {
+      "path": "packages/security/src/index.ts",
+      "sha256": "55E77FE074954E27E39033E3661272E31AEED990667D947DDD7815A9E4C445F2"
+    },
+    {
+      "path": "packages/security/src/node-live-transport.ts",
+      "sha256": "869277487A593977B42171DB2B76DEF3ADA65F4A5D3CF7A0F6C64ED0D335B0C7"
+    },
+    {
+      "path": "packages/security/src/secure-fetch.ts",
+      "sha256": "D2809608163A412BE1F5F0A2013865D377CCB6BD05CF69A7608D0AF107C60C52"
+    },
+    {
+      "path": "packages/security/test/secure-fetch.test.ts",
+      "sha256": "FA33E7B115E6A7411705E0CA0E398736B524F14AE5BFE1FAC0139EC7B35A9460"
+    },
+    {
+      "path": "playwright.config.mjs",
+      "sha256": "058860CC393152450EBFB87A9E0466BC85A9B5FDDD78B76CCC5385A76E093B17"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "6B12540E70C050016C9C4F3E4A8997628EBA474F7ADAACF6EE5C7CAB872D152B"
+    },
+    {
+      "path": "scripts/generate-dashboard-ci-snapshot.mjs",
+      "sha256": "8D502BF6C57B27883280C707FB89F1927417738118585C8DD814CB5A00B54A2A"
+    },
+    {
+      "path": "scripts/generate-dashboard-snapshot.mjs",
+      "sha256": "88EFE3E17CB0C27746ADD90C76FAF1A598EDEA5C187DA6F465F668CE84D1DB85"
+    },
+    {
+      "path": "scripts/generate-slice3-evidence.mjs",
+      "sha256": "58F5092EEF604B7685D61A6B1DB03FEEBE4177F8AA919589513755C39A55FF1C"
+    },
+    {
+      "path": "scripts/lib/agent-policy.mjs",
+      "sha256": "7549253B32B2B559B16E9C96CC6A3767E4D7E0B54D33DFD3413C22A00D4633F5"
+    },
+    {
+      "path": "scripts/lib/slice3-dashboard-policy.mjs",
+      "sha256": "1DFE4F896C6ABC7E2B1A37022E8D769C4E52E60EA876A3837A4F44F6B63817F8"
+    },
+    {
+      "path": "scripts/lib/snapshot-path-policy.mjs",
+      "sha256": "2FB7A990274B05E83B044E1ECAB7951CCDD09D410ECDDEAEFBC7448DA6473812"
+    },
+    {
+      "path": "scripts/qualify-slice3-live.mjs",
+      "sha256": "6A1D35343DFD747B604831466751BD9FEDA0A6CFB3248DC9F69FAFA9E1B01217"
+    },
+    {
+      "path": "scripts/validate-dashboard-snapshot.mjs",
+      "sha256": "6C623308667BB56B29ADE90BE17445B9802E6FA66963FE67068D56EECD1AB80A"
+    },
+    {
+      "path": "scripts/validate-slice2-evidence.mjs",
+      "sha256": "9B024C5152B93F9923EFDB78CA4CD30614F6646810F344EF1A302D1224E91B00"
+    },
+    {
+      "path": "scripts/validate-slice3-local.mjs",
+      "sha256": "75E1C45B378BFD4762C387CFE27FD535EE888025EC056B0E16A3C02DA7E86837"
+    },
+    {
+      "path": "test/agent-policy.test.mjs",
+      "sha256": "A7E7CE5E22998802422A14DDBE1C4E0BB81FC50EE2B6B62A7BF2A10AF6E8B1D7"
+    },
+    {
+      "path": "test/browser/product-live-reference-path.spec.mjs",
+      "sha256": "5A261FD32FCAEBAAC915410F80F4C632FE0B4AAC096712933B492A05FC2CE45D"
+    },
+    {
+      "path": "test/browser/product-qualified-reference-path.spec.mjs",
+      "sha256": "E849C2701D5E13DBB65F1AFAB34E0C8705E8A5D4E5EE785A01FF5E2B7E3E7DB6"
+    },
+    {
+      "path": "test/browser/product-reference-path.spec.mjs",
+      "sha256": "82B33F97C3115441BEA63F9B1F129EE9CB7BA188159F195A894D3682DF3BE34B"
+    },
+    {
+      "path": "test/browser/product-standard-reference-path.spec.mjs",
+      "sha256": "CB929F64F2F5617665C536CEFC764D32A1E5BAF8D72D5A872379B7E9EDAA3CE0"
+    },
+    {
+      "path": "test/historical-artifact-policy.test.mjs",
+      "sha256": "6C0E891DBDBA8EFB08F84456144FA73D9BA9C46D3309FE1D09DDE83EDEAC62E0"
+    },
+    {
+      "path": "test/slice2/application/combined-worker-postgres.test.mjs",
+      "sha256": "4EBDC00E766DD415FCDBF68C2687FE22B34DB9F4C8F24FA717E82DAE9DEC05B7"
+    },
+    {
+      "path": "test/slice2/data/standard-workspace-postgres.test.mjs",
+      "sha256": "CAEF191A1BA79C8AF14D4E845184520C74144577D483BDAF32461A39DA01F41A"
+    },
+    {
+      "path": "test/slice3/combined-live-worker-postgres.test.mjs",
+      "sha256": "9DC0949B15D630E7F677556931B550C7D72695F00012C02D8FD63FCDC4A3F9CE"
+    },
+    {
+      "path": "test/slice3/dashboard-policy.test.mjs",
+      "sha256": "964DEE507586284AA42D2446FB112179EDFCDC7DF1E8A5F9A9F0B9653C31BF59"
+    },
+    {
+      "path": "test/slice3/data/live-research-postgres.test.mjs",
+      "sha256": "DAA25F0FF6BAA006587274DE5417C9C947C4E963B338BADB91E3B8825AC856D8"
+    },
+    {
+      "path": "test/slice3/data/migration-contract.test.mjs",
+      "sha256": "BD88525EB857D250D04514F8FF5A388EDF71AD1800A3421F884AE6792BBA0A6D"
+    },
+    {
+      "path": "test/slice3/environment-provider-transport.test.mjs",
+      "sha256": "689971687993738D11F5CFDA7912A3919520F73CD47C04D7D8C4EAE111C973E4"
+    },
+    {
+      "path": "test/slice3/fixtures/live-worker-runtime.mjs",
+      "sha256": "654352FFDA1534FD24FE11D4C2051714C25E55BCCB7589681E05732724E959F4"
+    },
+    {
+      "path": "test/slice3/live-qualification-preflight.test.mjs",
+      "sha256": "050CD806E94FE6BF4164C5B0E929DD96A95FC768C0B9427E079DE0C8405C24CC"
+    },
+    {
+      "path": "test/slice3/live-research-application-postgres.test.mjs",
+      "sha256": "D95FFA1775D7D3D70E65B08EBAA8E279DDB4221C8FA0487380BF6C14C9BC159A"
+    },
+    {
+      "path": "test/slice3/qualified-live-admission.test.mjs",
+      "sha256": "10059C8E18EEEAC7BB5565387B61AA504E1077813FC6A5D2B1CB4A105E0389AD"
+    }
+  ]
+}

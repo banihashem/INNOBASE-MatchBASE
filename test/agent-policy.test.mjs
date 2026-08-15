@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -217,4 +223,23 @@ test("rejects a repository-relative traversal even when target bytes exist", () 
   } finally {
     rmSync(value.root, { recursive: true, force: true });
   }
+});
+
+test("binds historical agent outputs to immutable Git objects while current paths evolve", () => {
+  const root = realpathSync(new URL("..", import.meta.url));
+  const roster = JSON.parse(
+    readFileSync(new URL("../governance/agents.json", import.meta.url), "utf8"),
+  );
+  assert.doesNotThrow(() => validateAgentRoster(roster, { repoRoot: root }));
+  const mutated = structuredClone(roster);
+  const reference = mutated.agents
+    .flatMap((agent) => agent.deliverables)
+    .flatMap((deliverable) => deliverable.outputHashes)
+    .find((output) => output.gitBlob);
+  assert.ok(reference);
+  reference.gitBlob = "0".repeat(40);
+  assert.throws(
+    () => validateAgentRoster(mutated, { repoRoot: root }),
+    /Git object binding is invalid/,
+  );
 });

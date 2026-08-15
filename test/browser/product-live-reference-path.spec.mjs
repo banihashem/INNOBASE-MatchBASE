@@ -255,6 +255,9 @@ test("completes the real simulator, HTTP, PostgreSQL, worker, and Demo result pa
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await expect(page.getByText(syntheticNotice)).toBeVisible();
+  await expect(
+    page.getByText("Synthetic reference", { exact: true }),
+  ).toBeVisible();
   await expectAxeClean(page);
 
   await page.getByRole("link", { name: "Continue with Google" }).focus();
@@ -268,6 +271,14 @@ test("completes the real simulator, HTTP, PostgreSQL, worker, and Demo result pa
   const meResponse = await page.request.get("/api/v1/me");
   expect(meResponse.status()).toBe(200);
   const meBody = await meResponse.json();
+  expect(meBody.research_mode).toEqual({
+    id: "synthetic_reference",
+    label: "Synthetic reference",
+    live_qualified: false,
+  });
+  expect(JSON.stringify(meBody)).not.toMatch(
+    /gemini|openrouter|providerId|modelId/iu,
+  );
   expect(meBody.quota).toMatchObject({ limit: 3, used: 0, remaining: 3 });
   const csrfToken = meBody.csrf_token;
   const unsafeHeaders = (idempotencyKey) => ({

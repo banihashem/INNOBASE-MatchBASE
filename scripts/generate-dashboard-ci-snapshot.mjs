@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   externalClosureSourceRef,
@@ -23,7 +23,15 @@ import {
 } from "./lib/predecessor-failure-policy.mjs";
 import { replaceRegularFileTransactionally } from "./lib/replace-regular-file.mjs";
 import {
+  applySlice3DashboardProjection,
+  slice3EvidenceSourceRef,
+  validateSlice3Dashboard,
+  validateSlice3Evidence,
+  validateSlice3Governance,
+} from "./lib/slice3-dashboard-policy.mjs";
+import {
   REPOSITORY_ROOT,
+  SNAPSHOT_DIST_OUTPUT_PATH,
   SNAPSHOT_OUTPUT_PATH,
   assertSafeSnapshotOutput,
 } from "./lib/snapshot-path-policy.mjs";
@@ -100,6 +108,7 @@ const [
   slice2LocalEvidence,
   predecessorHistory,
   externalState,
+  slice3LocalEvidence,
 ] = await Promise.all([
   document("governance/slices.json"),
   document("governance/gates.json"),
@@ -112,7 +121,15 @@ const [
   document("evidence/slice2/local-validation.json"),
   document("governance/predecessor-failures-v1.json"),
   document("governance/external-state.json"),
+  document("evidence/slice3/local-validation.json"),
 ]);
+validateSlice3Evidence(slice3LocalEvidence.value);
+validateSlice3Governance(gates.value.gates, slice3LocalEvidence.value);
+const slice3SourceRef = slice3EvidenceSourceRef(
+  slice3LocalEvidence.sourceRef.path,
+  await readFile(slice3LocalEvidence.sourceRef.path),
+  slice3LocalEvidence.value,
+);
 validateSlice2HistoricalGitObject(
   artifactIndex.value,
   slice2HistoricalLocalClosure(slice2Closure),
@@ -506,6 +523,12 @@ const views = Object.fromEntries(
     },
   ]),
 );
+applySlice3DashboardProjection(
+  views,
+  slice3LocalEvidence.value,
+  slice3SourceRef,
+);
+validateSlice3Dashboard(views, slice3LocalEvidence.value, slice3SourceRef);
 validateDashboardHistoricalProvenance(
   views,
   artifactIndex.value,
@@ -529,9 +552,13 @@ const dashboard = {
 };
 
 await assertSafeSnapshotOutput();
+const snapshotBytes = `${JSON.stringify(dashboard, null, 2)}\n`;
+await replaceRegularFileTransactionally(SNAPSHOT_OUTPUT_PATH, snapshotBytes);
+await mkdir(resolve(SNAPSHOT_DIST_OUTPUT_PATH, ".."), { recursive: true });
 await replaceRegularFileTransactionally(
-  SNAPSHOT_OUTPUT_PATH,
-  `${JSON.stringify(dashboard, null, 2)}\n`,
+  SNAPSHOT_DIST_OUTPUT_PATH,
+  snapshotBytes,
+  SNAPSHOT_DIST_OUTPUT_PATH,
 );
 console.log(
   `dashboard CI snapshot: PASS (${Object.values(collections).flat().length} records; ${externalClosureSourceRef(closure).sha256})`,

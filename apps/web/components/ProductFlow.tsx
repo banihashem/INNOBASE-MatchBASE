@@ -10,6 +10,8 @@ import {
 } from "react";
 
 const SYNTHETIC_NOTICE = "Synthetic evaluation data — not a sourcing result";
+const QUALIFIED_LIVE_NOTICE =
+  "Qualified live research — external evidence is fetched and verified for this run";
 const PROHIBITED_RESULT_KEYS = new Set([
   "score",
   "compatibility_score",
@@ -33,6 +35,11 @@ type Session = {
     next_capacity_at: string | null;
   };
   execution: { active: number; capacity: number };
+  research_mode: {
+    id: "synthetic_reference" | "qualified_live_research";
+    label: "Synthetic reference" | "Qualified live research";
+    live_qualified: boolean;
+  };
   csrf_token: string;
   environment: "local" | "test";
 };
@@ -213,6 +220,10 @@ export function ProductFlow({
   const validationSummary = useRef<HTMLDivElement>(null);
   const errorSummary = useRef<HTMLDivElement>(null);
   const needId = useId();
+  const qualifiedLive = session?.research_mode.live_qualified === true;
+  const researchNotice = qualifiedLive
+    ? QUALIFIED_LIVE_NOTICE
+    : SYNTHETIC_NOTICE;
   const constraintsId = useId();
   const contextId = useId();
 
@@ -442,8 +453,18 @@ export function ProductFlow({
       <a className="skip-link" href="#main-content">
         Skip to main content
       </a>
-      <aside className="synthetic-banner" aria-label="Test environment notice">
-        <span aria-hidden="true">◆</span> {SYNTHETIC_NOTICE}
+      <aside
+        className={
+          qualifiedLive
+            ? "synthetic-banner qualified-live-banner"
+            : "synthetic-banner"
+        }
+        aria-label="Research mode notice"
+      >
+        <span aria-hidden="true">◆</span>{" "}
+        <strong>{session?.research_mode.label ?? "Synthetic reference"}</strong>
+        <span aria-hidden="true"> · </span>
+        {researchNotice}
       </aside>
       <header className="site-header">
         <a className="brand" href="/" aria-label="MatchBASE home">
@@ -505,14 +526,16 @@ export function ProductFlow({
               </h1>
               <p className="lede">
                 Structure a multilingual request, confirm its English canonical
-                form, and inspect up to three eligible synthetic candidates.
+                form, and inspect up to three eligible{" "}
+                {qualifiedLive ? "source-verified" : "synthetic"} candidates.
               </p>
               <a className="primary-action" href={authPath}>
                 Continue with Google
               </a>
               <p className="environment-disclosure">
-                Local/test simulator. This is not live Google authentication or
-                live supplier research.
+                {qualifiedLive
+                  ? "Test identity only. Research mode is assigned by server policy."
+                  : "Local/test simulator. This is not live Google authentication or live supplier research."}
               </p>
             </div>
             <aside className="principles" aria-label="Demo boundaries">
@@ -750,7 +773,9 @@ export function ProductFlow({
                   disabled={busy}
                   onClick={confirmAndRun}
                 >
-                  Confirm and start research
+                  {qualifiedLive
+                    ? "Confirm and start qualified live research"
+                    : "Confirm and start research"}
                 </button>
               )}
             </div>
@@ -767,7 +792,9 @@ export function ProductFlow({
               <span>2 Confirm</span>
               <span aria-current="step">3 Research</span>
             </div>
-            <p className="eyebrow">Run {run.run_id}</p>
+            <p className="eyebrow">
+              {session?.research_mode.label ?? "Research"} · Run {run.run_id}
+            </p>
             <h1 id="status-title" ref={mainHeading} tabIndex={-1}>
               Research in progress
             </h1>
@@ -832,7 +859,8 @@ export function ProductFlow({
             aria-labelledby="results-title"
           >
             <p className="eyebrow">
-              Demo result · Projection v{result.projection_version}
+              {qualifiedLive ? "Qualified live result" : "Demo result"} · Demo
+              projection v{result.projection_version}
             </p>
             <h1 id="results-title" ref={mainHeading} tabIndex={-1}>
               {result.outcome === "no_responsible_match"
@@ -842,7 +870,9 @@ export function ProductFlow({
             {result.scarcity !== "none" ? (
               <div className="scarcity-note" role="status">
                 {result.scarcity === "zero"
-                  ? "No candidate met every mandatory constraint in this synthetic evaluation."
+                  ? qualifiedLive
+                    ? "No candidate met every mandatory constraint in this qualified live run."
+                    : "No candidate met every mandatory constraint in this synthetic evaluation."
                   : "Fewer than three candidates met every mandatory constraint. Results are not padded."}
               </div>
             ) : null}
@@ -885,7 +915,11 @@ export function ProductFlow({
       </main>
       <footer>
         <span>Local reference environment</span>
-        <span>Demo disclosure · No live provider calls</span>
+        <span>
+          {qualifiedLive
+            ? "Demo disclosure · Qualified live evidence path"
+            : "Demo disclosure · No live provider calls"}
+        </span>
       </footer>
     </div>
   );

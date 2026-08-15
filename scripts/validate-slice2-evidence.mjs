@@ -7,8 +7,10 @@ import {
   validateSlice2AuditBindings,
   validateSlice2PredecessorParity,
 } from "./lib/slice2-audit-policy.mjs";
+import { verifyHistoricalArtifact } from "./lib/historical-artifact-policy.mjs";
 
 const root = realpathSync(".");
+const acceptedSlice2Commit = "f1a5429505616a61cdac87cf7f57c114fa5e43a6";
 const sha = (path) =>
   createHash("sha256").update(readFileSync(path)).digest("hex").toUpperCase();
 const contained = (path) => {
@@ -101,10 +103,15 @@ for (const artifact of evidence.artifacts ?? []) {
   if (
     !contained(path) ||
     lstatSync(path).isSymbolicLink() ||
-    !lstatSync(path).isFile() ||
-    sha(realpathSync(path)) !== artifact.sha256
+    !lstatSync(path).isFile()
   )
     throw new Error(`Slice 2 artifact hash mismatch: ${artifact.path}`);
+  verifyHistoricalArtifact({
+    repoRoot: root,
+    acceptedCommit: acceptedSlice2Commit,
+    path: artifact.path,
+    sha256: artifact.sha256,
+  });
   artifacts.set(artifact.id, artifact);
 }
 for (const item of evidence.acceptance)
@@ -164,10 +171,15 @@ for (const entry of manifest.files) {
   if (
     !contained(path) ||
     lstatSync(path).isSymbolicLink() ||
-    !lstatSync(path).isFile() ||
-    sha(realpathSync(path)) !== entry.sha256
+    !lstatSync(path).isFile()
   )
     throw new Error(`Slice 2 candidate hash mismatch: ${entry.path}`);
+  verifyHistoricalArtifact({
+    repoRoot: root,
+    acceptedCommit: acceptedSlice2Commit,
+    path: entry.path,
+    sha256: entry.sha256,
+  });
   aggregate.update(`${entry.path}\0${entry.sha256}\n`, "utf8");
 }
 if (aggregate.digest("hex").toUpperCase() !== manifest.aggregateSha256)
@@ -184,7 +196,12 @@ const gitPaths = (args) => {
 };
 const ancestry = spawnSync(
   "git",
-  ["merge-base", "--is-ancestor", manifest.baselineCommit, "HEAD"],
+  [
+    "merge-base",
+    "--is-ancestor",
+    manifest.baselineCommit,
+    acceptedSlice2Commit,
+  ],
   { cwd: root, encoding: "buffer" },
 );
 if (ancestry.status !== 0)
@@ -195,15 +212,10 @@ const actualChanged = mergeSlice2ChangedPaths({
     "--name-only",
     "-z",
     manifest.baselineCommit,
-    "HEAD",
+    acceptedSlice2Commit,
   ]),
-  workingPaths: gitPaths(["diff", "--name-only", "-z", "HEAD"]),
-  untrackedPaths: gitPaths([
-    "ls-files",
-    "--others",
-    "--exclude-standard",
-    "-z",
-  ]),
+  workingPaths: [],
+  untrackedPaths: [],
 });
 const expectedChanged = [
   ...manifest.files.map((entry) => entry.path),

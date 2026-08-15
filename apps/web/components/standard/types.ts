@@ -19,6 +19,11 @@ export type WorkspaceSession = {
     next_capacity_at: string | null;
   };
   execution: { active: number; capacity: number };
+  research_mode: {
+    id: "synthetic_reference" | "qualified_live_research";
+    label: "Synthetic reference" | "Qualified live research";
+    live_qualified: boolean;
+  };
   csrf_token: string;
   environment: "local" | "test";
 };

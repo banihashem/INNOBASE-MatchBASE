@@ -14,6 +14,10 @@ export const SNAPSHOT_OUTPUT_PATH = resolve(
   REPOSITORY_ROOT,
   "apps/dashboard/public/current-snapshot.json",
 );
+export const SNAPSHOT_DIST_OUTPUT_PATH = resolve(
+  REPOSITORY_ROOT,
+  "apps/dashboard/dist/current-snapshot.json",
+);
 export const TRUSTED_ROOTS = new Map([
   ["authoritative", "C:\\INNOBASE\\MatchBASE\\00_Authoritative_Sources"],
   ["product-management", "C:\\INNOBASE\\MatchBASE\\01_Product_Management"],
@@ -67,4 +71,8 @@ export async function assertSafeOutputPath(
 
 export async function assertSafeSnapshotOutput() {
   await assertSafeOutputPath(SNAPSHOT_OUTPUT_PATH);
+  await assertSafeOutputPath(
+    SNAPSHOT_DIST_OUTPUT_PATH,
+    SNAPSHOT_DIST_OUTPUT_PATH,
+  );
 }

@@ -67,7 +67,7 @@ export function StandardWorkspace({
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <SyntheticNotice />
+      <SyntheticNotice modeLabel={session.research_mode.label} />
       <header className="site-header standard-header">
         <a className="brand" href="/" aria-label="MatchBASE home">
           <span className="brand-mark">M</span>

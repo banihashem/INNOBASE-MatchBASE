@@ -11,6 +11,7 @@ import { inTransaction } from "./database.js";
 export const FOUNDATION_MIGRATION_ID = "0001_slice_1_foundation";
 export const STANDARD_WORKSPACE_MIGRATION_ID =
   "0002_slice_2_standard_workspace";
+export const LIVE_RESEARCH_MIGRATION_ID = "0003_slice_3_live_research";
 
 export interface MigrationDefinition {
   readonly id: string;
@@ -19,6 +20,7 @@ export interface MigrationDefinition {
 export const MIGRATIONS: readonly MigrationDefinition[] = Object.freeze([
   Object.freeze({ id: FOUNDATION_MIGRATION_ID }),
   Object.freeze({ id: STANDARD_WORKSPACE_MIGRATION_ID }),
+  Object.freeze({ id: LIVE_RESEARCH_MIGRATION_ID }),
 ]);
 
 export const LATEST_MIGRATION_ID =

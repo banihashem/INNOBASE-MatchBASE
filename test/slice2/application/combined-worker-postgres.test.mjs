@@ -7,6 +7,8 @@ import test from "node:test";
 
 import { StandardWorkspaceApplication } from "../../../packages/application/dist/index.js";
 import {
+  LIVE_RESEARCH_MIGRATION_ID,
+  STANDARD_WORKSPACE_MIGRATION_ID,
   admitRunWithinQuota,
   createPool,
   migrateDown,
@@ -337,7 +339,11 @@ postgresTest(
     try {
       await migrateDown(pool).catch(() => false);
       await migrateUp(pool);
-      await migrateDownLatest(pool);
+      assert.equal(await migrateDownLatest(pool), LIVE_RESEARCH_MIGRATION_ID);
+      assert.equal(
+        await migrateDownLatest(pool),
+        STANDARD_WORKSPACE_MIGRATION_ID,
+      );
       const child = spawn(process.execPath, [workerPath], {
         cwd: process.cwd(),
         env: {

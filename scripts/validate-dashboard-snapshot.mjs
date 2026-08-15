@@ -23,6 +23,13 @@ import {
   validateSlice2ExternalClosure,
 } from "./lib/slice2-external-closure-policy.mjs";
 import { validateSlice2DashboardClosure } from "./lib/slice2-dashboard-closure-policy.mjs";
+import {
+  assertSnapshotByteParity,
+  slice3EvidenceSourceRef,
+  validateSlice3Dashboard,
+  validateSlice3Evidence,
+} from "./lib/slice3-dashboard-policy.mjs";
+import { SNAPSHOT_DIST_OUTPUT_PATH } from "./lib/snapshot-path-policy.mjs";
 
 const actual = !process.argv.includes("--bootstrap");
 const snapshotPath = resolve(
@@ -203,6 +210,22 @@ if (actual) {
     auditSourceRef: slice2AuditRef,
     predecessorSourceRef: slice2PredecessorRef,
   });
+  const slice3EvidencePath = resolve("evidence/slice3/local-validation.json");
+  const slice3EvidenceBytes = readFileSync(slice3EvidencePath);
+  const slice3Evidence = validateSlice3Evidence(
+    JSON.parse(slice3EvidenceBytes.toString("utf8")),
+  );
+  const slice3SourceRef = slice3EvidenceSourceRef(
+    slice3EvidencePath,
+    slice3EvidenceBytes,
+    slice3Evidence,
+  );
+  validateSlice3Dashboard(snapshot.views, slice3Evidence, slice3SourceRef);
+  if (existsSync(SNAPSHOT_DIST_OUTPUT_PATH))
+    assertSnapshotByteParity(
+      readFileSync(snapshotPath),
+      readFileSync(SNAPSHOT_DIST_OUTPUT_PATH),
+    );
   if (requireSources && verifiedSources === 0)
     throw new Error("Current dashboard source verification was vacuous.");
 }

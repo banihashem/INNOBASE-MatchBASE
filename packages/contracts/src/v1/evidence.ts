@@ -11,7 +11,8 @@ export type VerificationStatus =
 
 export interface EvidenceItemV1 {
   evidenceId: string;
-  sourceKind: "synthetic_fixture" | "reserved_url" | "local_fixture";
+  sourceKind:
+    "synthetic_fixture" | "reserved_url" | "local_fixture" | "external_url";
   url: string;
   title: string;
   publisher: string;

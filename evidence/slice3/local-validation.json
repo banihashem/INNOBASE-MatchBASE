@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "slice": "SLICE-3",
-  "observedAt": "2026-08-16T00:52:39.936Z",
+  "observedAt": "2026-08-16T01:12:35.120Z",
   "candidateStatus": "LOCAL_REPOSITORY_IMPLEMENTATION_FROZEN_LIVE_BLOCKED",
   "repositoryImplementation": "PASS",
   "liveQualification": "BLOCKED_PREREQUISITE",
@@ -38,20 +38,20 @@
   },
   "candidate": {
     "manifestPath": "evidence/slice3/candidate-manifest.json",
-    "manifestSha256": "CB2AD833F2559DF174CF361F4C6B705DF6C9AE5A4A42A448D035EE5074C17010",
-    "aggregateSha256": "7CB0B9EDE618402EC3CCF3AB1726FB91F605BAD8778345EDB9E4BB94825EB1F6",
-    "fileCount": 37
+    "manifestSha256": "6C38CA9C4A1E3A7A56D31A9A9F8C0FF4166F6F658CAC015084C13E0963032CE0",
+    "aggregateSha256": "BB2418A4F68EF3D0C3D7BB71978B5C38F6A663A39D5EB77E86CF5DF8AD79FD89",
+    "fileCount": 38
   },
   "localGate": {
     "status": "PASS",
     "fullWrapper": {
       "command": "pnpm test:ci && pnpm dependency:audit",
-      "durationMs": 477600,
+      "durationMs": 466564,
       "result": "PASS",
-      "observedAt": "2026-08-16T00:52:39.861Z",
+      "observedAt": "2026-08-16T01:12:35.047Z",
       "sourceRef": {
         "path": "evidence/slice3/full-wrapper-result.json",
-        "sha256": "DD36F5F2A48DBCA5D49BEE11BC1449CD5ABBCD8D57CE227F2A3FD8D2A5AFAA08"
+        "sha256": "A2C8BC212E61963531F7D01B5AFBEEF622FFE5259CE5D97C287F51CBDD0B6C59"
       }
     },
     "testCounts": {
@@ -1510,7 +1510,7 @@
     {
       "id": "S3-ART-024",
       "path": "scripts/lib/slice3-dashboard-handoff-policy.mjs",
-      "sha256": "7472EFC194ECA6DFB4917E23C8D5618C7B86BC3C231EE9FA0C482CB32DEFAC69"
+      "sha256": "A66C445C2A3042A2E0CC2FC16E84694FACE5A97E07347FC5A778CB403B90B5F3"
     },
     {
       "id": "S3-ART-025",
@@ -1540,7 +1540,7 @@
     {
       "id": "S3-ART-030",
       "path": "governance/slice3-dashboard-handoff-policy-v1.json",
-      "sha256": "97F9A44D59A476C32D1529F9262D3F18EC4340D896F60B0E82AC147A4E0D6639"
+      "sha256": "8EB2B4F89D4E62259269EFDBEF21636A22E9B0D7CD1F1250A92B5A5F37231B06"
     },
     {
       "id": "S3-ART-031",
@@ -1565,7 +1565,7 @@
     {
       "id": "S3-ART-035",
       "path": "packages/security/test/secure-fetch.test.ts",
-      "sha256": "FA33E7B115E6A7411705E0CA0E398736B524F14AE5BFE1FAC0139EC7B35A9460"
+      "sha256": "775EA053CBB55126839727E887D677B2347686F3507D47B736AD2DB4B17FC83E"
     },
     {
       "id": "S3-ART-036",
@@ -1686,15 +1686,15 @@
   ],
   "postReview": {
     "schemaVersion": "matchbase.slice3-post-review/v1",
-    "observedAt": "2026-08-16T00:56:51.508Z",
+    "observedAt": "2026-08-16T01:15:44.944Z",
     "candidate": {
-      "manifestSha256": "CB2AD833F2559DF174CF361F4C6B705DF6C9AE5A4A42A448D035EE5074C17010",
-      "aggregateSha256": "7CB0B9EDE618402EC3CCF3AB1726FB91F605BAD8778345EDB9E4BB94825EB1F6",
-      "fileCount": 37
+      "manifestSha256": "6C38CA9C4A1E3A7A56D31A9A9F8C0FF4166F6F658CAC015084C13E0963032CE0",
+      "aggregateSha256": "BB2418A4F68EF3D0C3D7BB71978B5C38F6A663A39D5EB77E86CF5DF8AD79FD89",
+      "fileCount": 38
     },
     "wrapperSource": {
       "path": "evidence/slice3/full-wrapper-result.json",
-      "sha256": "DD36F5F2A48DBCA5D49BEE11BC1449CD5ABBCD8D57CE227F2A3FD8D2A5AFAA08"
+      "sha256": "A2C8BC212E61963531F7D01B5AFBEEF622FFE5259CE5D97C287F51CBDD0B6C59"
     },
     "disciplines": [
       {

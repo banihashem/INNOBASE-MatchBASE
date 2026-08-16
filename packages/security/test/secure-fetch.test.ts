@@ -1,5 +1,5 @@
 import { createServer, request as httpRequest } from "node:http";
-import type { AddressInfo } from "node:net";
+import type { AddressInfo, Socket } from "node:net";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SECURE_FETCH_POLICY,
@@ -304,6 +304,8 @@ describe("Slice 3 secure fetch boundary", () => {
   });
 
   it("enforces chunk and slowloris boundaries against a real local HTTP stream", async () => {
+    const sockets = new Set<Socket>();
+    const socketClosures = new Map<Socket, Promise<void>>();
     const server = createServer((request, response) => {
       if (request.url === "/slow") {
         response.writeHead(200, {
@@ -322,6 +324,19 @@ describe("Slice 3 secure fetch boundary", () => {
       setTimeout(() => response.write("5678"), 2);
       setTimeout(() => response.end("9012"), 4);
     });
+    server.on("connection", (socket) => {
+      sockets.add(socket);
+      socketClosures.set(
+        socket,
+        new Promise((resolve) =>
+          socket.once("close", () => {
+            sockets.delete(socket);
+            socketClosures.delete(socket);
+            resolve();
+          }),
+        ),
+      );
+    });
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
       server.listen(0, "127.0.0.1", resolve);
@@ -332,6 +347,7 @@ describe("Slice 3 secure fetch boundary", () => {
     ): Promise<PinnedFetchResponse> =>
       await new Promise((resolve, reject) => {
         const target = new URL(input.url);
+        let responseStream: PinnedFetchResponse["body"] | undefined;
         const request = httpRequest(
           {
             hostname: "127.0.0.1",
@@ -341,6 +357,7 @@ describe("Slice 3 secure fetch boundary", () => {
           },
           (response) => {
             response.on("error", () => undefined);
+            responseStream = response;
             const headers: Record<string, string | undefined> = {};
             for (const [name, value] of Object.entries(response.headers)) {
               headers[name] = Array.isArray(value) ? value.join(",") : value;
@@ -353,7 +370,22 @@ describe("Slice 3 secure fetch boundary", () => {
             });
           },
         );
+        const abort = () => {
+          if (
+            responseStream &&
+            !(responseStream instanceof Uint8Array) &&
+            "destroy" in responseStream &&
+            typeof responseStream.destroy === "function"
+          )
+            responseStream.destroy();
+          request.destroy();
+        };
+        input.signal.addEventListener("abort", abort, { once: true });
+        request.once("close", () =>
+          input.signal.removeEventListener("abort", abort),
+        );
         request.once("error", reject);
+        if (input.signal.aborted) abort();
         request.end();
       });
     const base = {
@@ -363,33 +395,43 @@ describe("Slice 3 secure fetch boundary", () => {
       signal: new AbortController().signal,
     };
     try {
-      await expect(
-        secureFetch({
-          ...base,
-          url: "https://public.example.org/chunks",
-          policy: {
-            ...DEFAULT_SECURE_FETCH_POLICY,
-            maxCompressedBytes: 12,
-            maxDecompressedBytes: 7,
-          },
-        }),
-      ).rejects.toMatchObject({ reason: "decompressed_size" });
-      await expect(
-        secureFetch({
-          ...base,
-          url: "https://public.example.org/slow",
-          policy: {
-            ...DEFAULT_SECURE_FETCH_POLICY,
-            ttfbTimeoutMs: 5,
-            timeoutMs: 100,
-          },
-        }),
-      ).rejects.toMatchObject({ reason: "ttfb_timeout" });
+      for (let iteration = 0; iteration < 3; iteration += 1) {
+        await expect(
+          secureFetch({
+            ...base,
+            url: "https://public.example.org/chunks",
+            policy: {
+              ...DEFAULT_SECURE_FETCH_POLICY,
+              maxCompressedBytes: 12,
+              maxDecompressedBytes: 7,
+            },
+          }),
+        ).rejects.toMatchObject({ reason: "decompressed_size" });
+        await expect(
+          secureFetch({
+            ...base,
+            url: "https://public.example.org/slow",
+            policy: {
+              ...DEFAULT_SECURE_FETCH_POLICY,
+              ttfbTimeoutMs: 5,
+              timeoutMs: 100,
+            },
+          }),
+        ).rejects.toMatchObject({ reason: "ttfb_timeout" });
+      }
     } finally {
-      await new Promise<void>((resolve, reject) =>
+      const closed = new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
       );
+      const pendingSocketClosures = [...sockets].map((socket) =>
+        socketClosures.get(socket)!,
+      );
+      server.closeIdleConnections();
+      server.closeAllConnections();
+      for (const socket of sockets) socket.destroy();
+      await Promise.all([closed, ...pendingSocketClosures]);
     }
+    expect(sockets.size).toBe(0);
   });
 
   it("enforces one active fetch per hostname while allowing another host", async () => {

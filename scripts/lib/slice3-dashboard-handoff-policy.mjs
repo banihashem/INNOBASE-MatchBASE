@@ -65,6 +65,14 @@ const HISTORICAL = Object.freeze([
     "failure",
     "UBUNTU_SLICE3_HANDOFF_LOG_PREFIX_WINDOWS_SOURCE_DEREFERENCE",
   ],
+  [
+    31918455005,
+    95094207452,
+    "274d5bf2cc872fb85cd2ca589132d96b3fa922f9",
+    "cd4552574107d2f05dd1a8bdc90bf04c6d56e7da",
+    "failure",
+    "HOSTED_SECURE_FETCH_STREAM_TEST_SOCKET_CLOSE_TIMEOUT",
+  ],
 ]);
 const LEDGER_KEYS = Object.freeze([
   "providerCalls",

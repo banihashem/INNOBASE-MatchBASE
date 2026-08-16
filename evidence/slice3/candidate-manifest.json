@@ -11,8 +11,8 @@
     "apps/dashboard/public/current-snapshot.json",
     "apps/dashboard/dist/current-snapshot.json"
   ],
-  "fileCount": 37,
-  "aggregateSha256": "7CB0B9EDE618402EC3CCF3AB1726FB91F605BAD8778345EDB9E4BB94825EB1F6",
+  "fileCount": 38,
+  "aggregateSha256": "BB2418A4F68EF3D0C3D7BB71978B5C38F6A663A39D5EB77E86CF5DF8AD79FD89",
   "files": [
     {
       "path": "apps/web/src/server-owned-research-admission.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "governance/slice3-dashboard-handoff-policy-v1.json",
-      "sha256": "97F9A44D59A476C32D1529F9262D3F18EC4340D896F60B0E82AC147A4E0D6639"
+      "sha256": "8EB2B4F89D4E62259269EFDBEF21636A22E9B0D7CD1F1250A92B5A5F37231B06"
     },
     {
       "path": "package.json",
@@ -99,6 +99,10 @@
       "sha256": "62CFD584252C044C19094AFB5362DABDD55D701320752C8FCD98C425FF44078A"
     },
     {
+      "path": "packages/security/test/secure-fetch.test.ts",
+      "sha256": "775EA053CBB55126839727E887D677B2347686F3507D47B736AD2DB4B17FC83E"
+    },
+    {
       "path": "scripts/generate-dashboard-ci-snapshot.mjs",
       "sha256": "549D8665ACCCC4931804931250EB5B9770D7A22D21641A03031BD153F437E028"
     },
@@ -112,7 +116,7 @@
     },
     {
       "path": "scripts/lib/slice3-dashboard-handoff-policy.mjs",
-      "sha256": "7472EFC194ECA6DFB4917E23C8D5618C7B86BC3C231EE9FA0C482CB32DEFAC69"
+      "sha256": "A66C445C2A3042A2E0CC2FC16E84694FACE5A97E07347FC5A778CB403B90B5F3"
     },
     {
       "path": "scripts/lib/slice3-dashboard-policy.mjs",

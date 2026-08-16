@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   closeSync,
+  existsSync,
   lstatSync,
   openSync,
   readFileSync,
@@ -55,6 +56,14 @@ const HISTORICAL = Object.freeze([
     "4d29c6cf1e2b044a9b6838c8ef5bf0cbc1010019",
     "success",
     "ROLE2_REJECTED_FOUR_MAJOR_CORRECTIONS_REQUIRED",
+  ],
+  [
+    31917590965,
+    95091993135,
+    "305569c390a59a14e6ca4ded4f1ac589e1c2397b",
+    "c76b61c3c8756a7b84a93877ce4144c2929f8b62",
+    "failure",
+    "UBUNTU_SLICE3_HANDOFF_LOG_PREFIX_WINDOWS_SOURCE_DEREFERENCE",
   ],
 ]);
 const LEDGER_KEYS = Object.freeze([
@@ -200,24 +209,71 @@ export function validateSlice3HandoffPolicy(value) {
 
 export function verifySlice3LogPrefix(
   policy,
-  { managementRoot = MANAGEMENT_ROOT } = {},
+  {
+    managementRoot = MANAGEMENT_ROOT,
+    regularSourceResolver,
+    regularSourceRoot = managementRoot,
+  } = {},
 ) {
   validateSlice3HandoffPolicy(policy);
-  const relative = win32.relative(
-    MANAGEMENT_ROOT,
-    policy.immutableLogPrefix.path,
+  return verifyImmutableLogPrefixSource(policy.immutableLogPrefix, {
+    identityRoot: MANAGEMENT_ROOT,
+    regularSourceResolver,
+    regularSourceRoot,
+  });
+}
+
+export function verifyImmutableLogPrefixSource(
+  source,
+  {
+    identityRoot = MANAGEMENT_ROOT,
+    regularSourceResolver,
+    regularSourceRoot = identityRoot,
+  } = {},
+) {
+  closed(
+    source,
+    ["path", "prefixBytes", "prefixSha256"],
+    "Slice 3 immutable log prefix source",
   );
-  const root = realpathSync(managementRoot);
-  const path = resolve(managementRoot, ...relative.split(/[\\/]+/u));
+  if (
+    !win32.isAbsolute(source.path) ||
+    !win32.isAbsolute(identityRoot) ||
+    !Number.isSafeInteger(source.prefixBytes) ||
+    source.prefixBytes < 1 ||
+    !SHA256.test(source.prefixSha256)
+  )
+    throw new Error("Slice 3 immutable log prefix source identity is invalid.");
+  const relative = win32.relative(identityRoot, source.path);
+  if (
+    !relative ||
+    win32.isAbsolute(relative) ||
+    relative === ".." ||
+    relative.startsWith(`..${win32.sep}`)
+  )
+    throw new Error("Slice 3 loop log escapes its declared Windows root.");
+  if (regularSourceResolver && typeof regularSourceResolver !== "function")
+    throw new Error("Slice 3 loop log resolver must be callable.");
+  if (!regularSourceRoot)
+    throw new Error("Slice 3 loop log resolver requires a fixture root.");
+  const root = realpathSync(regularSourceRoot);
+  const path = resolve(
+    regularSourceResolver
+      ? regularSourceResolver(source, { identityRoot, relative })
+      : resolve(regularSourceRoot, ...relative.split(/[\\/]+/u)),
+  );
+  if (!isPathWithinRoot(root, path))
+    throw new Error("Slice 3 loop log resolver escaped its fixture root.");
+  if (!existsSync(path)) throw new Error("Slice 3 loop log source is missing.");
   const stat = lstatSync(path);
   if (stat.isSymbolicLink() || !stat.isFile())
     throw new Error("Slice 3 loop log must be a regular file.");
   const real = realpathSync(path);
   if (!isPathWithinRoot(root, real))
     throw new Error("Slice 3 loop log escapes the management root.");
-  if (stat.size < policy.immutableLogPrefix.prefixBytes)
+  if (stat.size < source.prefixBytes)
     throw new Error("Slice 3 loop log is shorter than its immutable prefix.");
-  const bytes = Buffer.alloc(policy.immutableLogPrefix.prefixBytes);
+  const bytes = Buffer.alloc(source.prefixBytes);
   const descriptor = openSync(real, "r");
   try {
     if (readSync(descriptor, bytes, 0, bytes.length, 0) !== bytes.length)
@@ -226,7 +282,7 @@ export function verifySlice3LogPrefix(
     closeSync(descriptor);
   }
   const digest = createHash("sha256").update(bytes).digest("hex").toUpperCase();
-  if (digest !== policy.immutableLogPrefix.prefixSha256)
+  if (digest !== source.prefixSha256)
     throw new Error("Slice 3 loop log immutable prefix hash mismatch.");
 }
 

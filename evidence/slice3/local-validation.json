@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "slice": "SLICE-3",
-  "observedAt": "2026-08-16T00:29:31.114Z",
+  "observedAt": "2026-08-16T00:52:39.936Z",
   "candidateStatus": "LOCAL_REPOSITORY_IMPLEMENTATION_FROZEN_LIVE_BLOCKED",
   "repositoryImplementation": "PASS",
   "liveQualification": "BLOCKED_PREREQUISITE",
@@ -38,20 +38,20 @@
   },
   "candidate": {
     "manifestPath": "evidence/slice3/candidate-manifest.json",
-    "manifestSha256": "D60A8C2E6623A31B589DBBEA7D5E69CAB798D99C7502DA572A596231E00D9FF8",
-    "aggregateSha256": "46D8C888C09FFE1710D4D549C91D60E58C6CB9DC914AD0F918198D7673090505",
+    "manifestSha256": "CB2AD833F2559DF174CF361F4C6B705DF6C9AE5A4A42A448D035EE5074C17010",
+    "aggregateSha256": "7CB0B9EDE618402EC3CCF3AB1726FB91F605BAD8778345EDB9E4BB94825EB1F6",
     "fileCount": 37
   },
   "localGate": {
     "status": "PASS",
     "fullWrapper": {
       "command": "pnpm test:ci && pnpm dependency:audit",
-      "durationMs": 477423,
+      "durationMs": 477600,
       "result": "PASS",
-      "observedAt": "2026-08-16T00:29:30.627Z",
+      "observedAt": "2026-08-16T00:52:39.861Z",
       "sourceRef": {
         "path": "evidence/slice3/full-wrapper-result.json",
-        "sha256": "F98E6C337F10022E821317F07F06FDEF173B8B43700224098FA7A4105F233FE7"
+        "sha256": "DD36F5F2A48DBCA5D49BEE11BC1449CD5ABBCD8D57CE227F2A3FD8D2A5AFAA08"
       }
     },
     "testCounts": {
@@ -67,7 +67,7 @@
       "qualifiedLiveBrowserChrome": 1,
       "failed": 0
     },
-    "note": "Role 2 Loop 1 pre-wrapper basis: contracts 7/7, AI/evidence 74/74, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 12/12, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated. Provider calls and external mutations remained zero."
+    "note": "Role 2 Loop 1 pre-wrapper basis: contracts 7/7, AI/evidence 74/74, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated. Provider calls and external mutations remained zero."
   },
   "acceptance": [
     {
@@ -1510,7 +1510,7 @@
     {
       "id": "S3-ART-024",
       "path": "scripts/lib/slice3-dashboard-handoff-policy.mjs",
-      "sha256": "1B6C87725983E08026DFD003E70D4D4795E3EC38C3E4F306C06C30DFA56AF496"
+      "sha256": "7472EFC194ECA6DFB4917E23C8D5618C7B86BC3C231EE9FA0C482CB32DEFAC69"
     },
     {
       "id": "S3-ART-025",
@@ -1540,7 +1540,7 @@
     {
       "id": "S3-ART-030",
       "path": "governance/slice3-dashboard-handoff-policy-v1.json",
-      "sha256": "55CC87D5D5146B2086EB537D4ECE780B575C5C736D88645F9BFD7DCA62156500"
+      "sha256": "97F9A44D59A476C32D1529F9262D3F18EC4340D896F60B0E82AC147A4E0D6639"
     },
     {
       "id": "S3-ART-031",
@@ -1600,7 +1600,7 @@
     {
       "id": "S3-ART-042",
       "path": "test/slice3/dashboard-handoff-policy.test.mjs",
-      "sha256": "9749E82150CD6E50C7D399EA0FA231A37926661761BEBAE7F7920503DCFC7E0A"
+      "sha256": "E6E30E33545BC761134BD88B6C17968206D522A5E15CB6E657A21CAC8FAEC1DF"
     },
     {
       "id": "S3-ART-043",
@@ -1686,15 +1686,15 @@
   ],
   "postReview": {
     "schemaVersion": "matchbase.slice3-post-review/v1",
-    "observedAt": "2026-08-16T00:34:34.008Z",
+    "observedAt": "2026-08-16T00:56:51.508Z",
     "candidate": {
-      "manifestSha256": "D60A8C2E6623A31B589DBBEA7D5E69CAB798D99C7502DA572A596231E00D9FF8",
-      "aggregateSha256": "46D8C888C09FFE1710D4D549C91D60E58C6CB9DC914AD0F918198D7673090505",
+      "manifestSha256": "CB2AD833F2559DF174CF361F4C6B705DF6C9AE5A4A42A448D035EE5074C17010",
+      "aggregateSha256": "7CB0B9EDE618402EC3CCF3AB1726FB91F605BAD8778345EDB9E4BB94825EB1F6",
       "fileCount": 37
     },
     "wrapperSource": {
       "path": "evidence/slice3/full-wrapper-result.json",
-      "sha256": "F98E6C337F10022E821317F07F06FDEF173B8B43700224098FA7A4105F233FE7"
+      "sha256": "DD36F5F2A48DBCA5D49BEE11BC1449CD5ABBCD8D57CE227F2A3FD8D2A5AFAA08"
     },
     "disciplines": [
       {

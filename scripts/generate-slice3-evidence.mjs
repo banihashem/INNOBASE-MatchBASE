@@ -214,7 +214,7 @@ const evidence = {
       qualifiedLiveBrowserChrome: 1,
       failed: 0,
     },
-    note: "Role 2 Loop 1 pre-wrapper basis: contracts 7/7, AI/evidence 74/74, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 12/12, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated. Provider calls and external mutations remained zero.",
+    note: "Role 2 Loop 1 pre-wrapper basis: contracts 7/7, AI/evidence 74/74, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated. Provider calls and external mutations remained zero.",
   },
   acceptance,
   artifacts,

@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import {
@@ -13,7 +21,7 @@ import {
   validateSlice3HandoffDashboard,
   validateSlice3HandoffPolicy,
   validateSlice3SuccessorOverlay,
-  verifySlice3LogPrefix,
+  verifyImmutableLogPrefixSource,
 } from "../../scripts/lib/slice3-dashboard-handoff-policy.mjs";
 
 const policyPath = "governance/slice3-dashboard-handoff-policy-v1.json";
@@ -138,9 +146,120 @@ function blankViews() {
   );
 }
 
-test("validates the closed handoff policy and exact immutable log prefix", () => {
+function logPrefixFixture() {
+  const root = mkdtempSync(join(tmpdir(), "matchbase-s3-log-prefix-"));
+  const reports = join(root, "history");
+  const path = join(reports, "PRODUCT_MANAGEMENT_LOOP_LOG.md");
+  const prefix = Buffer.from(
+    "immutable Slice 3 management log prefix\n",
+    "utf8",
+  );
+  mkdirSync(reports);
+  writeFileSync(path, Buffer.concat([prefix, Buffer.from("new append\n")]));
+  return {
+    root,
+    path,
+    prefix,
+    source: {
+      path: `${String.raw`C:\INNOBASE\MatchBASE\01_Product_Management`}\\history\\PRODUCT_MANAGEMENT_LOOP_LOG.md`,
+      prefixBytes: prefix.length,
+      prefixSha256: digest(prefix),
+    },
+  };
+}
+
+test("validates the closed handoff policy without dereferencing a host-specific path", () => {
   assert.equal(validateSlice3HandoffPolicy(policy), policy);
-  assert.doesNotThrow(() => verifySlice3LogPrefix(policy));
+  assert.equal(
+    policy.immutableLogPrefix.path,
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\PRODUCT_MANAGEMENT_LOOP_LOG.md",
+  );
+});
+
+test("resolves the Windows log identity through a contained POSIX or Windows fixture", () => {
+  const value = logPrefixFixture();
+  try {
+    assert.doesNotThrow(() =>
+      verifyImmutableLogPrefixSource(value.source, {
+        regularSourceRoot: value.root,
+        regularSourceResolver: () => value.path,
+      }),
+    );
+    assert.doesNotThrow(() =>
+      verifyImmutableLogPrefixSource(value.source, {
+        regularSourceRoot: value.root,
+        regularSourceResolver: () =>
+          process.platform === "win32"
+            ? value.path.replaceAll("/", "\\")
+            : value.path.replaceAll("\\", "/"),
+      }),
+    );
+  } finally {
+    rmSync(value.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects missing, nonregular, traversal, hash, and prefix-length substitutions", () => {
+  const value = logPrefixFixture();
+  try {
+    const options = (resolver) => ({
+      regularSourceRoot: value.root,
+      regularSourceResolver: resolver,
+    });
+    assert.throws(
+      () =>
+        verifyImmutableLogPrefixSource(
+          value.source,
+          options(() => join(value.root, "missing.md")),
+        ),
+      /source is missing/u,
+    );
+    assert.throws(
+      () =>
+        verifyImmutableLogPrefixSource(
+          value.source,
+          options(() => value.root),
+        ),
+      /regular file/u,
+    );
+    assert.throws(
+      () =>
+        verifyImmutableLogPrefixSource(
+          value.source,
+          options(() => join(value.root, "..", "outside.md")),
+        ),
+      /escaped its fixture root/u,
+    );
+    assert.throws(
+      () =>
+        verifyImmutableLogPrefixSource(
+          { ...value.source, prefixSha256: "F".repeat(64) },
+          options(() => value.path),
+        ),
+      /hash mismatch/u,
+    );
+    assert.throws(
+      () =>
+        verifyImmutableLogPrefixSource(
+          { ...value.source, prefixBytes: value.prefix.length + 100 },
+          options(() => value.path),
+        ),
+      /shorter/u,
+    );
+    assert.throws(
+      () =>
+        verifyImmutableLogPrefixSource(
+          {
+            ...value.source,
+            path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\..\\outside.md",
+          },
+          options(() => value.path),
+        ),
+      /declared Windows root/u,
+    );
+  } finally {
+    rmSync(value.root, { recursive: true, force: true });
+  }
 });
 
 test("validates an exact source-bound successor without host-specific fixture paths", () => {

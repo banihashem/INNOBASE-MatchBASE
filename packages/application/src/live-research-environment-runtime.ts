@@ -26,15 +26,31 @@ import {
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
+import {
+  LIVE_RESEARCH_CREDENTIAL_HANDLES,
+  providerCredentialHandlePresent,
+  type LiveResearchCredentialHandle,
+} from "./live-research-credential-policy.js";
+
+export {
+  LIVE_RESEARCH_CREDENTIAL_HANDLES,
+  providerCredentialHandlePresent,
+} from "./live-research-credential-policy.js";
+export type { LiveResearchCredentialHandle } from "./live-research-credential-policy.js";
 
 class EnvironmentSecretHandles {
-  read(name: "MATCHBASE_GEMINI_API_KEY" | "MATCHBASE_OPENROUTER_API_KEY") {
-    const value = process.env[name];
-    if (!value || value.length < 16 || value.length > 4096)
+  constructor(
+    private readonly environment: Readonly<
+      Record<string, string | undefined>
+    > = process.env,
+  ) {}
+
+  read(name: LiveResearchCredentialHandle): string {
+    if (!providerCredentialHandlePresent(this.environment, name))
       throw new Error(
         `Required provider credential handle ${name} is unavailable.`,
       );
-    return value;
+    return this.environment[name] as string;
   }
 }
 
@@ -327,7 +343,9 @@ export async function createEnvironmentLiveResearchDispatcher(options: {
     return null;
   const secrets = new EnvironmentSecretHandles();
   const pricingVersion = exactPricingVersion();
-  const geminiCredential = secrets.read("MATCHBASE_GEMINI_API_KEY");
+  const geminiCredential = secrets.read(
+    LIVE_RESEARCH_CREDENTIAL_HANDLES.geminiDirect,
+  );
   const geminiSearch = new EnvironmentProviderTransport(
     "gemini_direct",
     geminiCredential,
@@ -344,7 +362,7 @@ export async function createEnvironmentLiveResearchDispatcher(options: {
   );
   const openrouter = new EnvironmentProviderTransport(
     "openrouter",
-    secrets.read("MATCHBASE_OPENROUTER_API_KEY"),
+    secrets.read(LIVE_RESEARCH_CREDENTIAL_HANDLES.openrouter),
     positiveCost("MATCHBASE_OPENROUTER_CONSERVATIVE_REQUEST_USD"),
     pricingVersion,
     "request",

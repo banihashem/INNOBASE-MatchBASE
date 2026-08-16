@@ -56,7 +56,6 @@ const policy = {
         requireParameters: true,
         allowFallbacks: false,
         maxOutputTokens: 2048,
-        temperature: 0,
         timeoutMs: 5000,
         maxAttempts: 1,
         backoffMs: 0,
@@ -101,7 +100,6 @@ const policy = {
         requireParameters: true,
         allowFallbacks: false,
         maxOutputTokens: 2048,
-        temperature: 0,
         timeoutMs: 5000,
         maxAttempts: 1,
         backoffMs: 0,
@@ -112,7 +110,7 @@ const policy = {
         evidenceAccessedAt: "2026-08-15T00:00:00.000Z",
         evidenceExpiresAt: "2026-09-15T00:00:00.000Z",
         paidPath: "verified",
-        retentionTrainingPosture: "verified_no_training",
+        retentionTrainingPosture: "verified_zdr",
       },
       costPolicy: {
         pricingState: "known",
@@ -336,6 +334,9 @@ postgresTest(
             request.body,
             /Identify qualified industrial suppliers/iu,
           );
+          const body = JSON.parse(request.body);
+          for (const field of ["temperature", "topP", "topK"])
+            assert.equal(field in body.generationConfig, false);
           return {
             status: 200,
             body: { sourceUrls: ["https://evidence.example.org/source"] },

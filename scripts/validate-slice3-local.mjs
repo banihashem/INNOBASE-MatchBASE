@@ -6,6 +6,7 @@ import {
   validateSlice3Evidence,
   validateSlice3Governance,
 } from "./lib/slice3-dashboard-policy.mjs";
+import { validateSlice3WrapperResult } from "./lib/slice3-wrapper-result-policy.mjs";
 
 const root = realpathSync(".");
 const sha = (path) =>
@@ -21,7 +22,12 @@ const contained = (path) => {
 };
 const evidencePath = resolve(root, "evidence/slice3/local-validation.json");
 const manifestPath = resolve(root, "evidence/slice3/candidate-manifest.json");
+const wrapperResultPath = resolve(
+  root,
+  "evidence/slice3/full-wrapper-result.json",
+);
 const evidence = JSON.parse(readFileSync(evidencePath, "utf8"));
+const wrapperResult = JSON.parse(readFileSync(wrapperResultPath, "utf8"));
 validateSlice3Evidence(evidence);
 validateSlice3Governance(
   JSON.parse(readFileSync(resolve(root, "governance/gates.json"), "utf8"))
@@ -58,9 +64,25 @@ if (
   policy.routes[1]?.path !== "openrouter"
 )
   throw new Error("Slice 3 blocked route policy is not closed and ordered.");
+const expectedProviderSources = [
+  "GOOGLE-GEMINI-3.6-SAMPLING-COMPATIBILITY",
+  "GOOGLE-GEMINI-MODEL-3.6-FLASH",
+  "GOOGLE-GEMINI-PAID-DATA-HANDLING",
+  "GOOGLE-GEMINI-PRICING",
+  "OPENROUTER-GEMINI-3.6-FLASH",
+  "OPENROUTER-PROVIDER-ROUTING",
+  "OPENROUTER-ZDR",
+  "OPENROUTER-SOVEREIGN-AI",
+  "OPENROUTER-USAGE-ACCOUNTING",
+];
 if (
   register.schemaVersion !== "provider-evidence-register.v1" ||
-  register.sources?.length !== 7 ||
+  register.registerVersion !==
+    "slice3-provider-evidence.2026-08-16.d001-d003" ||
+  register.accessedAt !== "2026-08-16T00:00:00.000Z" ||
+  register.expiresAt !== "2026-08-23T00:00:00.000Z" ||
+  JSON.stringify(register.sources?.map(({ sourceId }) => sourceId)) !==
+    JSON.stringify(expectedProviderSources) ||
   register.sources.some(
     (source) =>
       !["google", "openrouter"].includes(source.authority) ||
@@ -89,8 +111,15 @@ if (
     JSON.stringify(expectedBlockerCodes) ||
   JSON.stringify(evidence.qualificationPreflight?.blockers) !==
     JSON.stringify(expectedBlockerCodes) ||
-  evidence.role2?.status !== "PENDING" ||
-  evidence.role2?.acceptanceClaimed !== false
+  evidence.role2?.status !== "FAIL" ||
+  evidence.role2?.acceptanceClaimed !== false ||
+  JSON.stringify(evidence.role2?.defects) !==
+    JSON.stringify(
+      ["D001", "D002", "D003", "D004"].map((id) => ({
+        id,
+        status: "CORRECTED_PENDING_ROLE2",
+      })),
+    )
 )
   throw new Error("Slice 3 lifecycle or external-state evidence is invalid.");
 const expectedAcceptance = Array.from(
@@ -126,13 +155,14 @@ if (
 const exclusions = [
   "evidence/slice3/candidate-manifest.json",
   "evidence/slice3/local-validation.json",
+  "evidence/slice3/full-wrapper-result.json",
   "apps/dashboard/public/current-snapshot.json",
   "apps/dashboard/dist/current-snapshot.json",
 ];
 if (
   manifest.schemaVersion !== 1 ||
-  manifest.baselineCommit !== "f1a5429505616a61cdac87cf7f57c114fa5e43a6" ||
-  manifest.baselineTree !== "a01673ade6cc08c8648b52d8ac560d9ba385906f" ||
+  manifest.baselineCommit !== "b992d371c467c3e185cc07bb5ac08fb8f38bf864" ||
+  manifest.baselineTree !== "4d29c6cf1e2b044a9b6838c8ef5bf0cbc1010019" ||
   manifest.algorithm !== "SHA256(PATH_NUL_SHA256_LF)" ||
   JSON.stringify(manifest.excludedSelfReferentialMutableArtifacts) !==
     JSON.stringify(exclusions) ||
@@ -142,6 +172,7 @@ if (
   evidence.candidate?.fileCount !== manifest.fileCount
 )
   throw new Error("Slice 3 candidate identity is invalid.");
+validateSlice3WrapperResult(wrapperResult, evidence, sha(wrapperResultPath));
 const aggregate = createHash("sha256");
 let prior = "";
 for (const file of manifest.files) {
@@ -171,5 +202,5 @@ for (const artifact of evidence.artifacts ?? []) {
     throw new Error(`Slice 3 artifact mismatch: ${artifact.path}`);
 }
 console.log(
-  `slice3: PASS repository implementation (${manifest.fileCount} files; live qualification BLOCKED_PREREQUISITE; Role2 PENDING)`,
+  `slice3: PASS repository implementation (${manifest.fileCount} files; live qualification BLOCKED_PREREQUISITE; Role2 FAIL with D001-D004 CORRECTED_PENDING_ROLE2)`,
 );

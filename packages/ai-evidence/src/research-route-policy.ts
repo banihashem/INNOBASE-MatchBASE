@@ -46,7 +46,6 @@ const PARAMETER_FIELDS = new Set([
   "requireParameters",
   "allowFallbacks",
   "maxOutputTokens",
-  "temperature",
   "timeoutMs",
   "maxAttempts",
   "backoffMs",
@@ -207,14 +206,6 @@ function validateParameterPolicy(value: unknown, label: string): void {
     throw new Error(`${label}.maxOutputTokens is outside the closed range.`);
   }
   if (
-    typeof policy.temperature !== "number" ||
-    !Number.isFinite(policy.temperature) ||
-    policy.temperature < 0 ||
-    policy.temperature > 2
-  ) {
-    throw new Error(`${label}.temperature is outside the closed range.`);
-  }
-  if (
     typeof policy.timeoutMs !== "number" ||
     !Number.isInteger(policy.timeoutMs) ||
     policy.timeoutMs < 1 ||
@@ -342,6 +333,15 @@ function validateRoute(
     )
   ) {
     throw new Error(`Route ${routeId} retention/training posture is invalid.`);
+  }
+  if (
+    route.path === "openrouter" &&
+    enabled &&
+    data.retentionTrainingPosture !== "verified_zdr"
+  ) {
+    throw new Error(
+      `Route ${routeId} OpenRouter activation requires verified ZDR evidence.`,
+    );
   }
 
   const cost = object(route.costPolicy, `Route ${routeId} costPolicy`);

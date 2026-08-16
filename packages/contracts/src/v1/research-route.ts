@@ -21,7 +21,6 @@ export interface ResearchRouteParameterPolicyV1 {
   readonly requireParameters: true;
   readonly allowFallbacks: false;
   readonly maxOutputTokens: number;
-  readonly temperature: number;
   readonly timeoutMs: number;
   readonly maxAttempts: number;
   readonly backoffMs: number;

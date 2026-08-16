@@ -2,7 +2,7 @@ import type { ResearchRoutePolicyV1 } from "@matchbase/contracts";
 
 export function qualifiedPolicy(): ResearchRoutePolicyV1 {
   const common = {
-    adapterVersion: "slice3-adapter.v1",
+    adapterVersion: "slice3-adapter.v2",
     enabled: true,
     liveQualified: true,
     capabilities: [
@@ -13,13 +13,12 @@ export function qualifiedPolicy(): ResearchRoutePolicyV1 {
       "advisory_synthesis",
     ],
     parameterPolicy: {
-      policyVersion: "slice3-parameters.v1",
+      policyVersion: "slice3-parameters.v2",
       searchMode: "provider_native_web_search",
       structuredOutput: "json_schema",
       requireParameters: true,
       allowFallbacks: false,
       maxOutputTokens: 2048,
-      temperature: 0,
       timeoutMs: 20_000,
       maxAttempts: 1,
       backoffMs: 0,
@@ -62,6 +61,10 @@ export function qualifiedPolicy(): ResearchRoutePolicyV1 {
         parameterPolicy: {
           ...common.parameterPolicy,
           searchMode: "external_sanitized_evidence",
+        },
+        dataHandling: {
+          ...common.dataHandling,
+          retentionTrainingPosture: "verified_zdr",
         },
         routeId: "RT-OPENROUTER-GOOGLE-S3-V1",
         adapterId: "openrouter",

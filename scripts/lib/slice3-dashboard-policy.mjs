@@ -21,6 +21,9 @@ export const SLICE3_BLOCKER_CODES = [
   "EXPLICIT_BILLABLE_QUALIFICATION_AUTHORIZATION_ABSENT",
   "QUALIFICATION_BUDGET_INVALID",
 ];
+export const SLICE3_ROLE2_DEFECTS = ["D001", "D002", "D003", "D004"].map(
+  (id) => ({ id, status: "CORRECTED_PENDING_ROLE2" }),
+);
 
 const exact = (actual, expected, message) => {
   if (JSON.stringify(actual) !== JSON.stringify(expected))
@@ -40,13 +43,18 @@ export function validateSlice3Evidence(value, options = {}) {
     value?.slice !== "SLICE-3" ||
     value?.repositoryImplementation !== "PASS" ||
     value?.liveQualification !== "BLOCKED_PREREQUISITE" ||
-    value?.role2?.status !== "PENDING" ||
+    value?.role2?.status !== "FAIL" ||
     value?.role2?.acceptanceClaimed !== false ||
     value?.qualificationPreflight?.providerCalls !== 0 ||
     value?.qualificationPreflight?.externalMutations !== 0 ||
     value?.environment?.providerNetworkCalls !== 0
   )
     throw new Error("Slice 3 lifecycle evidence is invalid.");
+  exact(
+    value.role2.defects,
+    SLICE3_ROLE2_DEFECTS,
+    "Slice 3 Role 2 correction lifecycle is invalid.",
+  );
   exact(
     value.blockerCodes,
     SLICE3_BLOCKER_CODES,
@@ -139,7 +147,23 @@ function acceptanceStatus(status) {
   return "ACTIVE";
 }
 
-export function applySlice3DashboardProjection(views, evidence, sourceRef) {
+function projectedAcceptanceStatus(
+  item,
+  criticPassed,
+  repositoryReleaseClosed,
+) {
+  if (item.id === "S3-AC-022" && criticPassed) return "REPOSITORY_PASS";
+  if (item.id === "S3-AC-023" && repositoryReleaseClosed)
+    return "REPOSITORY_PASS";
+  return item.status;
+}
+
+export function applySlice3DashboardProjection(
+  views,
+  evidence,
+  sourceRef,
+  { repositoryReleaseClosed = false } = {},
+) {
   validateSlice3Evidence(evidence);
   const disciplinePassed = evidence.independentAudits
     .slice(0, 6)
@@ -169,13 +193,18 @@ export function applySlice3DashboardProjection(views, evidence, sourceRef) {
   }
   const ids = new Set(views.tests.records.map(({ id }) => id));
   for (const item of evidence.acceptance) {
+    const projectedStatus = projectedAcceptanceStatus(
+      item,
+      criticPassed,
+      repositoryReleaseClosed,
+    );
     const projected = {
       id: item.id,
       title: `Slice 3 acceptance ${item.id}`,
-      summary: `${item.status}; governed by ${item.gateId}.`,
-      status: acceptanceStatus(item.status),
+      summary: `${projectedStatus}; governed by ${item.gateId}.`,
+      status: acceptanceStatus(projectedStatus),
       facts: {
-        acceptanceStatus: item.status,
+        acceptanceStatus: projectedStatus,
         gateId: item.gateId,
         evidenceIntegrity: "VERIFIED",
       },
@@ -225,7 +254,12 @@ function exactRef(actual, expected) {
   );
 }
 
-export function validateSlice3Dashboard(views, evidence, sourceRef) {
+export function validateSlice3Dashboard(
+  views,
+  evidence,
+  sourceRef,
+  { repositoryReleaseClosed = false, handoffProjected = false } = {},
+) {
   validateSlice3Evidence(evidence);
   const disciplinePassed = evidence.independentAudits
     .slice(0, 6)
@@ -235,6 +269,7 @@ export function validateSlice3Dashboard(views, evidence, sourceRef) {
     { length: 8 },
     (_, index) => `S3-G${index}`,
   )) {
+    if (handoffProjected && gateId === "S3-G5") continue;
     const records = views.gates.records.filter(({ id }) => id === gateId);
     if (
       records.length !== 1 ||
@@ -252,11 +287,16 @@ export function validateSlice3Dashboard(views, evidence, sourceRef) {
   if (g6.status !== (criticPassed ? "PASS" : "ACTIVE"))
     throw new Error("Slice 3 G6 critic lifecycle is stale.");
   for (const item of evidence.acceptance) {
+    const projectedStatus = projectedAcceptanceStatus(
+      item,
+      criticPassed,
+      repositoryReleaseClosed,
+    );
     const records = views.tests.records.filter(({ id }) => id === item.id);
     if (
       records.length !== 1 ||
-      records[0].status !== acceptanceStatus(item.status) ||
-      records[0].facts?.acceptanceStatus !== item.status ||
+      records[0].status !== acceptanceStatus(projectedStatus) ||
+      records[0].facts?.acceptanceStatus !== projectedStatus ||
       records[0].facts?.gateId !== item.gateId ||
       records[0].facts?.evidenceIntegrity !== "VERIFIED" ||
       records[0].sourceRefs?.length !== 1 ||

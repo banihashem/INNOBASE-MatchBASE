@@ -29,6 +29,12 @@ import {
   validateSlice3Dashboard,
   validateSlice3Evidence,
 } from "./lib/slice3-dashboard-policy.mjs";
+import {
+  slice3HandoffSourceRef,
+  validateSlice3HandoffDashboard,
+  validateSlice3HandoffPolicy,
+  validateSlice3SuccessorOverlay,
+} from "./lib/slice3-dashboard-handoff-policy.mjs";
 import { SNAPSHOT_DIST_OUTPUT_PATH } from "./lib/snapshot-path-policy.mjs";
 
 const actual = !process.argv.includes("--bootstrap");
@@ -135,9 +141,9 @@ if (actual) {
     throw new Error("Semantic gate records are missing.");
   if (!snapshot.views.backlog.records.some(({ id }) => id === "S0-001"))
     throw new Error("Semantic backlog records are missing.");
-  if (snapshot.views.decisions.records.length !== 162)
+  if (snapshot.views.decisions.records.length !== 163)
     throw new Error(
-      "Decision disposition projection does not reconcile to 162.",
+      "Decision disposition projection does not reconcile to 163 including the Slice 3 handoff.",
     );
   const anchorOnly =
     process.env.MATCHBASE_EXTERNAL_EVIDENCE_MODE === "ANCHOR_ONLY_CI";
@@ -220,7 +226,46 @@ if (actual) {
     slice3EvidenceBytes,
     slice3Evidence,
   );
-  validateSlice3Dashboard(snapshot.views, slice3Evidence, slice3SourceRef);
+  const handoffPolicyPath = resolve(
+    "governance/slice3-dashboard-handoff-policy-v1.json",
+  );
+  const handoffPolicyBytes = readFileSync(handoffPolicyPath);
+  const handoffPolicy = validateSlice3HandoffPolicy(
+    JSON.parse(handoffPolicyBytes.toString("utf8")),
+  );
+  const handoffPolicyRef = slice3HandoffSourceRef(
+    handoffPolicyPath,
+    handoffPolicyBytes,
+    slice3Evidence.observedAt,
+  );
+  let successor;
+  let successorSourceRef;
+  if (process.env.MATCHBASE_SLICE3_REPOSITORY_RELEASE_OVERLAY) {
+    const overlayPath = resolve(
+      process.env.MATCHBASE_SLICE3_REPOSITORY_RELEASE_OVERLAY,
+    );
+    const overlayBytes = readFileSync(overlayPath);
+    successor = validateSlice3SuccessorOverlay(
+      JSON.parse(overlayBytes.toString("utf8")),
+      handoffPolicy,
+    );
+    successorSourceRef = slice3HandoffSourceRef(
+      overlayPath,
+      overlayBytes,
+      successor.observedAt,
+      "successor",
+    );
+  }
+  validateSlice3Dashboard(snapshot.views, slice3Evidence, slice3SourceRef, {
+    repositoryReleaseClosed: Boolean(successor),
+    handoffProjected: true,
+  });
+  validateSlice3HandoffDashboard(
+    snapshot.views,
+    handoffPolicy,
+    handoffPolicyRef,
+    { successor, successorSourceRef },
+  );
   if (existsSync(SNAPSHOT_DIST_OUTPUT_PATH))
     assertSnapshotByteParity(
       readFileSync(snapshotPath),

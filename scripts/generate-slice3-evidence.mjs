@@ -5,11 +5,12 @@ import { resolve } from "node:path";
 
 const root = resolve(".");
 const observedAt = new Date().toISOString();
-const baselineCommit = "f1a5429505616a61cdac87cf7f57c114fa5e43a6";
-const baselineTree = "a01673ade6cc08c8648b52d8ac560d9ba385906f";
+const baselineCommit = "b992d371c467c3e185cc07bb5ac08fb8f38bf864";
+const baselineTree = "4d29c6cf1e2b044a9b6838c8ef5bf0cbc1010019";
 const exclusions = [
   "evidence/slice3/candidate-manifest.json",
   "evidence/slice3/local-validation.json",
+  "evidence/slice3/full-wrapper-result.json",
   "apps/dashboard/public/current-snapshot.json",
   "apps/dashboard/dist/current-snapshot.json",
 ];
@@ -56,12 +57,20 @@ writeFileSync(
   "utf8",
 );
 const manifestSha256 = sha(exclusions[0]);
+const wrapperResultPath = "evidence/slice3/full-wrapper-result.json";
+const wrapperResult = JSON.parse(
+  readFileSync(resolve(root, wrapperResultPath), "utf8"),
+);
+const wrapperResultSha256 = sha(wrapperResultPath);
 const artifactPaths = [
   "config/slice3/provider-evidence-register.v1.json",
   "config/slice3/research-route-policy.v1.json",
   "packages/contracts/src/v1/research-route.ts",
   "packages/contracts/src/v1/evidence-lineage.ts",
   "packages/ai-evidence/src/research-route-policy.ts",
+  "packages/ai-evidence/src/route-policy.ts",
+  "packages/ai-evidence/src/adapters/gemini-direct.ts",
+  "packages/ai-evidence/src/adapters/openrouter.ts",
   "packages/ai-evidence/src/research-orchestrator.ts",
   "packages/ai-evidence/src/evidence/integrity.ts",
   "packages/ai-evidence/src/evidence/lineage.ts",
@@ -71,9 +80,19 @@ const artifactPaths = [
   "packages/application/src/live-research-execution.ts",
   "packages/application/src/live-research-worker.ts",
   "packages/application/src/live-research-environment-runtime.ts",
+  "packages/application/src/live-research-credential-policy.ts",
   "packages/application/src/combined-worker.ts",
   "packages/application/src/research-admission.ts",
   "apps/web/src/server-owned-research-admission.ts",
+  "scripts/qualify-slice3-live.mjs",
+  "scripts/lib/slice3-dashboard-policy.mjs",
+  "scripts/lib/slice3-dashboard-handoff-policy.mjs",
+  "scripts/lib/slice3-wrapper-result-policy.mjs",
+  "scripts/generate-dashboard-snapshot.mjs",
+  "scripts/generate-dashboard-ci-snapshot.mjs",
+  "scripts/validate-dashboard-snapshot.mjs",
+  "scripts/record-slice3-wrapper-result.mjs",
+  "governance/slice3-dashboard-handoff-policy-v1.json",
   "packages/data/migrations/0003_slice_3_live_research.up.sql",
   "packages/data/migrations/0003_slice_3_live_research.down.sql",
   "test/slice3/data/live-research-postgres.test.mjs",
@@ -83,6 +102,12 @@ const artifactPaths = [
   "test/slice3/combined-live-worker-postgres.test.mjs",
   "test/slice3/environment-provider-transport.test.mjs",
   "test/slice3/qualified-live-admission.test.mjs",
+  "test/slice3/live-qualification-preflight.test.mjs",
+  "test/slice3/dashboard-policy.test.mjs",
+  "test/slice3/dashboard-handoff-policy.test.mjs",
+  "test/slice3/wrapper-result-policy.test.mjs",
+  "packages/ai-evidence/test/research-adapters.test.ts",
+  "packages/ai-evidence/test/research-route-policy.test.ts",
   "test/browser/product-qualified-reference-path.spec.mjs",
   "test/browser/product-live-reference-path.spec.mjs",
   "test/browser/product-standard-reference-path.spec.mjs",
@@ -166,9 +191,19 @@ const evidence = {
   },
   localGate: {
     status: "PASS",
+    fullWrapper: {
+      command: wrapperResult.command,
+      durationMs: wrapperResult.durationMs,
+      result: wrapperResult.result,
+      observedAt: wrapperResult.observedAt,
+      sourceRef: {
+        path: wrapperResultPath,
+        sha256: wrapperResultSha256,
+      },
+    },
     testCounts: {
       contracts: 7,
-      aiEvidence: 71,
+      aiEvidence: 74,
       security: 52,
       dataPostgresql18: 22,
       liveResearchApplicationPostgresql18: 1,
@@ -179,7 +214,7 @@ const evidence = {
       qualifiedLiveBrowserChrome: 1,
       failed: 0,
     },
-    note: "Pre-wrapper frozen repository basis: contracts 7/7, AI/evidence 71/71, PostgreSQL 18 data 22/22 with down/reapply, security/HTTP 52/52, Slice 3 application/worker/HTTP 8/8, web PostgreSQL 29/29, and qualified-live real Chrome 1/1. The independent six-former-Major technical review passed 0C/0M/0m on the exact pre-freeze bytes. Full isolated wrapper, six formal same-byte discipline audits, final critic, hosted fixture-only release and Role 2 remain separately gated. Provider calls and external mutations remained zero.",
+    note: "Role 2 Loop 1 pre-wrapper basis: contracts 7/7, AI/evidence 74/74, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 12/12, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated. Provider calls and external mutations remained zero.",
   },
   acceptance,
   artifacts,
@@ -198,7 +233,14 @@ const evidence = {
     major: 0,
     minor: 0,
   })),
-  role2: { status: "PENDING", acceptanceClaimed: false },
+  role2: {
+    status: "FAIL",
+    acceptanceClaimed: false,
+    defects: ["D001", "D002", "D003", "D004"].map((id) => ({
+      id,
+      status: "CORRECTED_PENDING_ROLE2",
+    })),
+  },
 };
 writeFileSync(
   resolve(root, exclusions[1]),

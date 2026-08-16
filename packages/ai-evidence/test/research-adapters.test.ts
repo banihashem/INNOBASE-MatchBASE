@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createQualifiedGeminiDirectAdapter } from "../src/adapters/gemini-direct.js";
 import { createQualifiedOpenRouterAdapter } from "../src/adapters/openrouter.js";
+import { validateOpenRouterProviderRequestPolicy } from "../src/adapters/openrouter.js";
 import {
   RecordingFakeTransport,
   type ProviderAttemptOutcome,
@@ -72,7 +73,7 @@ test("Gemini adapter requires native search and snapshots exact served identity"
     model: string;
     contents: Array<{ role: string; parts: Array<{ text: string }> }>;
     tools: unknown[];
-    generationConfig: { responseMimeType: string; temperature: number };
+    generationConfig: Record<string, unknown>;
   };
   assert.equal(body.model, "gemini-2.5-flash");
   assert.deepEqual(body.contents, [
@@ -87,7 +88,9 @@ test("Gemini adapter requires native search and snapshots exact served identity"
   ]);
   assert.deepEqual(body.tools, [{ google_search: {} }]);
   assert.equal(body.generationConfig.responseMimeType, "application/json");
-  assert.equal(body.generationConfig.temperature, 0);
+  for (const field of ["temperature", "topP", "topK"]) {
+    assert.equal(field in body.generationConfig, false);
+  }
   assert.equal(result.routeSnapshot.path, "gemini_direct");
   assert.equal(result.routeSnapshot.servedProviderId, "google");
   assert.equal(result.routeSnapshot.servedModelId, "gemini-2.5-flash");
@@ -138,19 +141,31 @@ test("OpenRouter adapter serializes one explicit provider and disables broker fa
   const body = JSON.parse(capturedRequest.body) as {
     model: string;
     provider: {
+      zdr: boolean;
+      data_collection: string;
+      only: string[];
       order: string[];
       require_parameters: boolean;
       allow_fallbacks: boolean;
     };
     messages: Array<{ role: string; content: string }>;
     plugins?: unknown;
+    temperature?: unknown;
+    top_p?: unknown;
+    top_k?: unknown;
   };
   assert.equal(body.model, "google/gemini-2.5-flash");
   assert.deepEqual(body.provider, {
+    zdr: true,
+    data_collection: "deny",
+    only: ["google"],
     order: ["google"],
     require_parameters: true,
     allow_fallbacks: false,
   });
+  assert.equal(body.temperature, undefined);
+  assert.equal(body.top_p, undefined);
+  assert.equal(body.top_k, undefined);
   assert.equal(body.plugins, undefined);
   assert.equal(body.messages[0]?.role, "user");
   assert.equal(
@@ -167,6 +182,71 @@ test("OpenRouter adapter serializes one explicit provider and disables broker fa
   assert.equal(outcomes[0]?.requestedModelId, "google/gemini-2.5-flash");
   assert.equal(outcomes[0]?.servedProviderId, "google");
   assert.equal(outcomes[0]?.servedModelId, "google/gemini-2.5-flash");
+});
+
+test("OpenRouter rejects every provider privacy and allowlist mismatch", () => {
+  const context = {
+    orderedProviderAllowlist: ["google", "anthropic"],
+    retentionTrainingPosture: "verified_zdr",
+    requireParameters: true,
+    allowFallbacks: false,
+  } as const;
+  const exact = {
+    zdr: true,
+    data_collection: "deny",
+    only: ["google", "anthropic"],
+    order: ["google", "anthropic"],
+    require_parameters: true,
+    allow_fallbacks: false,
+  };
+  validateOpenRouterProviderRequestPolicy(exact, context);
+  const mutations: Array<(value: Record<string, unknown>) => void> = [
+    (value) => delete value.zdr,
+    (value) => {
+      value.zdr = false;
+    },
+    (value) => {
+      value.data_collection = "allow";
+    },
+    (value) => {
+      value.unknown = true;
+    },
+    (value) => {
+      value.only = ["google", "mistral"];
+    },
+    (value) => {
+      value.order = ["anthropic", "google"];
+    },
+    (value) => {
+      value.only = ["google", "anthropic", "mistral"];
+      value.order = ["google", "anthropic", "mistral"];
+    },
+    (value) => {
+      value.require_parameters = false;
+    },
+    (value) => {
+      value.allow_fallbacks = true;
+    },
+  ];
+  for (const mutate of mutations) {
+    const candidate = structuredClone(exact) as unknown as Record<
+      string,
+      unknown
+    >;
+    mutate(candidate);
+    assert.throws(
+      () => validateOpenRouterProviderRequestPolicy(candidate, context),
+      /policy|privacy|allowlist|unsupported/iu,
+    );
+  }
+  assert.throws(
+    () =>
+      validateOpenRouterProviderRequestPolicy(exact, {
+        ...context,
+        retentionTrainingPosture: "verified_no_training",
+      }),
+    /verified ZDR/iu,
+  );
 });
 
 test("both adapters fail attempts closed when served identity is missing or altered", async () => {

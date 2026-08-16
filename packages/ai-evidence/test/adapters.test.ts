@@ -19,8 +19,11 @@ function route(providerId: ProviderRouteV1["providerId"]): ProviderRouteV1 {
     environment: "test",
     realData: false,
     billingPath: "not_applicable",
-    retentionPosture: "unknown",
-    dataHandlingEvidenceRefs: [],
+    retentionPosture: providerId === "openrouter" ? "zdr" : "unknown",
+    dataHandlingEvidenceRefs:
+      providerId === "openrouter"
+        ? ["https://example.invalid/openrouter-zdr"]
+        : [],
     timeoutMs: 1000,
     retry: { maxAttempts: 1, backoffMs: 0 },
     requireParameters: true,
@@ -81,10 +84,14 @@ test("OpenRouter serializes closed provider routing through injected transport",
   assert.equal(transport.requests.length, 1);
   const request = JSON.parse(transport.requests[0]?.body ?? "null") as {
     model: string;
-    provider: { require_parameters: boolean; allow_fallbacks: boolean };
+    provider: Record<string, unknown>;
   };
   assert.equal(request.model, configured.modelId);
   assert.deepEqual(request.provider, {
+    zdr: true,
+    data_collection: "deny",
+    only: ["openrouter"],
+    order: ["openrouter"],
     require_parameters: true,
     allow_fallbacks: false,
   });

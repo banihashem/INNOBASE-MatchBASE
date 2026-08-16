@@ -1,9 +1,20 @@
 {
   "schemaVersion": "provider-evidence-register.v1",
-  "registerVersion": "slice3-provider-evidence.2026-08-15",
-  "accessedAt": "2026-08-15T18:00:00.000Z",
-  "expiresAt": "2026-08-22T18:00:00.000Z",
+  "registerVersion": "slice3-provider-evidence.2026-08-16.d001-d003",
+  "accessedAt": "2026-08-16T00:00:00.000Z",
+  "expiresAt": "2026-08-23T00:00:00.000Z",
   "sources": [
+    {
+      "sourceId": "GOOGLE-GEMINI-3.6-SAMPLING-COMPATIBILITY",
+      "authority": "google",
+      "url": "https://ai.google.dev/gemini-api/docs/latest-model",
+      "supports": [
+        "gemini_3_6_model_identity",
+        "generate_content_compatibility",
+        "sampling_parameters_removed"
+      ],
+      "confidence": "high"
+    },
     {
       "sourceId": "GOOGLE-GEMINI-MODEL-3.6-FLASH",
       "authority": "google",
@@ -36,14 +47,31 @@
       "sourceId": "OPENROUTER-PROVIDER-ROUTING",
       "authority": "openrouter",
       "url": "https://openrouter.ai/docs/guides/routing/provider-selection",
-      "supports": ["provider_order", "fallback_control", "parameter_control"],
+      "supports": [
+        "provider_allowlist",
+        "provider_order",
+        "fallback_control",
+        "parameter_control",
+        "data_collection_deny"
+      ],
       "confidence": "high"
     },
     {
       "sourceId": "OPENROUTER-ZDR",
       "authority": "openrouter",
       "url": "https://openrouter.ai/docs/guides/features/zdr",
-      "supports": ["zdr_control", "endpoint_policy_conservatism"],
+      "supports": [
+        "zdr_control",
+        "request_level_enforcement",
+        "endpoint_policy_conservatism"
+      ],
+      "confidence": "high"
+    },
+    {
+      "sourceId": "OPENROUTER-SOVEREIGN-AI",
+      "authority": "openrouter",
+      "url": "https://openrouter.ai/docs/guides/features/sovereign-ai",
+      "supports": ["regional_endpoint_policy", "data_residency_boundary"],
       "confidence": "high"
     },
     {

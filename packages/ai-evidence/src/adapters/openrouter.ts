@@ -20,6 +20,97 @@ import {
   type ProviderTransport,
 } from "../transport.js";
 
+const OPENROUTER_PROVIDER_FIELDS = new Set([
+  "zdr",
+  "data_collection",
+  "only",
+  "order",
+  "require_parameters",
+  "allow_fallbacks",
+]);
+
+export interface OpenRouterProviderRequestPolicy {
+  readonly zdr: true;
+  readonly data_collection: "deny";
+  readonly only: readonly string[];
+  readonly order: readonly string[];
+  readonly require_parameters: true;
+  readonly allow_fallbacks: false;
+}
+
+export function validateOpenRouterProviderRequestPolicy(
+  value: unknown,
+  context: Readonly<{
+    orderedProviderAllowlist: readonly string[];
+    retentionTrainingPosture: string;
+    requireParameters: boolean;
+    allowFallbacks: boolean;
+  }>,
+): asserts value is OpenRouterProviderRequestPolicy {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("OpenRouter provider policy must be a closed object.");
+  }
+  const provider = value as Record<string, unknown>;
+  const fields = Object.keys(provider);
+  if (
+    fields.length !== OPENROUTER_PROVIDER_FIELDS.size ||
+    fields.some((field) => !OPENROUTER_PROVIDER_FIELDS.has(field))
+  ) {
+    throw new Error("OpenRouter provider policy contains unsupported fields.");
+  }
+  const expected = context.orderedProviderAllowlist;
+  const only = provider.only;
+  const order = provider.order;
+  if (
+    context.retentionTrainingPosture !== "zdr" &&
+    context.retentionTrainingPosture !== "verified_zdr"
+  ) {
+    throw new Error("OpenRouter provider policy lacks verified ZDR evidence.");
+  }
+  if (context.requireParameters !== true || context.allowFallbacks !== false) {
+    throw new Error(
+      "OpenRouter route policy permits parameter or fallback drift.",
+    );
+  }
+  if (
+    provider.zdr !== true ||
+    provider.data_collection !== "deny" ||
+    provider.require_parameters !== true ||
+    provider.allow_fallbacks !== false
+  ) {
+    throw new Error("OpenRouter provider privacy policy mismatch.");
+  }
+  if (
+    expected.length === 0 ||
+    new Set(expected).size !== expected.length ||
+    expected.some((item) => typeof item !== "string" || !item) ||
+    !Array.isArray(only) ||
+    !Array.isArray(order) ||
+    only.length !== expected.length ||
+    order.length !== expected.length ||
+    only.some((item, index) => item !== expected[index]) ||
+    order.some((item, index) => item !== expected[index])
+  ) {
+    throw new Error("OpenRouter provider allowlist/order mismatch.");
+  }
+}
+
+function closedOpenRouterProviderPolicy(
+  context: Parameters<typeof validateOpenRouterProviderRequestPolicy>[1],
+): OpenRouterProviderRequestPolicy {
+  const allowlist = Object.freeze([...context.orderedProviderAllowlist]);
+  const policy = Object.freeze({
+    zdr: true as const,
+    data_collection: "deny" as const,
+    only: allowlist,
+    order: allowlist,
+    require_parameters: true as const,
+    allow_fallbacks: false as const,
+  });
+  validateOpenRouterProviderRequestPolicy(policy, context);
+  return policy;
+}
+
 class OpenRouterAdapter {
   constructor(
     readonly route: ProviderRouteV1,
@@ -37,6 +128,12 @@ class OpenRouterAdapter {
     signal: AbortSignal,
   ): Promise<unknown> {
     if (!this.route.enabled) throw new Error("OpenRouter route is disabled.");
+    const provider = closedOpenRouterProviderPolicy({
+      orderedProviderAllowlist: [this.route.providerId],
+      retentionTrainingPosture: this.route.retentionPosture,
+      requireParameters: this.route.requireParameters,
+      allowFallbacks: this.route.allowFallbacks,
+    });
     const response = await executeProviderRequest({
       route: this.route,
       transport: this.transport,
@@ -49,7 +146,7 @@ class OpenRouterAdapter {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           model: this.route.modelId,
-          provider: { require_parameters: true, allow_fallbacks: false },
+          provider,
           response_format: { type: "json_schema", json_schema: input },
         }),
         signal: attemptSignal,
@@ -125,6 +222,12 @@ class QualifiedOpenRouterAdapter {
         "OpenRouter requires externally fetched sanitized evidence.",
       );
     }
+    const provider = closedOpenRouterProviderPolicy({
+      orderedProviderAllowlist: [route.providerId],
+      retentionTrainingPosture: route.dataHandling.retentionTrainingPosture,
+      requireParameters: route.parameterPolicy.requireParameters,
+      allowFallbacks: route.parameterPolicy.allowFallbacks,
+    });
     const response = await executeProviderRequest({
       route: {
         routeId: route.routeId,
@@ -158,11 +261,7 @@ class QualifiedOpenRouterAdapter {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           model: route.requestedModelId,
-          provider: {
-            order: [route.providerId],
-            require_parameters: true,
-            allow_fallbacks: false,
-          },
+          provider,
           messages: [
             { role: "user", content: requestInput.canonicalEnglishRequest },
             {
@@ -177,7 +276,6 @@ class QualifiedOpenRouterAdapter {
             json_schema: requestInput.outputSchema,
           },
           max_tokens: route.parameterPolicy.maxOutputTokens,
-          temperature: route.parameterPolicy.temperature,
         }),
         signal: attemptSignal,
       }),

@@ -14,6 +14,15 @@ import {
   validateSlice3Governance,
 } from "./lib/slice3-dashboard-policy.mjs";
 import {
+  applySlice3HandoffProjection,
+  removeMutableSlice3LoopLogRecords,
+  slice3HandoffSourceRef,
+  validateSlice3HandoffDashboard,
+  validateSlice3HandoffPolicy,
+  validateSlice3SuccessorOverlay,
+  verifySlice3LogPrefix,
+} from "./lib/slice3-dashboard-handoff-policy.mjs";
+import {
   externalClosurePredecessorSourceRef,
   externalClosureRole2SourceRef,
   externalClosureSourceRef,
@@ -55,6 +64,48 @@ const slice3SourceRef = slice3EvidenceSourceRef(
   slice3EvidenceBytes,
   slice3Evidence,
 );
+const slice3HandoffPolicyPath = resolve(
+  "governance/slice3-dashboard-handoff-policy-v1.json",
+);
+const slice3HandoffPolicyBytes = await readFile(slice3HandoffPolicyPath);
+const slice3HandoffPolicy = validateSlice3HandoffPolicy(
+  JSON.parse(slice3HandoffPolicyBytes.toString("utf8")),
+);
+verifySlice3LogPrefix(slice3HandoffPolicy);
+const slice3HandoffPolicyRef = slice3HandoffSourceRef(
+  slice3HandoffPolicyPath,
+  slice3HandoffPolicyBytes,
+  slice3Evidence.observedAt,
+);
+let slice3Successor;
+let slice3SuccessorRef;
+if (process.env.MATCHBASE_SLICE3_REPOSITORY_RELEASE_OVERLAY) {
+  const managementRoot = "C:\\INNOBASE\\MatchBASE\\01_Product_Management";
+  const overlayIdentity =
+    process.env.MATCHBASE_SLICE3_REPOSITORY_RELEASE_OVERLAY;
+  const overlayRelative = win32.relative(managementRoot, overlayIdentity);
+  const overlayPath = resolve(overlayIdentity);
+  if (
+    !win32.isAbsolute(overlayIdentity) ||
+    win32.isAbsolute(overlayRelative) ||
+    overlayRelative === ".." ||
+    overlayRelative.startsWith(`..${win32.sep}`)
+  )
+    throw new Error(
+      "Slice 3 successor overlay must be an absolute management path.",
+    );
+  const overlayBytes = await readFile(overlayPath);
+  slice3Successor = validateSlice3SuccessorOverlay(
+    JSON.parse(overlayBytes.toString("utf8")),
+    slice3HandoffPolicy,
+  );
+  slice3SuccessorRef = slice3HandoffSourceRef(
+    overlayPath,
+    overlayBytes,
+    slice3Successor.observedAt,
+    "successor",
+  );
+}
 const anchorOnly =
   process.env.MATCHBASE_EXTERNAL_EVIDENCE_MODE === "ANCHOR_ONLY_CI";
 const externalClosurePath = process.env.MATCHBASE_EXTERNAL_CLOSURE_OVERLAY
@@ -225,6 +276,8 @@ trustedAgentEvidenceRefs.push(
   externalClosureRole2SourceRef(externalClosureValue),
 );
 trustedAgentEvidenceRefs.push(slice3SourceRef);
+trustedAgentEvidenceRefs.push(slice3HandoffPolicyRef);
+if (slice3SuccessorRef) trustedAgentEvidenceRefs.push(slice3SuccessorRef);
 trustedAgentEvidenceRefs.push(
   slice2ClosureDocument.sourceRef,
   slice2ClosureDocument.auditSourceRef,
@@ -286,8 +339,29 @@ const views = Object.fromEntries(
     ];
   }),
 );
-applySlice3DashboardProjection(views, slice3Evidence, slice3SourceRef);
-validateSlice3Dashboard(views, slice3Evidence, slice3SourceRef);
+removeMutableSlice3LoopLogRecords(views, slice3HandoffPolicy);
+applySlice3DashboardProjection(views, slice3Evidence, slice3SourceRef, {
+  repositoryReleaseClosed: Boolean(slice3Successor),
+});
+applySlice3HandoffProjection(
+  views,
+  slice3HandoffPolicy,
+  slice3HandoffPolicyRef,
+  {
+    successor: slice3Successor,
+    successorSourceRef: slice3SuccessorRef,
+  },
+);
+validateSlice3Dashboard(views, slice3Evidence, slice3SourceRef, {
+  repositoryReleaseClosed: Boolean(slice3Successor),
+  handoffProjected: true,
+});
+validateSlice3HandoffDashboard(
+  views,
+  slice3HandoffPolicy,
+  slice3HandoffPolicyRef,
+  { successor: slice3Successor, successorSourceRef: slice3SuccessorRef },
+);
 
 const dashboard = {
   schemaVersion: "1.0",

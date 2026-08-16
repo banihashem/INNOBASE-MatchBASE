@@ -1,8 +1,35 @@
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
+import {
+  LIVE_RESEARCH_CREDENTIAL_HANDLES,
+  providerCredentialHandlePresent,
+} from "../packages/application/dist/live-research-credential-policy.js";
+
+export { LIVE_RESEARCH_CREDENTIAL_HANDLES };
+
+export function credentialHandlePresence(environment) {
+  return Object.freeze({
+    directCredentialPresent: providerCredentialHandlePresent(
+      environment,
+      LIVE_RESEARCH_CREDENTIAL_HANDLES.geminiDirect,
+    ),
+    openRouterCredentialPresent: providerCredentialHandlePresent(
+      environment,
+      LIVE_RESEARCH_CREDENTIAL_HANDLES.openrouter,
+    ),
+  });
+}
 
 export function evaluateLiveQualificationPrerequisites(input) {
+  if (
+    typeof input?.directCredentialPresent !== "boolean" ||
+    typeof input?.openRouterCredentialPresent !== "boolean"
+  ) {
+    throw new Error(
+      "Qualification credential presence must use exact boolean signals.",
+    );
+  }
   const blockers = [];
   if (input.policy?.liveActivation !== "enabled")
     blockers.push("ROUTE_POLICY_NOT_ENABLED");
@@ -44,12 +71,10 @@ function run() {
   const maxCostUsd = Number(
     process.env.MATCHBASE_SLICE3_QUALIFICATION_MAX_COST_USD,
   );
+  const credentialPresence = credentialHandlePresence(process.env);
   const result = evaluateLiveQualificationPrerequisites({
     policy,
-    directCredentialPresent: Boolean(
-      process.env.GEMINI_API_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS,
-    ),
-    openRouterCredentialPresent: Boolean(process.env.OPENROUTER_API_KEY),
+    ...credentialPresence,
     explicitAuthorization:
       process.env.MATCHBASE_SLICE3_LIVE_QUALIFICATION ===
       "I_ACKNOWLEDGE_BILLABLE_SYNTHETIC_ONLY",

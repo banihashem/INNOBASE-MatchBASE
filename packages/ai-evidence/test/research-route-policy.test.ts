@@ -125,6 +125,34 @@ test("rejects secrets, unknown fields, open activation gaps, and stale runtime e
   );
 });
 
+test("rejects every stale Gemini sampling field instead of ignoring it", () => {
+  for (const field of ["temperature", "top_p", "top_k", "topP", "topK"]) {
+    assert.throws(
+      () =>
+        validateResearchRoutePolicy(
+          mutateRoute((route) => {
+            (route.parameterPolicy as Record<string, unknown>)[field] = 0;
+          }),
+        ),
+      /unsupported fields/iu,
+    );
+  }
+});
+
+test("rejects account-setting-only OpenRouter privacy evidence", () => {
+  assert.throws(
+    () =>
+      validateResearchRoutePolicy(
+        mutateRoute((route) => {
+          (
+            route.dataHandling as Record<string, unknown>
+          ).retentionTrainingPosture = "verified_no_training";
+        }, 1),
+      ),
+    /verified ZDR/iu,
+  );
+});
+
 test("creates an exact deeply immutable route snapshot and denies identity drift", () => {
   const policy = qualifiedPolicy();
   const route = policy.routes[1];

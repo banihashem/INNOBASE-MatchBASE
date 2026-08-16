@@ -183,6 +183,11 @@ export function validateProviderRoute(
         `Route ${routeId} must require parameters and disable provider fallbacks.`,
       );
     }
+    if (route.enabled && route.retentionPosture !== "zdr") {
+      throw new Error(
+        `Route ${routeId} OpenRouter requests require verified ZDR posture.`,
+      );
+    }
   }
   if (providerId === "synthetic_fixture") {
     if (!["local", "test"].includes(route.environment)) {

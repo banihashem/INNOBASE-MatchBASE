@@ -1,13 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createServerOwnedResearchAdmission } from "@matchbase/application";
+import {
+  createServerOwnedResearchAdmission,
+  LIVE_RESEARCH_CREDENTIAL_HANDLES,
+  providerCredentialHandlePresent,
+} from "@matchbase/application";
 import type { WebConfig } from "./config";
 
 const DEFAULT_POLICY_PATH = "config/slice3/research-route-policy.v1.json";
-
-function verifiedHandle(value: string | undefined): boolean {
-  return value !== undefined && value.length >= 16 && value.length <= 4096;
-}
 
 export function loadServerOwnedResearchAdmission(
   config: WebConfig,
@@ -27,8 +27,14 @@ export function loadServerOwnedResearchAdmission(
     environment: config.environment,
     policy,
     verifiedCredentialHandles: {
-      gemini_direct: verifiedHandle(environment.MATCHBASE_GEMINI_API_KEY),
-      openrouter: verifiedHandle(environment.MATCHBASE_OPENROUTER_API_KEY),
+      gemini_direct: providerCredentialHandlePresent(
+        environment,
+        LIVE_RESEARCH_CREDENTIAL_HANDLES.geminiDirect,
+      ),
+      openrouter: providerCredentialHandlePresent(
+        environment,
+        LIVE_RESEARCH_CREDENTIAL_HANDLES.openrouter,
+      ),
     },
     // Standard projections remain synthetic until a distinct live disclosure
     // contract exists. This allowlist is server-owned and never request-derived.

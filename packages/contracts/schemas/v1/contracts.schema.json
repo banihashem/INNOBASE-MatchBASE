@@ -455,7 +455,6 @@
                   "requireParameters",
                   "allowFallbacks",
                   "maxOutputTokens",
-                  "temperature",
                   "timeoutMs",
                   "maxAttempts",
                   "backoffMs"
@@ -486,11 +485,6 @@
                   "maxOutputTokens": {
                     "type": "integer",
                     "minimum": 1
-                  },
-                  "temperature": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 2
                   },
                   "timeoutMs": {
                     "type": "integer",
@@ -656,7 +650,6 @@
             "requireParameters",
             "allowFallbacks",
             "maxOutputTokens",
-            "temperature",
             "timeoutMs",
             "maxAttempts",
             "backoffMs"
@@ -687,11 +680,6 @@
             "maxOutputTokens": {
               "type": "integer",
               "minimum": 1
-            },
-            "temperature": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 2
             },
             "timeoutMs": {
               "type": "integer",

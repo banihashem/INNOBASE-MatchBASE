@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "matchbase.slice3-dashboard-handoff-policy/v1",
+  "repository": "banihashem/INNOBASE-MatchBASE",
+  "successorOverlayEnvironmentVariable": "MATCHBASE_SLICE3_REPOSITORY_RELEASE_OVERLAY",
+  "successorOverlaySchemaVersion": "matchbase.slice3-repository-release-successor/v1",
+  "historicalHosted": [
+    {
+      "runId": 31912344570,
+      "jobId": 95079230396,
+      "commit": "bd144bf178ac29c509379a66e72c8a771a8e44ad",
+      "tree": "6bba37c7812c2bd51861ca9c90bdc39d1cb7d1c8",
+      "conclusion": "failure",
+      "reason": "UBUNTU_AGENT_POLICY_HISTORICAL_WINDOWS_SOURCE_DEREFERENCE"
+    },
+    {
+      "runId": 31913523573,
+      "jobId": 95081989651,
+      "commit": "b992d371c467c3e185cc07bb5ac08fb8f38bf864",
+      "tree": "4d29c6cf1e2b044a9b6838c8ef5bf0cbc1010019",
+      "conclusion": "success",
+      "reason": "ROLE2_REJECTED_FOUR_MAJOR_CORRECTIONS_REQUIRED"
+    }
+  ],
+  "immutableLogPrefix": {
+    "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\PRODUCT_MANAGEMENT_LOOP_LOG.md",
+    "prefixBytes": 201811,
+    "prefixSha256": "33C3C5ABE713FC4E23DC3C0ADE079540EABCB0AE55BFEB4D0C5E501B7E90E5F2"
+  },
+  "blockerCodes": [
+    "ROUTE_POLICY_NOT_ENABLED",
+    "TWO_QUALIFIED_ROUTES_NOT_PRESENT",
+    "APPROVED_DIRECT_CREDENTIAL_ABSENT",
+    "APPROVED_OPENROUTER_CREDENTIAL_ABSENT",
+    "EXPLICIT_BILLABLE_QUALIFICATION_AUTHORIZATION_ABSENT",
+    "QUALIFICATION_BUDGET_INVALID"
+  ],
+  "blockedAcceptance": ["S3-AC-003", "S3-AC-019"],
+  "role2": {
+    "status": "FAIL",
+    "acceptanceClaimed": false,
+    "defects": [
+      { "id": "D001", "status": "CORRECTED_PENDING_ROLE2" },
+      { "id": "D002", "status": "CORRECTED_PENDING_ROLE2" },
+      { "id": "D003", "status": "CORRECTED_PENDING_ROLE2" },
+      { "id": "D004", "status": "CORRECTED_PENDING_ROLE2" }
+    ]
+  }
+}

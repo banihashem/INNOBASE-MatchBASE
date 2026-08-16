@@ -200,10 +200,10 @@
     {
       "id": "S3-G2",
       "name": "Slice 3 independent discipline audits",
-      "status": "PASS",
+      "status": "PENDING",
       "owner": "Independent reviewers",
       "evidence": ["evidence/slice3/local-validation.json"],
-      "summary": "Six repository-implementation audits pass with zero findings; the final critic remains pending.",
+      "summary": "All prior audit verdicts are invalidated by the Role 2 Loop 1 correction bytes; six fresh same-byte repository-implementation audits are pending.",
       "traceabilityIds": []
     },
     {
@@ -236,19 +236,19 @@
     {
       "id": "S3-G6",
       "name": "Slice 3 final integration critic",
-      "status": "PASS",
+      "status": "PENDING",
       "owner": "Independent critic",
       "evidence": ["evidence/slice3/local-validation.json"],
-      "summary": "Six repository audits and the final integration critic pass with zero findings; Slice 3 overall remains BLOCKED_PREREQUISITE.",
+      "summary": "The final integration critic is pending until six fresh same-byte audits pass on the Role 2 Loop 1 correction candidate; Slice 3 overall remains BLOCKED_PREREQUISITE.",
       "traceabilityIds": []
     },
     {
       "id": "S3-G7",
       "name": "Slice 3 Role 2 independent acceptance",
-      "status": "PENDING",
+      "status": "FAIL",
       "owner": "Role 2",
       "evidence": ["evidence/slice3/local-validation.json"],
-      "summary": "Role 2 acceptance is pending and cannot pass while live qualification is blocked.",
+      "summary": "Role 2 Loop 1 rejected D001 through D004; all four are corrected pending Role 2 re-audit, and Slice 3 acceptance remains unclaimed while live qualification is blocked.",
       "traceabilityIds": []
     }
   ]

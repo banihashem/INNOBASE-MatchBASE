@@ -30,6 +30,12 @@ import {
   validateSlice3Governance,
 } from "./lib/slice3-dashboard-policy.mjs";
 import {
+  applySlice3HandoffProjection,
+  slice3HandoffSourceRef,
+  validateSlice3HandoffDashboard,
+  validateSlice3HandoffPolicy,
+} from "./lib/slice3-dashboard-handoff-policy.mjs";
+import {
   REPOSITORY_ROOT,
   SNAPSHOT_DIST_OUTPUT_PATH,
   SNAPSHOT_OUTPUT_PATH,
@@ -109,6 +115,7 @@ const [
   predecessorHistory,
   externalState,
   slice3LocalEvidence,
+  slice3HandoffPolicyDocument,
 ] = await Promise.all([
   document("governance/slices.json"),
   document("governance/gates.json"),
@@ -122,8 +129,17 @@ const [
   document("governance/predecessor-failures-v1.json"),
   document("governance/external-state.json"),
   document("evidence/slice3/local-validation.json"),
+  document("governance/slice3-dashboard-handoff-policy-v1.json"),
 ]);
 validateSlice3Evidence(slice3LocalEvidence.value);
+const slice3HandoffPolicy = validateSlice3HandoffPolicy(
+  slice3HandoffPolicyDocument.value,
+);
+const slice3HandoffPolicyRef = slice3HandoffSourceRef(
+  slice3HandoffPolicyDocument.sourceRef.path,
+  await readFile(slice3HandoffPolicyDocument.sourceRef.path),
+  slice3LocalEvidence.value.observedAt,
+);
 validateSlice3Governance(gates.value.gates, slice3LocalEvidence.value);
 const slice3SourceRef = slice3EvidenceSourceRef(
   slice3LocalEvidence.sourceRef.path,
@@ -528,7 +544,19 @@ applySlice3DashboardProjection(
   slice3LocalEvidence.value,
   slice3SourceRef,
 );
-validateSlice3Dashboard(views, slice3LocalEvidence.value, slice3SourceRef);
+applySlice3HandoffProjection(
+  views,
+  slice3HandoffPolicy,
+  slice3HandoffPolicyRef,
+);
+validateSlice3Dashboard(views, slice3LocalEvidence.value, slice3SourceRef, {
+  handoffProjected: true,
+});
+validateSlice3HandoffDashboard(
+  views,
+  slice3HandoffPolicy,
+  slice3HandoffPolicyRef,
+);
 validateDashboardHistoricalProvenance(
   views,
   artifactIndex.value,

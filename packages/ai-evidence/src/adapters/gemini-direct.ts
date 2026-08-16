@@ -167,7 +167,6 @@ class QualifiedGeminiDirectAdapter {
             responseMimeType: "application/json",
             responseJsonSchema: requestInput.outputSchema,
             maxOutputTokens: route.parameterPolicy.maxOutputTokens,
-            temperature: route.parameterPolicy.temperature,
           },
         }),
         signal: attemptSignal,

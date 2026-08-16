@@ -243,7 +243,6 @@ export class GeminiServerOwnedSourceDiscovery implements ServerOwnedSourceDiscov
                 },
               },
               maxOutputTokens: 1024,
-              temperature: 0,
             },
           }),
           signal,

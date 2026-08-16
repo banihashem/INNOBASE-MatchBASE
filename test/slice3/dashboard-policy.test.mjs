@@ -59,7 +59,7 @@ test("rejects stale gate lifecycle", () => {
     evidence,
     sourceRef,
   );
-  projected.gates.records.find(({ id }) => id === "S3-G2").status = "ACTIVE";
+  projected.gates.records.find(({ id }) => id === "S3-G2").status = "PASS";
   assert.throws(
     () => validateSlice3Dashboard(projected, evidence, sourceRef),
     /G2 audit lifecycle/u,
@@ -68,8 +68,8 @@ test("rejects stale gate lifecycle", () => {
 
 test("rejects stale governed G2 and G6 lifecycle", () => {
   const gates = [
-    { id: "S3-G2", status: "PENDING", summary: "pending" },
-    { id: "S3-G6", status: "PENDING", summary: "pending" },
+    { id: "S3-G2", status: "PASS", summary: "stale pass" },
+    { id: "S3-G6", status: "PASS", summary: "stale pass" },
   ];
   assert.throws(
     () => validateSlice3Governance(gates, evidence),

@@ -1,8 +1,9 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "slice": "SLICE-3",
-  "observedAt": "2026-08-16T01:12:35.120Z",
-  "candidateStatus": "LOCAL_REPOSITORY_IMPLEMENTATION_FROZEN_LIVE_BLOCKED",
+  "observedAt": "2026-08-16T02:35:37.000Z",
+  "lifecyclePhase": "POST_REVIEW_CURRENT",
+  "candidateStatus": "REPOSITORY_IMPLEMENTATION_POST_REVIEW_CURRENT_LIVE_BLOCKED",
   "repositoryImplementation": "PASS",
   "liveQualification": "BLOCKED_PREREQUISITE",
   "blockerCodes": [
@@ -38,20 +39,20 @@
   },
   "candidate": {
     "manifestPath": "evidence/slice3/candidate-manifest.json",
-    "manifestSha256": "6C38CA9C4A1E3A7A56D31A9A9F8C0FF4166F6F658CAC015084C13E0963032CE0",
-    "aggregateSha256": "BB2418A4F68EF3D0C3D7BB71978B5C38F6A663A39D5EB77E86CF5DF8AD79FD89",
+    "manifestSha256": "5A825EECE2365D4979D611A0B756CBFE8AC33030A53DE3BC17BF7FC54BB0D077",
+    "aggregateSha256": "20822CB8FF0AC7406C4FAAA8C7112175568CA6E58DE9B603743210C3F2E96B14",
     "fileCount": 38
   },
   "localGate": {
     "status": "PASS",
     "fullWrapper": {
       "command": "pnpm test:ci && pnpm dependency:audit",
-      "durationMs": 466564,
+      "durationMs": 488227,
       "result": "PASS",
-      "observedAt": "2026-08-16T01:12:35.047Z",
+      "observedAt": "2026-08-16T02:35:35.849Z",
       "sourceRef": {
         "path": "evidence/slice3/full-wrapper-result.json",
-        "sha256": "A2C8BC212E61963531F7D01B5AFBEEF622FFE5259CE5D97C287F51CBDD0B6C59"
+        "sha256": "F6FF8467A37800A1E60E8AF1F2AD84BEAC46A35DA96EEE18BC50976091BEBF18"
       }
     },
     "testCounts": {
@@ -1227,7 +1228,7 @@
     },
     {
       "id": "S3-AC-022",
-      "status": "PENDING",
+      "status": "REPOSITORY_PASS",
       "gateId": "S3-G6",
       "artifactIds": [
         "S3-ART-001",
@@ -1505,7 +1506,7 @@
     {
       "id": "S3-ART-023",
       "path": "scripts/lib/slice3-dashboard-policy.mjs",
-      "sha256": "A02924977F3B6D8CE5A1B28659A4BEB0F0C9639AF9589430D492A3E92361F889"
+      "sha256": "F134C432E2D438C1423259B19B95C1BB11EBD8DC387D968F62EE8239E5D45069"
     },
     {
       "id": "S3-ART-024",
@@ -1595,7 +1596,7 @@
     {
       "id": "S3-ART-041",
       "path": "test/slice3/dashboard-policy.test.mjs",
-      "sha256": "5B25A78A715271106E60ED9DF3216F2AAEAD82F20387BB9215805B4F9463E2E3"
+      "sha256": "6D117B33D8D11E6BD7BFC9103EDF22ADADDAC8F9F16F4AEA59D199CBA73A86DC"
     },
     {
       "id": "S3-ART-042",
@@ -1636,65 +1637,139 @@
   "independentAudits": [
     {
       "id": "security_privacy_iam",
-      "status": "PENDING",
+      "status": "PASS",
       "critical": 0,
       "major": 0,
       "minor": 0
     },
     {
       "id": "ai_evidence",
-      "status": "PENDING",
+      "status": "PASS",
       "critical": 0,
       "major": 0,
       "minor": 0
     },
     {
       "id": "data_migration",
-      "status": "PENDING",
+      "status": "PASS",
       "critical": 0,
       "major": 0,
       "minor": 0
     },
     {
       "id": "qa_accessibility",
-      "status": "PENDING",
+      "status": "PASS",
       "critical": 0,
       "major": 0,
       "minor": 0
     },
     {
       "id": "sre_cost_recovery",
-      "status": "PENDING",
+      "status": "PASS",
       "critical": 0,
       "major": 0,
       "minor": 0
     },
     {
       "id": "repository_release_preservation",
-      "status": "PENDING",
+      "status": "PASS",
       "critical": 0,
       "major": 0,
       "minor": 0
     },
     {
       "id": "integration_critic",
-      "status": "PENDING",
+      "status": "PASS",
       "critical": 0,
       "major": 0,
       "minor": 0
     }
   ],
+  "historicalLifecycle": {
+    "schemaVersion": "matchbase.slice3-during-review-history/v1",
+    "phase": "DURING_REVIEW_PENDING",
+    "observedAt": "2026-08-16T02:24:27.176Z",
+    "current": false,
+    "supersededBy": "postReview",
+    "audits": [
+      {
+        "id": "security_privacy_iam",
+        "status": "PENDING",
+        "critical": 0,
+        "major": 0,
+        "minor": 0
+      },
+      {
+        "id": "ai_evidence",
+        "status": "PENDING",
+        "critical": 0,
+        "major": 0,
+        "minor": 0
+      },
+      {
+        "id": "data_migration",
+        "status": "PENDING",
+        "critical": 0,
+        "major": 0,
+        "minor": 0
+      },
+      {
+        "id": "qa_accessibility",
+        "status": "PENDING",
+        "critical": 0,
+        "major": 0,
+        "minor": 0
+      },
+      {
+        "id": "sre_cost_recovery",
+        "status": "PENDING",
+        "critical": 0,
+        "major": 0,
+        "minor": 0
+      },
+      {
+        "id": "repository_release_preservation",
+        "status": "PENDING",
+        "critical": 0,
+        "major": 0,
+        "minor": 0
+      },
+      {
+        "id": "integration_critic",
+        "status": "PENDING",
+        "critical": 0,
+        "major": 0,
+        "minor": 0
+      }
+    ],
+    "gates": [
+      {
+        "id": "S3-G2",
+        "status": "PENDING"
+      },
+      {
+        "id": "S3-G6",
+        "status": "PENDING"
+      }
+    ],
+    "acceptance": [
+      {
+        "id": "S3-AC-022",
+        "status": "PENDING"
+      }
+    ]
+  },
   "postReview": {
     "schemaVersion": "matchbase.slice3-post-review/v1",
-    "observedAt": "2026-08-16T01:15:44.944Z",
+    "observedAt": "2026-08-16T02:35:36.000Z",
     "candidate": {
-      "manifestSha256": "6C38CA9C4A1E3A7A56D31A9A9F8C0FF4166F6F658CAC015084C13E0963032CE0",
-      "aggregateSha256": "BB2418A4F68EF3D0C3D7BB71978B5C38F6A663A39D5EB77E86CF5DF8AD79FD89",
+      "manifestSha256": "5A825EECE2365D4979D611A0B756CBFE8AC33030A53DE3BC17BF7FC54BB0D077",
+      "aggregateSha256": "20822CB8FF0AC7406C4FAAA8C7112175568CA6E58DE9B603743210C3F2E96B14",
       "fileCount": 38
     },
     "wrapperSource": {
       "path": "evidence/slice3/full-wrapper-result.json",
-      "sha256": "A2C8BC212E61963531F7D01B5AFBEEF622FFE5259CE5D97C287F51CBDD0B6C59"
+      "sha256": "F6FF8467A37800A1E60E8AF1F2AD84BEAC46A35DA96EEE18BC50976091BEBF18"
     },
     "disciplines": [
       {

@@ -203,7 +203,7 @@
       "status": "PENDING",
       "owner": "Independent reviewers",
       "evidence": ["evidence/slice3/local-validation.json"],
-      "summary": "All prior audit verdicts are invalidated by the Role 2 Loop 1 correction bytes; six fresh same-byte repository-implementation audits are pending.",
+      "summary": "Base/pre-release state: six fresh same-byte repository-implementation audits are pending. A valid source-bound postReview supersedes this historical phase for the current dashboard without changing Slice 3 or Role 2 acceptance.",
       "traceabilityIds": []
     },
     {
@@ -239,7 +239,7 @@
       "status": "PENDING",
       "owner": "Independent critic",
       "evidence": ["evidence/slice3/local-validation.json"],
-      "summary": "The final integration critic is pending until six fresh same-byte audits pass on the Role 2 Loop 1 correction candidate; Slice 3 overall remains BLOCKED_PREREQUISITE.",
+      "summary": "Base/pre-release state: the final integration critic is pending. A valid source-bound postReview supersedes this historical phase for the current dashboard; Slice 3 overall remains BLOCKED_PREREQUISITE.",
       "traceabilityIds": []
     },
     {

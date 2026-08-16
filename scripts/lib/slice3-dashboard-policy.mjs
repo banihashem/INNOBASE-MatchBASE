@@ -24,13 +24,175 @@ export const SLICE3_BLOCKER_CODES = [
 export const SLICE3_ROLE2_DEFECTS = ["D001", "D002", "D003", "D004"].map(
   (id) => ({ id, status: "CORRECTED_PENDING_ROLE2" }),
 );
+export const SLICE3_LIFECYCLE_PHASES = ["DURING_REVIEW", "POST_REVIEW_CURRENT"];
+const CANDIDATE_STATUS_BY_PHASE = {
+  DURING_REVIEW: "LOCAL_REPOSITORY_IMPLEMENTATION_FROZEN_LIVE_BLOCKED",
+  POST_REVIEW_CURRENT:
+    "REPOSITORY_IMPLEMENTATION_POST_REVIEW_CURRENT_LIVE_BLOCKED",
+};
 
 const exact = (actual, expected, message) => {
   if (JSON.stringify(actual) !== JSON.stringify(expected))
     throw new Error(message);
 };
+const closed = (value, keys, message) => {
+  exact(Object.keys(value ?? {}).sort(), [...keys].sort(), message);
+};
 const auditRecordId = (id) =>
   `S3-AUDIT-${id.toUpperCase().replaceAll("_", "-")}`;
+
+const zeroAudit = (audit, expectedId, expectedStatus, label) => {
+  closed(
+    audit,
+    ["id", "status", "critical", "major", "minor"],
+    `${label} has unknown or missing fields.`,
+  );
+  if (
+    audit.id !== expectedId ||
+    audit.status !== expectedStatus ||
+    ![audit.critical, audit.major, audit.minor].every(
+      (count) => Number.isInteger(count) && count === 0,
+    )
+  )
+    throw new Error(`${label} disposition is invalid.`);
+};
+
+const candidateIdentity = (candidate) => ({
+  manifestSha256: candidate?.manifestSha256,
+  aggregateSha256: candidate?.aggregateSha256,
+  fileCount: candidate?.fileCount,
+});
+
+function validatePostReview(value, evidence) {
+  closed(
+    value,
+    [
+      "schemaVersion",
+      "observedAt",
+      "candidate",
+      "wrapperSource",
+      "disciplines",
+      "integrationCritic",
+      "repositoryDisposition",
+      "slice3Overall",
+      "role2Status",
+      "acceptanceClaimed",
+      "providerCalls",
+      "externalMutations",
+    ],
+    "Slice 3 post-review object is not closed.",
+  );
+  closed(
+    value?.candidate,
+    ["manifestSha256", "aggregateSha256", "fileCount"],
+    "Slice 3 post-review candidate is not closed.",
+  );
+  closed(
+    value?.wrapperSource,
+    ["path", "sha256"],
+    "Slice 3 post-review wrapper source is not closed.",
+  );
+  const observedAtMs = Date.parse(value?.observedAt ?? "");
+  if (
+    value?.schemaVersion !== "matchbase.slice3-post-review/v1" ||
+    !Number.isFinite(observedAtMs) ||
+    observedAtMs < Date.parse(evidence.localGate.fullWrapper.observedAt) ||
+    observedAtMs > Date.parse(evidence.observedAt) ||
+    JSON.stringify(value.candidate) !==
+      JSON.stringify(candidateIdentity(evidence.candidate)) ||
+    JSON.stringify(value.wrapperSource) !==
+      JSON.stringify(evidence.localGate.fullWrapper.sourceRef) ||
+    evidence.localGate.fullWrapper.result !== "PASS" ||
+    value.repositoryDisposition !== "READY_FOR_REPOSITORY_RELEASE" ||
+    value.slice3Overall !== "BLOCKED_PREREQUISITE" ||
+    value.role2Status !== "FAIL" ||
+    value.acceptanceClaimed !== false ||
+    value.providerCalls !== 0 ||
+    value.externalMutations !== 0
+  )
+    throw new Error(
+      "Slice 3 post-review lifecycle or source binding is invalid.",
+    );
+  exact(
+    value.disciplines?.map(({ id }) => id),
+    SLICE3_AUDIT_IDS.slice(0, 6),
+    "Slice 3 post-review disciplines are incomplete or reordered.",
+  );
+  value.disciplines.forEach((audit, index) =>
+    zeroAudit(
+      audit,
+      SLICE3_AUDIT_IDS[index],
+      "PASS",
+      `Slice 3 post-review discipline ${index}`,
+    ),
+  );
+  closed(
+    value.integrationCritic,
+    ["status", "critical", "major", "minor"],
+    "Slice 3 post-review critic is not closed.",
+  );
+  if (
+    value.integrationCritic.status !== "PASS" ||
+    ![
+      value.integrationCritic.critical,
+      value.integrationCritic.major,
+      value.integrationCritic.minor,
+    ].every((count) => Number.isInteger(count) && count === 0)
+  )
+    throw new Error("Slice 3 post-review critic disposition is invalid.");
+}
+
+function validateHistoricalLifecycle(value, postReview) {
+  closed(
+    value,
+    [
+      "schemaVersion",
+      "phase",
+      "observedAt",
+      "current",
+      "supersededBy",
+      "audits",
+      "gates",
+      "acceptance",
+    ],
+    "Slice 3 historical lifecycle is not closed.",
+  );
+  if (
+    value?.schemaVersion !== "matchbase.slice3-during-review-history/v1" ||
+    value.phase !== "DURING_REVIEW_PENDING" ||
+    value.current !== false ||
+    value.supersededBy !== "postReview" ||
+    !Number.isFinite(Date.parse(value.observedAt)) ||
+    Date.parse(value.observedAt) >= Date.parse(postReview.observedAt)
+  )
+    throw new Error("Slice 3 historical lifecycle phase is invalid.");
+  exact(
+    value.audits?.map(({ id }) => id),
+    SLICE3_AUDIT_IDS,
+    "Slice 3 historical audits are incomplete or reordered.",
+  );
+  value.audits.forEach((audit, index) =>
+    zeroAudit(
+      audit,
+      SLICE3_AUDIT_IDS[index],
+      "PENDING",
+      `Slice 3 historical audit ${index}`,
+    ),
+  );
+  exact(
+    value.gates,
+    [
+      { id: "S3-G2", status: "PENDING" },
+      { id: "S3-G6", status: "PENDING" },
+    ],
+    "Slice 3 historical gate lifecycle is invalid.",
+  );
+  exact(
+    value.acceptance,
+    [{ id: "S3-AC-022", status: "PENDING" }],
+    "Slice 3 historical acceptance lifecycle is invalid.",
+  );
+}
 
 export function validateSlice3Evidence(value, options = {}) {
   const nowMs = options.nowMs ?? Date.now();
@@ -38,9 +200,36 @@ export function validateSlice3Evidence(value, options = {}) {
   const observedAtMs = Date.parse(value?.observedAt ?? "");
   if (!Number.isFinite(observedAtMs) || observedAtMs > nowMs + maxFutureSkewMs)
     throw new Error("Slice 3 observedAt is invalid or in the future.");
+  closed(
+    value,
+    [
+      "schemaVersion",
+      "slice",
+      "observedAt",
+      "lifecyclePhase",
+      "candidateStatus",
+      "repositoryImplementation",
+      "liveQualification",
+      "blockerCodes",
+      "qualificationPreflight",
+      "environment",
+      "candidate",
+      "localGate",
+      "acceptance",
+      "artifacts",
+      "independentAudits",
+      ...(value?.lifecyclePhase === "POST_REVIEW_CURRENT"
+        ? ["historicalLifecycle", "postReview"]
+        : []),
+      "role2",
+    ],
+    "Slice 3 evidence top-level object is not closed.",
+  );
   if (
-    value?.schemaVersion !== 1 ||
+    value?.schemaVersion !== 2 ||
     value?.slice !== "SLICE-3" ||
+    !SLICE3_LIFECYCLE_PHASES.includes(value.lifecyclePhase) ||
+    value.candidateStatus !== CANDIDATE_STATUS_BY_PHASE[value.lifecyclePhase] ||
     value?.repositoryImplementation !== "PASS" ||
     value?.liveQualification !== "BLOCKED_PREREQUISITE" ||
     value?.role2?.status !== "FAIL" ||
@@ -50,10 +239,29 @@ export function validateSlice3Evidence(value, options = {}) {
     value?.environment?.providerNetworkCalls !== 0
   )
     throw new Error("Slice 3 lifecycle evidence is invalid.");
+  closed(
+    value.role2,
+    ["status", "acceptanceClaimed", "defects"],
+    "Slice 3 Role 2 lifecycle is not closed.",
+  );
+  value.role2.defects?.forEach((defect, index) =>
+    closed(
+      defect,
+      ["id", "status"],
+      `Slice 3 Role 2 defect ${index} is not closed.`,
+    ),
+  );
   exact(
     value.role2.defects,
     SLICE3_ROLE2_DEFECTS,
     "Slice 3 Role 2 correction lifecycle is invalid.",
+  );
+  value.acceptance?.forEach((item, index) =>
+    closed(
+      item,
+      ["id", "status", "gateId", "artifactIds"],
+      `Slice 3 acceptance ${index} is not closed.`,
+    ),
   );
   exact(
     value.blockerCodes,
@@ -70,12 +278,25 @@ export function validateSlice3Evidence(value, options = {}) {
     SLICE3_ACCEPTANCE_IDS,
     "Slice 3 acceptance identities are incomplete or reordered.",
   );
+  const postReviewCurrent = value.lifecyclePhase === "POST_REVIEW_CURRENT";
+  const expectedRepositoryPass = postReviewCurrent ? 20 : 19;
+  const expectedPending = postReviewCurrent ? 2 : 3;
   if (
     value.acceptance.filter(({ status }) => status === "REPOSITORY_PASS")
-      .length !== 19 ||
+      .length !== expectedRepositoryPass ||
     value.acceptance.filter(({ status }) => status === "BLOCKED").length !==
       2 ||
-    value.acceptance.filter(({ status }) => status === "PENDING").length !== 3
+    value.acceptance.filter(({ status }) => status === "PENDING").length !==
+      expectedPending ||
+    value.acceptance.find(({ id }) => id === "S3-AC-003")?.status !==
+      "BLOCKED" ||
+    value.acceptance.find(({ id }) => id === "S3-AC-019")?.status !==
+      "BLOCKED" ||
+    value.acceptance.find(({ id }) => id === "S3-AC-022")?.status !==
+      (postReviewCurrent ? "REPOSITORY_PASS" : "PENDING") ||
+    value.acceptance.find(({ id }) => id === "S3-AC-023")?.status !==
+      "PENDING" ||
+    value.acceptance.find(({ id }) => id === "S3-AC-024")?.status !== "PENDING"
   )
     throw new Error("Slice 3 acceptance lifecycle counts are invalid.");
   const audits = value.independentAudits;
@@ -84,29 +305,30 @@ export function validateSlice3Evidence(value, options = {}) {
     SLICE3_AUDIT_IDS,
     "Slice 3 audits are incomplete or reordered.",
   );
-  for (const audit of audits) {
+  const expectedStatus =
+    value.lifecyclePhase === "POST_REVIEW_CURRENT" ? "PASS" : "PENDING";
+  audits.forEach((audit, index) =>
+    zeroAudit(
+      audit,
+      SLICE3_AUDIT_IDS[index],
+      expectedStatus,
+      `Slice 3 current audit ${index}`,
+    ),
+  );
+  if (value.lifecyclePhase === "POST_REVIEW_CURRENT") {
+    validatePostReview(value.postReview, value);
+    validateHistoricalLifecycle(value.historicalLifecycle, value.postReview);
     exact(
-      Object.keys(audit).sort(),
-      ["critical", "id", "major", "minor", "status"],
-      `Slice 3 audit ${audit.id} has unknown or missing fields.`,
+      audits.slice(0, 6),
+      value.postReview.disciplines,
+      "Slice 3 current disciplines contradict post-review authority.",
     );
-    if (
-      !["PENDING", "PASS"].includes(audit.status) ||
-      ![audit.critical, audit.major, audit.minor].every(
-        (count) => Number.isInteger(count) && count === 0,
-      )
-    )
-      throw new Error(`Slice 3 audit ${audit.id} disposition is invalid.`);
+    exact(
+      audits[6],
+      { id: "integration_critic", ...value.postReview.integrationCritic },
+      "Slice 3 current critic contradicts post-review authority.",
+    );
   }
-  const disciplineStatuses = audits.slice(0, 6).map(({ status }) => status);
-  if (!disciplineStatuses.every((status) => status === disciplineStatuses[0]))
-    throw new Error(
-      "Slice 3 discipline audit lifecycle is partially advanced.",
-    );
-  if (audits[6].status === "PASS" && disciplineStatuses[0] !== "PASS")
-    throw new Error(
-      "Slice 3 critic cannot pass before all six discipline audits.",
-    );
   return value;
 }
 
@@ -127,11 +349,22 @@ export function validateSlice3Governance(gates, evidence) {
   const criticPassed = evidence.independentAudits[6].status === "PASS";
   const g2 = gates.find(({ id }) => id === "S3-G2");
   const g6 = gates.find(({ id }) => id === "S3-G6");
-  if (g2?.status !== (disciplinePassed ? "PASS" : "PENDING"))
+  const terminalCurrent = evidence.lifecyclePhase === "POST_REVIEW_CURRENT";
+  if (
+    g2?.status !== (disciplinePassed ? "PASS" : "PENDING") &&
+    !(terminalCurrent && g2?.status === "PENDING")
+  )
     throw new Error("Slice 3 G2 governed lifecycle is stale.");
-  if (g6?.status !== (criticPassed ? "PASS" : "PENDING"))
+  if (
+    g6?.status !== (criticPassed ? "PASS" : "PENDING") &&
+    !(terminalCurrent && g6?.status === "PENDING")
+  )
     throw new Error("Slice 3 G6 governed lifecycle is stale.");
-  if (disciplinePassed && !g2.summary?.includes("pass with zero findings"))
+  if (
+    disciplinePassed &&
+    g2?.status === "PASS" &&
+    !g2.summary?.includes("pass with zero findings")
+  )
     throw new Error("Slice 3 G2 governed summary is stale.");
   if (
     disciplinePassed &&
@@ -139,6 +372,16 @@ export function validateSlice3Governance(gates, evidence) {
     !g6.summary?.includes("critic remains pending")
   )
     throw new Error("Slice 3 G6 governed summary is stale.");
+  if (
+    terminalCurrent &&
+    (g2?.status === "PENDING" || g6?.status === "PENDING") &&
+    ![g2, g6].every(({ summary }) =>
+      summary?.toLowerCase().includes("base/pre-release"),
+    )
+  )
+    throw new Error(
+      "Slice 3 base governance is not explicitly separated from current post-review lifecycle.",
+    );
 }
 
 function acceptanceStatus(status) {
@@ -165,6 +408,13 @@ export function applySlice3DashboardProjection(
   { repositoryReleaseClosed = false } = {},
 ) {
   validateSlice3Evidence(evidence);
+  if (
+    repositoryReleaseClosed &&
+    evidence.lifecyclePhase !== "POST_REVIEW_CURRENT"
+  )
+    throw new Error(
+      "Slice 3 repository-release handoff requires post-review current evidence.",
+    );
   const disciplinePassed = evidence.independentAudits
     .slice(0, 6)
     .every(({ status }) => status === "PASS");
@@ -242,6 +492,30 @@ export function applySlice3DashboardProjection(
     if (index >= 0) views.evidence.records[index] = projected;
     else views.evidence.records.push(projected);
   }
+  if (evidence.lifecyclePhase === "POST_REVIEW_CURRENT") {
+    const historical = {
+      id: "S3-HISTORICAL-DURING-REVIEW",
+      title: "Slice 3 historical during-review lifecycle",
+      summary:
+        "Historical PENDING phase superseded by the source-bound post-review authority; excluded from current gate and acceptance counts.",
+      status: "PASS",
+      facts: {
+        phase: evidence.historicalLifecycle.phase,
+        observedAt: evidence.historicalLifecycle.observedAt,
+        current: false,
+        supersededBy: "postReview",
+        currentGateCounted: false,
+        currentAcceptanceCounted: false,
+        evidenceIntegrity: "VERIFIED",
+      },
+      sourceRefs: [sourceRef],
+    };
+    const index = views.evidence.records.findIndex(
+      ({ id }) => id === historical.id,
+    );
+    if (index >= 0) views.evidence.records[index] = historical;
+    else views.evidence.records.push(historical);
+  }
   return views;
 }
 
@@ -261,6 +535,13 @@ export function validateSlice3Dashboard(
   { repositoryReleaseClosed = false, handoffProjected = false } = {},
 ) {
   validateSlice3Evidence(evidence);
+  if (
+    repositoryReleaseClosed &&
+    evidence.lifecyclePhase !== "POST_REVIEW_CURRENT"
+  )
+    throw new Error(
+      "Slice 3 repository-release dashboard requires post-review current evidence.",
+    );
   const disciplinePassed = evidence.independentAudits
     .slice(0, 6)
     .every(({ status }) => status === "PASS");
@@ -313,12 +594,43 @@ export function validateSlice3Dashboard(
     );
     if (
       records.length !== 1 ||
+      records[0].status !== (audit.status === "PASS" ? "PASS" : "ACTIVE") ||
       records[0].facts?.auditStatus !== audit.status ||
+      records[0].facts?.critical !== audit.critical ||
+      records[0].facts?.major !== audit.major ||
+      records[0].facts?.minor !== audit.minor ||
       records[0].facts?.evidenceIntegrity !== "VERIFIED" ||
       records[0].sourceRefs?.length !== 1 ||
       !exactRef(records[0].sourceRefs[0], sourceRef)
     )
       throw new Error(`Slice 3 audit record is missing or stale: ${audit.id}`);
+  }
+  exact(
+    views.evidence.records
+      .filter(({ id }) => id.startsWith("S3-AUDIT-"))
+      .map(({ facts }) => facts.auditId),
+    SLICE3_AUDIT_IDS,
+    "Slice 3 dashboard audits are reordered or substituted.",
+  );
+  if (evidence.lifecyclePhase === "POST_REVIEW_CURRENT") {
+    const historical = views.evidence.records.filter(
+      ({ id }) => id === "S3-HISTORICAL-DURING-REVIEW",
+    );
+    if (
+      historical.length !== 1 ||
+      historical[0].status !== "PASS" ||
+      historical[0].facts?.phase !== "DURING_REVIEW_PENDING" ||
+      historical[0].facts?.current !== false ||
+      historical[0].facts?.supersededBy !== "postReview" ||
+      historical[0].facts?.currentGateCounted !== false ||
+      historical[0].facts?.currentAcceptanceCounted !== false ||
+      historical[0].facts?.evidenceIntegrity !== "VERIFIED" ||
+      historical[0].sourceRefs?.length !== 1 ||
+      !exactRef(historical[0].sourceRefs[0], sourceRef)
+    )
+      throw new Error(
+        "Slice 3 historical during-review dashboard record is missing or current.",
+      );
   }
   const slice3Records = Object.values(views)
     .flatMap(({ records }) => records)

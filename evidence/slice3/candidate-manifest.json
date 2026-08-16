@@ -12,7 +12,7 @@
     "apps/dashboard/dist/current-snapshot.json"
   ],
   "fileCount": 38,
-  "aggregateSha256": "BB2418A4F68EF3D0C3D7BB71978B5C38F6A663A39D5EB77E86CF5DF8AD79FD89",
+  "aggregateSha256": "20822CB8FF0AC7406C4FAAA8C7112175568CA6E58DE9B603743210C3F2E96B14",
   "files": [
     {
       "path": "apps/web/src/server-owned-research-admission.ts",
@@ -28,7 +28,7 @@
     },
     {
       "path": "governance/gates.json",
-      "sha256": "70FCF2F541F433757D530B2C367AB1318EF91856EB736689BBD7E528358ABD3C"
+      "sha256": "66C09F1929C040F93CFCD1AB27196710DA413FDC7CBC8F7255A80D9C0E9AC2F8"
     },
     {
       "path": "governance/slice3-dashboard-handoff-policy-v1.json",
@@ -112,7 +112,7 @@
     },
     {
       "path": "scripts/generate-slice3-evidence.mjs",
-      "sha256": "62D7801397CE681FE4F784A048C00E0CDCCA739B8232AE44609D90D7EA57E8FF"
+      "sha256": "F33C7245DE9454217C7E4BEED7A47865CCECCC58F01B1C6AF8D35C36B8865CFC"
     },
     {
       "path": "scripts/lib/slice3-dashboard-handoff-policy.mjs",
@@ -120,7 +120,7 @@
     },
     {
       "path": "scripts/lib/slice3-dashboard-policy.mjs",
-      "sha256": "A02924977F3B6D8CE5A1B28659A4BEB0F0C9639AF9589430D492A3E92361F889"
+      "sha256": "F134C432E2D438C1423259B19B95C1BB11EBD8DC387D968F62EE8239E5D45069"
     },
     {
       "path": "scripts/lib/slice3-wrapper-result-policy.mjs",
@@ -140,7 +140,7 @@
     },
     {
       "path": "scripts/validate-slice3-local.mjs",
-      "sha256": "608801294804E298443E63AFD73B28610B79DDF19D7915EE34C9E74B3901874E"
+      "sha256": "53B8AAB722E76CEEF1C58B8A90BFD10B586C9ED815C2465C170ED7281F7FD0A3"
     },
     {
       "path": "test/slice3/dashboard-handoff-policy.test.mjs",
@@ -148,7 +148,7 @@
     },
     {
       "path": "test/slice3/dashboard-policy.test.mjs",
-      "sha256": "5B25A78A715271106E60ED9DF3216F2AAEAD82F20387BB9215805B4F9463E2E3"
+      "sha256": "6D117B33D8D11E6BD7BFC9103EDF22ADADDAC8F9F16F4AEA59D199CBA73A86DC"
     },
     {
       "path": "test/slice3/fixtures/live-worker-runtime.mjs",

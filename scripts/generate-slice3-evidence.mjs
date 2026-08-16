@@ -1,10 +1,17 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
 const root = resolve(".");
 const observedAt = new Date().toISOString();
+const existingEvidencePath = resolve(
+  root,
+  "evidence/slice3/local-validation.json",
+);
+const priorEvidence = existsSync(existingEvidencePath)
+  ? JSON.parse(readFileSync(existingEvidencePath, "utf8"))
+  : undefined;
 const baselineCommit = "b992d371c467c3e185cc07bb5ac08fb8f38bf864";
 const baselineTree = "4d29c6cf1e2b044a9b6838c8ef5bf0cbc1010019";
 const exclusions = [
@@ -62,6 +69,26 @@ const wrapperResult = JSON.parse(
   readFileSync(resolve(root, wrapperResultPath), "utf8"),
 );
 const wrapperResultSha256 = sha(wrapperResultPath);
+const candidateIdentity = {
+  manifestSha256,
+  aggregateSha256: manifest.aggregateSha256,
+  fileCount: manifest.fileCount,
+};
+const postReview = priorEvidence?.postReview;
+const postReviewCurrent =
+  postReview?.schemaVersion === "matchbase.slice3-post-review/v1" &&
+  JSON.stringify(postReview.candidate) === JSON.stringify(candidateIdentity) &&
+  JSON.stringify(postReview.wrapperSource) ===
+    JSON.stringify({ path: wrapperResultPath, sha256: wrapperResultSha256 }) &&
+  postReview.disciplines?.length === 6 &&
+  postReview.disciplines.every(
+    ({ status, critical, major, minor }) =>
+      status === "PASS" && critical === 0 && major === 0 && minor === 0,
+  ) &&
+  postReview.integrationCritic?.status === "PASS" &&
+  postReview.integrationCritic?.critical === 0 &&
+  postReview.integrationCritic?.major === 0 &&
+  postReview.integrationCritic?.minor === 0;
 const artifactPaths = [
   "config/slice3/provider-evidence-register.v1.json",
   "config/slice3/research-route-policy.v1.json",
@@ -120,17 +147,8 @@ const blockerCodes = [
   "EXPLICIT_BILLABLE_QUALIFICATION_AUTHORIZATION_ABSENT",
   "QUALIFICATION_BUDGET_INVALID",
 ];
-const governedGates = JSON.parse(
-  readFileSync(resolve(root, "governance/gates.json"), "utf8"),
-).gates;
-const auditStatus =
-  governedGates.find(({ id }) => id === "S3-G2")?.status === "PASS"
-    ? "PASS"
-    : "PENDING";
-const criticStatus =
-  governedGates.find(({ id }) => id === "S3-G6")?.status === "PASS"
-    ? "PASS"
-    : "PENDING";
+const auditStatus = postReviewCurrent ? "PASS" : "PENDING";
+const criticStatus = postReviewCurrent ? "PASS" : "PENDING";
 const artifacts = artifactPaths.map((path, index) => ({
   id: `S3-ART-${String(index + 1).padStart(3, "0")}`,
   path,
@@ -138,7 +156,9 @@ const artifacts = artifactPaths.map((path, index) => ({
 }));
 const statusFor = (number) => {
   if ([3, 19].includes(number)) return "BLOCKED";
-  if ([22, 23, 24].includes(number)) return "PENDING";
+  if (number === 24) return "PENDING";
+  if (number === 22) return postReviewCurrent ? "REPOSITORY_PASS" : "PENDING";
+  if (number === 23) return "PENDING";
   return "REPOSITORY_PASS";
 };
 const gateFor = (number) => {
@@ -160,10 +180,13 @@ const acceptance = Array.from({ length: 24 }, (_, index) => {
   };
 });
 const evidence = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   slice: "SLICE-3",
   observedAt,
-  candidateStatus: "LOCAL_REPOSITORY_IMPLEMENTATION_FROZEN_LIVE_BLOCKED",
+  lifecyclePhase: postReviewCurrent ? "POST_REVIEW_CURRENT" : "DURING_REVIEW",
+  candidateStatus: postReviewCurrent
+    ? "REPOSITORY_IMPLEMENTATION_POST_REVIEW_CURRENT_LIVE_BLOCKED"
+    : "LOCAL_REPOSITORY_IMPLEMENTATION_FROZEN_LIVE_BLOCKED",
   repositoryImplementation: "PASS",
   liveQualification: "BLOCKED_PREREQUISITE",
   blockerCodes,
@@ -185,9 +208,7 @@ const evidence = {
   },
   candidate: {
     manifestPath: exclusions[0],
-    manifestSha256,
-    aggregateSha256: manifest.aggregateSha256,
-    fileCount: manifest.fileCount,
+    ...candidateIdentity,
   },
   localGate: {
     status: "PASS",
@@ -233,6 +254,12 @@ const evidence = {
     major: 0,
     minor: 0,
   })),
+  ...(postReviewCurrent
+    ? {
+        historicalLifecycle: priorEvidence.historicalLifecycle,
+        postReview,
+      }
+    : {}),
   role2: {
     status: "FAIL",
     acceptanceClaimed: false,

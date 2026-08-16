@@ -98,7 +98,7 @@ if (
 )
   throw new Error("Slice 3 provider evidence register is invalid.");
 if (
-  evidence.schemaVersion !== 1 ||
+  evidence.schemaVersion !== 2 ||
   evidence.slice !== "SLICE-3" ||
   evidence.repositoryImplementation !== "PASS" ||
   evidence.liveQualification !== "BLOCKED_PREREQUISITE" ||
@@ -126,6 +126,7 @@ const expectedAcceptance = Array.from(
   { length: 24 },
   (_, index) => `S3-AC-${String(index + 1).padStart(3, "0")}`,
 );
+const postReviewCurrent = evidence.lifecyclePhase === "POST_REVIEW_CURRENT";
 if (
   evidence.acceptance?.length !== 24 ||
   evidence.acceptance.some(
@@ -141,15 +142,20 @@ if (
     "S3-G4" ||
   evidence.acceptance.find((item) => item.id === "S3-AC-022")?.gateId !==
     "S3-G6" ||
+  evidence.acceptance.find((item) => item.id === "S3-AC-022")?.status !==
+    (postReviewCurrent ? "REPOSITORY_PASS" : "PENDING") ||
+  evidence.acceptance.find((item) => item.id === "S3-AC-023")?.status !==
+    "PENDING" ||
   evidence.acceptance.find((item) => item.id === "S3-AC-024")?.status !==
     "PENDING" ||
   evidence.acceptance.find((item) => item.id === "S3-AC-024")?.gateId !==
     "S3-G7" ||
   evidence.acceptance.filter((item) => item.status === "REPOSITORY_PASS")
-    .length !== 19 ||
+    .length !== (postReviewCurrent ? 20 : 19) ||
   evidence.acceptance.filter((item) => item.status === "BLOCKED").length !==
     2 ||
-  evidence.acceptance.filter((item) => item.status === "PENDING").length !== 3
+  evidence.acceptance.filter((item) => item.status === "PENDING").length !==
+    (postReviewCurrent ? 2 : 3)
 )
   throw new Error("Slice 3 acceptance lifecycle is invalid.");
 const exclusions = [

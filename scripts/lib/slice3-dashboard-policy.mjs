@@ -476,14 +476,8 @@ function acceptanceStatus(status) {
   return "ACTIVE";
 }
 
-function projectedAcceptanceStatus(
-  item,
-  criticPassed,
-  repositoryReleaseClosed,
-) {
+function projectedAcceptanceStatus(item, criticPassed) {
   if (item.id === "S3-AC-022" && criticPassed) return "REPOSITORY_PASS";
-  if (item.id === "S3-AC-023" && repositoryReleaseClosed)
-    return "REPOSITORY_PASS";
   return item.status;
 }
 
@@ -494,12 +488,9 @@ export function applySlice3DashboardProjection(
   { repositoryReleaseClosed = false } = {},
 ) {
   validateSlice3Evidence(evidence);
-  if (
-    repositoryReleaseClosed &&
-    evidence.lifecyclePhase !== "POST_REVIEW_CURRENT"
-  )
+  if (repositoryReleaseClosed)
     throw new Error(
-      "Slice 3 repository-release handoff requires post-review current evidence.",
+      "Base Slice 3 projection cannot close repository release; use the source-bound handoff projection.",
     );
   const disciplinePassed = evidence.independentAudits
     .slice(0, 6)
@@ -529,11 +520,7 @@ export function applySlice3DashboardProjection(
   }
   const ids = new Set(views.tests.records.map(({ id }) => id));
   for (const item of evidence.acceptance) {
-    const projectedStatus = projectedAcceptanceStatus(
-      item,
-      criticPassed,
-      repositoryReleaseClosed,
-    );
+    const projectedStatus = projectedAcceptanceStatus(item, criticPassed);
     const projected = {
       id: item.id,
       title: `Slice 3 acceptance ${item.id}`,
@@ -621,12 +608,9 @@ export function validateSlice3Dashboard(
   { repositoryReleaseClosed = false, handoffProjected = false } = {},
 ) {
   validateSlice3Evidence(evidence);
-  if (
-    repositoryReleaseClosed &&
-    evidence.lifecyclePhase !== "POST_REVIEW_CURRENT"
-  )
+  if (repositoryReleaseClosed)
     throw new Error(
-      "Slice 3 repository-release dashboard requires post-review current evidence.",
+      "Base Slice 3 dashboard cannot close repository release; use the source-bound handoff projection.",
     );
   const disciplinePassed = evidence.independentAudits
     .slice(0, 6)
@@ -654,11 +638,7 @@ export function validateSlice3Dashboard(
   if (g6.status !== (criticPassed ? "PASS" : "ACTIVE"))
     throw new Error("Slice 3 G6 critic lifecycle is stale.");
   for (const item of evidence.acceptance) {
-    const projectedStatus = projectedAcceptanceStatus(
-      item,
-      criticPassed,
-      repositoryReleaseClosed,
-    );
+    const projectedStatus = projectedAcceptanceStatus(item, criticPassed);
     const records = views.tests.records.filter(({ id }) => id === item.id);
     if (
       records.length !== 1 ||

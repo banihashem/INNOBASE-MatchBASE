@@ -257,7 +257,7 @@ if (actual) {
     );
   }
   validateSlice3Dashboard(snapshot.views, slice3Evidence, slice3SourceRef, {
-    repositoryReleaseClosed: Boolean(successor),
+    repositoryReleaseClosed: false,
     handoffProjected: true,
   });
   validateSlice3HandoffDashboard(

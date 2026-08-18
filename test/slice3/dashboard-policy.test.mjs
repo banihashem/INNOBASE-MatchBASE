@@ -272,11 +272,8 @@ test("projects every current acceptance and ordered PASS audit with exact eviden
     views(),
     evidence,
     sourceRef,
-    { repositoryReleaseClosed: true },
   );
-  validateSlice3Dashboard(projected, evidence, sourceRef, {
-    repositoryReleaseClosed: true,
-  });
+  validateSlice3Dashboard(projected, evidence, sourceRef);
   assert.equal(projected.tests.records.length, 24);
   assert.equal(projected.evidence.records.length, 8);
   assert.equal(
@@ -286,6 +283,11 @@ test("projects every current acceptance and ordered PASS audit with exact eviden
   );
   assert.equal(
     evidence.acceptance.find(({ id }) => id === "S3-AC-023").status,
+    "PENDING",
+  );
+  assert.equal(
+    projected.tests.records.find(({ id }) => id === "S3-AC-023").facts
+      .acceptanceStatus,
     "PENDING",
   );
   assert.equal(
@@ -299,46 +301,40 @@ test("rejects stale current gates and current PENDING audit records", () => {
     views(),
     evidence,
     sourceRef,
-    { repositoryReleaseClosed: true },
   );
   projected.gates.records.find(({ id }) => id === "S3-G6").status = "ACTIVE";
   assert.throws(
-    () =>
-      validateSlice3Dashboard(projected, evidence, sourceRef, {
-        repositoryReleaseClosed: true,
-      }),
+    () => validateSlice3Dashboard(projected, evidence, sourceRef),
     /G6 critic lifecycle/u,
   );
-  const second = applySlice3DashboardProjection(views(), evidence, sourceRef, {
-    repositoryReleaseClosed: true,
-  });
+  const second = applySlice3DashboardProjection(views(), evidence, sourceRef);
   second.evidence.records[0].facts.auditStatus = "PENDING";
   assert.throws(
-    () =>
-      validateSlice3Dashboard(second, evidence, sourceRef, {
-        repositoryReleaseClosed: true,
-      }),
+    () => validateSlice3Dashboard(second, evidence, sourceRef),
     /audit record/u,
   );
   const historical = applySlice3DashboardProjection(
     views(),
     evidence,
     sourceRef,
-    { repositoryReleaseClosed: true },
   );
   historical.evidence.records.find(
     ({ id }) => id === "S3-HISTORICAL-DURING-REVIEW",
   ).facts.current = true;
   assert.throws(
-    () =>
-      validateSlice3Dashboard(historical, evidence, sourceRef, {
-        repositoryReleaseClosed: true,
-      }),
+    () => validateSlice3Dashboard(historical, evidence, sourceRef),
     /historical during-review/u,
   );
 });
 
-test("keeps base/pre-release mode distinct from current hosted handoff", () => {
+test("keeps base acceptance distinct from source-bound hosted handoff", () => {
+  assert.throws(
+    () =>
+      applySlice3DashboardProjection(views(), evidence, sourceRef, {
+        repositoryReleaseClosed: true,
+      }),
+    /cannot close repository release/u,
+  );
   const duringReview = clone(evidence);
   duringReview.observedAt = new Date().toISOString();
   duringReview.lifecyclePhase = "DURING_REVIEW";
@@ -357,7 +353,7 @@ test("keeps base/pre-release mode distinct from current hosted handoff", () => {
       applySlice3DashboardProjection(views(), duringReview, sourceRef, {
         repositoryReleaseClosed: true,
       }),
-    /requires post-review current evidence/u,
+    /cannot close repository release/u,
   );
 });
 
@@ -387,36 +383,22 @@ test("rejects missing records, ERROR integrity and public-dist divergence", () =
     views(),
     evidence,
     sourceRef,
-    { repositoryReleaseClosed: true },
   );
   projected.tests.records.pop();
   assert.throws(
-    () =>
-      validateSlice3Dashboard(projected, evidence, sourceRef, {
-        repositoryReleaseClosed: true,
-      }),
+    () => validateSlice3Dashboard(projected, evidence, sourceRef),
     /acceptance record/u,
   );
-  const second = applySlice3DashboardProjection(views(), evidence, sourceRef, {
-    repositoryReleaseClosed: true,
-  });
+  const second = applySlice3DashboardProjection(views(), evidence, sourceRef);
   second.evidence.records.shift();
   assert.throws(
-    () =>
-      validateSlice3Dashboard(second, evidence, sourceRef, {
-        repositoryReleaseClosed: true,
-      }),
+    () => validateSlice3Dashboard(second, evidence, sourceRef),
     /audit record/u,
   );
-  const third = applySlice3DashboardProjection(views(), evidence, sourceRef, {
-    repositoryReleaseClosed: true,
-  });
+  const third = applySlice3DashboardProjection(views(), evidence, sourceRef);
   third.gates.records[0].facts.evidenceIntegrity = "ERROR";
   assert.throws(
-    () =>
-      validateSlice3Dashboard(third, evidence, sourceRef, {
-        repositoryReleaseClosed: true,
-      }),
+    () => validateSlice3Dashboard(third, evidence, sourceRef),
     /exact verified evidence/u,
   );
   assert.throws(

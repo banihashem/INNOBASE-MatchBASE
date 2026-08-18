@@ -12,7 +12,7 @@
     "apps/dashboard/dist/current-snapshot.json"
   ],
   "fileCount": 47,
-  "aggregateSha256": "190460AE07A2DD893E928BB7891B75FB1A9E8CFD586953A9CD6C7C9EEC2B282F",
+  "aggregateSha256": "65823AA3E483682A3CB4979FD72394489F4DF93EB8D4292B2BE9FB82D7B79A94",
   "files": [
     {
       "path": ".gitignore",
@@ -116,7 +116,7 @@
     },
     {
       "path": "scripts/generate-dashboard-snapshot.mjs",
-      "sha256": "E518A05AB32CC95C938CE382629DC3C46B872AAC298861EB8AA3A17C05FEE6C3"
+      "sha256": "FC8117D13F1CEC32D3639EFFB7F390B2E2BE60BFDD4477CC603F86F774F2CE11"
     },
     {
       "path": "scripts/generate-slice3-evidence.mjs",
@@ -128,7 +128,7 @@
     },
     {
       "path": "scripts/lib/slice3-dashboard-policy.mjs",
-      "sha256": "63A886113DFC4216E366943AF910DAE21193E6E6C4D2EF1DDB42C25DD750BA50"
+      "sha256": "A6DDB70A063EAF7EEB8FAE05EA2E1A0D211826740F307C4A93D544BC54A67151"
     },
     {
       "path": "scripts/lib/slice3-live-qualification-runner.mjs",
@@ -156,7 +156,7 @@
     },
     {
       "path": "scripts/validate-dashboard-snapshot.mjs",
-      "sha256": "4A846E3307F1463A4CB41F35D3A13D63940390F5D0717543FF71AC88254332F9"
+      "sha256": "C84A949BFD9D1FF5B10DEE1C29B40A63A04C6EDB8AE0625165569BF0CD130DF2"
     },
     {
       "path": "scripts/validate-slice3-local.mjs",
@@ -168,7 +168,7 @@
     },
     {
       "path": "test/slice3/dashboard-policy.test.mjs",
-      "sha256": "FB2B5A17CF5DF4C3FC988AA3A37F96AE930CF96BF20C5B7ABBC8B875F389C59A"
+      "sha256": "03CD98A34A735083497662A3A81B8612BD2A860946914119FA94309B5E1EB1ED"
     },
     {
       "path": "test/slice3/fixtures/live-worker-runtime.mjs",

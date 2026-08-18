@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "slice": "SLICE-3",
-  "observedAt": "2026-08-18T11:14:30.053Z",
+  "observedAt": "2026-08-18T11:53:08.655Z",
   "lifecyclePhase": "POST_REVIEW_CURRENT",
   "candidateStatus": "REPOSITORY_IMPLEMENTATION_POST_REVIEW_CURRENT_LIVE_BLOCKED",
   "repositoryImplementation": "PASS",
@@ -34,20 +34,20 @@
   },
   "candidate": {
     "manifestPath": "evidence/slice3/candidate-manifest.json",
-    "manifestSha256": "EF6D7396CA50F37B286498A56A57C3A2EB92B93345E05B9C43FABC63D511ED3E",
-    "aggregateSha256": "190460AE07A2DD893E928BB7891B75FB1A9E8CFD586953A9CD6C7C9EEC2B282F",
+    "manifestSha256": "AC790AE9D044159A3337233AD4AD933400238C1C0D396574C6496A26ED023F53",
+    "aggregateSha256": "65823AA3E483682A3CB4979FD72394489F4DF93EB8D4292B2BE9FB82D7B79A94",
     "fileCount": 47
   },
   "localGate": {
     "status": "PASS",
     "fullWrapper": {
       "command": "pnpm test:ci && pnpm dependency:audit",
-      "durationMs": 416675,
+      "durationMs": 413479,
       "result": "PASS",
-      "observedAt": "2026-08-18T11:10:15.057Z",
+      "observedAt": "2026-08-18T11:48:18.620Z",
       "sourceRef": {
         "path": "evidence/slice3/full-wrapper-result.json",
-        "sha256": "80C62183BBF2E0E03E86B586579C400EA3F5D03C064CF3A005693918316E72EC"
+        "sha256": "5BE2150D4BDDD60CF3F210A1BC5CB3E211AE5BD60BE259E6BA76F5689D91AD07"
       }
     },
     "testCounts": {
@@ -1684,7 +1684,7 @@
     {
       "id": "S3-ART-026",
       "path": "scripts/lib/slice3-dashboard-policy.mjs",
-      "sha256": "63A886113DFC4216E366943AF910DAE21193E6E6C4D2EF1DDB42C25DD750BA50"
+      "sha256": "A6DDB70A063EAF7EEB8FAE05EA2E1A0D211826740F307C4A93D544BC54A67151"
     },
     {
       "id": "S3-ART-027",
@@ -1699,7 +1699,7 @@
     {
       "id": "S3-ART-029",
       "path": "scripts/generate-dashboard-snapshot.mjs",
-      "sha256": "E518A05AB32CC95C938CE382629DC3C46B872AAC298861EB8AA3A17C05FEE6C3"
+      "sha256": "FC8117D13F1CEC32D3639EFFB7F390B2E2BE60BFDD4477CC603F86F774F2CE11"
     },
     {
       "id": "S3-ART-030",
@@ -1709,7 +1709,7 @@
     {
       "id": "S3-ART-031",
       "path": "scripts/validate-dashboard-snapshot.mjs",
-      "sha256": "4A846E3307F1463A4CB41F35D3A13D63940390F5D0717543FF71AC88254332F9"
+      "sha256": "C84A949BFD9D1FF5B10DEE1C29B40A63A04C6EDB8AE0625165569BF0CD130DF2"
     },
     {
       "id": "S3-ART-032",
@@ -1794,7 +1794,7 @@
     {
       "id": "S3-ART-048",
       "path": "test/slice3/dashboard-policy.test.mjs",
-      "sha256": "FB2B5A17CF5DF4C3FC988AA3A37F96AE930CF96BF20C5B7ABBC8B875F389C59A"
+      "sha256": "03CD98A34A735083497662A3A81B8612BD2A860946914119FA94309B5E1EB1ED"
     },
     {
       "id": "S3-ART-049",
@@ -1886,7 +1886,7 @@
   "historicalLifecycle": {
     "schemaVersion": "matchbase.slice3-during-review-history/v1",
     "phase": "DURING_REVIEW_PENDING",
-    "observedAt": "2026-08-18T11:10:15.102Z",
+    "observedAt": "2026-08-18T11:48:18.664Z",
     "current": false,
     "supersededBy": "postReview",
     "audits": [
@@ -1941,33 +1941,22 @@
       }
     ],
     "gates": [
-      {
-        "id": "S3-G2",
-        "status": "PENDING"
-      },
-      {
-        "id": "S3-G6",
-        "status": "PENDING"
-      }
+      { "id": "S3-G2", "status": "PENDING" },
+      { "id": "S3-G6", "status": "PENDING" }
     ],
-    "acceptance": [
-      {
-        "id": "S3-AC-022",
-        "status": "PENDING"
-      }
-    ]
+    "acceptance": [{ "id": "S3-AC-022", "status": "PENDING" }]
   },
   "postReview": {
     "schemaVersion": "matchbase.slice3-post-review/v1",
-    "observedAt": "2026-08-18T11:14:00.000Z",
+    "observedAt": "2026-08-18T11:53:08.655Z",
     "candidate": {
-      "manifestSha256": "EF6D7396CA50F37B286498A56A57C3A2EB92B93345E05B9C43FABC63D511ED3E",
-      "aggregateSha256": "190460AE07A2DD893E928BB7891B75FB1A9E8CFD586953A9CD6C7C9EEC2B282F",
+      "manifestSha256": "AC790AE9D044159A3337233AD4AD933400238C1C0D396574C6496A26ED023F53",
+      "aggregateSha256": "65823AA3E483682A3CB4979FD72394489F4DF93EB8D4292B2BE9FB82D7B79A94",
       "fileCount": 47
     },
     "wrapperSource": {
       "path": "evidence/slice3/full-wrapper-result.json",
-      "sha256": "80C62183BBF2E0E03E86B586579C400EA3F5D03C064CF3A005693918316E72EC"
+      "sha256": "5BE2150D4BDDD60CF3F210A1BC5CB3E211AE5BD60BE259E6BA76F5689D91AD07"
     },
     "disciplines": [
       {

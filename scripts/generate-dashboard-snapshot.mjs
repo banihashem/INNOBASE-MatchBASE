@@ -341,7 +341,7 @@ const views = Object.fromEntries(
 );
 removeMutableSlice3LoopLogRecords(views, slice3HandoffPolicy);
 applySlice3DashboardProjection(views, slice3Evidence, slice3SourceRef, {
-  repositoryReleaseClosed: Boolean(slice3Successor),
+  repositoryReleaseClosed: false,
 });
 applySlice3HandoffProjection(
   views,
@@ -353,7 +353,7 @@ applySlice3HandoffProjection(
   },
 );
 validateSlice3Dashboard(views, slice3Evidence, slice3SourceRef, {
-  repositoryReleaseClosed: Boolean(slice3Successor),
+  repositoryReleaseClosed: false,
   handoffProjected: true,
 });
 validateSlice3HandoffDashboard(

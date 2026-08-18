@@ -73,6 +73,14 @@ const HISTORICAL = Object.freeze([
     "failure",
     "HOSTED_SECURE_FETCH_STREAM_TEST_SOCKET_CLOSE_TIMEOUT",
   ],
+  [
+    32128190212,
+    95683315435,
+    "761439c1ded4dec14249f194867beef20a769892",
+    "accc46ba4071e987ae6f09c530d2ba95492b9cef",
+    "failure",
+    "UBUNTU_SLICE3_V4_TEST_WINDOWS_PM_STATE_DEREFERENCE",
+  ],
 ]);
 const LEDGER_KEYS = Object.freeze([
   "providerCalls",

@@ -12,7 +12,7 @@
     "apps/dashboard/dist/current-snapshot.json"
   ],
   "fileCount": 47,
-  "aggregateSha256": "280ADFD3633432E3C92BD75EA4D4C20800F6CAFC6FED5AC916B12A9DF1C46B9E",
+  "aggregateSha256": "190460AE07A2DD893E928BB7891B75FB1A9E8CFD586953A9CD6C7C9EEC2B282F",
   "files": [
     {
       "path": ".gitignore",
@@ -40,7 +40,7 @@
     },
     {
       "path": "governance/slice3-dashboard-handoff-policy-v1.json",
-      "sha256": "108F9D8FB600B07BF71213D014F6AD842ABDF4DC53F95B37AF406FBE71F94F8A"
+      "sha256": "72C36993FAD40B5C48EE8521A62813C8D4C718C2D0AB476FA37763349C626D17"
     },
     {
       "path": "package.json",
@@ -120,11 +120,11 @@
     },
     {
       "path": "scripts/generate-slice3-evidence.mjs",
-      "sha256": "31492F6F5DBEEECFD33E3111F6FD9A68C0E3765B5AABFA26FFCBA7626AA2AB8A"
+      "sha256": "65A89CA6376A684EBFBC23F7C9ACD19F858CA761B6F3C603233BE0E989E645B7"
     },
     {
       "path": "scripts/lib/slice3-dashboard-handoff-policy.mjs",
-      "sha256": "A66C445C2A3042A2E0CC2FC16E84694FACE5A97E07347FC5A778CB403B90B5F3"
+      "sha256": "D342A3503498E610F382A002B4BA141A835C347E3A7F82E7944A3DEAAA355C2E"
     },
     {
       "path": "scripts/lib/slice3-dashboard-policy.mjs",
@@ -192,7 +192,7 @@
     },
     {
       "path": "test/slice3/live-qualification-v4.test.mjs",
-      "sha256": "A134C8358477A63275CF8BCD16BF878CA6757F75D2B8424DB6E5BDC95A6CD958"
+      "sha256": "CAF43F42C84161865A682CA0507C02C1500F106DD99AE35F7E568378D7C5D76D"
     },
     {
       "path": "test/slice3/live-research-application-postgres.test.mjs",

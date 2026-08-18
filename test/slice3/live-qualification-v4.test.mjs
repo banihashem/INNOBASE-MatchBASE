@@ -2,39 +2,119 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
   appendFile,
-  copyFile,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
   readdir,
+  realpath,
+  rename,
   rm,
   symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import test from "node:test";
 import {
   GeminiV4OutputError,
   assessCurrentV4Disposition,
   buildGeminiV4QualificationRequest,
-  createV4SourceBinding,
   deriveV4TerminalFailure,
   executeCurrentV4PreCall,
   exerciseV4ExclusiveInitializerForTest,
   parseGeminiV4Candidate,
   reduceCredentialResponseForV4,
   slice3V4QualificationConstants,
-  verifyImmutableV3Ledger,
   verifyV4PrecallAbsenceAt,
 } from "../../scripts/lib/slice3-live-qualification-v4.mjs";
 import * as v4Module from "../../scripts/lib/slice3-live-qualification-v4.mjs";
 
-const canonicalState =
-  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-live-qualification-state";
 const v3Names = slice3V4QualificationConstants.v3Manifest.map(
   ({ name }) => name,
 );
+
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex").toUpperCase();
+}
+
+async function readContainedRegularFixtureFile(path, root) {
+  const rootReal = await realpath(root);
+  const item = await lstat(path);
+  if (!item.isFile() || item.isSymbolicLink()) {
+    throw new Error("Fixture source is not a regular file.");
+  }
+  const fileReal = await realpath(path);
+  const rel = relative(rootReal, fileReal);
+  if (!rel || rel.startsWith("..") || resolve(rootReal, rel) !== fileReal) {
+    throw new Error("Fixture source escaped its root.");
+  }
+  return readFile(fileReal);
+}
+
+async function verifyV4SourceFixture(options) {
+  const pmReal = await realpath(options.pmRoot);
+  const stateItem = await lstat(options.stateRoot);
+  if (!stateItem.isDirectory() || stateItem.isSymbolicLink()) {
+    throw new Error("Fixture state root is not a regular directory.");
+  }
+  const stateReal = await realpath(options.stateRoot);
+  const stateRel = relative(pmReal, stateReal);
+  if (
+    !stateRel ||
+    stateRel.startsWith("..") ||
+    resolve(pmReal, stateRel) !== stateReal
+  ) {
+    throw new Error("Fixture state root escaped its management root.");
+  }
+  const [ownerBytes, preflightBytes, policyBytes] = await Promise.all([
+    readContainedRegularFixtureFile(options.ownerFile, options.pmRoot),
+    readContainedRegularFixtureFile(options.preflightFile, options.pmRoot),
+    readContainedRegularFixtureFile(
+      options.policyFile,
+      dirname(options.policyFile),
+    ),
+  ]);
+  if (
+    sha256(ownerBytes) !== options.expectedOwnerDigest ||
+    sha256(preflightBytes) !== options.expectedPreflightDigest ||
+    sha256(policyBytes) !== options.expectedPolicyDigest
+  ) {
+    throw new Error("Fixture source binding drifted.");
+  }
+  const session = join(stateReal, "session-19AD2D3117AF9064AF90F879");
+  const names = (await readdir(session)).sort();
+  const expectedNames = options.expectedV3Manifest.map(({ name }) => name);
+  if (JSON.stringify(names) !== JSON.stringify(expectedNames)) {
+    throw new Error("Fixture V3 ledger file set drifted.");
+  }
+  const manifest = [];
+  for (const expected of options.expectedV3Manifest) {
+    const bytes = await readContainedRegularFixtureFile(
+      join(session, expected.name),
+      session,
+    );
+    const digest = sha256(bytes);
+    if (digest !== expected.digest)
+      throw new Error("Fixture V3 ledger drifted.");
+    manifest.push({ name: expected.name, digest });
+  }
+  if (sha256(JSON.stringify(manifest)) !== options.expectedV3LedgerDigest) {
+    throw new Error("Fixture V3 ledger manifest drifted.");
+  }
+  JSON.parse(preflightBytes.toString("utf8"));
+  if (!ownerBytes.includes("SLICE3_V4_AUTHORIZATION")) {
+    throw new Error("Fixture authorization marker is absent.");
+  }
+  return Object.freeze({
+    schemaVersion: "slice3-live-qualification-source-fixture-verification.v4",
+    authorizationId:
+      "PO-001-SLICE3-LIVE-QUALIFICATION-REPLACEMENT-2026-08-18-V4",
+    sessionId: "session-3DD21321009BFABD87CB1904",
+    currentDisposition: "BLOCKED_CREDENTIAL",
+    activation: false,
+  });
+}
 
 function validOutput(overrides = {}) {
   return {
@@ -66,90 +146,246 @@ async function fixture() {
   return { root, credentialFile };
 }
 
-async function copyV3(targetRoot) {
-  const source = join(canonicalState, "session-19AD2D3117AF9064AF90F879");
-  const target = join(targetRoot, "session-19AD2D3117AF9064AF90F879");
-  await mkdir(target, { recursive: true });
-  for (const name of v3Names) {
-    await copyFile(join(source, name), join(target, name));
-  }
-  return target;
-}
+async function sourceFixture() {
+  const root = await mkdtemp(join(tmpdir(), "matchbase-v4-source-"));
+  const pmRoot = join(root, "management");
+  const stateRoot = join(pmRoot, ".slice3-live-qualification-state");
+  const session = join(stateRoot, "session-19AD2D3117AF9064AF90F879");
+  const policyRoot = join(root, "repository", "config", "slice3");
+  const ownerFile = join(
+    pmRoot,
+    "OWNER_DECISION_AND_ROLE2_ALLOCATION_PO_001_SLICE_3_LIVE_QUALIFICATION_V4.md",
+  );
+  const preflightFile = join(
+    pmRoot,
+    "ROLE3_SLICE_3_OPENROUTER_CREDENTIAL_PREFLIGHT_V4.json",
+  );
+  const policyFile = join(policyRoot, "research-route-policy.v1.json");
+  await mkdir(session, { recursive: true });
+  await mkdir(policyRoot, { recursive: true });
 
-test("current V4 source binding remains credential-blocked without a session", async () => {
-  const binding = await createV4SourceBinding();
-  const result = assessCurrentV4Disposition(binding);
-  assert.deepEqual(result, {
-    schemaVersion: "slice3-live-qualification-precall.v4",
-    disposition: "BLOCKED_CREDENTIAL",
+  const authorization = {
+    schemaVersion: "slice3-live-qualification-allocation.v4",
+    allocationId: "S3-V4-HOST-NEUTRAL-TEST",
     authorizationId:
       "PO-001-SLICE3-LIVE-QUALIFICATION-REPLACEMENT-2026-08-18-V4",
+    authorizationSignal:
+      "I_AUTHORIZE_TWO_REPLACEMENT_BILLABLE_SYNTHETIC_CALLS_V4",
     sessionId: "session-3DD21321009BFABD87CB1904",
-    credentialPreflightHttpStatus: 401,
-    credentialRead: false,
-    additionalAuthorizationGets: 0,
+    maxCalls: 2,
+    maxCostUsd: 100,
+    retries: 0,
+    fallbacks: 0,
+    syntheticOnly: true,
+    restartPolicy: "NON_RESUMABLE_NEW_ALLOCATION_REQUIRED",
+    policyDigest: slice3V4QualificationConstants.policyDigest,
+    consumedV1LedgerDigest:
+      "D26108B406EBB23615E9A181ADBC40FED85EDFEE504D7BA144A7BC2277930FA8",
+    consumedV2LedgerDigest:
+      "DB247B6E332F02D38E0355B6359F7A3A72A7C02D64A23B6A7B33212D423EF748",
+    consumedV3LedgerDigest: slice3V4QualificationConstants.v3LedgerDigest,
+    credentialPreflightDigest:
+      slice3V4QualificationConstants.credentialPreflightDigest,
+    currentDisposition: "BLOCKED_CREDENTIAL",
+    providerModelPosts: 0,
+    v4SessionState: "ABSENT",
+    activation: false,
+  };
+  const ownerBytes = Buffer.from(
+    `# Host-neutral V4 fixture\n\n<!--SLICE3_V4_AUTHORIZATION:${JSON.stringify(authorization)}-->\n`,
+  );
+  const sanitizedEnvelope = {
+    endpointCapability: "OPENROUTER_KEY_STATUS_READ",
+    httpStatus: 401,
+    callOccurred: true,
+    responseBodyPersisted: false,
+    rawHeadersPersisted: false,
+  };
+  const preflight = {
+    schemaVersion: "slice3-openrouter-credential-preflight.v1",
+    observationSource: "OWNER_MEASURED_CURRENT_FACT",
+    endpoint: "https://openrouter.ai/api/v1/key",
+    method: "GET",
+    sanitizedEnvelope,
+    sanitizedEnvelopeDigest: sha256(JSON.stringify(sanitizedEnvelope)),
+    disposition: "BLOCKED_CREDENTIAL",
     providerModelPosts: 0,
     billableCalls: 0,
-    sessionCreated: false,
-    activation: false,
-  });
-  assert.equal(
-    (await readdir(canonicalState)).includes(result.sessionId),
-    false,
-  );
-  let fetchCalls = 0;
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => {
-    fetchCalls += 1;
-    return response({ data: { is_free_tier: false } });
+    additionalAuthorizationGets: 0,
+    requestIdDigest: null,
+    errorCode: null,
+    errorType: null,
+    costState: "unknown",
+    costAmountUsd: null,
+    credentialValuePersisted: false,
+    credentialValueDisclosed: false,
+    rawResponsePersisted: false,
+    recordedAt: "2026-08-18T00:00:00.000Z",
   };
-  try {
-    assert.deepEqual(await executeCurrentV4PreCall(binding), result);
-  } finally {
-    globalThis.fetch = originalFetch;
+  const preflightBytes = Buffer.from(`${JSON.stringify(preflight)}\n`);
+  const policyBytes = Buffer.from('{"fixture":"host-neutral"}\n');
+  await writeFile(ownerFile, ownerBytes);
+  await writeFile(preflightFile, preflightBytes);
+  await writeFile(policyFile, policyBytes);
+
+  const expectedV3Manifest = [];
+  for (const [index, name] of v3Names.entries()) {
+    const bytes = Buffer.from(
+      `${JSON.stringify({ schemaVersion: "fixture.v3", index: index + 1 })}\n`,
+    );
+    await writeFile(join(session, name), bytes);
+    expectedV3Manifest.push({ name, digest: sha256(bytes) });
   }
-  assert.equal(fetchCalls, 0);
-  assert.equal("probeOpenRouterCredentialForV4" in v4Module, false);
-  assert.equal("initializeV4SessionWithCapability" in v4Module, false);
-  assert.equal("appendV4TerminalFailure" in v4Module, false);
+  const options = {
+    pmRoot,
+    stateRoot,
+    ownerFile,
+    preflightFile,
+    policyFile,
+    expectedOwnerDigest: sha256(ownerBytes),
+    expectedPreflightDigest: sha256(preflightBytes),
+    expectedPolicyDigest: sha256(policyBytes),
+    expectedV3Manifest,
+    expectedV3LedgerDigest: sha256(JSON.stringify(expectedV3Manifest)),
+  };
+  return { root, stateRoot, session, ownerFile, preflightFile, options };
+}
+
+test("host-neutral V4 source fixtures verify without minting a capability", async () => {
+  const source = await sourceFixture();
+  try {
+    const fixtureResult = await verifyV4SourceFixture(source.options);
+    assert.equal(
+      fixtureResult.schemaVersion,
+      "slice3-live-qualification-source-fixture-verification.v4",
+    );
+    assert.equal(fixtureResult.currentDisposition, "BLOCKED_CREDENTIAL");
+    assert.equal(
+      (await readdir(source.stateRoot)).includes(fixtureResult.sessionId),
+      false,
+    );
+    let fetchCalls = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      fetchCalls += 1;
+      return response({ data: { is_free_tier: false } });
+    };
+    try {
+      assert.throws(
+        () => assessCurrentV4Disposition(fixtureResult),
+        /capability/iu,
+      );
+      await assert.rejects(
+        executeCurrentV4PreCall(fixtureResult),
+        /capability/iu,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    assert.equal(fetchCalls, 0);
+    assert.equal("probeOpenRouterCredentialForV4" in v4Module, false);
+    assert.equal("initializeV4SessionWithCapability" in v4Module, false);
+    assert.equal("appendV4TerminalFailure" in v4Module, false);
+  } finally {
+    await rm(source.root, { recursive: true, force: true });
+  }
 });
 
 test("forged and detached V4 source bindings cannot assess or execute", async () => {
-  const genuine = await createV4SourceBinding();
-  const forged = { ...genuine };
-  let fetchCalls = 0;
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => {
-    fetchCalls += 1;
-    throw new Error("must not execute");
-  };
+  const source = await sourceFixture();
   try {
-    assert.throws(() => assessCurrentV4Disposition(forged), /capability/iu);
-    await assert.rejects(executeCurrentV4PreCall(forged), /capability/iu);
+    const inert = await verifyV4SourceFixture(source.options);
+    const forged = { ...inert };
+    let fetchCalls = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      fetchCalls += 1;
+      throw new Error("must not execute");
+    };
+    try {
+      assert.throws(() => assessCurrentV4Disposition(forged), /capability/iu);
+      await assert.rejects(executeCurrentV4PreCall(forged), /capability/iu);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    assert.equal(fetchCalls, 0);
   } finally {
-    globalThis.fetch = originalFetch;
+    await rm(source.root, { recursive: true, force: true });
   }
-  assert.equal(fetchCalls, 0);
 });
 
 test("immutable V3 binding rejects extra, missing, and changed bytes", async () => {
   for (const kind of ["extra", "missing", "changed"]) {
-    const { root } = await fixture();
+    const source = await sourceFixture();
     try {
-      const session = await copyV3(root);
-      assert.equal(
-        (await verifyImmutableV3Ledger(root)).ledgerDigest,
-        "3030B12726EB31DA43BBEBD19E9D5C0E819AB5857371FBC843CF3F7D759F7BC8",
-      );
+      await verifyV4SourceFixture(source.options);
       if (kind === "extra")
-        await writeFile(join(session, "extra.json"), "{}\n");
-      if (kind === "missing") await rm(join(session, v3Names[2]));
+        await writeFile(join(source.session, "extra.json"), "{}\n");
+      if (kind === "missing") await rm(join(source.session, v3Names[2]));
       if (kind === "changed") {
-        await appendFile(join(session, v3Names[2]), " ");
+        await appendFile(join(source.session, v3Names[2]), " ");
       }
-      await assert.rejects(verifyImmutableV3Ledger(root), /V3 ledger/iu);
+      await assert.rejects(
+        verifyV4SourceFixture(source.options),
+        /V3 ledger/iu,
+      );
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await rm(source.root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("host-neutral source fixtures reject traversal, nonregular, missing, and hash drift", async () => {
+  for (const kind of ["traversal", "nonregular", "missing", "hash"]) {
+    const source = await sourceFixture();
+    try {
+      if (kind === "traversal") {
+        const outside = join(source.root, "outside-owner.md");
+        await writeFile(outside, await readFile(source.ownerFile));
+        source.options.ownerFile = outside;
+      }
+      if (kind === "nonregular") {
+        await rm(source.ownerFile);
+        await mkdir(source.ownerFile);
+      }
+      if (kind === "missing") await rm(source.preflightFile);
+      if (kind === "hash") await appendFile(source.preflightFile, " ");
+      await assert.rejects(
+        verifyV4SourceFixture(source.options),
+        /escaped|regular file|ENOENT|source binding/iu,
+      );
+    } finally {
+      await rm(source.root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("host-neutral fixtures reject outside, traversal, missing, and linked state roots", async () => {
+  for (const kind of ["outside", "traversal", "missing", "linked"]) {
+    const source = await sourceFixture();
+    try {
+      if (kind === "outside" || kind === "traversal") {
+        const outside = join(source.root, `${kind}-state`);
+        await rename(source.stateRoot, outside);
+        source.options.stateRoot =
+          kind === "traversal"
+            ? join(source.options.pmRoot, "..", `${kind}-state`)
+            : outside;
+      }
+      if (kind === "missing") {
+        source.options.stateRoot = join(source.options.pmRoot, "missing-state");
+      }
+      if (kind === "linked") {
+        const alias = join(source.options.pmRoot, "linked-state");
+        await symlink(source.stateRoot, alias, "junction");
+        source.options.stateRoot = alias;
+      }
+      await assert.rejects(
+        verifyV4SourceFixture(source.options),
+        /escaped|regular directory|ENOENT/iu,
+      );
+    } finally {
+      await rm(source.root, { recursive: true, force: true });
     }
   }
 });

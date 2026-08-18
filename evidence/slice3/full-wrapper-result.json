@@ -1,13 +1,13 @@
 {
   "schemaVersion": "matchbase.slice3-full-wrapper-result/v1",
-  "observedAt": "2026-08-18T10:32:49.212Z",
+  "observedAt": "2026-08-18T11:10:15.057Z",
   "command": "pnpm test:ci && pnpm dependency:audit",
-  "durationMs": 414065,
+  "durationMs": 416675,
   "result": "PASS",
   "exitCode": 0,
   "candidate": {
-    "manifestSha256": "8809C44B38C0F3576F7E17ECE5AEC4D4A766B32A12AD3CFF049A5DDB026D009F",
-    "aggregateSha256": "280ADFD3633432E3C92BD75EA4D4C20800F6CAFC6FED5AC916B12A9DF1C46B9E",
+    "manifestSha256": "EF6D7396CA50F37B286498A56A57C3A2EB92B93345E05B9C43FABC63D511ED3E",
+    "aggregateSha256": "190460AE07A2DD893E928BB7891B75FB1A9E8CFD586953A9CD6C7C9EEC2B282F",
     "fileCount": 47
   },
   "providerCalls": 0,

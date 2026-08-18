@@ -246,7 +246,7 @@ const evidence = {
       qualifiedLiveBrowserChrome: 1,
       failed: 0,
     },
-    note: "V4 SAFE_BLOCKED pre-wrapper basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 41/41, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. V4 remains BLOCKED_CREDENTIAL with no session, provider call, credential read, activation or external mutation. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated.",
+    note: "V4 SAFE_BLOCKED pre-wrapper basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 43/43, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. V4 remains BLOCKED_CREDENTIAL with no session, provider call, credential read, activation or external mutation. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated.",
   },
   acceptance,
   artifacts,

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "slice": "SLICE-3",
-  "observedAt": "2026-08-18T10:43:01.846Z",
+  "observedAt": "2026-08-18T11:14:30.053Z",
   "lifecyclePhase": "POST_REVIEW_CURRENT",
   "candidateStatus": "REPOSITORY_IMPLEMENTATION_POST_REVIEW_CURRENT_LIVE_BLOCKED",
   "repositoryImplementation": "PASS",
@@ -34,20 +34,20 @@
   },
   "candidate": {
     "manifestPath": "evidence/slice3/candidate-manifest.json",
-    "manifestSha256": "8809C44B38C0F3576F7E17ECE5AEC4D4A766B32A12AD3CFF049A5DDB026D009F",
-    "aggregateSha256": "280ADFD3633432E3C92BD75EA4D4C20800F6CAFC6FED5AC916B12A9DF1C46B9E",
+    "manifestSha256": "EF6D7396CA50F37B286498A56A57C3A2EB92B93345E05B9C43FABC63D511ED3E",
+    "aggregateSha256": "190460AE07A2DD893E928BB7891B75FB1A9E8CFD586953A9CD6C7C9EEC2B282F",
     "fileCount": 47
   },
   "localGate": {
     "status": "PASS",
     "fullWrapper": {
       "command": "pnpm test:ci && pnpm dependency:audit",
-      "durationMs": 414065,
+      "durationMs": 416675,
       "result": "PASS",
-      "observedAt": "2026-08-18T10:32:49.212Z",
+      "observedAt": "2026-08-18T11:10:15.057Z",
       "sourceRef": {
         "path": "evidence/slice3/full-wrapper-result.json",
-        "sha256": "170CC3E95CF1C68AC09EFE63C67AC9F6C5397657E05523B5A7A81DC66DAC6C2C"
+        "sha256": "80C62183BBF2E0E03E86B586579C400EA3F5D03C064CF3A005693918316E72EC"
       }
     },
     "testCounts": {
@@ -63,7 +63,7 @@
       "qualifiedLiveBrowserChrome": 1,
       "failed": 0
     },
-    "note": "V4 SAFE_BLOCKED pre-wrapper basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 41/41, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. V4 remains BLOCKED_CREDENTIAL with no session, provider call, credential read, activation or external mutation. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated."
+    "note": "V4 SAFE_BLOCKED pre-wrapper basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 43/43, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. V4 remains BLOCKED_CREDENTIAL with no session, provider call, credential read, activation or external mutation. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated."
   },
   "acceptance": [
     {
@@ -1689,7 +1689,7 @@
     {
       "id": "S3-ART-027",
       "path": "scripts/lib/slice3-dashboard-handoff-policy.mjs",
-      "sha256": "A66C445C2A3042A2E0CC2FC16E84694FACE5A97E07347FC5A778CB403B90B5F3"
+      "sha256": "D342A3503498E610F382A002B4BA141A835C347E3A7F82E7944A3DEAAA355C2E"
     },
     {
       "id": "S3-ART-028",
@@ -1719,7 +1719,7 @@
     {
       "id": "S3-ART-033",
       "path": "governance/slice3-dashboard-handoff-policy-v1.json",
-      "sha256": "108F9D8FB600B07BF71213D014F6AD842ABDF4DC53F95B37AF406FBE71F94F8A"
+      "sha256": "72C36993FAD40B5C48EE8521A62813C8D4C718C2D0AB476FA37763349C626D17"
     },
     {
       "id": "S3-ART-034",
@@ -1789,7 +1789,7 @@
     {
       "id": "S3-ART-047",
       "path": "test/slice3/live-qualification-v4.test.mjs",
-      "sha256": "A134C8358477A63275CF8BCD16BF878CA6757F75D2B8424DB6E5BDC95A6CD958"
+      "sha256": "CAF43F42C84161865A682CA0507C02C1500F106DD99AE35F7E568378D7C5D76D"
     },
     {
       "id": "S3-ART-048",
@@ -1886,7 +1886,7 @@
   "historicalLifecycle": {
     "schemaVersion": "matchbase.slice3-during-review-history/v1",
     "phase": "DURING_REVIEW_PENDING",
-    "observedAt": "2026-08-18T10:32:49.268Z",
+    "observedAt": "2026-08-18T11:10:15.102Z",
     "current": false,
     "supersededBy": "postReview",
     "audits": [
@@ -1959,15 +1959,15 @@
   },
   "postReview": {
     "schemaVersion": "matchbase.slice3-post-review/v1",
-    "observedAt": "2026-08-18T10:40:00.000Z",
+    "observedAt": "2026-08-18T11:14:00.000Z",
     "candidate": {
-      "manifestSha256": "8809C44B38C0F3576F7E17ECE5AEC4D4A766B32A12AD3CFF049A5DDB026D009F",
-      "aggregateSha256": "280ADFD3633432E3C92BD75EA4D4C20800F6CAFC6FED5AC916B12A9DF1C46B9E",
+      "manifestSha256": "EF6D7396CA50F37B286498A56A57C3A2EB92B93345E05B9C43FABC63D511ED3E",
+      "aggregateSha256": "190460AE07A2DD893E928BB7891B75FB1A9E8CFD586953A9CD6C7C9EEC2B282F",
       "fileCount": 47
     },
     "wrapperSource": {
       "path": "evidence/slice3/full-wrapper-result.json",
-      "sha256": "170CC3E95CF1C68AC09EFE63C67AC9F6C5397657E05523B5A7A81DC66DAC6C2C"
+      "sha256": "80C62183BBF2E0E03E86B586579C400EA3F5D03C064CF3A005693918316E72EC"
     },
     "disciplines": [
       {

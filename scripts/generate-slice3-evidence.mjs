@@ -112,6 +112,9 @@ const artifactPaths = [
   "packages/application/src/research-admission.ts",
   "apps/web/src/server-owned-research-admission.ts",
   "scripts/qualify-slice3-live.mjs",
+  "scripts/qualify-slice3-live-v4.mjs",
+  "scripts/lib/slice3-live-qualification-runner.mjs",
+  "scripts/lib/slice3-live-qualification-v4.mjs",
   "scripts/lib/slice3-dashboard-policy.mjs",
   "scripts/lib/slice3-dashboard-handoff-policy.mjs",
   "scripts/lib/slice3-wrapper-result-policy.mjs",
@@ -130,6 +133,10 @@ const artifactPaths = [
   "test/slice3/environment-provider-transport.test.mjs",
   "test/slice3/qualified-live-admission.test.mjs",
   "test/slice3/live-qualification-preflight.test.mjs",
+  "test/slice3/live-qualification-durable-runner.test.mjs",
+  "test/slice3/live-qualification-runner.test.mjs",
+  "test/slice3/live-qualification-runtime-transport.test.mjs",
+  "test/slice3/live-qualification-v4.test.mjs",
   "test/slice3/dashboard-policy.test.mjs",
   "test/slice3/dashboard-handoff-policy.test.mjs",
   "test/slice3/wrapper-result-policy.test.mjs",
@@ -139,14 +146,7 @@ const artifactPaths = [
   "test/browser/product-live-reference-path.spec.mjs",
   "test/browser/product-standard-reference-path.spec.mjs",
 ];
-const blockerCodes = [
-  "ROUTE_POLICY_NOT_ENABLED",
-  "TWO_QUALIFIED_ROUTES_NOT_PRESENT",
-  "APPROVED_DIRECT_CREDENTIAL_ABSENT",
-  "APPROVED_OPENROUTER_CREDENTIAL_ABSENT",
-  "EXPLICIT_BILLABLE_QUALIFICATION_AUTHORIZATION_ABSENT",
-  "QUALIFICATION_BUDGET_INVALID",
-];
+const blockerCodes = ["BLOCKED_CREDENTIAL"];
 const auditStatus = postReviewCurrent ? "PASS" : "PENDING";
 const criticStatus = postReviewCurrent ? "PASS" : "PENDING";
 const artifacts = artifactPaths.map((path, index) => ({
@@ -191,11 +191,22 @@ const evidence = {
   liveQualification: "BLOCKED_PREREQUISITE",
   blockerCodes,
   qualificationPreflight: {
-    schemaVersion: "slice3-live-qualification-preflight.v1",
-    disposition: "BLOCKED_PREREQUISITE",
+    schemaVersion: "slice3-live-qualification-preflight.v4-safe-blocked",
+    disposition: "BLOCKED_CREDENTIAL",
     blockers: blockerCodes,
+    sourceBinding: {
+      path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_OPENROUTER_CREDENTIAL_PREFLIGHT_V4.json",
+      verificationMode: "EXACT_LOCAL_SHA256_OR_ANCHOR_ONLY_CI",
+      sha256:
+        "144E77DE086FF53BFE2FCDD75A4CA750951C4026EA10ECF41FCAE983F9B87C08",
+      httpStatus: 401,
+      sanitizedEnvelopeDigest:
+        "8CF8991C0372D72CEB99F18D9187DA4FB55E022D9BE264F02DB9BB0BB6EBF508",
+    },
     providerCalls: 0,
     credentialValuesInspected: false,
+    additionalAuthorizationGets: 0,
+    v4SessionCreated: false,
     externalMutations: 0,
   },
   environment: {
@@ -211,7 +222,7 @@ const evidence = {
     ...candidateIdentity,
   },
   localGate: {
-    status: "PASS",
+    status: wrapperResult.result,
     fullWrapper: {
       command: wrapperResult.command,
       durationMs: wrapperResult.durationMs,
@@ -224,7 +235,7 @@ const evidence = {
     },
     testCounts: {
       contracts: 7,
-      aiEvidence: 74,
+      aiEvidence: 75,
       security: 52,
       dataPostgresql18: 22,
       liveResearchApplicationPostgresql18: 1,
@@ -235,7 +246,7 @@ const evidence = {
       qualifiedLiveBrowserChrome: 1,
       failed: 0,
     },
-    note: "Role 2 Loop 1 pre-wrapper basis: contracts 7/7, AI/evidence 74/74, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated. Provider calls and external mutations remained zero.",
+    note: "V4 SAFE_BLOCKED pre-wrapper basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 41/41, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. V4 remains BLOCKED_CREDENTIAL with no session, provider call, credential read, activation or external mutation. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated.",
   },
   acceptance,
   artifacts,

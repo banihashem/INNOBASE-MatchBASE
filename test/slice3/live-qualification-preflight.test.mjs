@@ -6,6 +6,7 @@ import {
   evaluateLiveQualificationPrerequisites,
   LIVE_RESEARCH_CREDENTIAL_HANDLES,
 } from "../../scripts/qualify-slice3-live.mjs";
+import { SLICE3_LIVE_QUALIFICATION_CONSTANTS } from "../../scripts/lib/slice3-live-qualification-runner.mjs";
 
 const policy = JSON.parse(
   readFileSync(
@@ -22,25 +23,31 @@ test("live qualification preflight remains blocked without inspecting credential
     directCredentialPresent: true,
     openRouterCredentialPresent: false,
     explicitAuthorization: false,
-    budget: { maxCalls: 2, maxCostUsd: 1 },
+    authorizationId: null,
+    budget: { maxCalls: 2, maxCostUsd: 100 },
   });
   assert.equal(result.disposition, "BLOCKED_PREREQUISITE");
   assert.equal(result.providerCalls, 0);
   assert.equal(result.credentialValuesInspected, false);
   assert.deepEqual(result.blockers, [
+    "APPROVED_OPENROUTER_CREDENTIAL_ABSENT",
+    "V3_DISTINCT_AUTHORIZATION_SIGNAL_ABSENT",
+    "V3_OWNER_REAUTHORIZATION_ABSENT",
+    "V3_PREFLIGHT_AUTHORIZATION_BINDING_ABSENT",
+  ]);
+  assert.deepEqual(result.currentAcceptanceBlockers, [
     "ROUTE_POLICY_NOT_ENABLED",
     "TWO_QUALIFIED_ROUTES_NOT_PRESENT",
-    "APPROVED_OPENROUTER_CREDENTIAL_ABSENT",
-    "EXPLICIT_BILLABLE_QUALIFICATION_AUTHORIZATION_ABSENT",
   ]);
 });
 
 test("preflight rejects an unbounded or malformed call budget", () => {
   const result = evaluateLiveQualificationPrerequisites({
-    policy: { ...policy, liveActivation: "enabled" },
+    policy,
     directCredentialPresent: true,
     openRouterCredentialPresent: true,
     explicitAuthorization: true,
+    authorizationId: SLICE3_LIVE_QUALIFICATION_CONSTANTS.authorizationId,
     budget: { maxCalls: 3, maxCostUsd: 0 },
   });
   assert.equal(result.disposition, "BLOCKED_PREREQUISITE");
@@ -86,41 +93,79 @@ test("credential presence uses only the two canonical runtime handles", () => {
   }
 });
 
-test("preflight reaches READY only from exact canonical presence signals", () => {
-  const readyPolicy = structuredClone(policy);
-  readyPolicy.liveActivation = "enabled";
-  for (const route of readyPolicy.routes) {
-    route.enabled = true;
-    route.liveQualified = true;
-  }
+test("preflight remains blocked until a source-anchored owner capability exists", () => {
   const present = credentialHandlePresence({
     MATCHBASE_GEMINI_API_KEY: "present",
     MATCHBASE_OPENROUTER_API_KEY: "present",
   });
-  assert.equal(
-    evaluateLiveQualificationPrerequisites({
-      policy: readyPolicy,
-      ...present,
-      explicitAuthorization: true,
-      budget: { maxCalls: 2, maxCostUsd: 1 },
-    }).disposition,
-    "READY_TO_EXECUTE",
-  );
+  const pendingOwner = evaluateLiveQualificationPrerequisites({
+    policy,
+    ...present,
+    explicitAuthorization: true,
+    authorizationId: SLICE3_LIVE_QUALIFICATION_CONSTANTS.authorizationId,
+    authorizationBinding: null,
+    budget: { maxCalls: 2, maxCostUsd: 100 },
+  });
+  assert.equal(pendingOwner.disposition, "BLOCKED_PREREQUISITE");
+  assert.deepEqual(pendingOwner.blockers, [
+    "V3_PREFLIGHT_AUTHORIZATION_BINDING_ABSENT",
+  ]);
   const legacyOnly = credentialHandlePresence({
     GEMINI_API_KEY: "legacy-only",
     GOOGLE_APPLICATION_CREDENTIALS: "legacy-only",
     OPENROUTER_API_KEY: "legacy-only",
   });
   const blocked = evaluateLiveQualificationPrerequisites({
-    policy: readyPolicy,
+    policy,
     ...legacyOnly,
     explicitAuthorization: true,
-    budget: { maxCalls: 2, maxCostUsd: 1 },
+    authorizationId: SLICE3_LIVE_QUALIFICATION_CONSTANTS.authorizationId,
+    budget: { maxCalls: 2, maxCostUsd: 100 },
   });
   assert.equal(blocked.disposition, "BLOCKED_PREREQUISITE");
   assert.deepEqual(blocked.blockers, [
     "APPROVED_DIRECT_CREDENTIAL_ABSENT",
     "APPROVED_OPENROUTER_CREDENTIAL_ABSENT",
+    "V3_PREFLIGHT_AUTHORIZATION_BINDING_ABSENT",
+  ]);
+});
+
+test("preflight rejects already-enabled or partially qualified route state", () => {
+  for (const mutate of [
+    (candidate) => (candidate.liveActivation = "enabled"),
+    (candidate) => (candidate.routes[0].enabled = true),
+    (candidate) => (candidate.routes[1].liveQualified = true),
+    (candidate) => (candidate.routes[0].parameterPolicy.maxAttempts = 2),
+    (candidate) => (candidate.routes[1].parameterPolicy.backoffMs = 500),
+  ]) {
+    const candidate = structuredClone(policy);
+    mutate(candidate);
+    const result = evaluateLiveQualificationPrerequisites({
+      policy: candidate,
+      directCredentialPresent: true,
+      openRouterCredentialPresent: true,
+      explicitAuthorization: true,
+      authorizationId: SLICE3_LIVE_QUALIFICATION_CONSTANTS.authorizationId,
+      budget: { maxCalls: 2, maxCostUsd: 100 },
+    });
+    assert.equal(result.disposition, "BLOCKED_PREREQUISITE");
+    assert.ok(result.blockers.includes("QUALIFICATION_ROUTE_SET_INVALID"));
+  }
+});
+
+test("preflight rejects the exhausted V1 authorization identity", () => {
+  const result = evaluateLiveQualificationPrerequisites({
+    policy,
+    directCredentialPresent: true,
+    openRouterCredentialPresent: true,
+    explicitAuthorization: true,
+    authorizationId: "PO-001-SLICE3-LIVE-QUALIFICATION-2026-08-16-V1",
+    budget: { maxCalls: 2, maxCostUsd: 100 },
+  });
+  assert.equal(result.disposition, "BLOCKED_PREREQUISITE");
+  assert.deepEqual(result.blockers, [
+    "V3_OWNER_REAUTHORIZATION_ABSENT",
+    "V3_PREFLIGHT_AUTHORIZATION_BINDING_ABSENT",
   ]);
 });
 
@@ -132,7 +177,8 @@ test("preflight rejects malformed presence signals without accepting values", ()
         directCredentialPresent: "present",
         openRouterCredentialPresent: false,
         explicitAuthorization: false,
-        budget: { maxCalls: 2, maxCostUsd: 1 },
+        authorizationId: null,
+        budget: { maxCalls: 2, maxCostUsd: 100 },
       }),
     /exact boolean signals/iu,
   );

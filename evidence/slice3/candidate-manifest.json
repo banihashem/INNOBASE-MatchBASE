@@ -11,9 +11,17 @@
     "apps/dashboard/public/current-snapshot.json",
     "apps/dashboard/dist/current-snapshot.json"
   ],
-  "fileCount": 38,
-  "aggregateSha256": "20822CB8FF0AC7406C4FAAA8C7112175568CA6E58DE9B603743210C3F2E96B14",
+  "fileCount": 47,
+  "aggregateSha256": "280ADFD3633432E3C92BD75EA4D4C20800F6CAFC6FED5AC916B12A9DF1C46B9E",
   "files": [
+    {
+      "path": ".gitignore",
+      "sha256": "0F680743BD1E3FD784C9CE04A5197F5D6C9BA656DF1C3EA036C236E575697554"
+    },
+    {
+      "path": ".prettierignore",
+      "sha256": "F3CEA4FFA718AE76A4768641270BCBC731A1B667ADB5A792E1D96E71F391AE7B"
+    },
     {
       "path": "apps/web/src/server-owned-research-admission.ts",
       "sha256": "2C8A51485A28F3A55DC16E292623A8E6A4A9C02D9B688186AF7112E1EC43AFF2"
@@ -24,15 +32,15 @@
     },
     {
       "path": "config/slice3/research-route-policy.v1.json",
-      "sha256": "2C3D8D4A18755A60AAABA52E252B507944B98B6E961AFAF482958D7D0D9B1EDA"
+      "sha256": "46FCAF0C2D2B66F8BAB8526C48E448A24B2E9F65B065AAA99135CA6AF048DB23"
     },
     {
       "path": "governance/gates.json",
-      "sha256": "66C09F1929C040F93CFCD1AB27196710DA413FDC7CBC8F7255A80D9C0E9AC2F8"
+      "sha256": "560B0D8BCCF9A1BDA0037F59B96D76C35A9EA0FBBC7F8B8F6F23BA5C2ED95BCC"
     },
     {
       "path": "governance/slice3-dashboard-handoff-policy-v1.json",
-      "sha256": "8EB2B4F89D4E62259269EFDBEF21636A22E9B0D7CD1F1250A92B5A5F37231B06"
+      "sha256": "108F9D8FB600B07BF71213D014F6AD842ABDF4DC53F95B37AF406FBE71F94F8A"
     },
     {
       "path": "package.json",
@@ -48,7 +56,7 @@
     },
     {
       "path": "packages/ai-evidence/src/research-route-policy.ts",
-      "sha256": "AAF25416B1ED8988ED8924F2ABC3FFC33C1826DAC387C6231282B4627A0BDC0D"
+      "sha256": "4B2CA712BF4369219487932D261E7288461B8663771B0B747EEF459B7623098F"
     },
     {
       "path": "packages/ai-evidence/src/route-policy.ts",
@@ -68,7 +76,7 @@
     },
     {
       "path": "packages/ai-evidence/test/research-route-policy.test.ts",
-      "sha256": "4D264838B3400B29D36294363D86CD1F5562FED61E87F49F71D895C19FD976B8"
+      "sha256": "B59414ED10A4EED3F5BBF2A7EE97F837D1795A5E66E84C3B00A2B3F837A82200"
     },
     {
       "path": "packages/application/src/index.ts",
@@ -80,7 +88,7 @@
     },
     {
       "path": "packages/application/src/live-research-environment-runtime.ts",
-      "sha256": "27BB2BA680F1D7A6554596D85E23CF0225FEC88472509164084737337EBBB8BF"
+      "sha256": "F1CDC15B6BFCFCE0D9C4005C90E79570C8B177CFF2391B9BEBDD19EA90053364"
     },
     {
       "path": "packages/application/src/live-research-execution.ts",
@@ -112,7 +120,7 @@
     },
     {
       "path": "scripts/generate-slice3-evidence.mjs",
-      "sha256": "F33C7245DE9454217C7E4BEED7A47865CCECCC58F01B1C6AF8D35C36B8865CFC"
+      "sha256": "31492F6F5DBEEECFD33E3111F6FD9A68C0E3765B5AABFA26FFCBA7626AA2AB8A"
     },
     {
       "path": "scripts/lib/slice3-dashboard-handoff-policy.mjs",
@@ -120,15 +128,27 @@
     },
     {
       "path": "scripts/lib/slice3-dashboard-policy.mjs",
-      "sha256": "F134C432E2D438C1423259B19B95C1BB11EBD8DC387D968F62EE8239E5D45069"
+      "sha256": "63A886113DFC4216E366943AF910DAE21193E6E6C4D2EF1DDB42C25DD750BA50"
+    },
+    {
+      "path": "scripts/lib/slice3-live-qualification-runner.mjs",
+      "sha256": "B01CD9A96C6A524630CC6987B443D37E55BA903794719D2C98C4290B815ACEE3"
+    },
+    {
+      "path": "scripts/lib/slice3-live-qualification-v4.mjs",
+      "sha256": "4BB34A269F5C5D65D7A4CC132DFEB93D96735A8C65B1E786B1EAC52823CB1304"
     },
     {
       "path": "scripts/lib/slice3-wrapper-result-policy.mjs",
       "sha256": "E5ED7F4ADB6CD3E6F123E041AD3606A662B23D119BD4DB6DB091192891BA7D93"
     },
     {
+      "path": "scripts/qualify-slice3-live-v4.mjs",
+      "sha256": "1A3E85F969A7FA3522CB9B93000AA80035574179A913ECF1EF02147040C9606F"
+    },
+    {
       "path": "scripts/qualify-slice3-live.mjs",
-      "sha256": "ABDAEC4DEF1CEEA38DD89EF6AAC0F455B056EB577E63FE5E24BE4C9F41069254"
+      "sha256": "7051D798686EF3C7F20C4287919B63F0833F59287FFC6F5212A6CF7D309556CE"
     },
     {
       "path": "scripts/record-slice3-wrapper-result.mjs",
@@ -140,7 +160,7 @@
     },
     {
       "path": "scripts/validate-slice3-local.mjs",
-      "sha256": "53B8AAB722E76CEEF1C58B8A90BFD10B586C9ED815C2465C170ED7281F7FD0A3"
+      "sha256": "E2DDD312229E10126C40495FCFD4F926FE40A0E592B3EA4832142401F6AE78C8"
     },
     {
       "path": "test/slice3/dashboard-handoff-policy.test.mjs",
@@ -148,15 +168,31 @@
     },
     {
       "path": "test/slice3/dashboard-policy.test.mjs",
-      "sha256": "6D117B33D8D11E6BD7BFC9103EDF22ADADDAC8F9F16F4AEA59D199CBA73A86DC"
+      "sha256": "FB2B5A17CF5DF4C3FC988AA3A37F96AE930CF96BF20C5B7ABBC8B875F389C59A"
     },
     {
       "path": "test/slice3/fixtures/live-worker-runtime.mjs",
       "sha256": "46CA7352B8D9C5B16E80F818E3F9B848BD1EE3CEEBCDA5196115F3832BAB2753"
     },
     {
+      "path": "test/slice3/live-qualification-durable-runner.test.mjs",
+      "sha256": "57B1CCC819ABDEC9FA0CF27F89D85A7149EA8E13C31B8435DC3F00DBCF1D2324"
+    },
+    {
       "path": "test/slice3/live-qualification-preflight.test.mjs",
-      "sha256": "A930026B3F0D5137BC421EE329801CE77220D9944A386DEE461ACFC7E41FD3A2"
+      "sha256": "21E6724394CD4207DF288ED8291804B87FD21F85030B9F19EE924C324198AC2C"
+    },
+    {
+      "path": "test/slice3/live-qualification-runner.test.mjs",
+      "sha256": "AA0137AE1B0ACD6CD903BF5F453787246EB53F98B939347A547AF7C6801E6110"
+    },
+    {
+      "path": "test/slice3/live-qualification-runtime-transport.test.mjs",
+      "sha256": "9F3C1A9ABECC74945D88A39612135A39EBCD841E5630581DBD737BB0F0751D6E"
+    },
+    {
+      "path": "test/slice3/live-qualification-v4.test.mjs",
+      "sha256": "A134C8358477A63275CF8BCD16BF878CA6757F75D2B8424DB6E5BDC95A6CD958"
     },
     {
       "path": "test/slice3/live-research-application-postgres.test.mjs",

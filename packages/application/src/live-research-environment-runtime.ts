@@ -229,7 +229,14 @@ function structuredBody(
   return JSON.parse(text);
 }
 
-class EnvironmentProviderTransport implements ProviderTransport {
+function hasOnlyKeys(
+  value: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+): boolean {
+  return Object.keys(value).every((key) => allowed.has(key));
+}
+
+export class EnvironmentProviderTransport implements ProviderTransport {
   constructor(
     private readonly provider: "gemini_direct" | "openrouter",
     private readonly secret: string,
@@ -261,11 +268,127 @@ class EnvironmentProviderTransport implements ProviderTransport {
         ...request.headers,
         ...(this.provider === "gemini_direct"
           ? { "x-goog-api-key": this.secret }
-          : { Authorization: `Bearer ${this.secret}` }),
+          : {
+              Authorization: `Bearer ${this.secret}`,
+              "X-OpenRouter-Metadata": "enabled",
+            }),
       },
       body: request.body,
     });
     const envelope = await readBoundedProviderJson(response);
+    let openRouterMetadata: Record<string, unknown> | null = null;
+    if (this.provider === "openrouter" && response.ok) {
+      const routing = envelope.openrouter_metadata as
+        Record<string, unknown> | undefined;
+      const endpoints = routing?.endpoints as
+        Record<string, unknown> | undefined;
+      const available = endpoints?.available;
+      const selected = Array.isArray(available)
+        ? available.filter(
+            (entry) =>
+              entry &&
+              typeof entry === "object" &&
+              !Array.isArray(entry) &&
+              (entry as Record<string, unknown>).selected === true,
+          )
+        : [];
+      const attempts = routing?.attempts ?? [];
+      if (
+        !routing ||
+        !hasOnlyKeys(
+          routing,
+          new Set([
+            "requested",
+            "strategy",
+            "attempt",
+            "endpoints",
+            "attempts",
+            "pipeline",
+          ]),
+        ) ||
+        !endpoints ||
+        !hasOnlyKeys(endpoints, new Set(["total", "available"])) ||
+        routing?.requested !== "google/gemini-3.6-flash" ||
+        routing.strategy !== "direct" ||
+        routing.attempt !== 1 ||
+        !Array.isArray(available) ||
+        endpoints?.total !== available.length ||
+        selected.length !== 1 ||
+        available.some(
+          (entry) =>
+            !entry ||
+            typeof entry !== "object" ||
+            Array.isArray(entry) ||
+            !hasOnlyKeys(
+              entry as Record<string, unknown>,
+              new Set(["provider", "model", "selected"]),
+            ) ||
+            (entry as Record<string, unknown>).provider !== "Google Vertex" ||
+            (entry as Record<string, unknown>).model !==
+              "google/gemini-3.6-flash" ||
+            typeof (entry as Record<string, unknown>).selected !== "boolean",
+        ) ||
+        !Array.isArray(attempts) ||
+        attempts.length > 1 ||
+        (routing.pipeline !== undefined &&
+          (!Array.isArray(routing.pipeline) || routing.pipeline.length !== 0))
+      )
+        throw new Error("OpenRouter routing metadata is invalid.");
+      if (attempts.length === 1) {
+        const attempt = attempts[0] as Record<string, unknown>;
+        if (
+          !attempt ||
+          typeof attempt !== "object" ||
+          Array.isArray(attempt) ||
+          !hasOnlyKeys(attempt, new Set(["provider", "model", "status"])) ||
+          attempt.provider !== "Google Vertex" ||
+          attempt.model !== "google/gemini-3.6-flash" ||
+          attempt.status !== 200
+        )
+          throw new Error("OpenRouter routing attempt is invalid.");
+      }
+      const bodyId = typeof envelope.id === "string" ? envelope.id : null;
+      const headerId = response.headers.get("x-generation-id");
+      if (!bodyId && !headerId)
+        throw new Error("OpenRouter omitted its generation identity.");
+      if (bodyId && headerId && bodyId !== headerId)
+        throw new Error("OpenRouter generation identities differ.");
+      const generationId = bodyId ?? headerId;
+      const metadataResponse = await fetch(
+        `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(generationId as string)}`,
+        {
+          method: "GET",
+          redirect: "error",
+          signal: request.signal,
+          headers: { Authorization: `Bearer ${this.secret}` },
+        },
+      );
+      const metadataEnvelope = await readBoundedProviderJson(metadataResponse);
+      const metadata = metadataEnvelope.data;
+      if (
+        !metadataResponse.ok ||
+        !metadata ||
+        typeof metadata !== "object" ||
+        Array.isArray(metadata)
+      )
+        throw new Error("OpenRouter generation metadata is unavailable.");
+      openRouterMetadata = metadata as Record<string, unknown>;
+      const usage = envelope.usage as Record<string, unknown> | undefined;
+      const finishReason = (
+        envelope.choices as Array<{ finish_reason?: unknown }> | undefined
+      )?.[0]?.finish_reason;
+      if (
+        openRouterMetadata.id !== generationId ||
+        openRouterMetadata.provider_name !== "Google Vertex" ||
+        openRouterMetadata.model !== "google/gemini-3.6-flash" ||
+        envelope.model !== "google/gemini-3.6-flash" ||
+        openRouterMetadata.finish_reason !== finishReason ||
+        openRouterMetadata.tokens_prompt !== usage?.prompt_tokens ||
+        openRouterMetadata.tokens_completion !== usage?.completion_tokens ||
+        Number(openRouterMetadata.total_cost) !== Number(usage?.cost)
+      )
+        throw new Error("OpenRouter generation metadata did not reconcile.");
+    }
     const modelFromPath = decodeURIComponent(
       url.pathname.match(/\/models\/([^:/]+):/u)?.[1] ?? "",
     );
@@ -274,7 +397,11 @@ class EnvironmentProviderTransport implements ProviderTransport {
         ? envelope.modelVersion
         : envelope.model;
     const servedProvider =
-      this.provider === "gemini_direct" ? "google" : envelope.provider;
+      this.provider === "gemini_direct"
+        ? "google"
+        : openRouterMetadata?.provider_name === "Google Vertex"
+          ? "google-vertex"
+          : null;
     return {
       status: response.status,
       body: response.ok
@@ -285,19 +412,28 @@ class EnvironmentProviderTransport implements ProviderTransport {
       (this.provider !== "gemini_direct" || modelFromPath)
         ? {
             servedIdentity: {
-              providerId: servedProvider.toLowerCase(),
+              providerId: servedProvider,
               modelId: servedModel,
             },
           }
         : {}),
       accounting: {
-        state: "estimated",
+        state:
+          this.provider === "openrouter" && openRouterMetadata
+            ? "priced"
+            : "estimated",
         quantity: 1,
         unit: this.accountingUnit,
-        amount: this.conservativeCost,
+        amount:
+          this.provider === "openrouter" && openRouterMetadata
+            ? Number(openRouterMetadata.total_cost)
+            : this.conservativeCost,
         currency: "USD",
         pricingVersion: this.pricingVersion,
-        measurement: "estimated",
+        measurement:
+          this.provider === "openrouter" && openRouterMetadata
+            ? "measured"
+            : "estimated",
       },
     };
   }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "research-route-policy.v1",
-  "policyVersion": "slice3-routes.2026-08-16.blocked-v2",
+  "policyVersion": "slice3-routes.2026-08-16.blocked-v3-qualification-v3",
   "capabilityPolicyVersion": "slice3-capabilities.v1",
   "environment": "production",
   "evaluatedAt": "2026-08-16T00:00:00.000Z",
@@ -30,13 +30,13 @@
         "structuredOutput": "json_schema",
         "requireParameters": true,
         "allowFallbacks": false,
-        "maxOutputTokens": 4096,
+        "maxOutputTokens": 2048,
         "timeoutMs": 30000,
-        "maxAttempts": 2,
-        "backoffMs": 500
+        "maxAttempts": 1,
+        "backoffMs": 0
       },
       "dataHandling": {
-        "evidenceVersion": "slice3-provider-evidence.2026-08-16.d001-d003",
+        "evidenceVersion": "slice3-provider-evidence.2026-08-16.qualification-v3",
         "evidenceRefs": [
           "https://ai.google.dev/gemini-api/docs/latest-model",
           "https://ai.google.dev/gemini-api/docs/models",
@@ -60,7 +60,7 @@
       "adapterId": "openrouter",
       "adapterVersion": "slice3-adapter.v2",
       "path": "openrouter",
-      "providerId": "google",
+      "providerId": "google-vertex",
       "requestedModelId": "google/gemini-3.6-flash",
       "expectedServedModelId": "google/gemini-3.6-flash",
       "enabled": false,
@@ -79,13 +79,13 @@
         "structuredOutput": "json_schema",
         "requireParameters": true,
         "allowFallbacks": false,
-        "maxOutputTokens": 4096,
+        "maxOutputTokens": 2048,
         "timeoutMs": 30000,
-        "maxAttempts": 2,
-        "backoffMs": 500
+        "maxAttempts": 1,
+        "backoffMs": 0
       },
       "dataHandling": {
-        "evidenceVersion": "slice3-provider-evidence.2026-08-16.d001-d003",
+        "evidenceVersion": "slice3-provider-evidence.2026-08-16.qualification-v3",
         "evidenceRefs": [
           "https://openrouter.ai/google/gemini-3.6-flash",
           "https://openrouter.ai/docs/guides/routing/provider-selection",

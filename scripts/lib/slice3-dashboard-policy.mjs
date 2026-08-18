@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 export const SLICE3_ACCEPTANCE_IDS = Array.from(
   { length: 24 },
@@ -13,14 +15,7 @@ export const SLICE3_AUDIT_IDS = [
   "repository_release_preservation",
   "integration_critic",
 ];
-export const SLICE3_BLOCKER_CODES = [
-  "ROUTE_POLICY_NOT_ENABLED",
-  "TWO_QUALIFIED_ROUTES_NOT_PRESENT",
-  "APPROVED_DIRECT_CREDENTIAL_ABSENT",
-  "APPROVED_OPENROUTER_CREDENTIAL_ABSENT",
-  "EXPLICIT_BILLABLE_QUALIFICATION_AUTHORIZATION_ABSENT",
-  "QUALIFICATION_BUDGET_INVALID",
-];
+export const SLICE3_BLOCKER_CODES = ["BLOCKED_CREDENTIAL"];
 export const SLICE3_ROLE2_DEFECTS = ["D001", "D002", "D003", "D004"].map(
   (id) => ({ id, status: "CORRECTED_PENDING_ROLE2" }),
 );
@@ -30,6 +25,7 @@ const CANDIDATE_STATUS_BY_PHASE = {
   POST_REVIEW_CURRENT:
     "REPOSITORY_IMPLEMENTATION_POST_REVIEW_CURRENT_LIVE_BLOCKED",
 };
+const SLICE3_MANAGEMENT_ROOT = "C:\\INNOBASE\\MatchBASE\\01_Product_Management";
 
 const exact = (actual, expected, message) => {
   if (JSON.stringify(actual) !== JSON.stringify(expected))
@@ -40,6 +36,48 @@ const closed = (value, keys, message) => {
 };
 const auditRecordId = (id) =>
   `S3-AUDIT-${id.toUpperCase().replaceAll("_", "-")}`;
+
+export function verifySlice3CredentialPreflightSource(
+  sourceBinding,
+  {
+    anchorOnly = false,
+    ci = process.env.CI === "true",
+    sourceResolver,
+    sourceRoot = SLICE3_MANAGEMENT_ROOT,
+  } = {},
+) {
+  if (anchorOnly) {
+    if (!ci)
+      throw new Error(
+        "Slice 3 credential source ANCHOR_ONLY_CI requires an explicit CI runner.",
+      );
+    return sourceBinding;
+  }
+  const resolvedSource = sourceResolver
+    ? sourceResolver(sourceBinding.path)
+    : sourceBinding.path;
+  const rootReal = realpathSync(sourceRoot);
+  const sourceStat = lstatSync(resolvedSource);
+  const sourceReal = realpathSync(resolvedSource);
+  const difference = relative(rootReal, sourceReal);
+  if (
+    sourceStat.isSymbolicLink() ||
+    !sourceStat.isFile() ||
+    difference === "" ||
+    difference === ".." ||
+    difference.startsWith(`..${sep}`) ||
+    isAbsolute(difference) ||
+    resolve(rootReal, difference) !== sourceReal ||
+    createHash("sha256")
+      .update(readFileSync(sourceReal))
+      .digest("hex")
+      .toUpperCase() !== sourceBinding.sha256
+  )
+    throw new Error(
+      "Slice 3 credential preflight external source drifted or escaped containment.",
+    );
+  return sourceBinding;
+}
 
 const zeroAudit = (audit, expectedId, expectedStatus, label) => {
   closed(
@@ -273,6 +311,54 @@ export function validateSlice3Evidence(value, options = {}) {
     SLICE3_BLOCKER_CODES,
     "Slice 3 preflight blocker order is invalid.",
   );
+  closed(
+    value.qualificationPreflight,
+    [
+      "schemaVersion",
+      "disposition",
+      "blockers",
+      "sourceBinding",
+      "providerCalls",
+      "credentialValuesInspected",
+      "additionalAuthorizationGets",
+      "v4SessionCreated",
+      "externalMutations",
+    ],
+    "Slice 3 qualification preflight is not closed.",
+  );
+  closed(
+    value.qualificationPreflight.sourceBinding,
+    [
+      "path",
+      "verificationMode",
+      "sha256",
+      "httpStatus",
+      "sanitizedEnvelopeDigest",
+    ],
+    "Slice 3 qualification preflight source binding is not closed.",
+  );
+  if (
+    value.qualificationPreflight.schemaVersion !==
+      "slice3-live-qualification-preflight.v4-safe-blocked" ||
+    value.qualificationPreflight.disposition !== "BLOCKED_CREDENTIAL" ||
+    value.qualificationPreflight.sourceBinding.path !==
+      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_OPENROUTER_CREDENTIAL_PREFLIGHT_V4.json" ||
+    value.qualificationPreflight.sourceBinding.verificationMode !==
+      "EXACT_LOCAL_SHA256_OR_ANCHOR_ONLY_CI" ||
+    value.qualificationPreflight.sourceBinding.sha256 !==
+      "144E77DE086FF53BFE2FCDD75A4CA750951C4026EA10ECF41FCAE983F9B87C08" ||
+    value.qualificationPreflight.sourceBinding.httpStatus !== 401 ||
+    value.qualificationPreflight.sourceBinding.sanitizedEnvelopeDigest !==
+      "8CF8991C0372D72CEB99F18D9187DA4FB55E022D9BE264F02DB9BB0BB6EBF508" ||
+    value.qualificationPreflight.credentialValuesInspected !== false ||
+    value.qualificationPreflight.additionalAuthorizationGets !== 0 ||
+    value.qualificationPreflight.v4SessionCreated !== false ||
+    value.localGate?.status !== value.localGate?.fullWrapper?.result ||
+    !["PENDING", "PASS"].includes(value.localGate?.status)
+  )
+    throw new Error(
+      "Slice 3 credential blocker or wrapper lifecycle is stale.",
+    );
   exact(
     value.acceptance?.map(({ id }) => id),
     SLICE3_ACCEPTANCE_IDS,

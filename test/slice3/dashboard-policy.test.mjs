@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   applySlice3DashboardProjection,
@@ -8,6 +11,7 @@ import {
   validateSlice3Dashboard,
   validateSlice3Evidence,
   validateSlice3Governance,
+  verifySlice3CredentialPreflightSource,
 } from "../../scripts/lib/slice3-dashboard-policy.mjs";
 
 const baseEvidence = JSON.parse(
@@ -31,6 +35,7 @@ const passAudit = (id) => ({
 
 function currentEvidence() {
   const value = clone(baseEvidence);
+  value.localGate.status = "PASS";
   value.localGate.fullWrapper.result = "PASS";
   value.localGate.fullWrapper.durationMs = 1;
   const wrapperAt = Date.parse(value.localGate.fullWrapper.observedAt);
@@ -166,12 +171,89 @@ test("rejects premature Role 2 or Slice 3 acceptance and blocker mutation", () =
     (value) => (value.liveQualification = "PASS"),
     (value) => (value.candidateStatus = "SLICE3_PASS_PRODUCTION_READY"),
     (value) => value.blockerCodes.pop(),
-    (value) => value.blockerCodes.reverse(),
+    (value) => value.blockerCodes.push("STALE_BLOCKER"),
+    (value) =>
+      (value.blockerCodes = [
+        "ROUTE_POLICY_NOT_ENABLED",
+        "TWO_QUALIFIED_ROUTES_NOT_PRESENT",
+        "APPROVED_DIRECT_CREDENTIAL_ABSENT",
+        "APPROVED_OPENROUTER_CREDENTIAL_ABSENT",
+        "EXPLICIT_BILLABLE_QUALIFICATION_AUTHORIZATION_ABSENT",
+        "QUALIFICATION_BUDGET_INVALID",
+      ]),
     (value) => (value.acceptance[2].status = "REPOSITORY_PASS"),
   ]) {
     const mutated = clone(evidence);
     mutate(mutated);
     assert.throws(() => validateSlice3Evidence(mutated));
+  }
+});
+
+test("rejects stale credential source binding and wrapper lifecycle contradiction", () => {
+  for (const mutate of [
+    (value) => (value.qualificationPreflight.disposition = "READY_TO_QUALIFY"),
+    (value) => (value.qualificationPreflight.sourceBinding.httpStatus = 200),
+    (value) =>
+      (value.qualificationPreflight.sourceBinding.sha256 = "F".repeat(64)),
+    (value) =>
+      (value.qualificationPreflight.sourceBinding.verificationMode =
+        "UNVERIFIED"),
+    (value) => (value.qualificationPreflight.additionalAuthorizationGets = 1),
+    (value) => (value.qualificationPreflight.v4SessionCreated = true),
+    (value) =>
+      (value.localGate.status =
+        value.localGate.fullWrapper.result === "PASS" ? "PENDING" : "PASS"),
+  ]) {
+    const mutated = clone(evidence);
+    mutate(mutated);
+    assert.throws(() => validateSlice3Evidence(mutated));
+  }
+});
+
+test("verifies exact local credential-preflight bytes and rejects source drift", () => {
+  const root = mkdtempSync(join(tmpdir(), "matchbase-s3-preflight-"));
+  try {
+    const source = join(root, "preflight.json");
+    const original = Buffer.from('{"disposition":"BLOCKED_CREDENTIAL"}\n');
+    writeFileSync(source, original);
+    const binding = {
+      path: baseEvidence.qualificationPreflight.sourceBinding.path,
+      verificationMode: "EXACT_LOCAL_SHA256_OR_ANCHOR_ONLY_CI",
+      sha256: createHash("sha256").update(original).digest("hex").toUpperCase(),
+      httpStatus: 401,
+      sanitizedEnvelopeDigest: "A".repeat(64),
+    };
+    const options = {
+      sourceResolver: () => source,
+      sourceRoot: root,
+    };
+    assert.doesNotThrow(() =>
+      verifySlice3CredentialPreflightSource(binding, options),
+    );
+    writeFileSync(source, Buffer.from('{"disposition":"SUBSTITUTED"}\n'));
+    assert.throws(() =>
+      verifySlice3CredentialPreflightSource(binding, options),
+    );
+    assert.throws(() =>
+      verifySlice3CredentialPreflightSource(
+        { ...binding, sha256: "F".repeat(64) },
+        options,
+      ),
+    );
+    assert.throws(() =>
+      verifySlice3CredentialPreflightSource(binding, {
+        anchorOnly: true,
+        ci: false,
+      }),
+    );
+    assert.doesNotThrow(() =>
+      verifySlice3CredentialPreflightSource(binding, {
+        anchorOnly: true,
+        ci: true,
+      }),
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

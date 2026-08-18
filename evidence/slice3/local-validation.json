@@ -1,32 +1,27 @@
 {
   "schemaVersion": 2,
   "slice": "SLICE-3",
-  "observedAt": "2026-08-16T02:35:37.000Z",
+  "observedAt": "2026-08-18T10:43:01.846Z",
   "lifecyclePhase": "POST_REVIEW_CURRENT",
   "candidateStatus": "REPOSITORY_IMPLEMENTATION_POST_REVIEW_CURRENT_LIVE_BLOCKED",
   "repositoryImplementation": "PASS",
   "liveQualification": "BLOCKED_PREREQUISITE",
-  "blockerCodes": [
-    "ROUTE_POLICY_NOT_ENABLED",
-    "TWO_QUALIFIED_ROUTES_NOT_PRESENT",
-    "APPROVED_DIRECT_CREDENTIAL_ABSENT",
-    "APPROVED_OPENROUTER_CREDENTIAL_ABSENT",
-    "EXPLICIT_BILLABLE_QUALIFICATION_AUTHORIZATION_ABSENT",
-    "QUALIFICATION_BUDGET_INVALID"
-  ],
+  "blockerCodes": ["BLOCKED_CREDENTIAL"],
   "qualificationPreflight": {
-    "schemaVersion": "slice3-live-qualification-preflight.v1",
-    "disposition": "BLOCKED_PREREQUISITE",
-    "blockers": [
-      "ROUTE_POLICY_NOT_ENABLED",
-      "TWO_QUALIFIED_ROUTES_NOT_PRESENT",
-      "APPROVED_DIRECT_CREDENTIAL_ABSENT",
-      "APPROVED_OPENROUTER_CREDENTIAL_ABSENT",
-      "EXPLICIT_BILLABLE_QUALIFICATION_AUTHORIZATION_ABSENT",
-      "QUALIFICATION_BUDGET_INVALID"
-    ],
+    "schemaVersion": "slice3-live-qualification-preflight.v4-safe-blocked",
+    "disposition": "BLOCKED_CREDENTIAL",
+    "blockers": ["BLOCKED_CREDENTIAL"],
+    "sourceBinding": {
+      "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_OPENROUTER_CREDENTIAL_PREFLIGHT_V4.json",
+      "verificationMode": "EXACT_LOCAL_SHA256_OR_ANCHOR_ONLY_CI",
+      "sha256": "144E77DE086FF53BFE2FCDD75A4CA750951C4026EA10ECF41FCAE983F9B87C08",
+      "httpStatus": 401,
+      "sanitizedEnvelopeDigest": "8CF8991C0372D72CEB99F18D9187DA4FB55E022D9BE264F02DB9BB0BB6EBF508"
+    },
     "providerCalls": 0,
     "credentialValuesInspected": false,
+    "additionalAuthorizationGets": 0,
+    "v4SessionCreated": false,
     "externalMutations": 0
   },
   "environment": {
@@ -39,25 +34,25 @@
   },
   "candidate": {
     "manifestPath": "evidence/slice3/candidate-manifest.json",
-    "manifestSha256": "5A825EECE2365D4979D611A0B756CBFE8AC33030A53DE3BC17BF7FC54BB0D077",
-    "aggregateSha256": "20822CB8FF0AC7406C4FAAA8C7112175568CA6E58DE9B603743210C3F2E96B14",
-    "fileCount": 38
+    "manifestSha256": "8809C44B38C0F3576F7E17ECE5AEC4D4A766B32A12AD3CFF049A5DDB026D009F",
+    "aggregateSha256": "280ADFD3633432E3C92BD75EA4D4C20800F6CAFC6FED5AC916B12A9DF1C46B9E",
+    "fileCount": 47
   },
   "localGate": {
     "status": "PASS",
     "fullWrapper": {
       "command": "pnpm test:ci && pnpm dependency:audit",
-      "durationMs": 488227,
+      "durationMs": 414065,
       "result": "PASS",
-      "observedAt": "2026-08-16T02:35:35.849Z",
+      "observedAt": "2026-08-18T10:32:49.212Z",
       "sourceRef": {
         "path": "evidence/slice3/full-wrapper-result.json",
-        "sha256": "F6FF8467A37800A1E60E8AF1F2AD84BEAC46A35DA96EEE18BC50976091BEBF18"
+        "sha256": "170CC3E95CF1C68AC09EFE63C67AC9F6C5397657E05523B5A7A81DC66DAC6C2C"
       }
     },
     "testCounts": {
       "contracts": 7,
-      "aiEvidence": 74,
+      "aiEvidence": 75,
       "security": 52,
       "dataPostgresql18": 22,
       "liveResearchApplicationPostgresql18": 1,
@@ -68,7 +63,7 @@
       "qualifiedLiveBrowserChrome": 1,
       "failed": 0
     },
-    "note": "Role 2 Loop 1 pre-wrapper basis: contracts 7/7, AI/evidence 74/74, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated. Provider calls and external mutations remained zero."
+    "note": "V4 SAFE_BLOCKED pre-wrapper basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 41/41, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. V4 remains BLOCKED_CREDENTIAL with no session, provider call, credential read, activation or external mutation. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated."
   },
   "acceptance": [
     {
@@ -123,7 +118,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -178,7 +180,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -233,7 +242,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -288,7 +304,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -343,7 +366,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -398,7 +428,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -453,7 +490,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -508,7 +552,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -563,7 +614,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -618,7 +676,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -673,7 +738,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -728,7 +800,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -783,7 +862,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -838,7 +924,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -893,7 +986,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -948,7 +1048,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -1003,7 +1110,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -1058,7 +1172,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -1113,7 +1234,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -1168,7 +1296,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -1223,7 +1358,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -1278,7 +1420,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -1333,7 +1482,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     },
     {
@@ -1388,7 +1544,14 @@
         "S3-ART-045",
         "S3-ART-046",
         "S3-ART-047",
-        "S3-ART-048"
+        "S3-ART-048",
+        "S3-ART-049",
+        "S3-ART-050",
+        "S3-ART-051",
+        "S3-ART-052",
+        "S3-ART-053",
+        "S3-ART-054",
+        "S3-ART-055"
       ]
     }
   ],
@@ -1401,7 +1564,7 @@
     {
       "id": "S3-ART-002",
       "path": "config/slice3/research-route-policy.v1.json",
-      "sha256": "2C3D8D4A18755A60AAABA52E252B507944B98B6E961AFAF482958D7D0D9B1EDA"
+      "sha256": "46FCAF0C2D2B66F8BAB8526C48E448A24B2E9F65B065AAA99135CA6AF048DB23"
     },
     {
       "id": "S3-ART-003",
@@ -1416,7 +1579,7 @@
     {
       "id": "S3-ART-005",
       "path": "packages/ai-evidence/src/research-route-policy.ts",
-      "sha256": "AAF25416B1ED8988ED8924F2ABC3FFC33C1826DAC387C6231282B4627A0BDC0D"
+      "sha256": "4B2CA712BF4369219487932D261E7288461B8663771B0B747EEF459B7623098F"
     },
     {
       "id": "S3-ART-006",
@@ -1476,7 +1639,7 @@
     {
       "id": "S3-ART-017",
       "path": "packages/application/src/live-research-environment-runtime.ts",
-      "sha256": "27BB2BA680F1D7A6554596D85E23CF0225FEC88472509164084737337EBBB8BF"
+      "sha256": "F1CDC15B6BFCFCE0D9C4005C90E79570C8B177CFF2391B9BEBDD19EA90053364"
     },
     {
       "id": "S3-ART-018",
@@ -1501,135 +1664,170 @@
     {
       "id": "S3-ART-022",
       "path": "scripts/qualify-slice3-live.mjs",
-      "sha256": "ABDAEC4DEF1CEEA38DD89EF6AAC0F455B056EB577E63FE5E24BE4C9F41069254"
+      "sha256": "7051D798686EF3C7F20C4287919B63F0833F59287FFC6F5212A6CF7D309556CE"
     },
     {
       "id": "S3-ART-023",
-      "path": "scripts/lib/slice3-dashboard-policy.mjs",
-      "sha256": "F134C432E2D438C1423259B19B95C1BB11EBD8DC387D968F62EE8239E5D45069"
+      "path": "scripts/qualify-slice3-live-v4.mjs",
+      "sha256": "1A3E85F969A7FA3522CB9B93000AA80035574179A913ECF1EF02147040C9606F"
     },
     {
       "id": "S3-ART-024",
+      "path": "scripts/lib/slice3-live-qualification-runner.mjs",
+      "sha256": "B01CD9A96C6A524630CC6987B443D37E55BA903794719D2C98C4290B815ACEE3"
+    },
+    {
+      "id": "S3-ART-025",
+      "path": "scripts/lib/slice3-live-qualification-v4.mjs",
+      "sha256": "4BB34A269F5C5D65D7A4CC132DFEB93D96735A8C65B1E786B1EAC52823CB1304"
+    },
+    {
+      "id": "S3-ART-026",
+      "path": "scripts/lib/slice3-dashboard-policy.mjs",
+      "sha256": "63A886113DFC4216E366943AF910DAE21193E6E6C4D2EF1DDB42C25DD750BA50"
+    },
+    {
+      "id": "S3-ART-027",
       "path": "scripts/lib/slice3-dashboard-handoff-policy.mjs",
       "sha256": "A66C445C2A3042A2E0CC2FC16E84694FACE5A97E07347FC5A778CB403B90B5F3"
     },
     {
-      "id": "S3-ART-025",
+      "id": "S3-ART-028",
       "path": "scripts/lib/slice3-wrapper-result-policy.mjs",
       "sha256": "E5ED7F4ADB6CD3E6F123E041AD3606A662B23D119BD4DB6DB091192891BA7D93"
     },
     {
-      "id": "S3-ART-026",
+      "id": "S3-ART-029",
       "path": "scripts/generate-dashboard-snapshot.mjs",
       "sha256": "E518A05AB32CC95C938CE382629DC3C46B872AAC298861EB8AA3A17C05FEE6C3"
     },
     {
-      "id": "S3-ART-027",
+      "id": "S3-ART-030",
       "path": "scripts/generate-dashboard-ci-snapshot.mjs",
       "sha256": "549D8665ACCCC4931804931250EB5B9770D7A22D21641A03031BD153F437E028"
     },
     {
-      "id": "S3-ART-028",
+      "id": "S3-ART-031",
       "path": "scripts/validate-dashboard-snapshot.mjs",
       "sha256": "4A846E3307F1463A4CB41F35D3A13D63940390F5D0717543FF71AC88254332F9"
     },
     {
-      "id": "S3-ART-029",
+      "id": "S3-ART-032",
       "path": "scripts/record-slice3-wrapper-result.mjs",
       "sha256": "7DC296FFE0BA9280466EAC4B333134EA66BD80FBF20B484ADB4D903A3CC54328"
     },
     {
-      "id": "S3-ART-030",
+      "id": "S3-ART-033",
       "path": "governance/slice3-dashboard-handoff-policy-v1.json",
-      "sha256": "8EB2B4F89D4E62259269EFDBEF21636A22E9B0D7CD1F1250A92B5A5F37231B06"
+      "sha256": "108F9D8FB600B07BF71213D014F6AD842ABDF4DC53F95B37AF406FBE71F94F8A"
     },
     {
-      "id": "S3-ART-031",
+      "id": "S3-ART-034",
       "path": "packages/data/migrations/0003_slice_3_live_research.up.sql",
       "sha256": "CB895D8C18F31D9B6741719BCF30D6168D5FBEC02E6F51B86B2F34F463F5A383"
     },
     {
-      "id": "S3-ART-032",
+      "id": "S3-ART-035",
       "path": "packages/data/migrations/0003_slice_3_live_research.down.sql",
       "sha256": "5023859FB8727FF196181D82BD340F83B2980D34F6869603C8BD0E5102E331CA"
     },
     {
-      "id": "S3-ART-033",
+      "id": "S3-ART-036",
       "path": "test/slice3/data/live-research-postgres.test.mjs",
       "sha256": "DAA25F0FF6BAA006587274DE5417C9C947C4E963B338BADB91E3B8825AC856D8"
     },
     {
-      "id": "S3-ART-034",
+      "id": "S3-ART-037",
       "path": "packages/ai-evidence/test/research-orchestrator.test.ts",
       "sha256": "BEC88F59074C894F6B62388D1416EFD3055F65413F0D25B28E1C488D888ADFFF"
     },
     {
-      "id": "S3-ART-035",
+      "id": "S3-ART-038",
       "path": "packages/security/test/secure-fetch.test.ts",
       "sha256": "775EA053CBB55126839727E887D677B2347686F3507D47B736AD2DB4B17FC83E"
     },
     {
-      "id": "S3-ART-036",
+      "id": "S3-ART-039",
       "path": "test/slice3/live-research-application-postgres.test.mjs",
       "sha256": "BA62200747DF6D20060E65FD1328982F115F6B8553A05C6CE67647CE2C7CFB8B"
     },
     {
-      "id": "S3-ART-037",
+      "id": "S3-ART-040",
       "path": "test/slice3/combined-live-worker-postgres.test.mjs",
       "sha256": "9DC0949B15D630E7F677556931B550C7D72695F00012C02D8FD63FCDC4A3F9CE"
     },
     {
-      "id": "S3-ART-038",
+      "id": "S3-ART-041",
       "path": "test/slice3/environment-provider-transport.test.mjs",
       "sha256": "689971687993738D11F5CFDA7912A3919520F73CD47C04D7D8C4EAE111C973E4"
     },
     {
-      "id": "S3-ART-039",
+      "id": "S3-ART-042",
       "path": "test/slice3/qualified-live-admission.test.mjs",
       "sha256": "10059C8E18EEEAC7BB5565387B61AA504E1077813FC6A5D2B1CB4A105E0389AD"
     },
     {
-      "id": "S3-ART-040",
+      "id": "S3-ART-043",
       "path": "test/slice3/live-qualification-preflight.test.mjs",
-      "sha256": "A930026B3F0D5137BC421EE329801CE77220D9944A386DEE461ACFC7E41FD3A2"
+      "sha256": "21E6724394CD4207DF288ED8291804B87FD21F85030B9F19EE924C324198AC2C"
     },
     {
-      "id": "S3-ART-041",
+      "id": "S3-ART-044",
+      "path": "test/slice3/live-qualification-durable-runner.test.mjs",
+      "sha256": "57B1CCC819ABDEC9FA0CF27F89D85A7149EA8E13C31B8435DC3F00DBCF1D2324"
+    },
+    {
+      "id": "S3-ART-045",
+      "path": "test/slice3/live-qualification-runner.test.mjs",
+      "sha256": "AA0137AE1B0ACD6CD903BF5F453787246EB53F98B939347A547AF7C6801E6110"
+    },
+    {
+      "id": "S3-ART-046",
+      "path": "test/slice3/live-qualification-runtime-transport.test.mjs",
+      "sha256": "9F3C1A9ABECC74945D88A39612135A39EBCD841E5630581DBD737BB0F0751D6E"
+    },
+    {
+      "id": "S3-ART-047",
+      "path": "test/slice3/live-qualification-v4.test.mjs",
+      "sha256": "A134C8358477A63275CF8BCD16BF878CA6757F75D2B8424DB6E5BDC95A6CD958"
+    },
+    {
+      "id": "S3-ART-048",
       "path": "test/slice3/dashboard-policy.test.mjs",
-      "sha256": "6D117B33D8D11E6BD7BFC9103EDF22ADADDAC8F9F16F4AEA59D199CBA73A86DC"
+      "sha256": "FB2B5A17CF5DF4C3FC988AA3A37F96AE930CF96BF20C5B7ABBC8B875F389C59A"
     },
     {
-      "id": "S3-ART-042",
+      "id": "S3-ART-049",
       "path": "test/slice3/dashboard-handoff-policy.test.mjs",
       "sha256": "E6E30E33545BC761134BD88B6C17968206D522A5E15CB6E657A21CAC8FAEC1DF"
     },
     {
-      "id": "S3-ART-043",
+      "id": "S3-ART-050",
       "path": "test/slice3/wrapper-result-policy.test.mjs",
       "sha256": "22360CE8537ECC3E7DD9C2E169656441A935AE6FF5D42B524631137C580B1134"
     },
     {
-      "id": "S3-ART-044",
+      "id": "S3-ART-051",
       "path": "packages/ai-evidence/test/research-adapters.test.ts",
       "sha256": "D8941B2842BDEB3292E2F1D198B4CD39960FC7F2E68F6D751FCC77BD6BE82C20"
     },
     {
-      "id": "S3-ART-045",
+      "id": "S3-ART-052",
       "path": "packages/ai-evidence/test/research-route-policy.test.ts",
-      "sha256": "4D264838B3400B29D36294363D86CD1F5562FED61E87F49F71D895C19FD976B8"
+      "sha256": "B59414ED10A4EED3F5BBF2A7EE97F837D1795A5E66E84C3B00A2B3F837A82200"
     },
     {
-      "id": "S3-ART-046",
+      "id": "S3-ART-053",
       "path": "test/browser/product-qualified-reference-path.spec.mjs",
       "sha256": "E849C2701D5E13DBB65F1AFAB34E0C8705E8A5D4E5EE785A01FF5E2B7E3E7DB6"
     },
     {
-      "id": "S3-ART-047",
+      "id": "S3-ART-054",
       "path": "test/browser/product-live-reference-path.spec.mjs",
       "sha256": "5A261FD32FCAEBAAC915410F80F4C632FE0B4AAC096712933B492A05FC2CE45D"
     },
     {
-      "id": "S3-ART-048",
+      "id": "S3-ART-055",
       "path": "test/browser/product-standard-reference-path.spec.mjs",
       "sha256": "CB929F64F2F5617665C536CEFC764D32A1E5BAF8D72D5A872379B7E9EDAA3CE0"
     }
@@ -1688,7 +1886,7 @@
   "historicalLifecycle": {
     "schemaVersion": "matchbase.slice3-during-review-history/v1",
     "phase": "DURING_REVIEW_PENDING",
-    "observedAt": "2026-08-16T02:24:27.176Z",
+    "observedAt": "2026-08-18T10:32:49.268Z",
     "current": false,
     "supersededBy": "postReview",
     "audits": [
@@ -1761,15 +1959,15 @@
   },
   "postReview": {
     "schemaVersion": "matchbase.slice3-post-review/v1",
-    "observedAt": "2026-08-16T02:35:36.000Z",
+    "observedAt": "2026-08-18T10:40:00.000Z",
     "candidate": {
-      "manifestSha256": "5A825EECE2365D4979D611A0B756CBFE8AC33030A53DE3BC17BF7FC54BB0D077",
-      "aggregateSha256": "20822CB8FF0AC7406C4FAAA8C7112175568CA6E58DE9B603743210C3F2E96B14",
-      "fileCount": 38
+      "manifestSha256": "8809C44B38C0F3576F7E17ECE5AEC4D4A766B32A12AD3CFF049A5DDB026D009F",
+      "aggregateSha256": "280ADFD3633432E3C92BD75EA4D4C20800F6CAFC6FED5AC916B12A9DF1C46B9E",
+      "fileCount": 47
     },
     "wrapperSource": {
       "path": "evidence/slice3/full-wrapper-result.json",
-      "sha256": "F6FF8467A37800A1E60E8AF1F2AD84BEAC46A35DA96EEE18BC50976091BEBF18"
+      "sha256": "170CC3E95CF1C68AC09EFE63C67AC9F6C5397657E05523B5A7A81DC66DAC6C2C"
     },
     "disciplines": [
       {

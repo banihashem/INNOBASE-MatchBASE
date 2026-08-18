@@ -9,6 +9,7 @@ coverage/
 .env
 .env.*
 !.env.example
+APIKeys.md
 *.local
 *.log
 .DS_Store

@@ -216,18 +216,16 @@ function validateParameterPolicy(value: unknown, label: string): void {
   if (
     typeof policy.maxAttempts !== "number" ||
     !Number.isInteger(policy.maxAttempts) ||
-    policy.maxAttempts < 1 ||
-    policy.maxAttempts > 3
+    policy.maxAttempts !== 1
   ) {
-    throw new Error(`${label}.maxAttempts is outside the closed range.`);
+    throw new Error(`${label}.maxAttempts must enforce one send.`);
   }
   if (
     typeof policy.backoffMs !== "number" ||
     !Number.isInteger(policy.backoffMs) ||
-    policy.backoffMs < 0 ||
-    policy.backoffMs > 10_000
+    policy.backoffMs !== 0
   ) {
-    throw new Error(`${label}.backoffMs is outside the closed range.`);
+    throw new Error(`${label}.backoffMs must disable retry backoff.`);
   }
 }
 

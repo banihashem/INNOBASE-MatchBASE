@@ -35,6 +35,34 @@ test("accepts a closed direct Gemini plus explicit OpenRouter policy", () => {
   );
 });
 
+test("accepts only exact provider-reported Gemini 3.6 aliases", () => {
+  const policy = qualifiedPolicy() as unknown as {
+    routes: Array<Record<string, unknown>>;
+  };
+  policy.routes[0]!.requestedModelId = "gemini-3.6-flash";
+  policy.routes[0]!.expectedServedModelId = "gemini-3.6-flash";
+  policy.routes[1]!.requestedModelId = "google/gemini-3.6-flash";
+  policy.routes[1]!.expectedServedModelId = "google/gemini-3.6-flash";
+  assert.equal(
+    validateResearchRoutePolicy(policy as unknown as ResearchRoutePolicyV1),
+    policy,
+  );
+  for (const [routeIndex, candidate] of [
+    [0, "gemini-3.6-flash-20260721"],
+    [1, "google/gemini-3.6-flash-20260721"],
+    [0, "Gemini-3.6-Flash"],
+  ] as const) {
+    policy.routes[routeIndex]!.expectedServedModelId = candidate;
+    assert.throws(
+      () =>
+        validateResearchRoutePolicy(policy as unknown as ResearchRoutePolicyV1),
+      /identities differ/iu,
+    );
+    policy.routes[routeIndex]!.expectedServedModelId =
+      routeIndex === 0 ? "gemini-3.6-flash" : "google/gemini-3.6-flash";
+  }
+});
+
 test("rejects auto, wildcard, mutable, implicit, and mismatched identities", () => {
   const mutations: Array<[number, string, string]> = [
     [1, "requestedModelId", "openrouter/auto"],

@@ -5,14 +5,15 @@ import { validateResearchRoutePolicy } from "../packages/ai-evidence/dist/src/re
 import {
   validateSlice3Evidence,
   validateSlice3Governance,
+  verifySlice3CredentialPreflightSource,
 } from "./lib/slice3-dashboard-policy.mjs";
 import { validateSlice3WrapperResult } from "./lib/slice3-wrapper-result-policy.mjs";
 
 const root = realpathSync(".");
 const sha = (path) =>
   createHash("sha256").update(readFileSync(path)).digest("hex").toUpperCase();
-const contained = (path) => {
-  const difference = relative(root, path);
+const containedWithin = (parent, path) => {
+  const difference = relative(parent, path);
   return (
     difference === "" ||
     (!difference.startsWith(`..${sep}`) &&
@@ -20,6 +21,7 @@ const contained = (path) => {
       !isAbsolute(difference))
   );
 };
+const contained = (path) => containedWithin(root, path);
 const evidencePath = resolve(root, "evidence/slice3/local-validation.json");
 const manifestPath = resolve(root, "evidence/slice3/candidate-manifest.json");
 const wrapperResultPath = resolve(
@@ -47,14 +49,7 @@ const register = JSON.parse(
     "utf8",
   ),
 );
-const expectedBlockerCodes = [
-  "ROUTE_POLICY_NOT_ENABLED",
-  "TWO_QUALIFIED_ROUTES_NOT_PRESENT",
-  "APPROVED_DIRECT_CREDENTIAL_ABSENT",
-  "APPROVED_OPENROUTER_CREDENTIAL_ABSENT",
-  "EXPLICIT_BILLABLE_QUALIFICATION_AUTHORIZATION_ABSENT",
-  "QUALIFICATION_BUDGET_INVALID",
-];
+const expectedBlockerCodes = ["BLOCKED_CREDENTIAL"];
 validateResearchRoutePolicy(policy);
 if (
   policy.liveActivation !== "blocked" ||
@@ -103,10 +98,24 @@ if (
   evidence.repositoryImplementation !== "PASS" ||
   evidence.liveQualification !== "BLOCKED_PREREQUISITE" ||
   evidence.environment?.providerNetworkCalls !== 0 ||
-  evidence.qualificationPreflight?.disposition !== "BLOCKED_PREREQUISITE" ||
+  evidence.qualificationPreflight?.schemaVersion !==
+    "slice3-live-qualification-preflight.v4-safe-blocked" ||
+  evidence.qualificationPreflight?.disposition !== "BLOCKED_CREDENTIAL" ||
+  evidence.qualificationPreflight?.sourceBinding?.path !==
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_OPENROUTER_CREDENTIAL_PREFLIGHT_V4.json" ||
+  evidence.qualificationPreflight?.sourceBinding?.verificationMode !==
+    "EXACT_LOCAL_SHA256_OR_ANCHOR_ONLY_CI" ||
+  evidence.qualificationPreflight?.sourceBinding?.sha256 !==
+    "144E77DE086FF53BFE2FCDD75A4CA750951C4026EA10ECF41FCAE983F9B87C08" ||
+  evidence.qualificationPreflight?.sourceBinding?.httpStatus !== 401 ||
+  evidence.qualificationPreflight?.sourceBinding?.sanitizedEnvelopeDigest !==
+    "8CF8991C0372D72CEB99F18D9187DA4FB55E022D9BE264F02DB9BB0BB6EBF508" ||
   evidence.qualificationPreflight?.providerCalls !== 0 ||
   evidence.qualificationPreflight?.credentialValuesInspected !== false ||
+  evidence.qualificationPreflight?.additionalAuthorizationGets !== 0 ||
+  evidence.qualificationPreflight?.v4SessionCreated !== false ||
   evidence.qualificationPreflight?.externalMutations !== 0 ||
+  evidence.localGate?.status !== evidence.localGate?.fullWrapper?.result ||
   JSON.stringify(evidence.blockerCodes) !==
     JSON.stringify(expectedBlockerCodes) ||
   JSON.stringify(evidence.qualificationPreflight?.blockers) !==
@@ -122,6 +131,13 @@ if (
     )
 )
   throw new Error("Slice 3 lifecycle or external-state evidence is invalid.");
+verifySlice3CredentialPreflightSource(
+  evidence.qualificationPreflight.sourceBinding,
+  {
+    anchorOnly:
+      process.env.MATCHBASE_EXTERNAL_EVIDENCE_MODE === "ANCHOR_ONLY_CI",
+  },
+);
 const expectedAcceptance = Array.from(
   { length: 24 },
   (_, index) => `S3-AC-${String(index + 1).padStart(3, "0")}`,

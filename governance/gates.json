@@ -211,8 +211,8 @@
       "name": "Slice 3 current provider-policy and capability qualification",
       "status": "BLOCKED",
       "owner": "Product owner and provider account owner",
-      "evidence": ["config/slice3/provider-evidence-register.v1.json"],
-      "summary": "Approved OpenRouter credentials, verified paid credit path, direct billing authorization and endpoint-specific qualification evidence are incomplete.",
+      "evidence": ["evidence/slice3/local-validation.json"],
+      "summary": "Owner authorization and the USD 100 qualification budget are present, but the exact source-bound OpenRouter credential preflight returned HTTP 401. V4 is BLOCKED_CREDENTIAL and the consumed allocation permits no repeated credential GET.",
       "traceabilityIds": []
     },
     {
@@ -221,7 +221,7 @@
       "status": "BLOCKED",
       "owner": "Role 3",
       "evidence": ["evidence/slice3/local-validation.json"],
-      "summary": "Two-route live qualification is prohibited until S3-G3 passes; provider calls remain zero.",
+      "summary": "V4 session creation and two-route live qualification remain prohibited by BLOCKED_CREDENTIAL; new V4 provider calls, credential rereads and external mutations after the authoritative HTTP 401 checkpoint remain zero. Historical V1-V3 attempts remain preserved separately.",
       "traceabilityIds": []
     },
     {

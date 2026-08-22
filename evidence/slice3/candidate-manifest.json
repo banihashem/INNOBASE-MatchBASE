@@ -11,8 +11,8 @@
     "apps/dashboard/public/current-snapshot.json",
     "apps/dashboard/dist/current-snapshot.json"
   ],
-  "fileCount": 64,
-  "aggregateSha256": "7F7100AD275C78D13C043D497BC53FDACDA8E3C743D6D693DD5A6615FC6BEDB0",
+  "fileCount": 66,
+  "aggregateSha256": "F20B1710DCC9C107423879E94A4E42A2BE8088613C558D0E62A51A6EBB51F7A0",
   "files": [
     {
       "path": ".gitignore",
@@ -119,6 +119,10 @@
       "sha256": "775EA053CBB55126839727E887D677B2347686F3507D47B736AD2DB4B17FC83E"
     },
     {
+      "path": "scripts/archive-slice3-v5-invalid-pair.mjs",
+      "sha256": "72289F4E33548C24F8F2B55695EE6C37349319494E153E35F01383AB2F96F23A"
+    },
+    {
       "path": "scripts/generate-dashboard-ci-snapshot.mjs",
       "sha256": "549D8665ACCCC4931804931250EB5B9770D7A22D21641A03031BD153F437E028"
     },
@@ -128,7 +132,7 @@
     },
     {
       "path": "scripts/generate-slice3-evidence.mjs",
-      "sha256": "71FB5D58598D15948E17333C8680B07DA8A6B387AB5E766AD452F1A38F53512B"
+      "sha256": "9873815A7FDA69893CD9411CE67E50F7106492DD86FC377AB71F585821EFB291"
     },
     {
       "path": "scripts/lib/slice3-dashboard-handoff-policy.mjs",
@@ -136,7 +140,7 @@
     },
     {
       "path": "scripts/lib/slice3-dashboard-policy.mjs",
-      "sha256": "8A7C154EFC7C94AF1944F75173BBF0DACE5FCB13DFBF416BB490E4B62ED13186"
+      "sha256": "06C18E73BD185CC22502E3944ECD53D94A98044C98F6E5D6F732B66BE49D13E0"
     },
     {
       "path": "scripts/lib/slice3-live-qualification-runner.mjs",
@@ -176,11 +180,11 @@
     },
     {
       "path": "scripts/lib/slice3-v5-role2-source-binding.mjs",
-      "sha256": "43FD9EE003B4B7468A7C9B363944C146702784934013348592FBFA0F5C475747"
+      "sha256": "B8F6FFE9BD22F95DCB9DD5C2D88E183B7A961C4CB4F4105C722466257273B2BE"
     },
     {
       "path": "scripts/lib/slice3-v5-role2-tpm-verifier.mjs",
-      "sha256": "4E8CE821B08EF02E0B40F782766DACDEFA6D94357A98A744565AA55306519E7E"
+      "sha256": "B1F75BE2CDBFFBA7DD2F0E36EF14BB1A249979E8ABB43A822BC128892CB56CCF"
     },
     {
       "path": "scripts/lib/slice3-v5-source-verifier.mjs",
@@ -212,7 +216,7 @@
     },
     {
       "path": "scripts/validate-slice3-local.mjs",
-      "sha256": "BDEC5A46DDB1CBB98F5783B279C88D92FF8ED0AE2C9BFCCA606793BBBA4A611B"
+      "sha256": "F76E6D6A761474858232C1F0B2A26B1633DE2E82DC376672B4A18EF42A77B963"
     },
     {
       "path": "scripts/verify-boundaries.mjs",
@@ -252,11 +256,11 @@
     },
     {
       "path": "test/slice3/live-qualification-v5-tpm-contract.test.mjs",
-      "sha256": "F05284F3D52D23BB8228AA06379372BC7C579F42A0F64D5318FC6CCAD8E6AEB7"
+      "sha256": "3C72B575D4C747D24BD5F52D2840F25E877AA94A866537D86358B0547D3E480A"
     },
     {
       "path": "test/slice3/live-qualification-v5.test.mjs",
-      "sha256": "25F3DB91ADB7F917B2427C91FAB6A144FF4D001EFF6AC45C38514E306F1E7981"
+      "sha256": "46726C6D3FA910116105D61860D3E40252A9F69186A497566A92D39888C9939A"
     },
     {
       "path": "test/slice3/live-research-application-postgres.test.mjs",
@@ -265,6 +269,10 @@
     {
       "path": "test/slice3/support/v5-replay-registry-test-harness.mjs",
       "sha256": "4D4289D4C32B404C6215811096E5E949BFABC1AF85AEBB6D20A7D8E7DFD6A19D"
+    },
+    {
+      "path": "test/slice3/v5-invalid-pair-archive.test.mjs",
+      "sha256": "CA92F2A1BB99C4AE04DC4CACA23990EED0926D107F60A1F66475C0B9E8F91A30"
     },
     {
       "path": "test/slice3/wrapper-result-policy.test.mjs",

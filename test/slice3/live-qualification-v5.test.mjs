@@ -243,7 +243,7 @@ test(
       {
         schemaVersion: "matchbase.slice3-v5-source-binding/v1",
         authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET",
-        sessionId: "v5-968A9D69D38203E2E8B1375A",
+        sessionId: "v5-53676308BAD073D07FFC88B8",
         disposition: "PRE_EXECUTION_PENDING",
         reason: "ROLE2_ACCEPTANCE_PAYLOAD_ABSENT",
         sourceAttestationDigest: "DIGEST",
@@ -850,7 +850,7 @@ test(
     const replayPath =
       "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.role2-signing-replay-registry\\consumed-v5.jsonl";
     const sessionPath =
-      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-live-qualification-state\\v5-968A9D69D38203E2E8B1375A";
+      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-live-qualification-state\\v5-53676308BAD073D07FFC88B8";
     const replayBefore = sha256(await readFile(replayPath));
     await assert.rejects(lstat(sessionPath), /ENOENT/u);
     const moduleUrl = pathToFileURL(

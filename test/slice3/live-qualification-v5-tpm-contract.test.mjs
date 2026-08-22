@@ -42,6 +42,7 @@ import {
 } from "../../scripts/lib/slice3-v5-response-contract.mjs";
 import { reduceV5CredentialResponse } from "../../scripts/lib/slice3-live-qualification-v5.mjs";
 import { assertCanonicalV5DirectoryIdentity } from "../../scripts/lib/slice3-v5-canonical-workspace.mjs";
+import { validateV5HostedObservation } from "../../scripts/lib/slice3-v5-role2-source-binding.mjs";
 
 const DIGEST = "A".repeat(64);
 const COMMIT = "a".repeat(40);
@@ -77,7 +78,7 @@ function payloadFixture() {
     ),
   );
   return {
-    schemaVersion: "matchbase.role2-detached-acceptance/v3",
+    schemaVersion: "matchbase.role2-detached-acceptance/v4",
     payloadType: "V5_OPENROUTER_CREDENTIAL_GET_AUTHORIZATION",
     decisionId: V5_TPM_CONTRACT.decisionId,
     sessionId: V5_TPM_CONTRACT.sessionId,
@@ -85,14 +86,14 @@ function payloadFixture() {
     signatureEnvelopePath: V5_TPM_CONTRACT.envelopePath,
     issuedAt: "2026-08-22T11:55:00Z",
     expiresAt: "2026-08-22T12:10:00Z",
-    nonce: "0123456789ABCDEF0123456789ABCDEF",
+    nonce: V5_TPM_CONTRACT.nonce,
     stateRoot: V5_TPM_CONTRACT.stateRoot,
     replayIdentity: {
       workspaceClaim: V5_TPM_CONTRACT.workspaceClaim,
       canonicalNonClonedWorkspaceOnly: true,
       decisionId: V5_TPM_CONTRACT.decisionId,
       sessionId: V5_TPM_CONTRACT.sessionId,
-      nonce: "0123456789ABCDEF0123456789ABCDEF",
+      nonce: V5_TPM_CONTRACT.nonce,
       keyId: V5_TPM_CONTRACT.keyId,
       registryPath: V5_TPM_CONTRACT.replayRegistryPath,
       registryPreSignSha256: sha256(Buffer.alloc(0)),
@@ -138,15 +139,22 @@ function payloadFixture() {
           bytes: V5_TPM_CONTRACT.transitionBytes,
         },
       ),
+      successorAuthorization: binding(
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_AUTHORIZATION_REQUIREMENTS_AFTER_HOSTED_TIME_BINDING_FAILURE.md",
+        {
+          sha256: V5_TPM_CONTRACT.successorAuthorizationSha256,
+          bytes: V5_TPM_CONTRACT.successorAuthorizationBytes,
+        },
+      ),
       payloadSchema: binding(
-        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.json",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.json",
         {
           sha256: V5_TPM_CONTRACT.schemaSha256,
           bytes: V5_TPM_CONTRACT.schemaBytes,
         },
       ),
       signingContract: binding(
-        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.md",
         {
           sha256: V5_TPM_CONTRACT.contractSha256,
           bytes: V5_TPM_CONTRACT.contractBytes,
@@ -173,6 +181,13 @@ function payloadFixture() {
           sha256:
             "144E77DE086FF53BFE2FCDD75A4CA750951C4026EA10ECF41FCAE983F9B87C08",
           bytes: 886,
+        },
+      ),
+      forensicArchiveAudit: binding(
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_INVALID_PAIR_FORENSIC_ARCHIVE_AUDIT_2026-08-22.json",
+        {
+          sha256: V5_TPM_CONTRACT.forensicArchiveAuditSha256,
+          bytes: V5_TPM_CONTRACT.forensicArchiveAuditBytes,
         },
       ),
       v1Ledger: {
@@ -235,7 +250,7 @@ function payloadFixture() {
         observedAt: "2026-08-22T11:50:00Z",
       },
       preSignRole2Audit: passBinding(
-        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN_LOOP_1.md",
       ),
     },
     authorizationPolicy: {
@@ -302,6 +317,8 @@ function payloadFixture() {
     },
     preservation: {
       v1ToV4Immutable: true,
+      v3ContractImmutable: true,
+      failedAttemptArchived: true,
       authoritativeSourcesImmutable: true,
       priorAuditHistoryImmutable: true,
       canonicalWorkspaceOnly: true,
@@ -314,7 +331,7 @@ function envelopeFixture(payload) {
     Buffer.from(rfc8785Canonicalize(payload), "utf8"),
   );
   return {
-    schemaVersion: "matchbase.role2-detached-signature/v3",
+    schemaVersion: "matchbase.role2-detached-signature/v4",
     sessionId: payload.sessionId,
     replayIdentitySha256: sha256(
       Buffer.from(rfc8785Canonicalize(payload.replayIdentity), "utf8"),
@@ -349,7 +366,7 @@ test("missing canonical roots fail with one host-neutral typed error", async () 
   );
 });
 
-test("v3 payload closes identity, exact paths, safe IDs, and exact 900-second UTC", () => {
+test("v4 payload closes successor identity, exact paths, safe IDs, and exact 900-second UTC", () => {
   const payload = payloadFixture();
   assert.equal(
     validateV5Role2Payload(payload, { nowMs: NOW }).payload,
@@ -357,8 +374,27 @@ test("v3 payload closes identity, exact paths, safe IDs, and exact 900-second UT
   );
   for (const mutate of [
     (value) => (value.sessionId = "v5-FFFFFFFFFFFFFFFFFFFFFFFF"),
+    (value) => (value.sessionId = "v5-968A9D69D38203E2E8B1375A"),
+    (value) => (value.nonce = "16C743A6706C922C45383A161D5E9EC7"),
+    (value) => (value.schemaVersion = "matchbase.role2-detached-acceptance/v3"),
+    (value) => (value.replayIdentity.sessionId = "v5-968A9D69D38203E2E8B1375A"),
+    (value) =>
+      (value.replayIdentity.nonce = "16C743A6706C922C45383A161D5E9EC7"),
+    (value) => (value.replayIdentity.registryPreSignSha256 = "F".repeat(64)),
+    (value) =>
+      (value.reviewEvidence.preSignRole2Audit.path =
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN.md"),
     (value) => (value.expiresAt = "2026-08-22T12:10:01Z"),
     (value) => (value.issuedAt = "2026-02-30T11:55:00Z"),
+    (value) =>
+      (value.reviewEvidence.hosted.observedAt = "2026-08-22T11:50:00.1Z"),
+    (value) =>
+      (value.reviewEvidence.hosted.observedAt = "2026-08-22T15:20:00+03:30"),
+    (value) =>
+      (value.reviewEvidence.hosted.observedAt = "2026-08-22T11:50:00z"),
+    (value) => (value.reviewEvidence.hosted.observedAt = "2026-08-22T11:50Z"),
+    (value) =>
+      (value.reviewEvidence.hosted.observedAt = "2026-08-22T11:50:00.000001Z"),
     (value) =>
       (value.reviewEvidence.hosted.runId = Number.MAX_SAFE_INTEGER + 1),
     (value) => value.authoritativeSourceSet.sources.reverse(),
@@ -371,6 +407,35 @@ test("v3 payload closes identity, exact paths, safe IDs, and exact 900-second UT
   }
 });
 
+test("hosted source observedAt must exactly equal the signed whole-second value", () => {
+  const hosted = payloadFixture().reviewEvidence.hosted;
+  const observation = {
+    schemaVersion: "matchbase.slice3-v5-hosted-observation/v1",
+    repository: "banihashem/INNOBASE-MatchBASE",
+    runId: hosted.runId,
+    jobId: hosted.jobId,
+    commit: hosted.commit,
+    tree: hosted.tree,
+    status: hosted.status,
+    conclusion: hosted.conclusion,
+    independentAuthentication: hosted.independentAuthentication,
+    authenticatedApiEvidenceSha256: hosted.authenticatedApiEvidenceSha256,
+    observedAt: hosted.observedAt,
+    providerCalls: 0,
+    externalMutations: 0,
+    activation: false,
+  };
+  assert.equal(validateV5HostedObservation(observation, hosted), true);
+  assert.throws(
+    () =>
+      validateV5HostedObservation(
+        { ...observation, observedAt: "2026-08-22T11:50:01Z" },
+        hosted,
+      ),
+    /hosted observation semantics/u,
+  );
+});
+
 test("replayIdentity digest and six-field envelope are exact", () => {
   const payload = payloadFixture();
   const envelope = envelopeFixture(payload);
@@ -380,6 +445,7 @@ test("replayIdentity digest and six-field envelope are exact", () => {
   );
   for (const mutate of [
     (value) => (value.signedAt = "2026-08-22T11:55:01Z"),
+    (value) => (value.schemaVersion = "matchbase.role2-detached-signature/v3"),
     (value) => (value.replayIdentitySha256 = "F".repeat(64)),
     (value) => (value.extra = true),
   ]) {

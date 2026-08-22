@@ -38,6 +38,45 @@ const exactKeys = (value, keys) =>
   JSON.stringify(Object.keys(value).sort()) ===
     JSON.stringify([...keys].sort());
 
+export function validateV5HostedObservation(observation, hosted) {
+  if (
+    !exactKeys(observation, [
+      "schemaVersion",
+      "repository",
+      "runId",
+      "jobId",
+      "commit",
+      "tree",
+      "status",
+      "conclusion",
+      "independentAuthentication",
+      "authenticatedApiEvidenceSha256",
+      "observedAt",
+      "providerCalls",
+      "externalMutations",
+      "activation",
+    ]) ||
+    observation.schemaVersion !== "matchbase.slice3-v5-hosted-observation/v1" ||
+    observation.repository !== "banihashem/INNOBASE-MatchBASE" ||
+    observation.runId !== hosted.runId ||
+    observation.jobId !== hosted.jobId ||
+    observation.commit !== hosted.commit ||
+    observation.tree !== hosted.tree ||
+    observation.status !== hosted.status ||
+    observation.conclusion !== hosted.conclusion ||
+    observation.independentAuthentication !==
+      hosted.independentAuthentication ||
+    observation.authenticatedApiEvidenceSha256 !==
+      hosted.authenticatedApiEvidenceSha256 ||
+    observation.observedAt !== hosted.observedAt ||
+    observation.providerCalls !== 0 ||
+    observation.externalMutations !== 0 ||
+    observation.activation !== false
+  )
+    throw new Error("V5 hosted observation semantics are invalid.");
+  return true;
+}
+
 const utf8ByteOrder = (left, right) =>
   Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
 
@@ -300,41 +339,7 @@ async function verifyReviewSources(payload) {
   const observation = JSON.parse(
     new TextDecoder("utf8", { fatal: true }).decode(hostedBytes),
   );
-  if (
-    !exactKeys(observation, [
-      "schemaVersion",
-      "repository",
-      "runId",
-      "jobId",
-      "commit",
-      "tree",
-      "status",
-      "conclusion",
-      "independentAuthentication",
-      "authenticatedApiEvidenceSha256",
-      "observedAt",
-      "providerCalls",
-      "externalMutations",
-      "activation",
-    ]) ||
-    observation.schemaVersion !== "matchbase.slice3-v5-hosted-observation/v1" ||
-    observation.repository !== "banihashem/INNOBASE-MatchBASE" ||
-    observation.runId !== hosted.runId ||
-    observation.jobId !== hosted.jobId ||
-    observation.commit !== hosted.commit ||
-    observation.tree !== hosted.tree ||
-    observation.status !== hosted.status ||
-    observation.conclusion !== hosted.conclusion ||
-    observation.independentAuthentication !==
-      hosted.independentAuthentication ||
-    observation.authenticatedApiEvidenceSha256 !==
-      hosted.authenticatedApiEvidenceSha256 ||
-    observation.observedAt !== hosted.observedAt ||
-    observation.providerCalls !== 0 ||
-    observation.externalMutations !== 0 ||
-    observation.activation !== false
-  )
-    throw new Error("V5 hosted observation semantics are invalid.");
+  validateV5HostedObservation(observation, hosted);
 }
 
 async function verifyResponseContract(binding) {
@@ -350,11 +355,13 @@ async function verifyGovernanceSources(payload) {
     payload.governanceBindings.ownerDecision,
     payload.governanceBindings.oneGetAllocation,
     payload.governanceBindings.transitionDecision,
+    payload.governanceBindings.successorAuthorization,
     payload.governanceBindings.payloadSchema,
     payload.governanceBindings.signingContract,
     payload.governanceBindings.custodyEvidence,
     payload.governanceBindings.revokedEd25519Record,
     payload.governanceBindings.priorHttp401,
+    payload.governanceBindings.forensicArchiveAudit,
     payload.governanceBindings.v4Ledger,
   ])
     await exactBinding(binding, PM_ROOT);

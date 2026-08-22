@@ -371,6 +371,18 @@ export function validateSlice3Evidence(value, options = {}) {
     signingContract:
       value.qualificationPreflight.v5Admission.role2TpmAuthority
         .signingContract,
+    successorAuthorization:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .successorAuthorization,
+    forensicArchiveAudit:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .forensicArchiveAudit,
+    preservedV3Schema:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .preservedV3Schema,
+    preservedV3Contract:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .preservedV3Contract,
     supersession:
       value.qualificationPreflight.v5Admission.role2TpmAuthority.supersession,
     custody: value.qualificationPreflight.v5Admission.role2TpmAuthority.custody,
@@ -395,6 +407,10 @@ export function validateSlice3Evidence(value, options = {}) {
       "publicCer",
       "payloadSchema",
       "signingContract",
+      "successorAuthorization",
+      "forensicArchiveAudit",
+      "preservedV3Schema",
+      "preservedV3Contract",
       "supersession",
       "custody",
       "transition",
@@ -442,9 +458,21 @@ export function validateSlice3Evidence(value, options = {}) {
       "5674E94E9D2F27AC16D9F0C793D6222F67C4EE4FFEDA0B10D2F9A09D50F99CFB" ||
     value.qualificationPreflight.v5Admission.role2TpmAuthority.payloadSchema
       .sha256 !==
-      "B9F704789FC30F368D8F297A9A5B18E0F5CDD7CBB6CFBD4486AFC746EFC2A68F" ||
+      "772232A6D9DFFD70391EFD39FBD0E78F438DFE37201DB5371806DBFC213A0C9B" ||
     value.qualificationPreflight.v5Admission.role2TpmAuthority.signingContract
       .sha256 !==
+      "97B02588101654E614FCE8C7226013475D2D94CC55DBB81504DFE23918F03C76" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority
+      .successorAuthorization.sha256 !==
+      "84BE0EADC0E27886B7B13E5211999F1BD2557D435A843C33A7CC1D86368C97FE" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority
+      .forensicArchiveAudit.sha256 !==
+      "9221C3A297DA7BE4D7C9E0CBE0DAD61F72F89B340658AA9687C8F83DE6F46A1D" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.preservedV3Schema
+      .sha256 !==
+      "B9F704789FC30F368D8F297A9A5B18E0F5CDD7CBB6CFBD4486AFC746EFC2A68F" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority
+      .preservedV3Contract.sha256 !==
       "5865910AE5BE6A9E034B8C13BD4F718B3F845156E1E17172A8CC30194E09DDF1" ||
     value.qualificationPreflight.v5Admission.role2TpmAuthority.supersession
       .sha256 !==

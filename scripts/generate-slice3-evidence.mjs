@@ -116,6 +116,7 @@ const artifactPaths = [
   "scripts/qualify-slice3-live.mjs",
   "scripts/qualify-slice3-live-v4.mjs",
   "scripts/qualify-slice3-live-v5.mjs",
+  "scripts/archive-slice3-v5-invalid-pair.mjs",
   "scripts/lib/slice3-live-qualification-runner.mjs",
   "scripts/lib/slice3-live-qualification-v4.mjs",
   "scripts/lib/slice3-live-qualification-v5.mjs",
@@ -153,6 +154,7 @@ const artifactPaths = [
   "test/slice3/live-qualification-v4.test.mjs",
   "test/slice3/live-qualification-v5.test.mjs",
   "test/slice3/live-qualification-v5-tpm-contract.test.mjs",
+  "test/slice3/v5-invalid-pair-archive.test.mjs",
   "test/slice3/support/v5-replay-registry-test-harness.mjs",
   "test/slice3/dashboard-policy.test.mjs",
   "test/slice3/dashboard-handoff-policy.test.mjs",
@@ -255,11 +257,31 @@ const evidence = {
             "5674E94E9D2F27AC16D9F0C793D6222F67C4EE4FFEDA0B10D2F9A09D50F99CFB",
         },
         payloadSchema: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.json",
+          sha256:
+            "772232A6D9DFFD70391EFD39FBD0E78F438DFE37201DB5371806DBFC213A0C9B",
+        },
+        signingContract: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.md",
+          sha256:
+            "97B02588101654E614FCE8C7226013475D2D94CC55DBB81504DFE23918F03C76",
+        },
+        successorAuthorization: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_AUTHORIZATION_REQUIREMENTS_AFTER_HOSTED_TIME_BINDING_FAILURE.md",
+          sha256:
+            "84BE0EADC0E27886B7B13E5211999F1BD2557D435A843C33A7CC1D86368C97FE",
+        },
+        forensicArchiveAudit: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_INVALID_PAIR_FORENSIC_ARCHIVE_AUDIT_2026-08-22.json",
+          sha256:
+            "9221C3A297DA7BE4D7C9E0CBE0DAD61F72F89B340658AA9687C8F83DE6F46A1D",
+        },
+        preservedV3Schema: {
           path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.json",
           sha256:
             "B9F704789FC30F368D8F297A9A5B18E0F5CDD7CBB6CFBD4486AFC746EFC2A68F",
         },
-        signingContract: {
+        preservedV3Contract: {
           path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.md",
           sha256:
             "5865910AE5BE6A9E034B8C13BD4F718B3F845156E1E17172A8CC30194E09DDF1",
@@ -337,14 +359,14 @@ const evidence = {
       webUnitPostgresql18: 29,
       qualifiedLiveBrowserChrome: 1,
       liveQualificationV3V4: 43,
-      liveQualificationV5: 44,
-      slice3NodeTotal: 245,
+      liveQualificationV5: 54,
+      slice3NodeTotal: 255,
       browserTotal: 18,
       standaloneRepeat: 1,
       skipped: 1,
       failed: 0,
     },
-    note: "V5 PRE_EXECUTION_PENDING measured basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 43/43, V5 TPM credential infrastructure 43 PASS plus 1 intentional noncanonical-host skip, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, Slice 3 Node total 244 PASS of 245 with 1 intentional skip, standalone repeat 1/1, and Chrome 18/18. The revoked file-backed Ed25519 authority remains unused; the replacement Role 2 TPM ECDSA-P256 V3 verifier contract and public trust anchor are pinned, while the detached signed acceptance payload/envelope are absent. Slice 3 remains PRE_EXECUTION_PENDING and BLOCKED_CREDENTIAL. V5 has no session, credential GET, credential reread, provider/model/search call, activation or external mutation. Six fresh successor audits, final critic, hosted infrastructure release and a new Role 2 signed acceptance remain separately gated.",
+    note: "V5 successor PRE_EXECUTION_PENDING basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 43/43, V5 TPM credential and forensic-archive infrastructure 53 PASS plus 1 intentional noncanonical-host skip, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, Slice 3 Node total 254 PASS of 255 with 1 intentional skip, standalone repeat 1/1, and Chrome 18/18. The revoked file-backed Ed25519 authority remains unused. The Role 2 TPM ECDSA-P256 v4 successor contract and public trust anchor are pinned; the failed v3 attempt is preserved in its verified forensic archive; and the fresh detached signed acceptance payload/envelope are absent. Slice 3 remains PRE_EXECUTION_PENDING and BLOCKED_CREDENTIAL. V5 has no session, credential GET, credential reread, provider/model/search call, replay consumption, activation or external mutation. Six fresh successor audits, final critic, hosted infrastructure release and a new Role 2 signed acceptance remain separately gated.",
   },
   acceptance,
   artifacts,

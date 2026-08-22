@@ -6,6 +6,7 @@ import {
 } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
+import { spawnSync } from "node:child_process";
 
 export const V5_TPM_CONTRACT = Object.freeze({
   keyId: "ROLE2-PO001-S3-V5-TPM-ECDSA-P256-0AED3F3F66C077CB",
@@ -17,11 +18,38 @@ export const V5_TPM_CONTRACT = Object.freeze({
     "5674E94E9D2F27AC16D9F0C793D6222F67C4EE4FFEDA0B10D2F9A09D50F99CFB",
   certificateBytes: 414,
   schemaSha256:
-    "B9F704789FC30F368D8F297A9A5B18E0F5CDD7CBB6CFBD4486AFC746EFC2A68F",
-  schemaBytes: 17_449,
+    "772232A6D9DFFD70391EFD39FBD0E78F438DFE37201DB5371806DBFC213A0C9B",
+  schemaBytes: 17_574,
   contractSha256:
+    "97B02588101654E614FCE8C7226013475D2D94CC55DBB81504DFE23918F03C76",
+  contractBytes: 7_030,
+  successorAuthorizationSha256:
+    "84BE0EADC0E27886B7B13E5211999F1BD2557D435A843C33A7CC1D86368C97FE",
+  successorAuthorizationBytes: 10_171,
+  forensicArchiveAuditSha256:
+    "9221C3A297DA7BE4D7C9E0CBE0DAD61F72F89B340658AA9687C8F83DE6F46A1D",
+  forensicArchiveAuditBytes: 2_053,
+  v3SchemaSha256:
+    "B9F704789FC30F368D8F297A9A5B18E0F5CDD7CBB6CFBD4486AFC746EFC2A68F",
+  v3SchemaBytes: 17_449,
+  v3ContractSha256:
     "5865910AE5BE6A9E034B8C13BD4F718B3F845156E1E17172A8CC30194E09DDF1",
-  contractBytes: 10_431,
+  v3ContractBytes: 10_431,
+  failedAbortSha256:
+    "897F9CC0DE146FE50A8D21D758A8BD212F2740E8F39B3E4C992DBC312BE46DC9",
+  failedAbortBytes: 2_342,
+  failedAuditSha256:
+    "D947ED74204868C0AA24DD3C04BABD399062B837C46E2FF8AAB029CBC606610C",
+  failedAuditBytes: 8_847,
+  archiveManifestSha256:
+    "3B27A207346F5E0E8AD2879F1AA2EC49F72C451102E4CFB58C4AED0507066C00",
+  archiveManifestBytes: 2_488,
+  archivePayloadSha256:
+    "092DD4345C6C2C773588F138D21584588E29D2CCB1942A2596483CF053DB0CF4",
+  archivePayloadBytes: 13_317,
+  archiveEnvelopeSha256:
+    "55AA88224249D105CBC97C0D4EF6828ED32240EC4ABF35D186E1680F29A0D1D0",
+  archiveEnvelopeBytes: 407,
   supersessionSha256:
     "E15A8DA74FD84AA758C05B65D84935554AAFEF4DC71C479AF26D0248B650B90E",
   supersessionBytes: 915,
@@ -47,7 +75,8 @@ export const V5_TPM_CONTRACT = Object.freeze({
   managementLogPath:
     "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\PRODUCT_MANAGEMENT_LOOP_LOG.md",
   decisionId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET",
-  sessionId: "v5-968A9D69D38203E2E8B1375A",
+  sessionId: "v5-53676308BAD073D07FFC88B8",
+  nonce: "B5E913955E9D6F0812DEB32E03771901",
   endpoint: "https://openrouter.ai/api/v1/key",
   lifetimeSeconds: 900,
 });
@@ -99,9 +128,27 @@ const PUBLIC_MATERIALS = Object.freeze({
   managementCer:
     "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_AUTHORITY_PO_001_SLICE_3_V5_TPM_ECDSA_P256_PUBLIC.cer",
   schema:
-    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.json",
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.json",
   contract:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.md",
+  successorAuthorization:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_AUTHORIZATION_REQUIREMENTS_AFTER_HOSTED_TIME_BINDING_FAILURE.md",
+  forensicArchiveAudit:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_INVALID_PAIR_FORENSIC_ARCHIVE_AUDIT_2026-08-22.json",
+  v3Schema:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.json",
+  v3Contract:
     "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.md",
+  failedAbort:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_PRE_SIGN_ABORT_HOSTED_TIME_BINDING_2026-08-22.md",
+  failedAudit:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN.md",
+  archiveManifest:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-v5-signing\\archive\\V5-HOSTED-TIME-BINDING-001\\INVALID_SESSION_v5-968A9D69D38203E2E8B1375A_MANIFEST.json",
+  archivePayload:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-v5-signing\\archive\\V5-HOSTED-TIME-BINDING-001\\INVALID_SESSION_v5-968A9D69D38203E2E8B1375A_PAYLOAD.json",
+  archiveEnvelope:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-v5-signing\\archive\\V5-HOSTED-TIME-BINDING-001\\INVALID_SESSION_v5-968A9D69D38203E2E8B1375A_SIGNATURE.json",
   supersession:
     "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_V2_SUPERSESSION_PO_001_SLICE_3_V5.md",
   custody:
@@ -221,6 +268,33 @@ async function checkedPublicBytes(path, root, expectedBytes, expectedSha256) {
   return bytes;
 }
 
+async function assertCanonicalNonReparseDirectory(path) {
+  const item = await lstat(path);
+  if (
+    !item.isDirectory() ||
+    item.isSymbolicLink() ||
+    (await realpath(path)) !== resolve(path)
+  )
+    throw new Error("V5 preservation directory identity is invalid.");
+  if (process.platform === "win32") {
+    const result = spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "$item=Get-Item -LiteralPath $env:MATCHBASE_V5_PATH -Force; if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){exit 9}",
+      ],
+      {
+        env: { ...process.env, MATCHBASE_V5_PATH: path },
+        windowsHide: true,
+      },
+    );
+    if (result.status !== 0)
+      throw new Error("V5 preservation directory is reparse-backed.");
+  }
+}
+
 function readDerTlv(bytes, offset) {
   if (offset + 2 > bytes.length)
     throw new Error("V5 certificate DER is truncated.");
@@ -321,6 +395,15 @@ function exactCertificateKeyUsage(certificateBytes) {
 export async function verifyPinnedV5PublicMaterials() {
   const repositoryRoot = resolve(".");
   const managementRoot = dirname(PUBLIC_MATERIALS.managementPem);
+  const archiveRoot = dirname(PUBLIC_MATERIALS.archiveManifest);
+  await Promise.all([
+    assertCanonicalNonReparseDirectory(managementRoot),
+    assertCanonicalNonReparseDirectory(
+      resolve(managementRoot, ".slice3-v5-signing"),
+    ),
+    assertCanonicalNonReparseDirectory(dirname(archiveRoot)),
+    assertCanonicalNonReparseDirectory(archiveRoot),
+  ]);
   const [repositoryPem, managementPem, certificateBytes] = await Promise.all([
     checkedPublicBytes(
       PUBLIC_MATERIALS.repositoryPem,
@@ -351,6 +434,60 @@ export async function verifyPinnedV5PublicMaterials() {
       managementRoot,
       V5_TPM_CONTRACT.contractBytes,
       V5_TPM_CONTRACT.contractSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.successorAuthorization,
+      managementRoot,
+      V5_TPM_CONTRACT.successorAuthorizationBytes,
+      V5_TPM_CONTRACT.successorAuthorizationSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.forensicArchiveAudit,
+      managementRoot,
+      V5_TPM_CONTRACT.forensicArchiveAuditBytes,
+      V5_TPM_CONTRACT.forensicArchiveAuditSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.v3Schema,
+      managementRoot,
+      V5_TPM_CONTRACT.v3SchemaBytes,
+      V5_TPM_CONTRACT.v3SchemaSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.v3Contract,
+      managementRoot,
+      V5_TPM_CONTRACT.v3ContractBytes,
+      V5_TPM_CONTRACT.v3ContractSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.failedAbort,
+      managementRoot,
+      V5_TPM_CONTRACT.failedAbortBytes,
+      V5_TPM_CONTRACT.failedAbortSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.failedAudit,
+      managementRoot,
+      V5_TPM_CONTRACT.failedAuditBytes,
+      V5_TPM_CONTRACT.failedAuditSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.archiveManifest,
+      managementRoot,
+      V5_TPM_CONTRACT.archiveManifestBytes,
+      V5_TPM_CONTRACT.archiveManifestSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.archivePayload,
+      managementRoot,
+      V5_TPM_CONTRACT.archivePayloadBytes,
+      V5_TPM_CONTRACT.archivePayloadSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.archiveEnvelope,
+      managementRoot,
+      V5_TPM_CONTRACT.archiveEnvelopeBytes,
+      V5_TPM_CONTRACT.archiveEnvelopeSha256,
     ),
     checkedPublicBytes(
       PUBLIC_MATERIALS.supersession,
@@ -553,7 +690,8 @@ function validateReplayIdentity(value, sessionId, nonce) {
     value.nonce !== nonce ||
     value.keyId !== V5_TPM_CONTRACT.keyId ||
     value.registryPath !== V5_TPM_CONTRACT.replayRegistryPath ||
-    !SHA256.test(value.registryPreSignSha256) ||
+    value.registryPreSignSha256 !==
+      "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855" ||
     value.nonceAbsentBeforeSign !== true
   )
     throw new Error("V5 replay identity is invalid.");
@@ -594,11 +732,13 @@ function validateGovernance(value) {
       "ownerDecision",
       "oneGetAllocation",
       "transitionDecision",
+      "successorAuthorization",
       "payloadSchema",
       "signingContract",
       "custodyEvidence",
       "revokedEd25519Record",
       "priorHttp401",
+      "forensicArchiveAudit",
       "v1Ledger",
       "v2Ledger",
       "v3Ledger",
@@ -621,13 +761,18 @@ function validateGovernance(value) {
     sha256: V5_TPM_CONTRACT.transitionSha256,
     bytes: V5_TPM_CONTRACT.transitionBytes,
   });
+  digestBinding(value.successorAuthorization, "V5 successor authorization", {
+    path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_AUTHORIZATION_REQUIREMENTS_AFTER_HOSTED_TIME_BINDING_FAILURE.md",
+    sha256: V5_TPM_CONTRACT.successorAuthorizationSha256,
+    bytes: V5_TPM_CONTRACT.successorAuthorizationBytes,
+  });
   digestBinding(value.payloadSchema, "V5 payload schema", {
-    path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.json",
+    path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.json",
     sha256: V5_TPM_CONTRACT.schemaSha256,
     bytes: V5_TPM_CONTRACT.schemaBytes,
   });
   digestBinding(value.signingContract, "V5 signing contract", {
-    path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.md",
+    path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.md",
     sha256: V5_TPM_CONTRACT.contractSha256,
     bytes: V5_TPM_CONTRACT.contractBytes,
   });
@@ -645,6 +790,11 @@ function validateGovernance(value) {
     path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_OPENROUTER_CREDENTIAL_PREFLIGHT_V4.json",
     sha256: "144E77DE086FF53BFE2FCDD75A4CA750951C4026EA10ECF41FCAE983F9B87C08",
     bytes: 886,
+  });
+  digestBinding(value.forensicArchiveAudit, "V5 forensic archive audit", {
+    path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_INVALID_PAIR_FORENSIC_ARCHIVE_AUDIT_2026-08-22.json",
+    sha256: V5_TPM_CONTRACT.forensicArchiveAuditSha256,
+    bytes: V5_TPM_CONTRACT.forensicArchiveAuditBytes,
   });
   historicalLedger(
     value.v1Ledger,
@@ -724,7 +874,7 @@ function validateReviewEvidence(value, repository) {
   passBinding(value.preSignRole2Audit, "V5 pre-sign Role2 audit");
   if (
     value.preSignRole2Audit.path !==
-    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN.md"
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN_LOOP_1.md"
   )
     throw new Error("V5 pre-sign Role2 audit path is invalid.");
   closed(
@@ -832,7 +982,7 @@ function validateAuthorizationPolicy(value) {
 export function validateV5Role2Payload(payload, { nowMs = Date.now() } = {}) {
   closed(payload, TOP_LEVEL_KEYS, "V5 signed payload");
   if (
-    payload.schemaVersion !== "matchbase.role2-detached-acceptance/v3" ||
+    payload.schemaVersion !== "matchbase.role2-detached-acceptance/v4" ||
     payload.payloadType !== "V5_OPENROUTER_CREDENTIAL_GET_AUTHORIZATION" ||
     payload.decisionId !== V5_TPM_CONTRACT.decisionId ||
     !SESSION.test(payload.sessionId) ||
@@ -840,6 +990,7 @@ export function validateV5Role2Payload(payload, { nowMs = Date.now() } = {}) {
     payload.payloadPath !== V5_TPM_CONTRACT.payloadPath ||
     payload.signatureEnvelopePath !== V5_TPM_CONTRACT.envelopePath ||
     !NONCE.test(payload.nonce) ||
+    payload.nonce !== V5_TPM_CONTRACT.nonce ||
     payload.stateRoot !== V5_TPM_CONTRACT.stateRoot
   )
     throw new Error("V5 signed payload identity is invalid.");
@@ -894,6 +1045,8 @@ export function validateV5Role2Payload(payload, { nowMs = Date.now() } = {}) {
     payload.preservation,
     [
       "v1ToV4Immutable",
+      "v3ContractImmutable",
+      "failedAttemptArchived",
       "authoritativeSourcesImmutable",
       "priorAuditHistoryImmutable",
       "canonicalWorkspaceOnly",
@@ -912,7 +1065,7 @@ export function validateV5Role2Envelope(envelope, payload, payloadSha256) {
     Buffer.from(rfc8785Canonicalize(payload.replayIdentity), "utf8"),
   );
   if (
-    envelope.schemaVersion !== "matchbase.role2-detached-signature/v3" ||
+    envelope.schemaVersion !== "matchbase.role2-detached-signature/v4" ||
     envelope.sessionId !== payload.sessionId ||
     envelope.replayIdentitySha256 !== replayIdentitySha256 ||
     envelope.payloadSha256 !== payloadSha256 ||

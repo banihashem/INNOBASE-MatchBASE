@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "slice": "SLICE-3",
-  "observedAt": "2026-08-22T13:03:42.262Z",
+  "observedAt": "2026-08-22T14:03:05.339Z",
   "lifecyclePhase": "DURING_REVIEW",
   "candidateStatus": "LOCAL_REPOSITORY_IMPLEMENTATION_FROZEN_LIVE_BLOCKED",
   "repositoryImplementation": "PASS",
@@ -47,10 +47,26 @@
           "sha256": "5674E94E9D2F27AC16D9F0C793D6222F67C4EE4FFEDA0B10D2F9A09D50F99CFB"
         },
         "payloadSchema": {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.json",
+          "sha256": "772232A6D9DFFD70391EFD39FBD0E78F438DFE37201DB5371806DBFC213A0C9B"
+        },
+        "signingContract": {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.md",
+          "sha256": "97B02588101654E614FCE8C7226013475D2D94CC55DBB81504DFE23918F03C76"
+        },
+        "successorAuthorization": {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_AUTHORIZATION_REQUIREMENTS_AFTER_HOSTED_TIME_BINDING_FAILURE.md",
+          "sha256": "84BE0EADC0E27886B7B13E5211999F1BD2557D435A843C33A7CC1D86368C97FE"
+        },
+        "forensicArchiveAudit": {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_INVALID_PAIR_FORENSIC_ARCHIVE_AUDIT_2026-08-22.json",
+          "sha256": "9221C3A297DA7BE4D7C9E0CBE0DAD61F72F89B340658AA9687C8F83DE6F46A1D"
+        },
+        "preservedV3Schema": {
           "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.json",
           "sha256": "B9F704789FC30F368D8F297A9A5B18E0F5CDD7CBB6CFBD4486AFC746EFC2A68F"
         },
-        "signingContract": {
+        "preservedV3Contract": {
           "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.md",
           "sha256": "5865910AE5BE6A9E034B8C13BD4F718B3F845156E1E17172A8CC30194E09DDF1"
         },
@@ -96,20 +112,20 @@
   },
   "candidate": {
     "manifestPath": "evidence/slice3/candidate-manifest.json",
-    "manifestSha256": "020BFCBA368C703C726EFC0A9DCFD6EE23E60863473D5662D1F96FF8B8C98517",
-    "aggregateSha256": "7F7100AD275C78D13C043D497BC53FDACDA8E3C743D6D693DD5A6615FC6BEDB0",
-    "fileCount": 64
+    "manifestSha256": "DAB381F7EB87237C927856342904A175F29827DE3F2C291742934138597219A6",
+    "aggregateSha256": "F20B1710DCC9C107423879E94A4E42A2BE8088613C558D0E62A51A6EBB51F7A0",
+    "fileCount": 66
   },
   "localGate": {
     "status": "PASS",
     "fullWrapper": {
       "command": "pnpm test:ci && pnpm dependency:audit",
-      "durationMs": 488998,
+      "durationMs": 505175,
       "result": "PASS",
-      "observedAt": "2026-08-22T13:03:42.195Z",
+      "observedAt": "2026-08-22T14:03:05.275Z",
       "sourceRef": {
         "path": "evidence/slice3/full-wrapper-result.json",
-        "sha256": "14CB030D0E46C8FA8AF75484DDF5FA3D91A2EF277A2C0A662C9B2E82BA0163AC"
+        "sha256": "9E4B621E25AAB83FB78E82AE9C53144D39020F3B7402430D65B20689B1F00F72"
       }
     },
     "testCounts": {
@@ -124,14 +140,14 @@
       "webUnitPostgresql18": 29,
       "qualifiedLiveBrowserChrome": 1,
       "liveQualificationV3V4": 43,
-      "liveQualificationV5": 44,
-      "slice3NodeTotal": 245,
+      "liveQualificationV5": 54,
+      "slice3NodeTotal": 255,
       "browserTotal": 18,
       "standaloneRepeat": 1,
       "skipped": 1,
       "failed": 0
     },
-    "note": "V5 PRE_EXECUTION_PENDING measured basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 43/43, V5 TPM credential infrastructure 43 PASS plus 1 intentional noncanonical-host skip, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, Slice 3 Node total 244 PASS of 245 with 1 intentional skip, standalone repeat 1/1, and Chrome 18/18. The revoked file-backed Ed25519 authority remains unused; the replacement Role 2 TPM ECDSA-P256 V3 verifier contract and public trust anchor are pinned, while the detached signed acceptance payload/envelope are absent. Slice 3 remains PRE_EXECUTION_PENDING and BLOCKED_CREDENTIAL. V5 has no session, credential GET, credential reread, provider/model/search call, activation or external mutation. Six fresh successor audits, final critic, hosted infrastructure release and a new Role 2 signed acceptance remain separately gated."
+    "note": "V5 successor PRE_EXECUTION_PENDING basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 43/43, V5 TPM credential and forensic-archive infrastructure 53 PASS plus 1 intentional noncanonical-host skip, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, Slice 3 Node total 254 PASS of 255 with 1 intentional skip, standalone repeat 1/1, and Chrome 18/18. The revoked file-backed Ed25519 authority remains unused. The Role 2 TPM ECDSA-P256 v4 successor contract and public trust anchor are pinned; the failed v3 attempt is preserved in its verified forensic archive; and the fresh detached signed acceptance payload/envelope are absent. Slice 3 remains PRE_EXECUTION_PENDING and BLOCKED_CREDENTIAL. V5 has no session, credential GET, credential reread, provider/model/search call, replay consumption, activation or external mutation. Six fresh successor audits, final critic, hosted infrastructure release and a new Role 2 signed acceptance remain separately gated."
   },
   "acceptance": [
     {
@@ -210,7 +226,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -289,7 +307,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -368,7 +388,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -447,7 +469,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -526,7 +550,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -605,7 +631,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -684,7 +712,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -763,7 +793,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -842,7 +874,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -921,7 +955,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -1000,7 +1036,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -1079,7 +1117,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -1158,7 +1198,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -1237,7 +1279,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -1316,7 +1360,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -1395,7 +1441,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -1474,7 +1522,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -1553,7 +1603,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -1632,7 +1684,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -1711,7 +1765,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -1790,7 +1846,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -1869,7 +1927,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -1948,7 +2008,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     },
     {
@@ -2027,7 +2089,9 @@
         "S3-ART-069",
         "S3-ART-070",
         "S3-ART-071",
-        "S3-ART-072"
+        "S3-ART-072",
+        "S3-ART-073",
+        "S3-ART-074"
       ]
     }
   ],
@@ -2164,231 +2228,241 @@
     },
     {
       "id": "S3-ART-027",
+      "path": "scripts/archive-slice3-v5-invalid-pair.mjs",
+      "sha256": "72289F4E33548C24F8F2B55695EE6C37349319494E153E35F01383AB2F96F23A"
+    },
+    {
+      "id": "S3-ART-028",
       "path": "scripts/lib/slice3-live-qualification-runner.mjs",
       "sha256": "B01CD9A96C6A524630CC6987B443D37E55BA903794719D2C98C4290B815ACEE3"
     },
     {
-      "id": "S3-ART-028",
+      "id": "S3-ART-029",
       "path": "scripts/lib/slice3-live-qualification-v4.mjs",
       "sha256": "4BB34A269F5C5D65D7A4CC132DFEB93D96735A8C65B1E786B1EAC52823CB1304"
     },
     {
-      "id": "S3-ART-029",
+      "id": "S3-ART-030",
       "path": "scripts/lib/slice3-live-qualification-v5.mjs",
       "sha256": "6C0B1B86E3C0A5EF36B3C602E88EF9749B58DCC69D56275423F10D752F4BD8E7"
     },
     {
-      "id": "S3-ART-030",
+      "id": "S3-ART-031",
       "path": "scripts/lib/slice3-v5-capability-registry.mjs",
       "sha256": "7EAEE3EBCED35860C35BFBA9A500C9CA032D8AE65ED9A2E9A1AB892A9D74F254"
     },
     {
-      "id": "S3-ART-031",
+      "id": "S3-ART-032",
       "path": "scripts/lib/slice3-v5-canonical-workspace.mjs",
       "sha256": "F951D5D4B16E356CACADFF7985ECC33220AF3C36C2AE631D7CA3C18B03E7DDA4"
     },
     {
-      "id": "S3-ART-032",
+      "id": "S3-ART-033",
       "path": "scripts/lib/slice3-v5-credential-file-controls.mjs",
       "sha256": "E6888D4CE66B694E30FD41B441AD9DED7C203A6EE88624379955163CDEEA37D5"
     },
     {
-      "id": "S3-ART-033",
+      "id": "S3-ART-034",
       "path": "scripts/lib/slice3-v5-one-use-ledger.mjs",
       "sha256": "99169E17632F7F55F35F8068625CB87E3646DB2010B0150776FCAB8E5669D26B"
     },
     {
-      "id": "S3-ART-034",
+      "id": "S3-ART-035",
       "path": "scripts/lib/slice3-v5-replay-registry.mjs",
       "sha256": "79649A04ACB9EAD40029109B91E7E8B38A58D23631D9AAED9FC3E9CBCA1D8973"
     },
     {
-      "id": "S3-ART-035",
+      "id": "S3-ART-036",
       "path": "scripts/lib/slice3-v5-response-contract.mjs",
       "sha256": "FD19F3FBA00EBF6019DDFCFAF6DA0FE3B7F75EC61666E1F4DC0B60526E89F1D4"
     },
     {
-      "id": "S3-ART-036",
-      "path": "scripts/lib/slice3-v5-role2-source-binding.mjs",
-      "sha256": "43FD9EE003B4B7468A7C9B363944C146702784934013348592FBFA0F5C475747"
-    },
-    {
       "id": "S3-ART-037",
-      "path": "scripts/lib/slice3-v5-role2-tpm-verifier.mjs",
-      "sha256": "4E8CE821B08EF02E0B40F782766DACDEFA6D94357A98A744565AA55306519E7E"
+      "path": "scripts/lib/slice3-v5-role2-source-binding.mjs",
+      "sha256": "B8F6FFE9BD22F95DCB9DD5C2D88E183B7A961C4CB4F4105C722466257273B2BE"
     },
     {
       "id": "S3-ART-038",
+      "path": "scripts/lib/slice3-v5-role2-tpm-verifier.mjs",
+      "sha256": "B1F75BE2CDBFFBA7DD2F0E36EF14BB1A249979E8ABB43A822BC128892CB56CCF"
+    },
+    {
+      "id": "S3-ART-039",
       "path": "scripts/lib/slice3-v5-source-verifier.mjs",
       "sha256": "0C9C8E540DB1B5C18D0E0DAF8615714AA6F568072C81964E1DE404EEA3D7CB96"
     },
     {
-      "id": "S3-ART-039",
+      "id": "S3-ART-040",
       "path": "scripts/lib/slice3-dashboard-policy.mjs",
-      "sha256": "8A7C154EFC7C94AF1944F75173BBF0DACE5FCB13DFBF416BB490E4B62ED13186"
+      "sha256": "06C18E73BD185CC22502E3944ECD53D94A98044C98F6E5D6F732B66BE49D13E0"
     },
     {
-      "id": "S3-ART-040",
+      "id": "S3-ART-041",
       "path": "scripts/lib/slice3-dashboard-handoff-policy.mjs",
       "sha256": "D342A3503498E610F382A002B4BA141A835C347E3A7F82E7944A3DEAAA355C2E"
     },
     {
-      "id": "S3-ART-041",
+      "id": "S3-ART-042",
       "path": "scripts/lib/slice3-wrapper-result-policy.mjs",
       "sha256": "E5ED7F4ADB6CD3E6F123E041AD3606A662B23D119BD4DB6DB091192891BA7D93"
     },
     {
-      "id": "S3-ART-042",
+      "id": "S3-ART-043",
       "path": "scripts/generate-dashboard-snapshot.mjs",
       "sha256": "FC8117D13F1CEC32D3639EFFB7F390B2E2BE60BFDD4477CC603F86F774F2CE11"
     },
     {
-      "id": "S3-ART-043",
+      "id": "S3-ART-044",
       "path": "scripts/generate-dashboard-ci-snapshot.mjs",
       "sha256": "549D8665ACCCC4931804931250EB5B9770D7A22D21641A03031BD153F437E028"
     },
     {
-      "id": "S3-ART-044",
+      "id": "S3-ART-045",
       "path": "scripts/validate-dashboard-snapshot.mjs",
       "sha256": "C84A949BFD9D1FF5B10DEE1C29B40A63A04C6EDB8AE0625165569BF0CD130DF2"
     },
     {
-      "id": "S3-ART-045",
+      "id": "S3-ART-046",
       "path": "scripts/record-slice3-wrapper-result.mjs",
       "sha256": "7DC296FFE0BA9280466EAC4B333134EA66BD80FBF20B484ADB4D903A3CC54328"
     },
     {
-      "id": "S3-ART-046",
+      "id": "S3-ART-047",
       "path": "scripts/verify-boundaries.mjs",
       "sha256": "7FEE42465EBEC70C2A13360881DB471F45EC27AC4BB303B2F712671F3B673104"
     },
     {
-      "id": "S3-ART-047",
+      "id": "S3-ART-048",
       "path": "governance/slice3-dashboard-handoff-policy-v1.json",
       "sha256": "72C36993FAD40B5C48EE8521A62813C8D4C718C2D0AB476FA37763349C626D17"
     },
     {
-      "id": "S3-ART-048",
+      "id": "S3-ART-049",
       "path": "packages/data/migrations/0003_slice_3_live_research.up.sql",
       "sha256": "CB895D8C18F31D9B6741719BCF30D6168D5FBEC02E6F51B86B2F34F463F5A383"
     },
     {
-      "id": "S3-ART-049",
+      "id": "S3-ART-050",
       "path": "packages/data/migrations/0003_slice_3_live_research.down.sql",
       "sha256": "5023859FB8727FF196181D82BD340F83B2980D34F6869603C8BD0E5102E331CA"
     },
     {
-      "id": "S3-ART-050",
+      "id": "S3-ART-051",
       "path": "test/slice3/data/live-research-postgres.test.mjs",
       "sha256": "DAA25F0FF6BAA006587274DE5417C9C947C4E963B338BADB91E3B8825AC856D8"
     },
     {
-      "id": "S3-ART-051",
+      "id": "S3-ART-052",
       "path": "packages/ai-evidence/test/research-orchestrator.test.ts",
       "sha256": "BEC88F59074C894F6B62388D1416EFD3055F65413F0D25B28E1C488D888ADFFF"
     },
     {
-      "id": "S3-ART-052",
+      "id": "S3-ART-053",
       "path": "packages/security/test/secure-fetch.test.ts",
       "sha256": "775EA053CBB55126839727E887D677B2347686F3507D47B736AD2DB4B17FC83E"
     },
     {
-      "id": "S3-ART-053",
+      "id": "S3-ART-054",
       "path": "test/slice3/live-research-application-postgres.test.mjs",
       "sha256": "BA62200747DF6D20060E65FD1328982F115F6B8553A05C6CE67647CE2C7CFB8B"
     },
     {
-      "id": "S3-ART-054",
+      "id": "S3-ART-055",
       "path": "test/slice3/combined-live-worker-postgres.test.mjs",
       "sha256": "9DC0949B15D630E7F677556931B550C7D72695F00012C02D8FD63FCDC4A3F9CE"
     },
     {
-      "id": "S3-ART-055",
+      "id": "S3-ART-056",
       "path": "test/slice3/environment-provider-transport.test.mjs",
       "sha256": "689971687993738D11F5CFDA7912A3919520F73CD47C04D7D8C4EAE111C973E4"
     },
     {
-      "id": "S3-ART-056",
+      "id": "S3-ART-057",
       "path": "test/slice3/qualified-live-admission.test.mjs",
       "sha256": "10059C8E18EEEAC7BB5565387B61AA504E1077813FC6A5D2B1CB4A105E0389AD"
     },
     {
-      "id": "S3-ART-057",
+      "id": "S3-ART-058",
       "path": "test/slice3/live-qualification-preflight.test.mjs",
       "sha256": "21E6724394CD4207DF288ED8291804B87FD21F85030B9F19EE924C324198AC2C"
     },
     {
-      "id": "S3-ART-058",
+      "id": "S3-ART-059",
       "path": "test/slice3/live-qualification-durable-runner.test.mjs",
       "sha256": "57B1CCC819ABDEC9FA0CF27F89D85A7149EA8E13C31B8435DC3F00DBCF1D2324"
     },
     {
-      "id": "S3-ART-059",
+      "id": "S3-ART-060",
       "path": "test/slice3/live-qualification-runner.test.mjs",
       "sha256": "AA0137AE1B0ACD6CD903BF5F453787246EB53F98B939347A547AF7C6801E6110"
     },
     {
-      "id": "S3-ART-060",
+      "id": "S3-ART-061",
       "path": "test/slice3/live-qualification-runtime-transport.test.mjs",
       "sha256": "9F3C1A9ABECC74945D88A39612135A39EBCD841E5630581DBD737BB0F0751D6E"
     },
     {
-      "id": "S3-ART-061",
+      "id": "S3-ART-062",
       "path": "test/slice3/live-qualification-v4.test.mjs",
       "sha256": "CAF43F42C84161865A682CA0507C02C1500F106DD99AE35F7E568378D7C5D76D"
     },
     {
-      "id": "S3-ART-062",
-      "path": "test/slice3/live-qualification-v5.test.mjs",
-      "sha256": "25F3DB91ADB7F917B2427C91FAB6A144FF4D001EFF6AC45C38514E306F1E7981"
-    },
-    {
       "id": "S3-ART-063",
-      "path": "test/slice3/live-qualification-v5-tpm-contract.test.mjs",
-      "sha256": "F05284F3D52D23BB8228AA06379372BC7C579F42A0F64D5318FC6CCAD8E6AEB7"
+      "path": "test/slice3/live-qualification-v5.test.mjs",
+      "sha256": "46726C6D3FA910116105D61860D3E40252A9F69186A497566A92D39888C9939A"
     },
     {
       "id": "S3-ART-064",
+      "path": "test/slice3/live-qualification-v5-tpm-contract.test.mjs",
+      "sha256": "3C72B575D4C747D24BD5F52D2840F25E877AA94A866537D86358B0547D3E480A"
+    },
+    {
+      "id": "S3-ART-065",
+      "path": "test/slice3/v5-invalid-pair-archive.test.mjs",
+      "sha256": "CA92F2A1BB99C4AE04DC4CACA23990EED0926D107F60A1F66475C0B9E8F91A30"
+    },
+    {
+      "id": "S3-ART-066",
       "path": "test/slice3/support/v5-replay-registry-test-harness.mjs",
       "sha256": "4D4289D4C32B404C6215811096E5E949BFABC1AF85AEBB6D20A7D8E7DFD6A19D"
     },
     {
-      "id": "S3-ART-065",
+      "id": "S3-ART-067",
       "path": "test/slice3/dashboard-policy.test.mjs",
       "sha256": "03CD98A34A735083497662A3A81B8612BD2A860946914119FA94309B5E1EB1ED"
     },
     {
-      "id": "S3-ART-066",
+      "id": "S3-ART-068",
       "path": "test/slice3/dashboard-handoff-policy.test.mjs",
       "sha256": "E6E30E33545BC761134BD88B6C17968206D522A5E15CB6E657A21CAC8FAEC1DF"
     },
     {
-      "id": "S3-ART-067",
+      "id": "S3-ART-069",
       "path": "test/slice3/wrapper-result-policy.test.mjs",
       "sha256": "22360CE8537ECC3E7DD9C2E169656441A935AE6FF5D42B524631137C580B1134"
     },
     {
-      "id": "S3-ART-068",
+      "id": "S3-ART-070",
       "path": "packages/ai-evidence/test/research-adapters.test.ts",
       "sha256": "D8941B2842BDEB3292E2F1D198B4CD39960FC7F2E68F6D751FCC77BD6BE82C20"
     },
     {
-      "id": "S3-ART-069",
+      "id": "S3-ART-071",
       "path": "packages/ai-evidence/test/research-route-policy.test.ts",
       "sha256": "B59414ED10A4EED3F5BBF2A7EE97F837D1795A5E66E84C3B00A2B3F837A82200"
     },
     {
-      "id": "S3-ART-070",
+      "id": "S3-ART-072",
       "path": "test/browser/product-qualified-reference-path.spec.mjs",
       "sha256": "E849C2701D5E13DBB65F1AFAB34E0C8705E8A5D4E5EE785A01FF5E2B7E3E7DB6"
     },
     {
-      "id": "S3-ART-071",
+      "id": "S3-ART-073",
       "path": "test/browser/product-live-reference-path.spec.mjs",
       "sha256": "5A261FD32FCAEBAAC915410F80F4C632FE0B4AAC096712933B492A05FC2CE45D"
     },
     {
-      "id": "S3-ART-072",
+      "id": "S3-ART-074",
       "path": "test/browser/product-standard-reference-path.spec.mjs",
       "sha256": "CB929F64F2F5617665C536CEFC764D32A1E5BAF8D72D5A872379B7E9EDAA3CE0"
     }

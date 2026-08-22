@@ -322,6 +322,8 @@ export function validateSlice3Evidence(value, options = {}) {
       "credentialValuesInspected",
       "additionalAuthorizationGets",
       "v4SessionCreated",
+      "v5SessionCreated",
+      "v5Admission",
       "externalMutations",
     ],
     "Slice 3 qualification preflight is not closed.",
@@ -337,10 +339,74 @@ export function validateSlice3Evidence(value, options = {}) {
     ],
     "Slice 3 qualification preflight source binding is not closed.",
   );
+  closed(
+    value.qualificationPreflight.v5Admission,
+    [
+      "ownerDecision",
+      "role2Allocation",
+      "role2SigningRevocation",
+      "role2TpmAuthority",
+      "role2PublicKeyPinned",
+      "reason",
+      "executable",
+      "credentialGets",
+      "maxCredentialGets",
+      "modelPosts",
+      "searchCalls",
+      "activation",
+    ],
+    "Slice 3 V5 admission is not closed.",
+  );
+  for (const [label, source] of Object.entries({
+    ownerDecision: value.qualificationPreflight.v5Admission.ownerDecision,
+    role2Allocation: value.qualificationPreflight.v5Admission.role2Allocation,
+    role2SigningRevocation:
+      value.qualificationPreflight.v5Admission.role2SigningRevocation,
+    publicPem:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority.publicPem,
+    publicCer:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority.publicCer,
+    payloadSchema:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority.payloadSchema,
+    signingContract:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .signingContract,
+    supersession:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority.supersession,
+    custody: value.qualificationPreflight.v5Admission.role2TpmAuthority.custody,
+    transition:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority.transition,
+    replayInitialization:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .replayInitialization,
+    replayRegistry:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority.replayRegistry,
+  }))
+    closed(
+      source,
+      ["path", "sha256"],
+      `Slice 3 V5 ${label} source is not closed.`,
+    );
+  closed(
+    value.qualificationPreflight.v5Admission.role2TpmAuthority,
+    [
+      "keyId",
+      "publicPem",
+      "publicCer",
+      "payloadSchema",
+      "signingContract",
+      "supersession",
+      "custody",
+      "transition",
+      "replayInitialization",
+      "replayRegistry",
+    ],
+    "Slice 3 V5 TPM authority is not closed.",
+  );
   if (
     value.qualificationPreflight.schemaVersion !==
-      "slice3-live-qualification-preflight.v4-safe-blocked" ||
-    value.qualificationPreflight.disposition !== "BLOCKED_CREDENTIAL" ||
+      "slice3-live-qualification-preflight.v5-pre-execution-pending" ||
+    value.qualificationPreflight.disposition !== "PRE_EXECUTION_PENDING" ||
     value.qualificationPreflight.sourceBinding.path !==
       "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_OPENROUTER_CREDENTIAL_PREFLIGHT_V4.json" ||
     value.qualificationPreflight.sourceBinding.verificationMode !==
@@ -353,6 +419,57 @@ export function validateSlice3Evidence(value, options = {}) {
     value.qualificationPreflight.credentialValuesInspected !== false ||
     value.qualificationPreflight.additionalAuthorizationGets !== 0 ||
     value.qualificationPreflight.v4SessionCreated !== false ||
+    value.qualificationPreflight.v5SessionCreated !== false ||
+    value.qualificationPreflight.v5Admission.ownerDecision.path !==
+      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\OWNER_DECISION_PO_001_SLICE_3_V5_ONE_GET_2026-08-22.md" ||
+    value.qualificationPreflight.v5Admission.ownerDecision.sha256 !==
+      "7B9DC0E27F2DA3B0E20ED2A4220DFE26AA95B76FA4EC1B37D9B559AE3D0AD916" ||
+    value.qualificationPreflight.v5Admission.role2Allocation.path !==
+      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_ALLOCATION_PO_001_SLICE_3_V5_ONE_GET_PRE_EXECUTION_PENDING.md" ||
+    value.qualificationPreflight.v5Admission.role2Allocation.sha256 !==
+      "484B8F82E08E97CBC40CA0E01115D735FA0446FB19D093DE06F41691CCF1C0C6" ||
+    value.qualificationPreflight.v5Admission.role2SigningRevocation.path !==
+      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_AUTHORITY_PO_001_SLICE_3_V5_ED25519_REVOCATION.md" ||
+    value.qualificationPreflight.v5Admission.role2SigningRevocation.sha256 !==
+      "D38D03154C6C87576DEED07EB97A3557271D47E79EE4227D7005CFE7140A1665" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.keyId !==
+      "ROLE2-PO001-S3-V5-TPM-ECDSA-P256-0AED3F3F66C077CB" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.publicPem
+      .sha256 !==
+      "5897804885924CE5499494F9D00471A6B1D918671B6D17F7206C6007AFCDF1E4" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.publicCer
+      .sha256 !==
+      "5674E94E9D2F27AC16D9F0C793D6222F67C4EE4FFEDA0B10D2F9A09D50F99CFB" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.payloadSchema
+      .sha256 !==
+      "B9F704789FC30F368D8F297A9A5B18E0F5CDD7CBB6CFBD4486AFC746EFC2A68F" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.signingContract
+      .sha256 !==
+      "5865910AE5BE6A9E034B8C13BD4F718B3F845156E1E17172A8CC30194E09DDF1" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.supersession
+      .sha256 !==
+      "E15A8DA74FD84AA758C05B65D84935554AAFEF4DC71C479AF26D0248B650B90E" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.custody
+      .sha256 !==
+      "2E0FF67F9D7E0E9524B101F0EF3BB35B13F788D2FE035A113418031B0B1FD5C1" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.transition
+      .sha256 !==
+      "0967EE2C5AB9C7E7779F3E8AD2C2B1EF2AE528B6BC0CD54B7A7955A00246E911" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority
+      .replayInitialization.sha256 !==
+      "DF6F2B352BCE80ECC1B4BCFDC70041B3015E4866C5494A00F3DF94DF116EA146" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.replayRegistry
+      .sha256 !==
+      "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855" ||
+    value.qualificationPreflight.v5Admission.role2PublicKeyPinned !== true ||
+    value.qualificationPreflight.v5Admission.reason !==
+      "ROLE2_ACCEPTANCE_PAYLOAD_ABSENT" ||
+    value.qualificationPreflight.v5Admission.executable !== false ||
+    value.qualificationPreflight.v5Admission.credentialGets !== 0 ||
+    value.qualificationPreflight.v5Admission.maxCredentialGets !== 1 ||
+    value.qualificationPreflight.v5Admission.modelPosts !== 0 ||
+    value.qualificationPreflight.v5Admission.searchCalls !== 0 ||
+    value.qualificationPreflight.v5Admission.activation !== false ||
     value.localGate?.status !== value.localGate?.fullWrapper?.result ||
     !["PENDING", "PASS"].includes(value.localGate?.status)
   )

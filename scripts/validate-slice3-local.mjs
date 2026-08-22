@@ -99,8 +99,8 @@ if (
   evidence.liveQualification !== "BLOCKED_PREREQUISITE" ||
   evidence.environment?.providerNetworkCalls !== 0 ||
   evidence.qualificationPreflight?.schemaVersion !==
-    "slice3-live-qualification-preflight.v4-safe-blocked" ||
-  evidence.qualificationPreflight?.disposition !== "BLOCKED_CREDENTIAL" ||
+    "slice3-live-qualification-preflight.v5-pre-execution-pending" ||
+  evidence.qualificationPreflight?.disposition !== "PRE_EXECUTION_PENDING" ||
   evidence.qualificationPreflight?.sourceBinding?.path !==
     "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_OPENROUTER_CREDENTIAL_PREFLIGHT_V4.json" ||
   evidence.qualificationPreflight?.sourceBinding?.verificationMode !==
@@ -114,6 +114,25 @@ if (
   evidence.qualificationPreflight?.credentialValuesInspected !== false ||
   evidence.qualificationPreflight?.additionalAuthorizationGets !== 0 ||
   evidence.qualificationPreflight?.v4SessionCreated !== false ||
+  evidence.qualificationPreflight?.v5SessionCreated !== false ||
+  evidence.qualificationPreflight?.v5Admission?.ownerDecision?.sha256 !==
+    "7B9DC0E27F2DA3B0E20ED2A4220DFE26AA95B76FA4EC1B37D9B559AE3D0AD916" ||
+  evidence.qualificationPreflight?.v5Admission?.role2Allocation?.sha256 !==
+    "484B8F82E08E97CBC40CA0E01115D735FA0446FB19D093DE06F41691CCF1C0C6" ||
+  evidence.qualificationPreflight?.v5Admission?.role2SigningRevocation?.path !==
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_AUTHORITY_PO_001_SLICE_3_V5_ED25519_REVOCATION.md" ||
+  evidence.qualificationPreflight?.v5Admission?.role2SigningRevocation
+    ?.sha256 !==
+    "D38D03154C6C87576DEED07EB97A3557271D47E79EE4227D7005CFE7140A1665" ||
+  evidence.qualificationPreflight?.v5Admission?.role2PublicKeyPinned !== true ||
+  evidence.qualificationPreflight?.v5Admission?.reason !==
+    "ROLE2_ACCEPTANCE_PAYLOAD_ABSENT" ||
+  evidence.qualificationPreflight?.v5Admission?.executable !== false ||
+  evidence.qualificationPreflight?.v5Admission?.credentialGets !== 0 ||
+  evidence.qualificationPreflight?.v5Admission?.maxCredentialGets !== 1 ||
+  evidence.qualificationPreflight?.v5Admission?.modelPosts !== 0 ||
+  evidence.qualificationPreflight?.v5Admission?.searchCalls !== 0 ||
+  evidence.qualificationPreflight?.v5Admission?.activation !== false ||
   evidence.qualificationPreflight?.externalMutations !== 0 ||
   evidence.localGate?.status !== evidence.localGate?.fullWrapper?.result ||
   JSON.stringify(evidence.blockerCodes) !==
@@ -138,6 +157,25 @@ verifySlice3CredentialPreflightSource(
       process.env.MATCHBASE_EXTERNAL_EVIDENCE_MODE === "ANCHOR_ONLY_CI",
   },
 );
+for (const sourceBinding of [
+  evidence.qualificationPreflight.v5Admission.ownerDecision,
+  evidence.qualificationPreflight.v5Admission.role2Allocation,
+  evidence.qualificationPreflight.v5Admission.role2SigningRevocation,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority.publicPem,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority.publicCer,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority.payloadSchema,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority.signingContract,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority.supersession,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority.custody,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority.transition,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority
+    .replayInitialization,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority.replayRegistry,
+])
+  verifySlice3CredentialPreflightSource(sourceBinding, {
+    anchorOnly:
+      process.env.MATCHBASE_EXTERNAL_EVIDENCE_MODE === "ANCHOR_ONLY_CI",
+  });
 const expectedAcceptance = Array.from(
   { length: 24 },
   (_, index) => `S3-AC-${String(index + 1).padStart(3, "0")}`,

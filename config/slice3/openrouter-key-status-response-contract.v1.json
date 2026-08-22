@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "matchbase.openrouter-key-status-response-contract/v1",
+  "endpoint": "https://openrouter.ai/api/v1/key",
+  "method": "GET",
+  "successStatus": 200,
+  "contentType": "application/json",
+  "maximumBodyBytes": 32768,
+  "topLevelKeys": ["data"],
+  "requiredDataKeys": ["is_free_tier"],
+  "allowedDataKeys": [
+    "byok_usage",
+    "byok_usage_daily",
+    "byok_usage_monthly",
+    "byok_usage_weekly",
+    "include_byok_in_limit",
+    "is_free_tier",
+    "label",
+    "limit",
+    "limit_remaining",
+    "rate_limit",
+    "usage",
+    "usage_daily",
+    "usage_monthly",
+    "usage_weekly"
+  ],
+  "paidCredentialPredicate": {
+    "path": "data.is_free_tier",
+    "operator": "EQUALS",
+    "value": false
+  },
+  "persistedFields": [
+    "endpointCapability",
+    "httpStatus",
+    "callOccurred",
+    "urlValid",
+    "contentTypeValid",
+    "schemaValid",
+    "paidCredential",
+    "failureClass",
+    "responseBodyPersisted",
+    "rawHeadersPersisted"
+  ],
+  "prohibitedPersistence": [
+    "authorization_header",
+    "credential_value",
+    "raw_headers",
+    "raw_response_body",
+    "account_identifier",
+    "email",
+    "label",
+    "provider_message"
+  ]
+}

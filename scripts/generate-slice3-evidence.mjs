@@ -92,6 +92,8 @@ const postReviewCurrent =
 const artifactPaths = [
   "config/slice3/provider-evidence-register.v1.json",
   "config/slice3/research-route-policy.v1.json",
+  "config/slice3/openrouter-key-status-response-contract.v1.json",
+  "config/slice3/role2-v5-tpm-ecdsa-p256-public.pem",
   "packages/contracts/src/v1/research-route.ts",
   "packages/contracts/src/v1/evidence-lineage.ts",
   "packages/ai-evidence/src/research-route-policy.ts",
@@ -113,8 +115,19 @@ const artifactPaths = [
   "apps/web/src/server-owned-research-admission.ts",
   "scripts/qualify-slice3-live.mjs",
   "scripts/qualify-slice3-live-v4.mjs",
+  "scripts/qualify-slice3-live-v5.mjs",
   "scripts/lib/slice3-live-qualification-runner.mjs",
   "scripts/lib/slice3-live-qualification-v4.mjs",
+  "scripts/lib/slice3-live-qualification-v5.mjs",
+  "scripts/lib/slice3-v5-capability-registry.mjs",
+  "scripts/lib/slice3-v5-canonical-workspace.mjs",
+  "scripts/lib/slice3-v5-credential-file-controls.mjs",
+  "scripts/lib/slice3-v5-one-use-ledger.mjs",
+  "scripts/lib/slice3-v5-replay-registry.mjs",
+  "scripts/lib/slice3-v5-response-contract.mjs",
+  "scripts/lib/slice3-v5-role2-source-binding.mjs",
+  "scripts/lib/slice3-v5-role2-tpm-verifier.mjs",
+  "scripts/lib/slice3-v5-source-verifier.mjs",
   "scripts/lib/slice3-dashboard-policy.mjs",
   "scripts/lib/slice3-dashboard-handoff-policy.mjs",
   "scripts/lib/slice3-wrapper-result-policy.mjs",
@@ -122,6 +135,7 @@ const artifactPaths = [
   "scripts/generate-dashboard-ci-snapshot.mjs",
   "scripts/validate-dashboard-snapshot.mjs",
   "scripts/record-slice3-wrapper-result.mjs",
+  "scripts/verify-boundaries.mjs",
   "governance/slice3-dashboard-handoff-policy-v1.json",
   "packages/data/migrations/0003_slice_3_live_research.up.sql",
   "packages/data/migrations/0003_slice_3_live_research.down.sql",
@@ -137,6 +151,9 @@ const artifactPaths = [
   "test/slice3/live-qualification-runner.test.mjs",
   "test/slice3/live-qualification-runtime-transport.test.mjs",
   "test/slice3/live-qualification-v4.test.mjs",
+  "test/slice3/live-qualification-v5.test.mjs",
+  "test/slice3/live-qualification-v5-tpm-contract.test.mjs",
+  "test/slice3/support/v5-replay-registry-test-harness.mjs",
   "test/slice3/dashboard-policy.test.mjs",
   "test/slice3/dashboard-handoff-policy.test.mjs",
   "test/slice3/wrapper-result-policy.test.mjs",
@@ -191,8 +208,9 @@ const evidence = {
   liveQualification: "BLOCKED_PREREQUISITE",
   blockerCodes,
   qualificationPreflight: {
-    schemaVersion: "slice3-live-qualification-preflight.v4-safe-blocked",
-    disposition: "BLOCKED_CREDENTIAL",
+    schemaVersion:
+      "slice3-live-qualification-preflight.v5-pre-execution-pending",
+    disposition: "PRE_EXECUTION_PENDING",
     blockers: blockerCodes,
     sourceBinding: {
       path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_OPENROUTER_CREDENTIAL_PREFLIGHT_V4.json",
@@ -207,6 +225,80 @@ const evidence = {
     credentialValuesInspected: false,
     additionalAuthorizationGets: 0,
     v4SessionCreated: false,
+    v5SessionCreated: false,
+    v5Admission: {
+      ownerDecision: {
+        path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\OWNER_DECISION_PO_001_SLICE_3_V5_ONE_GET_2026-08-22.md",
+        sha256:
+          "7B9DC0E27F2DA3B0E20ED2A4220DFE26AA95B76FA4EC1B37D9B559AE3D0AD916",
+      },
+      role2Allocation: {
+        path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_ALLOCATION_PO_001_SLICE_3_V5_ONE_GET_PRE_EXECUTION_PENDING.md",
+        sha256:
+          "484B8F82E08E97CBC40CA0E01115D735FA0446FB19D093DE06F41691CCF1C0C6",
+      },
+      role2SigningRevocation: {
+        path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_AUTHORITY_PO_001_SLICE_3_V5_ED25519_REVOCATION.md",
+        sha256:
+          "D38D03154C6C87576DEED07EB97A3557271D47E79EE4227D7005CFE7140A1665",
+      },
+      role2TpmAuthority: {
+        keyId: "ROLE2-PO001-S3-V5-TPM-ECDSA-P256-0AED3F3F66C077CB",
+        publicPem: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_AUTHORITY_PO_001_SLICE_3_V5_TPM_ECDSA_P256_PUBLIC.pem",
+          sha256:
+            "5897804885924CE5499494F9D00471A6B1D918671B6D17F7206C6007AFCDF1E4",
+        },
+        publicCer: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_AUTHORITY_PO_001_SLICE_3_V5_TPM_ECDSA_P256_PUBLIC.cer",
+          sha256:
+            "5674E94E9D2F27AC16D9F0C793D6222F67C4EE4FFEDA0B10D2F9A09D50F99CFB",
+        },
+        payloadSchema: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.json",
+          sha256:
+            "B9F704789FC30F368D8F297A9A5B18E0F5CDD7CBB6CFBD4486AFC746EFC2A68F",
+        },
+        signingContract: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.md",
+          sha256:
+            "5865910AE5BE6A9E034B8C13BD4F718B3F845156E1E17172A8CC30194E09DDF1",
+        },
+        supersession: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_V2_SUPERSESSION_PO_001_SLICE_3_V5.md",
+          sha256:
+            "E15A8DA74FD84AA758C05B65D84935554AAFEF4DC71C479AF26D0248B650B90E",
+        },
+        custody: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_TPM_ECDSA_P256_CUSTODY_EVIDENCE_PO_001_SLICE_3_V5.json",
+          sha256:
+            "2E0FF67F9D7E0E9524B101F0EF3BB35B13F788D2FE035A113418031B0B1FD5C1",
+        },
+        transition: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\OWNER_DELEGATED_DECISION_PO_001_SLICE_3_V5_TPM_ECDSA_P256_TRANSITION.md",
+          sha256:
+            "0967EE2C5AB9C7E7779F3E8AD2C2B1EF2AE528B6BC0CD54B7A7955A00246E911",
+        },
+        replayInitialization: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNER_REPLAY_REGISTRY_INITIALIZATION_PO_001_SLICE_3_V5.json",
+          sha256:
+            "DF6F2B352BCE80ECC1B4BCFDC70041B3015E4866C5494A00F3DF94DF116EA146",
+        },
+        replayRegistry: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.role2-signing-replay-registry\\consumed-v5.jsonl",
+          sha256:
+            "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+        },
+      },
+      role2PublicKeyPinned: true,
+      reason: "ROLE2_ACCEPTANCE_PAYLOAD_ABSENT",
+      executable: false,
+      credentialGets: 0,
+      maxCredentialGets: 1,
+      modelPosts: 0,
+      searchCalls: 0,
+      activation: false,
+    },
     externalMutations: 0,
   },
   environment: {
@@ -246,7 +338,7 @@ const evidence = {
       qualifiedLiveBrowserChrome: 1,
       failed: 0,
     },
-    note: "V4 SAFE_BLOCKED pre-wrapper basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 43/43, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. V4 remains BLOCKED_CREDENTIAL with no session, provider call, credential read, activation or external mutation. Six fresh same-byte audits, final critic, hosted fixture-only release and Role 2 re-audit remain separately gated.",
+    note: "V5 PRE_EXECUTION_PENDING pre-wrapper basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 43/43, V5 credential infrastructure 25/25, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. Slice 3 remains BLOCKED_CREDENTIAL; the Role 2 signing authority was revoked before use and no replacement TPM/ECDSA verifier contract or trust anchor is pinned. V5 has no session, credential GET, credential reread, provider/model/search call, activation or external mutation. Six fresh same-byte audits, final critic, hosted infrastructure release and a new Role 2 acceptance remain separately gated.",
   },
   acceptance,
   artifacts,

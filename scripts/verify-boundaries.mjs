@@ -1,4 +1,5 @@
-import { lstatSync, readdirSync, realpathSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { trackedIgnoredFiles } from "./lib/repository-files.mjs";
 
@@ -21,6 +22,12 @@ const forbiddenExtensions = new Set([
   ".pfx",
 ]);
 const violations = [];
+const pinnedPublicMaterial = new Map([
+  [
+    `config${sep}slice3${sep}role2-v5-tpm-ecdsa-p256-public.pem`,
+    "5897804885924CE5499494F9D00471A6B1D918671B6D17F7206C6007AFCDF1E4",
+  ],
+]);
 for (const path of trackedIgnoredFiles(root)) {
   violations.push(`${path} (tracked path is ignored by policy)`);
 }
@@ -52,7 +59,14 @@ function walk(directory) {
       const lower = name.toLowerCase();
       if (
         [...forbiddenExtensions].some((ext) => lower.endsWith(ext)) &&
-        !lower.endsWith(".env.example")
+        !lower.endsWith(".env.example") &&
+        !(
+          pinnedPublicMaterial.has(rel) &&
+          createHash("sha256")
+            .update(readFileSync(path))
+            .digest("hex")
+            .toUpperCase() === pinnedPublicMaterial.get(rel)
+        )
       )
         violations.push(rel);
       if (/^(license|copying)(\.|$)/i.test(name))

@@ -12,7 +12,7 @@
     "apps/dashboard/dist/current-snapshot.json"
   ],
   "fileCount": 64,
-  "aggregateSha256": "3EE222223B02623EDD2A1515B269CB247847827D869061E4C38A5987D9797764",
+  "aggregateSha256": "5BE4D5CC0EA502CDD6C13FBF2651E5FE7B4A841724778E04BE3AF7A6C9FAA6C7",
   "files": [
     {
       "path": ".gitignore",
@@ -180,7 +180,7 @@
     },
     {
       "path": "scripts/lib/slice3-v5-role2-tpm-verifier.mjs",
-      "sha256": "E89EA169852DCBCCA1A3431FB80E1BA6EDE64D5408C5F2F9083F8A82371A15DC"
+      "sha256": "4E8CE821B08EF02E0B40F782766DACDEFA6D94357A98A744565AA55306519E7E"
     },
     {
       "path": "scripts/lib/slice3-v5-source-verifier.mjs",
@@ -252,11 +252,11 @@
     },
     {
       "path": "test/slice3/live-qualification-v5-tpm-contract.test.mjs",
-      "sha256": "50F7C848CBCCEEC52878EC187A373BFC38BD4CC6D25DBA5239C9BCE8C08CC96C"
+      "sha256": "F3D38532F37BEC3D9027D94F667A97D5D4A211A9FE8231E54C63FA1D852D22E1"
     },
     {
       "path": "test/slice3/live-qualification-v5.test.mjs",
-      "sha256": "7BB7B600DEF543D114D0D3D2531761ED42AE7BBD8E89A069A44A3F0569C0D923"
+      "sha256": "25F3DB91ADB7F917B2427C91FAB6A144FF4D001EFF6AC45C38514E306F1E7981"
     },
     {
       "path": "test/slice3/live-research-application-postgres.test.mjs",

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "slice": "SLICE-3",
-  "observedAt": "2026-08-22T11:54:53.231Z",
+  "observedAt": "2026-08-22T12:18:58.812Z",
   "lifecyclePhase": "DURING_REVIEW",
   "candidateStatus": "LOCAL_REPOSITORY_IMPLEMENTATION_FROZEN_LIVE_BLOCKED",
   "repositoryImplementation": "PASS",
@@ -96,20 +96,20 @@
   },
   "candidate": {
     "manifestPath": "evidence/slice3/candidate-manifest.json",
-    "manifestSha256": "B54343495B974FFE978EADF8064363FFB9348EA39C2D62C92D4A9EFBD8C6744A",
-    "aggregateSha256": "3EE222223B02623EDD2A1515B269CB247847827D869061E4C38A5987D9797764",
+    "manifestSha256": "6AB480CBDCDB6233C3EEBEB91F942B90D3F5E3575FAF254E96BE9FFFE42CE568",
+    "aggregateSha256": "5BE4D5CC0EA502CDD6C13FBF2651E5FE7B4A841724778E04BE3AF7A6C9FAA6C7",
     "fileCount": 64
   },
   "localGate": {
     "status": "PASS",
     "fullWrapper": {
       "command": "pnpm test:ci && pnpm dependency:audit",
-      "durationMs": 473697,
+      "durationMs": 501735,
       "result": "PASS",
-      "observedAt": "2026-08-22T11:54:53.166Z",
+      "observedAt": "2026-08-22T12:18:58.750Z",
       "sourceRef": {
         "path": "evidence/slice3/full-wrapper-result.json",
-        "sha256": "7D299A94EA79722E9FBB16C2B9367630C6F9AEB783F6FC1F525472C70172FC86"
+        "sha256": "2E470B3A9A971F5BD081B3864288D78B8439EAFDDC2549EABE8D9491F92674A0"
       }
     },
     "testCounts": {
@@ -2209,7 +2209,7 @@
     {
       "id": "S3-ART-037",
       "path": "scripts/lib/slice3-v5-role2-tpm-verifier.mjs",
-      "sha256": "E89EA169852DCBCCA1A3431FB80E1BA6EDE64D5408C5F2F9083F8A82371A15DC"
+      "sha256": "4E8CE821B08EF02E0B40F782766DACDEFA6D94357A98A744565AA55306519E7E"
     },
     {
       "id": "S3-ART-038",
@@ -2334,12 +2334,12 @@
     {
       "id": "S3-ART-062",
       "path": "test/slice3/live-qualification-v5.test.mjs",
-      "sha256": "7BB7B600DEF543D114D0D3D2531761ED42AE7BBD8E89A069A44A3F0569C0D923"
+      "sha256": "25F3DB91ADB7F917B2427C91FAB6A144FF4D001EFF6AC45C38514E306F1E7981"
     },
     {
       "id": "S3-ART-063",
       "path": "test/slice3/live-qualification-v5-tpm-contract.test.mjs",
-      "sha256": "50F7C848CBCCEEC52878EC187A373BFC38BD4CC6D25DBA5239C9BCE8C08CC96C"
+      "sha256": "F3D38532F37BEC3D9027D94F667A97D5D4A211A9FE8231E54C63FA1D852D22E1"
     },
     {
       "id": "S3-ART-064",

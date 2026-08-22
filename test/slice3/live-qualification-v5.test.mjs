@@ -271,6 +271,28 @@ test(
   },
 );
 
+test(
+  "noncanonical hosts reject production V5 binding before fetch or state",
+  { skip: process.platform === "win32" },
+  async () => {
+    const originalFetch = globalThis.fetch;
+    let fetches = 0;
+    globalThis.fetch = async () => {
+      fetches += 1;
+      throw new Error("FETCH_CALLED");
+    };
+    try {
+      await assert.rejects(
+        createV5SourceBinding(),
+        /canonical repository root/u,
+      );
+      assert.equal(fetches, 0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+);
+
 test("current V5 bytes pin the TPM public authority but reject absent acceptance", () => {
   assert.equal(slice3V5QualificationConstants.role2PublicKeyPinned, true);
   assert.equal(
@@ -794,53 +816,62 @@ test("host-neutral source verifier rejects traversal, symlink, tamper, missing, 
   );
 });
 
-test("an identical clean clone is rejected before credential, replay, state, or fetch", async (t) => {
-  const parent = await mkdtemp(join(tmpdir(), "matchbase-v5-clone-"));
-  const clone = join(parent, "clone");
-  t.after(() => rm(parent, { recursive: true, force: true }));
-  const repository = resolve(".");
-  assert.equal(
-    spawnSync("git", ["clone", "--quiet", "--no-hardlinks", repository, clone])
-      .status,
-    0,
-  );
-  assert.equal(
-    spawnSync(
-      "git",
+test(
+  "an identical clean clone is rejected before credential, replay, state, or fetch",
+  { skip: process.platform !== "win32" },
+  async (t) => {
+    const parent = await mkdtemp(join(tmpdir(), "matchbase-v5-clone-"));
+    const clone = join(parent, "clone");
+    t.after(() => rm(parent, { recursive: true, force: true }));
+    const repository = resolve(".");
+    assert.equal(
+      spawnSync("git", [
+        "clone",
+        "--quiet",
+        "--no-hardlinks",
+        repository,
+        clone,
+      ]).status,
+      0,
+    );
+    assert.equal(
+      spawnSync(
+        "git",
+        [
+          "remote",
+          "set-url",
+          "origin",
+          "https://github.com/banihashem/INNOBASE-MatchBASE.git",
+        ],
+        { cwd: clone },
+      ).status,
+      0,
+    );
+    const replayPath =
+      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.role2-signing-replay-registry\\consumed-v5.jsonl";
+    const sessionPath =
+      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-live-qualification-state\\v5-968A9D69D38203E2E8B1375A";
+    const replayBefore = sha256(await readFile(replayPath));
+    await assert.rejects(lstat(sessionPath), /ENOENT/u);
+    const moduleUrl = pathToFileURL(
+      resolve("scripts/lib/slice3-live-qualification-v5.mjs"),
+    ).href;
+    const child = spawnSync(
+      process.execPath,
       [
-        "remote",
-        "set-url",
-        "origin",
-        "https://github.com/banihashem/INNOBASE-MatchBASE.git",
+        "--input-type=module",
+        "--eval",
+        `globalThis.fetch=()=>{throw new Error("FETCH_CALLED")};const m=await import(${JSON.stringify(moduleUrl)});await m.createV5SourceBinding()`,
       ],
-      { cwd: clone },
-    ).status,
-    0,
-  );
-  const replayPath =
-    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.role2-signing-replay-registry\\consumed-v5.jsonl";
-  const sessionPath =
-    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-live-qualification-state\\v5-968A9D69D38203E2E8B1375A";
-  const replayBefore = sha256(await readFile(replayPath));
-  await assert.rejects(lstat(sessionPath), /ENOENT/u);
-  const moduleUrl = pathToFileURL(
-    resolve("scripts/lib/slice3-live-qualification-v5.mjs"),
-  ).href;
-  const child = spawnSync(
-    process.execPath,
-    [
-      "--input-type=module",
-      "--eval",
-      `globalThis.fetch=()=>{throw new Error("FETCH_CALLED")};const m=await import(${JSON.stringify(moduleUrl)});await m.createV5SourceBinding()`,
-    ],
-    { cwd: clone, encoding: "utf8" },
-  );
-  assert.notEqual(child.status, 0);
-  assert.match(child.stderr, /canonical repository root/u);
-  assert.doesNotMatch(child.stderr, /FETCH_CALLED/u);
-  assert.equal(sha256(await readFile(replayPath)), replayBefore);
-  await assert.rejects(lstat(sessionPath), /ENOENT/u);
-});
+      { cwd: clone, encoding: "utf8" },
+    );
+    assert.notEqual(child.status, 0);
+    assert.match(child.stderr, /canonical repository root/u);
+    assert.doesNotMatch(child.stderr, /FETCH_CALLED/u);
+    assert.equal(sha256(await readFile(replayPath)), replayBefore);
+    await assert.rejects(lstat(sessionPath), /ENOENT/u);
+  },
+);
 
 test("HTTP 200 is reduced to closed sanitized credential-gate PASS only", async () => {
   const result = await reduceV5CredentialResponse(

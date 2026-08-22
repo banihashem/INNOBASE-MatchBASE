@@ -956,7 +956,6 @@ export async function verifyPinnedV5Role2Acceptance({
     envelopeBytes.length > 4_096
   )
     throw new Error("V5 signed input or public trust anchor is invalid.");
-  const { publicKey } = await verifyPinnedV5PublicMaterials();
   const decoder = new TextDecoder("utf8", { fatal: true });
   const payload = JSON.parse(decoder.decode(payloadBytes));
   const envelope = JSON.parse(decoder.decode(envelopeBytes));
@@ -975,6 +974,7 @@ export async function verifyPinnedV5Role2Acceptance({
   const s = p1363Scalar(signature, 32);
   if (r <= 0n || r >= P256_ORDER || s <= 0n || s > P256_HALF_ORDER)
     throw new Error("V5 signature is not a valid low-S P-256 signature.");
+  const { publicKey } = await verifyPinnedV5PublicMaterials();
   const signedInput = Buffer.concat([
     Buffer.from(SIGNATURE_DOMAIN_TEXT, "utf8"),
     canonicalPayload,

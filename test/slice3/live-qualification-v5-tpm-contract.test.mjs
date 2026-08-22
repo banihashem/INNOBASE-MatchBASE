@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createPublicKey } from "node:crypto";
 import {
   link,
   mkdir,
@@ -10,7 +11,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import {
   rfc8785Canonicalize,
@@ -45,6 +46,9 @@ const DIGEST = "A".repeat(64);
 const COMMIT = "a".repeat(40);
 const TREE = "b".repeat(40);
 const NOW = Date.parse("2026-08-22T12:00:00Z");
+const CANONICAL_WINDOWS_WORKSPACE =
+  process.platform === "win32" &&
+  resolve(".") === V5_TPM_CONTRACT.repositoryPath;
 
 const binding = (path, overrides = {}) => ({
   path,
@@ -440,29 +444,54 @@ test("invalid and high-S P1363 signatures fail closed under the pinned TPM key",
   );
 });
 
-test("fixed public CER, PEM, SPKI, curve, validity, self-signature, and Key Usage verify", async () => {
-  const result = await verifyPinnedV5PublicMaterials();
-  assert.equal(result.publicKey.asymmetricKeyType, "ec");
-  assert.equal(result.publicKey.asymmetricKeyDetails.namedCurve, "prime256v1");
-  assert.equal(V5_TPM_CONTRACT.signatureProtocolVersion, "V1");
+test("repository-pinned public PEM has exact SPKI and P-256 curve on every host", async () => {
+  const pem = await readFile(
+    "config/slice3/role2-v5-tpm-ecdsa-p256-public.pem",
+  );
+  assert.equal(sha256(pem), V5_TPM_CONTRACT.publicPemSha256);
+  const key = createPublicKey(pem);
+  assert.equal(key.asymmetricKeyType, "ec");
+  assert.equal(key.asymmetricKeyDetails.namedCurve, "prime256v1");
+  assert.equal(
+    sha256(key.export({ type: "spki", format: "der" })),
+    V5_TPM_CONTRACT.publicSpkiDerSha256,
+  );
 });
 
-test("authoritative live tree equals the frozen UTF-8 byte-ordered 14-path set", async () => {
-  const files = [];
-  const walk = async (directory) => {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const path = join(directory, entry.name);
-      if (entry.isDirectory()) await walk(path);
-      else if (entry.isFile()) files.push(path);
-      else assert.fail("authoritative tree contains a non-file");
-    }
-  };
-  await walk(V5_TPM_CONTRACT.authoritativeRoot);
-  files.sort((left, right) =>
-    Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8")),
-  );
-  assert.deepEqual(files, V5_AUTHORITATIVE_SOURCE_PATHS);
-});
+test(
+  "canonical Windows public CER, PEM, custody, and Key Usage verify",
+  { skip: !CANONICAL_WINDOWS_WORKSPACE },
+  async () => {
+    const result = await verifyPinnedV5PublicMaterials();
+    assert.equal(result.publicKey.asymmetricKeyType, "ec");
+    assert.equal(
+      result.publicKey.asymmetricKeyDetails.namedCurve,
+      "prime256v1",
+    );
+    assert.equal(V5_TPM_CONTRACT.signatureProtocolVersion, "V1");
+  },
+);
+
+test(
+  "canonical Windows authoritative tree equals the frozen UTF-8 byte-ordered 14-path set",
+  { skip: !CANONICAL_WINDOWS_WORKSPACE },
+  async () => {
+    const files = [];
+    const walk = async (directory) => {
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) await walk(path);
+        else if (entry.isFile()) files.push(path);
+        else assert.fail("authoritative tree contains a non-file");
+      }
+    };
+    await walk(V5_TPM_CONTRACT.authoritativeRoot);
+    files.sort((left, right) =>
+      Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8")),
+    );
+    assert.deepEqual(files, V5_AUTHORITATIVE_SOURCE_PATHS);
+  },
+);
 
 function replayRecord(sequence, previousRecordSha256 = null) {
   const core = {
@@ -509,15 +538,19 @@ test("replay registry fixes initial-empty, ordered JSONL, hash chain, and duplic
     assert.throws(() => validateV5ReplayRegistryBytes(bytes));
 });
 
-test("canonical replay registry is a present checked empty file with unused identity", async () => {
-  const payload = payloadFixture();
-  const inspected = await inspectCanonicalV5ReplayRegistry(
-    payload.replayIdentity,
-  );
-  assert.equal(inspected.digest, sha256(Buffer.alloc(0)));
-  assert.equal(inspected.records.length, 0);
-  assert.equal(inspected.identityUsed, false);
-});
+test(
+  "canonical Windows replay registry is a checked empty file with unused identity",
+  { skip: !CANONICAL_WINDOWS_WORKSPACE },
+  async () => {
+    const payload = payloadFixture();
+    const inspected = await inspectCanonicalV5ReplayRegistry(
+      payload.replayIdentity,
+    );
+    assert.equal(inspected.digest, sha256(Buffer.alloc(0)));
+    assert.equal(inspected.records.length, 0);
+    assert.equal(inspected.identityUsed, false);
+  },
+);
 
 test("replay production export surface is canonical-only", () => {
   assert.deepEqual(Object.keys(replayRegistryModule).sort(), [

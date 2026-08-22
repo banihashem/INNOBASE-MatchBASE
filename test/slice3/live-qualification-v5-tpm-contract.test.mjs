@@ -41,6 +41,7 @@ import {
   V5_RESPONSE_PERSISTED_FIELDS,
 } from "../../scripts/lib/slice3-v5-response-contract.mjs";
 import { reduceV5CredentialResponse } from "../../scripts/lib/slice3-live-qualification-v5.mjs";
+import { assertCanonicalV5DirectoryIdentity } from "../../scripts/lib/slice3-v5-canonical-workspace.mjs";
 
 const DIGEST = "A".repeat(64);
 const COMMIT = "a".repeat(40);
@@ -338,6 +339,14 @@ test("RFC 8785 canonicalization is deterministic and rejects invalid Unicode", (
     rfc8785Canonicalize({ value: "e\u0301" }),
   );
   assert.throws(() => rfc8785Canonicalize({ value: "\ud800" }), /surrogate/u);
+});
+
+test("missing canonical roots fail with one host-neutral typed error", async () => {
+  const missing = join(tmpdir(), `matchbase-v5-missing-${process.pid}`);
+  await assert.rejects(
+    assertCanonicalV5DirectoryIdentity(missing, missing, "fixture root"),
+    /canonical fixture root is unavailable or invalid/u,
+  );
 });
 
 test("v3 payload closes identity, exact paths, safe IDs, and exact 900-second UTC", () => {

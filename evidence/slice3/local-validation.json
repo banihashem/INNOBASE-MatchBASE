@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "slice": "SLICE-3",
-  "observedAt": "2026-08-22T12:18:58.812Z",
+  "observedAt": "2026-08-22T12:39:31.444Z",
   "lifecyclePhase": "DURING_REVIEW",
   "candidateStatus": "LOCAL_REPOSITORY_IMPLEMENTATION_FROZEN_LIVE_BLOCKED",
   "repositoryImplementation": "PASS",
@@ -96,20 +96,20 @@
   },
   "candidate": {
     "manifestPath": "evidence/slice3/candidate-manifest.json",
-    "manifestSha256": "6AB480CBDCDB6233C3EEBEB91F942B90D3F5E3575FAF254E96BE9FFFE42CE568",
-    "aggregateSha256": "5BE4D5CC0EA502CDD6C13FBF2651E5FE7B4A841724778E04BE3AF7A6C9FAA6C7",
+    "manifestSha256": "5452B3C487703EE676923AB3DD53CD119DB2F51890DBE636FB6F395054416A69",
+    "aggregateSha256": "95E8BA7A6D8A91DE824AC136BFE00D3F0CDCB0D730CA7BD9720A1D574545E1E6",
     "fileCount": 64
   },
   "localGate": {
     "status": "PASS",
     "fullWrapper": {
       "command": "pnpm test:ci && pnpm dependency:audit",
-      "durationMs": 501735,
+      "durationMs": 525330,
       "result": "PASS",
-      "observedAt": "2026-08-22T12:18:58.750Z",
+      "observedAt": "2026-08-22T12:39:31.394Z",
       "sourceRef": {
         "path": "evidence/slice3/full-wrapper-result.json",
-        "sha256": "2E470B3A9A971F5BD081B3864288D78B8439EAFDDC2549EABE8D9491F92674A0"
+        "sha256": "4F15A088E690AFA709191BB96B3CC2C908427643C325FDA9554FCB09F0ED649A"
       }
     },
     "testCounts": {
@@ -2179,7 +2179,7 @@
     {
       "id": "S3-ART-031",
       "path": "scripts/lib/slice3-v5-canonical-workspace.mjs",
-      "sha256": "7D53232917BC7F5F61BC0BB6ED3B07F71FB7EF3B53F8E7B4237B696368D2F918"
+      "sha256": "F951D5D4B16E356CACADFF7985ECC33220AF3C36C2AE631D7CA3C18B03E7DDA4"
     },
     {
       "id": "S3-ART-032",
@@ -2339,7 +2339,7 @@
     {
       "id": "S3-ART-063",
       "path": "test/slice3/live-qualification-v5-tpm-contract.test.mjs",
-      "sha256": "F3D38532F37BEC3D9027D94F667A97D5D4A211A9FE8231E54C63FA1D852D22E1"
+      "sha256": "F05284F3D52D23BB8228AA06379372BC7C579F42A0F64D5318FC6CCAD8E6AEB7"
     },
     {
       "id": "S3-ART-064",

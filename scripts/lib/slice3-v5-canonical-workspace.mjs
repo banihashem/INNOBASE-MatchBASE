@@ -14,15 +14,22 @@ export async function assertCanonicalV5DirectoryIdentity(
   expectedPath,
   label,
 ) {
-  const item = await lstat(path);
+  let item;
+  let actualPath;
+  try {
+    item = await lstat(path);
+    actualPath = await realpath(path);
+  } catch {
+    throw new Error(`V5 canonical ${label} is unavailable or invalid.`);
+  }
   if (
     !item.isDirectory() ||
     item.isSymbolicLink() ||
-    (await realpath(path)) !== path ||
+    actualPath !== path ||
     resolve(path) !== path ||
     path !== expectedPath
   )
-    throw new Error(`V5 ${label} is not a canonical directory.`);
+    throw new Error(`V5 canonical ${label} is unavailable or invalid.`);
   return path;
 }
 

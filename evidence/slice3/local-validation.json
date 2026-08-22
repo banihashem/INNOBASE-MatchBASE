@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "slice": "SLICE-3",
-  "observedAt": "2026-08-22T12:39:31.444Z",
+  "observedAt": "2026-08-22T13:03:42.262Z",
   "lifecyclePhase": "DURING_REVIEW",
   "candidateStatus": "LOCAL_REPOSITORY_IMPLEMENTATION_FROZEN_LIVE_BLOCKED",
   "repositoryImplementation": "PASS",
@@ -96,20 +96,20 @@
   },
   "candidate": {
     "manifestPath": "evidence/slice3/candidate-manifest.json",
-    "manifestSha256": "5452B3C487703EE676923AB3DD53CD119DB2F51890DBE636FB6F395054416A69",
-    "aggregateSha256": "95E8BA7A6D8A91DE824AC136BFE00D3F0CDCB0D730CA7BD9720A1D574545E1E6",
+    "manifestSha256": "020BFCBA368C703C726EFC0A9DCFD6EE23E60863473D5662D1F96FF8B8C98517",
+    "aggregateSha256": "7F7100AD275C78D13C043D497BC53FDACDA8E3C743D6D693DD5A6615FC6BEDB0",
     "fileCount": 64
   },
   "localGate": {
     "status": "PASS",
     "fullWrapper": {
       "command": "pnpm test:ci && pnpm dependency:audit",
-      "durationMs": 525330,
+      "durationMs": 488998,
       "result": "PASS",
-      "observedAt": "2026-08-22T12:39:31.394Z",
+      "observedAt": "2026-08-22T13:03:42.195Z",
       "sourceRef": {
         "path": "evidence/slice3/full-wrapper-result.json",
-        "sha256": "4F15A088E690AFA709191BB96B3CC2C908427643C325FDA9554FCB09F0ED649A"
+        "sha256": "14CB030D0E46C8FA8AF75484DDF5FA3D91A2EF277A2C0A662C9B2E82BA0163AC"
       }
     },
     "testCounts": {
@@ -123,9 +123,15 @@
       "slice3RootPostgresqlHttpWorker": 8,
       "webUnitPostgresql18": 29,
       "qualifiedLiveBrowserChrome": 1,
+      "liveQualificationV3V4": 43,
+      "liveQualificationV5": 44,
+      "slice3NodeTotal": 245,
+      "browserTotal": 18,
+      "standaloneRepeat": 1,
+      "skipped": 1,
       "failed": 0
     },
-    "note": "V5 PRE_EXECUTION_PENDING pre-wrapper basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 43/43, V5 credential infrastructure 25/25, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, and qualified-live injected real Chrome 1/1. Slice 3 remains BLOCKED_CREDENTIAL; the Role 2 signing authority was revoked before use and no replacement TPM/ECDSA verifier contract or trust anchor is pinned. V5 has no session, credential GET, credential reread, provider/model/search call, activation or external mutation. Six fresh same-byte audits, final critic, hosted infrastructure release and a new Role 2 acceptance remain separately gated."
+    "note": "V5 PRE_EXECUTION_PENDING measured basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 43/43, V5 TPM credential infrastructure 43 PASS plus 1 intentional noncanonical-host skip, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, Slice 3 Node total 244 PASS of 245 with 1 intentional skip, standalone repeat 1/1, and Chrome 18/18. The revoked file-backed Ed25519 authority remains unused; the replacement Role 2 TPM ECDSA-P256 V3 verifier contract and public trust anchor are pinned, while the detached signed acceptance payload/envelope are absent. Slice 3 remains PRE_EXECUTION_PENDING and BLOCKED_CREDENTIAL. V5 has no session, credential GET, credential reread, provider/model/search call, activation or external mutation. Six fresh successor audits, final critic, hosted infrastructure release and a new Role 2 signed acceptance remain separately gated."
   },
   "acceptance": [
     {

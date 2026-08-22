@@ -12,7 +12,7 @@
     "apps/dashboard/dist/current-snapshot.json"
   ],
   "fileCount": 64,
-  "aggregateSha256": "95E8BA7A6D8A91DE824AC136BFE00D3F0CDCB0D730CA7BD9720A1D574545E1E6",
+  "aggregateSha256": "7F7100AD275C78D13C043D497BC53FDACDA8E3C743D6D693DD5A6615FC6BEDB0",
   "files": [
     {
       "path": ".gitignore",
@@ -128,7 +128,7 @@
     },
     {
       "path": "scripts/generate-slice3-evidence.mjs",
-      "sha256": "9FC2B7744987F008A2BAE8C3FD52ED7184B7E4C82D671F9B0A2966C5FB711F53"
+      "sha256": "71FB5D58598D15948E17333C8680B07DA8A6B387AB5E766AD452F1A38F53512B"
     },
     {
       "path": "scripts/lib/slice3-dashboard-handoff-policy.mjs",

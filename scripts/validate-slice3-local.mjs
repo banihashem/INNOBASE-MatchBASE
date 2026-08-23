@@ -170,6 +170,14 @@ for (const sourceBinding of [
   evidence.qualificationPreflight.v5Admission.role2TpmAuthority
     .forensicArchiveAudit,
   evidence.qualificationPreflight.v5Admission.role2TpmAuthority
+    .forensicArchiveManifest,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority
+    .officialDocsEvidence,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority
+    .officialDocsEvidenceAudit,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority
+    .rateLimitAmendment,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority
     .preservedV3Schema,
   evidence.qualificationPreflight.v5Admission.role2TpmAuthority
     .preservedV3Contract,

@@ -15,6 +15,7 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 import {
   rfc8785Canonicalize,
+  assertV5ArchiveRootIdentity,
   sha256,
   validateV5Role2Envelope,
   validateV5Role2Payload,
@@ -78,7 +79,7 @@ function payloadFixture() {
     ),
   );
   return {
-    schemaVersion: "matchbase.role2-detached-acceptance/v4",
+    schemaVersion: "matchbase.role2-detached-acceptance/v5",
     payloadType: "V5_OPENROUTER_CREDENTIAL_GET_AUTHORIZATION",
     decisionId: V5_TPM_CONTRACT.decisionId,
     sessionId: V5_TPM_CONTRACT.sessionId,
@@ -96,7 +97,11 @@ function payloadFixture() {
       nonce: V5_TPM_CONTRACT.nonce,
       keyId: V5_TPM_CONTRACT.keyId,
       registryPath: V5_TPM_CONTRACT.replayRegistryPath,
-      registryPreSignSha256: sha256(Buffer.alloc(0)),
+      registryPreSignSha256: V5_TPM_CONTRACT.replayPreSignSha256,
+      registryPreSignBytes: V5_TPM_CONTRACT.replayPreSignBytes,
+      registryPreSignRecordCount: V5_TPM_CONTRACT.replayPreSignRecordCount,
+      registryPreSignLastSequence: V5_TPM_CONTRACT.replayPreSignLastSequence,
+      registryPreSignTailSha256: V5_TPM_CONTRACT.replayPreSignTailSha256,
       nonceAbsentBeforeSign: true,
     },
     repository: {
@@ -140,21 +145,21 @@ function payloadFixture() {
         },
       ),
       successorAuthorization: binding(
-        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_AUTHORIZATION_REQUIREMENTS_AFTER_HOSTED_TIME_BINDING_FAILURE.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_REQUIREMENTS_AFTER_INVALID_200_SCHEMA_V1.md",
         {
           sha256: V5_TPM_CONTRACT.successorAuthorizationSha256,
           bytes: V5_TPM_CONTRACT.successorAuthorizationBytes,
         },
       ),
       payloadSchema: binding(
-        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.json",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.json",
         {
           sha256: V5_TPM_CONTRACT.schemaSha256,
           bytes: V5_TPM_CONTRACT.schemaBytes,
         },
       ),
       signingContract: binding(
-        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.md",
         {
           sha256: V5_TPM_CONTRACT.contractSha256,
           bytes: V5_TPM_CONTRACT.contractBytes,
@@ -183,8 +188,36 @@ function payloadFixture() {
           bytes: 886,
         },
       ),
+      forensicArchiveManifest: binding(
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-v5-signing\\archive\\V5-INVALID-200-SCHEMA-001\\CONSUMED_SESSION_v5-53676308BAD073D07FFC88B8_MANIFEST.json",
+        {
+          sha256: V5_TPM_CONTRACT.forensicArchiveManifestSha256,
+          bytes: V5_TPM_CONTRACT.forensicArchiveManifestBytes,
+        },
+      ),
+      officialDocsEvidence: binding(
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_OPENROUTER_KEY_STATUS_OFFICIAL_DOCS_EVIDENCE_V2_2026-08-23.json",
+        {
+          sha256: V5_TPM_CONTRACT.officialDocsEvidenceSha256,
+          bytes: V5_TPM_CONTRACT.officialDocsEvidenceBytes,
+        },
+      ),
+      officialDocsEvidenceAudit: binding(
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_OPENROUTER_KEY_STATUS_OFFICIAL_DOCS_EVIDENCE_V2_AUDIT_2026-08-23.json",
+        {
+          sha256: V5_TPM_CONTRACT.officialDocsEvidenceAuditSha256,
+          bytes: V5_TPM_CONTRACT.officialDocsEvidenceAuditBytes,
+        },
+      ),
+      rateLimitAmendment: binding(
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_GOVERNANCE_AMENDMENT_RATE_LIMIT_REQUESTS_V1.md",
+        {
+          sha256: V5_TPM_CONTRACT.rateLimitAmendmentSha256,
+          bytes: V5_TPM_CONTRACT.rateLimitAmendmentBytes,
+        },
+      ),
       forensicArchiveAudit: binding(
-        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_INVALID_PAIR_FORENSIC_ARCHIVE_AUDIT_2026-08-22.json",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_INVALID_200_SCHEMA_FORENSIC_ARCHIVE_AUDIT_2026-08-23.json",
         {
           sha256: V5_TPM_CONTRACT.forensicArchiveAuditSha256,
           bytes: V5_TPM_CONTRACT.forensicArchiveAuditBytes,
@@ -237,7 +270,7 @@ function payloadFixture() {
       critic: passBinding(V5_FIXED_SIGNED_PATHS.critic),
       hosted: {
         observationPath:
-          "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_GITHUB_HOSTED_OBSERVATION_PO_001_SLICE_3_V5_SUCCESSOR.json",
+          "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_GITHUB_HOSTED_OBSERVATION_PO_001_SLICE_3_V5_SUCCESSOR_2.json",
         observationSha256: DIGEST,
         runId: 32_134_102_849,
         jobId: 95_701_395_827,
@@ -250,7 +283,7 @@ function payloadFixture() {
         observedAt: "2026-08-22T11:50:00Z",
       },
       preSignRole2Audit: passBinding(
-        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN_LOOP_1.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN_LOOP_2.md",
       ),
     },
     authorizationPolicy: {
@@ -331,7 +364,7 @@ function envelopeFixture(payload) {
     Buffer.from(rfc8785Canonicalize(payload), "utf8"),
   );
   return {
-    schemaVersion: "matchbase.role2-detached-signature/v4",
+    schemaVersion: "matchbase.role2-detached-signature/v5",
     sessionId: payload.sessionId,
     replayIdentitySha256: sha256(
       Buffer.from(rfc8785Canonicalize(payload.replayIdentity), "utf8"),
@@ -568,61 +601,37 @@ test(
   },
 );
 
-function replayRecord(sequence, previousRecordSha256 = null) {
-  const core = {
-    schemaVersion: "matchbase.role2-v5-replay-consumption/v1",
-    sequence,
-    workspaceClaim: V5_TPM_CONTRACT.workspaceClaim,
-    decisionId: V5_TPM_CONTRACT.decisionId,
-    sessionId: `v5-${String(sequence).padStart(24, "A")}`,
-    nonce: String(sequence).padStart(32, "B"),
-    keyId: V5_TPM_CONTRACT.keyId,
-    payloadSha256: DIGEST,
-    registryPreSignSha256: sha256(Buffer.alloc(0)),
-    previousRecordSha256,
-    observedAt: `2026-08-22T12:00:0${sequence}Z`,
-  };
-  return {
-    ...core,
-    recordSha256: sha256(Buffer.from(rfc8785Canonicalize(core), "utf8")),
-  };
-}
-
-test("replay registry fixes initial-empty, ordered JSONL, hash chain, and duplicate denial", () => {
+test("replay registry fixes the exact nonempty predecessor and rejects rollback", async () => {
+  const predecessor = await readFile(V5_TPM_CONTRACT.replayRegistryPath);
+  const validated = validateV5ReplayRegistryBytes(predecessor);
+  assert.equal(validated.digest, V5_TPM_CONTRACT.replayPreSignSha256);
+  assert.equal(validated.byteLength, V5_TPM_CONTRACT.replayPreSignBytes);
+  assert.equal(validated.records.length, 1);
   assert.equal(
-    validateV5ReplayRegistryBytes(Buffer.alloc(0)).digest,
-    sha256(Buffer.alloc(0)),
+    validated.lastRecordSha256,
+    V5_TPM_CONTRACT.replayPreSignTailSha256,
   );
-  const first = replayRecord(1);
-  const firstBytes = Buffer.from(`${JSON.stringify(first)}\n`, "utf8");
-  assert.equal(
-    validateV5ReplayRegistryBytes(firstBytes).lastRecordSha256,
-    first.recordSha256,
+  assert.throws(
+    () => validateV5ReplayRegistryBytes(Buffer.alloc(0)),
+    /empty rollback/u,
   );
-  const second = replayRecord(2, first.recordSha256);
-  const chain = Buffer.from(
-    `${JSON.stringify(first)}\n${JSON.stringify(second)}\n`,
-    "utf8",
+  const changed = JSON.parse(predecessor.toString("utf8"));
+  changed.sequence = 9;
+  assert.throws(() =>
+    validateV5ReplayRegistryBytes(Buffer.from(`${JSON.stringify(changed)}\n`)),
   );
-  assert.equal(validateV5ReplayRegistryBytes(chain).records.length, 2);
-  for (const bytes of [
-    chain.subarray(0, -1),
-    Buffer.from(`${JSON.stringify({ ...first, sequence: 9 })}\n`, "utf8"),
-    Buffer.from(`${JSON.stringify(first)}\n${JSON.stringify(first)}\n`, "utf8"),
-  ])
-    assert.throws(() => validateV5ReplayRegistryBytes(bytes));
 });
 
 test(
-  "canonical Windows replay registry is a checked empty file with unused identity",
+  "canonical Windows replay registry is the checked nonempty predecessor with unused successor identity",
   { skip: !CANONICAL_WINDOWS_WORKSPACE },
   async () => {
     const payload = payloadFixture();
     const inspected = await inspectCanonicalV5ReplayRegistry(
       payload.replayIdentity,
     );
-    assert.equal(inspected.digest, sha256(Buffer.alloc(0)));
-    assert.equal(inspected.records.length, 0);
+    assert.equal(inspected.digest, V5_TPM_CONTRACT.replayPreSignSha256);
+    assert.equal(inspected.records.length, 1);
     assert.equal(inspected.identityUsed, false);
   },
 );
@@ -665,13 +674,17 @@ test("replay reservation is one-winner, durable, restart-safe, and rejects unsaf
   const registryRoot = join(root, "registry");
   const registryPath = join(registryRoot, "consumed-v5.jsonl");
   await mkdir(registryRoot);
-  await writeFile(registryPath, Buffer.alloc(0), { flag: "wx" });
+  await writeFile(
+    registryPath,
+    await readFile(V5_TPM_CONTRACT.replayRegistryPath),
+    { flag: "wx" },
+  );
   const replayIdentity = payloadFixture().replayIdentity;
   const input = {
     registryPath,
     replayIdentity,
     payloadSha256: DIGEST,
-    observedAt: "2026-08-22T12:00:00Z",
+    observedAt: "2026-08-23T09:00:00Z",
   };
   const attempts = await Promise.allSettled([
     reserveV5ReplayIdentityAt(input),
@@ -748,13 +761,35 @@ test("replay reservation is one-winner, durable, restart-safe, and rejects unsaf
 test("response contract is exhaustive, ordered, and identical to runtime sanitized evidence", async () => {
   const contract = JSON.parse(
     await readFile(
-      "config/slice3/openrouter-key-status-response-contract.v1.json",
+      "config/slice3/openrouter-key-status-response-contract.v2.json",
       "utf8",
     ),
   );
   validateV5ResponseContractArtifact(contract);
   const response = new Response(
-    JSON.stringify({ data: { is_free_tier: false } }),
+    JSON.stringify({
+      data: {
+        byok_usage: 0,
+        byok_usage_daily: 0,
+        byok_usage_monthly: 0,
+        byok_usage_weekly: 0,
+        creator_user_id: null,
+        expires_at: null,
+        include_byok_in_limit: false,
+        is_free_tier: false,
+        is_management_key: false,
+        is_provisioning_key: false,
+        label: "discard",
+        limit: null,
+        limit_remaining: 1,
+        limit_reset: null,
+        rate_limit: { requests: -1, interval: "legacy", note: "discard" },
+        usage: 0,
+        usage_daily: 0,
+        usage_monthly: 0,
+        usage_weekly: 0,
+      },
+    }),
     {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -767,7 +802,7 @@ test("response contract is exhaustive, ordered, and identical to runtime sanitiz
     V5_RESPONSE_PERSISTED_FIELDS,
   );
   for (const key of [
-    "allowedDataKeys",
+    "extractedDataKeys",
     "persistedFields",
     "prohibitedPersistence",
   ]) {
@@ -791,4 +826,38 @@ test("TPM verifier source has private immutable V1 protocol-domain construction"
   assert.match(source, /const SIGNATURE_DOMAIN_TEXT/u);
   assert.match(source, /Buffer\.from\(SIGNATURE_DOMAIN_TEXT, "utf8"\)/u);
   assert.doesNotMatch(source, /domain:\s*Buffer/u);
+});
+
+test("new invalid-200 archive root is explicitly non-reparse checked on every public-material load", async () => {
+  const source = await readFile(
+    "scripts/lib/slice3-v5-role2-tpm-verifier.mjs",
+    "utf8",
+  );
+  assert.match(
+    source,
+    /const invalid200ArchiveRoot =\s*dirname\(\s*PUBLIC_MATERIALS\.forensicArchiveManifest,?\s*\)/u,
+  );
+  assert.match(
+    source,
+    /assertV5ArchiveRootIdentity\(dirname\(invalid200ArchiveRoot\)\)/u,
+  );
+  assert.match(source, /assertV5ArchiveRootIdentity\(invalid200ArchiveRoot\)/u);
+  const root = await mkdtemp(join(tmpdir(), "matchbase-v5-archive-root-"));
+  const canonical = join(root, "canonical");
+  const linked = join(root, "linked");
+  await mkdir(canonical);
+  try {
+    assert.equal(await assertV5ArchiveRootIdentity(canonical), true);
+    await symlink(
+      canonical,
+      linked,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    await assert.rejects(
+      assertV5ArchiveRootIdentity(linked),
+      /identity|reparse/u,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

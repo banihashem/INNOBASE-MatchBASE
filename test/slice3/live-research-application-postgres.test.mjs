@@ -1696,14 +1696,58 @@ postgresTest(
         /circuit is open/iu,
       );
       assert.equal(failedDiscoveryCalls, 3);
-      await new Promise((resolve) => setTimeout(resolve, 120));
+      const localCircuitPolicyId = randomUUID();
+      const localCircuitPolicyVersion = "slice3-routes.local-circuit.v1";
+      await pool.query(
+        `INSERT INTO research_route_policy
+           (research_route_policy_id,schema_version,policy_version,environment,
+            activation_state,official_evidence,qualification_budget)
+         VALUES($1,'research-route-policy.v1',$2,'local','qualified',
+                '["direct","openrouter"]','{"max_calls":2,"max_cost_usd":1}')`,
+        [localCircuitPolicyId, localCircuitPolicyVersion],
+      );
+      const localCircuitProviderRouteId = randomUUID();
+      await pool.query(
+        `INSERT INTO provider_route
+           (provider_route_id,route_id,capability,provider,model_id,environment,
+            route_kind,data_handling_posture,timeout_ms,max_attempts,retry_policy,
+            config_version,enabled)
+         VALUES($1,'RT-GEMINI-DIRECT-S3-V1','CAP-STRUCTURED-GENERATION',
+                'gemini_direct','gemini-2.5-flash','local','real_data',
+                'paid_no_training',1000,1,'{}',$2,true)`,
+        [localCircuitProviderRouteId, localCircuitPolicyVersion],
+      );
+      await pool.query(
+        `INSERT INTO provider_route_capability(provider_route_id,capability)
+         VALUES($1,'CAP-SEARCH'),($1,'CAP-STRUCTURED-GENERATION')`,
+        [localCircuitProviderRouteId],
+      );
+      const circuitProbeAfterMs = 5_000;
+      const probeAtMs = Date.now();
+      const probeAt = new Date(probeAtMs).toISOString();
+      await pool.query(
+        `INSERT INTO research_route_health_observation
+           (research_route_health_observation_id,route_id,environment,observation,
+            consecutive_failures,circuit_disposition,source_attempt_id,observed_at)
+         VALUES($1,'RT-GEMINI-DIRECT-S3-V1','local','transient_failure',3,'open',NULL,$2)`,
+        [
+          randomUUID(),
+          new Date(probeAtMs - circuitProbeAfterMs - 1).toISOString(),
+        ],
+      );
       const circuit = createPostgresLiveResearchCircuit({
         pool,
-        environment: "test",
-        probeAfterMs: 100,
+        environment: "local",
+        probeAfterMs: circuitProbeAfterMs,
       });
+      const localCircuitPolicy = {
+        ...policy,
+        policyVersion: localCircuitPolicyVersion,
+        environment: "local",
+      };
       const halfOpenFailureService = new LiveResearchExecutionService({
         ...serviceOptions,
+        policyId: localCircuitPolicyId,
         circuit,
         sourceDiscovery: new GeminiServerOwnedSourceDiscovery({
           async send() {
@@ -1716,7 +1760,6 @@ postgresTest(
           openrouter: new RecordingFakeTransport(new Error("must not run")),
         },
       });
-      const probeAt = new Date().toISOString();
       const firstProbe = await circuit.isRouteAvailable(
         "RT-GEMINI-DIRECT-S3-V1",
         probeAt,
@@ -1727,11 +1770,14 @@ postgresTest(
         await circuit.isRouteAvailable("RT-GEMINI-DIRECT-S3-V1", probeAt),
         false,
       );
-      await new Promise((resolve) => setTimeout(resolve, 120));
+      await new Promise((resolve) =>
+        setTimeout(resolve, circuitProbeAfterMs + 100),
+      );
       const halfOpenFailureRunId = await seedRun("half-open probe failure");
       await assert.rejects(
         halfOpenFailureService.execute({
           ...execution,
+          policy: localCircuitPolicy,
           executionId: "EXEC-HALF-OPEN-FAILURE",
           runId: halfOpenFailureRunId,
           capturedAt: new Date().toISOString(),
@@ -1748,6 +1794,19 @@ postgresTest(
         ),
         false,
       );
+      const localCircuitState = await pool.query(
+        `SELECT observation,consecutive_failures,circuit_disposition,
+                source_attempt_id IS NOT NULL source_is_present
+           FROM research_route_health_observation
+          WHERE route_id='RT-GEMINI-DIRECT-S3-V1' AND environment='local'
+          ORDER BY observed_at DESC,research_route_health_observation_id DESC LIMIT 1`,
+      );
+      assert.deepEqual(localCircuitState.rows[0], {
+        observation: "transient_failure",
+        consecutive_failures: 4,
+        circuit_disposition: "open",
+        source_is_present: true,
+      });
       const healthSuccessRunId = await seedRun("circuit health success");
       const healthSuccessExecutionId = "EXEC-CIRCUIT-HEALTH-SUCCESS";
       const healthSuccessLedger = new PostgresLiveResearchAtomicLedger({
@@ -1799,8 +1858,13 @@ postgresTest(
           resultCount: healthSuccessDiscovery.sourceUrls.length,
         },
       );
+      const healthCircuit = createPostgresLiveResearchCircuit({
+        pool,
+        environment: "test",
+        probeAfterMs: circuitProbeAfterMs,
+      });
       assert.equal(
-        await circuit.isRouteAvailable(
+        await healthCircuit.isRouteAvailable(
           "RT-GEMINI-DIRECT-S3-V1",
           new Date().toISOString(),
         ),

@@ -361,6 +361,10 @@ async function verifyGovernanceSources(payload) {
     payload.governanceBindings.custodyEvidence,
     payload.governanceBindings.revokedEd25519Record,
     payload.governanceBindings.priorHttp401,
+    payload.governanceBindings.forensicArchiveManifest,
+    payload.governanceBindings.officialDocsEvidence,
+    payload.governanceBindings.officialDocsEvidenceAudit,
+    payload.governanceBindings.rateLimitAmendment,
     payload.governanceBindings.forensicArchiveAudit,
     payload.governanceBindings.v4Ledger,
   ])

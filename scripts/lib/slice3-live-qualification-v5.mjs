@@ -84,7 +84,7 @@ const ROLE2_REPLAY_REGISTRY_INITIALIZATION_DIGEST =
 const ROLE2_SIGNING_REVOCATION_DIGEST =
   "D38D03154C6C87576DEED07EB97A3557271D47E79EE4227D7005CFE7140A1665";
 const V5_SESSION_ID = V5_TPM_CONTRACT.sessionId;
-const V5_AUTHORIZATION_ID = "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET";
+const V5_AUTHORIZATION_ID = "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S2";
 const ENDPOINT = "https://openrouter.ai/api/v1/key";
 const OWNER_DIGEST =
   "7B9DC0E27F2DA3B0E20ED2A4220DFE26AA95B76FA4EC1B37D9B559AE3D0AD916";
@@ -342,6 +342,14 @@ export async function createV5SourceBinding() {
     replayReady =
       replay.digest ===
         acceptance.payload.replayIdentity.registryPreSignSha256 &&
+      replay.byteLength ===
+        acceptance.payload.replayIdentity.registryPreSignBytes &&
+      replay.records.length ===
+        acceptance.payload.replayIdentity.registryPreSignRecordCount &&
+      replay.records.at(-1)?.sequence ===
+        acceptance.payload.replayIdentity.registryPreSignLastSequence &&
+      replay.lastRecordSha256 ===
+        acceptance.payload.replayIdentity.registryPreSignTailSha256 &&
       !replay.identityUsed &&
       (await absent(`${V5_TPM_CONTRACT.replayRegistryPath}.lock`));
     replayExhausted = !replayReady;
@@ -424,30 +432,177 @@ async function boundedBytes(response, controller, timeoutMs = 10_000) {
   );
 }
 
-function closedKeyStatusBody(parsed) {
+const V5_REQUIRED_KEY_STATUS_FIELDS = Object.freeze(
+  V5_RESPONSE_ALLOWED_DATA_KEYS.filter((key) => key !== "expires_at"),
+);
+const V5_RATE_LIMIT_KEYS = Object.freeze(["requests", "interval", "note"]);
+const V5_PROTOTYPE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const V5_MAX_JSON_DEPTH = 8;
+
+function assertNoDuplicateOrHostileJsonKeys(text) {
+  let index = 0;
+  const whitespace = () => {
+    while (/\s/u.test(text[index] ?? "")) index += 1;
+  };
+  const stringToken = () => {
+    const start = index;
+    if (text[index++] !== '"') throw new Error("invalid-json");
+    while (index < text.length) {
+      const character = text[index++];
+      if (character === '"') return JSON.parse(text.slice(start, index));
+      if (character === "\\") {
+        const escaped = text[index++];
+        if (escaped === "u") {
+          if (!/^[0-9a-fA-F]{4}$/u.test(text.slice(index, index + 4)))
+            throw new Error("invalid-json");
+          index += 4;
+        } else if (!'"\\/bfnrt'.includes(escaped ?? "")) {
+          throw new Error("invalid-json");
+        }
+      } else if (character.charCodeAt(0) < 0x20) {
+        throw new Error("invalid-json");
+      }
+    }
+    throw new Error("invalid-json");
+  };
+  const value = (depth) => {
+    whitespace();
+    if (depth > V5_MAX_JSON_DEPTH) throw new Error("invalid-json");
+    if (text[index] === "{") {
+      index += 1;
+      whitespace();
+      const keys = new Set();
+      if (text[index] === "}") {
+        index += 1;
+        return;
+      }
+      while (true) {
+        whitespace();
+        const key = stringToken();
+        if (keys.has(key) || V5_PROTOTYPE_KEYS.has(key))
+          throw new Error("invalid-json");
+        keys.add(key);
+        whitespace();
+        if (text[index++] !== ":") throw new Error("invalid-json");
+        value(depth + 1);
+        whitespace();
+        if (text[index] === "}") {
+          index += 1;
+          return;
+        }
+        if (text[index++] !== ",") throw new Error("invalid-json");
+      }
+    }
+    if (text[index] === "[") {
+      index += 1;
+      whitespace();
+      if (text[index] === "]") {
+        index += 1;
+        return;
+      }
+      while (true) {
+        value(depth + 1);
+        whitespace();
+        if (text[index] === "]") {
+          index += 1;
+          return;
+        }
+        if (text[index++] !== ",") throw new Error("invalid-json");
+      }
+    }
+    if (text[index] === '"') {
+      stringToken();
+      return;
+    }
+    const token = text
+      .slice(index)
+      .match(
+        /^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/u,
+      )?.[0];
+    if (!token) throw new Error("invalid-json");
+    if (/^-?\d/u.test(token) && !Number.isFinite(Number(token)))
+      throw new Error("invalid-json");
+    index += token.length;
+  };
+  value(1);
+  whitespace();
+  if (index !== text.length) throw new Error("invalid-json");
+}
+
+function validRfc3339DateTime(value) {
+  if (typeof value !== "string") return false;
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/u,
+  );
+  if (!match) return false;
+  const [, year, month, day, hour, minute, second, offsetHour, offsetMinute] =
+    match.map((item) => (item === undefined ? item : Number(item)));
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > new Date(Date.UTC(year, month, 0)).getUTCDate() ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59 ||
+    (offsetHour !== undefined && (offsetHour > 23 || offsetMinute > 59))
+  )
+    return false;
+  return Number.isFinite(Date.parse(value));
+}
+
+const finiteNonnegative = (value) => Number.isFinite(value) && value >= 0;
+
+function extractKeyStatusDecision(parsed, verificationInstantMs) {
+  const diagnostics = new Set();
+  const add = (value) => diagnostics.add(value);
   if (
     !parsed ||
     typeof parsed !== "object" ||
     Array.isArray(parsed) ||
-    JSON.stringify(Object.keys(parsed)) !== JSON.stringify(["data"]) ||
+    !Object.hasOwn(parsed, "data") ||
     !parsed.data ||
     typeof parsed.data !== "object" ||
     Array.isArray(parsed.data)
-  )
-    return false;
-  const allowed = new Set(V5_RESPONSE_ALLOWED_DATA_KEYS);
+  ) {
+    add("MISSING_REQUIRED_FIELD");
+    return {
+      schemaValid: false,
+      paidCredential: null,
+      failureClass: "INVALID_200_SCHEMA",
+      diagnostics,
+    };
+  }
+  if (Object.keys(parsed).some((key) => key !== "data"))
+    add("UNKNOWN_FIELDS_DISCARDED");
+  const data = parsed.data;
   if (
-    Object.keys(parsed.data).some((key) => !allowed.has(key)) ||
-    parsed.data.is_free_tier !== false ||
-    ("label" in parsed.data && typeof parsed.data.label !== "string") ||
-    ("include_byok_in_limit" in parsed.data &&
-      typeof parsed.data.include_byok_in_limit !== "boolean")
+    Object.keys(data).some(
+      (key) => !V5_RESPONSE_ALLOWED_DATA_KEYS.includes(key),
+    )
   )
-    return false;
-  const numeric = [
+    add("UNKNOWN_FIELDS_DISCARDED");
+  const missing = V5_REQUIRED_KEY_STATUS_FIELDS.filter(
+    (key) => !Object.hasOwn(data, key),
+  );
+  if (missing.length > 0) add("MISSING_REQUIRED_FIELD");
+  if (!Object.hasOwn(data, "is_free_tier")) add("MISSING_PAID_STATUS");
+  if (
+    !Object.hasOwn(data, "is_management_key") ||
+    !Object.hasOwn(data, "is_provisioning_key")
+  )
+    add("KEY_CLASS_UNPROVEN");
+  if (!Object.hasOwn(data, "expires_at")) add("EXPIRY_UNPROVEN");
+  if (!Object.hasOwn(data, "limit_remaining")) add("QUOTA_UNPROVEN");
+
+  const booleanKeys = [
+    "include_byok_in_limit",
+    "is_free_tier",
+    "is_management_key",
+    "is_provisioning_key",
+  ];
+  const numberKeys = [
     "usage",
-    "limit",
-    "limit_remaining",
     "usage_daily",
     "usage_weekly",
     "usage_monthly",
@@ -456,37 +611,96 @@ function closedKeyStatusBody(parsed) {
     "byok_usage_weekly",
     "byok_usage_monthly",
   ];
-  if (
-    numeric.some(
+  let typeMismatch =
+    booleanKeys.some(
+      (key) => Object.hasOwn(data, key) && typeof data[key] !== "boolean",
+    ) ||
+    numberKeys.some(
+      (key) => Object.hasOwn(data, key) && !finiteNonnegative(data[key]),
+    ) ||
+    (Object.hasOwn(data, "label") && typeof data.label !== "string") ||
+    (Object.hasOwn(data, "creator_user_id") &&
+      data.creator_user_id !== null &&
+      typeof data.creator_user_id !== "string") ||
+    ["limit", "limit_remaining"].some(
       (key) =>
-        key in parsed.data &&
-        parsed.data[key] !== null &&
-        (!Number.isFinite(parsed.data[key]) || parsed.data[key] < 0),
-    )
+        Object.hasOwn(data, key) &&
+        data[key] !== null &&
+        !finiteNonnegative(data[key]),
+    ) ||
+    (Object.hasOwn(data, "limit_reset") &&
+      data.limit_reset !== null &&
+      typeof data.limit_reset !== "string") ||
+    (Object.hasOwn(data, "expires_at") &&
+      data.expires_at !== null &&
+      !validRfc3339DateTime(data.expires_at));
+
+  if (
+    typeof data.limit_reset === "string" &&
+    !["daily", "weekly", "monthly"].includes(data.limit_reset)
   )
-    return false;
-  if ("rate_limit" in parsed.data) {
-    const rate = parsed.data.rate_limit;
-    if (
-      !rate ||
-      typeof rate !== "object" ||
-      Array.isArray(rate) ||
-      Object.keys(rate).some(
-        (key) => !new Set(["requests", "interval", "note"]).has(key),
-      ) ||
-      ("requests" in rate && !Number.isFinite(rate.requests)) ||
-      ("interval" in rate && typeof rate.interval !== "string") ||
-      ("note" in rate && typeof rate.note !== "string")
-    )
-      return false;
+    add("UNKNOWN_FIELDS_DISCARDED");
+
+  if (Object.hasOwn(data, "rate_limit")) {
+    const rate = data.rate_limit;
+    if (!rate || typeof rate !== "object" || Array.isArray(rate)) {
+      typeMismatch = true;
+    } else {
+      if (Object.keys(rate).some((key) => !V5_RATE_LIMIT_KEYS.includes(key)))
+        add("UNKNOWN_FIELDS_DISCARDED");
+      if (V5_RATE_LIMIT_KEYS.some((key) => !Object.hasOwn(rate, key)))
+        add("MISSING_REQUIRED_FIELD");
+      // The narrow Role2 amendment permits the legacy -1 sentinel, not values below it.
+      if (
+        (Object.hasOwn(rate, "requests") &&
+          (!Number.isSafeInteger(rate.requests) || rate.requests < -1)) ||
+        (Object.hasOwn(rate, "interval") &&
+          typeof rate.interval !== "string") ||
+        (Object.hasOwn(rate, "note") && typeof rate.note !== "string")
+      )
+        typeMismatch = true;
+    }
   }
-  return true;
+  if (typeMismatch) add("KNOWN_FIELD_TYPE_MISMATCH");
+  const schemaValid =
+    missing.length === 0 &&
+    !diagnostics.has("MISSING_REQUIRED_FIELD") &&
+    !diagnostics.has("MISSING_PAID_STATUS") &&
+    !diagnostics.has("KNOWN_FIELD_TYPE_MISMATCH");
+  if (!schemaValid)
+    return {
+      schemaValid: false,
+      paidCredential: null,
+      failureClass: "INVALID_200_SCHEMA",
+      diagnostics,
+    };
+
+  const paidCredential = data.is_free_tier === false;
+  if (data.limit_remaining === null) add("QUOTA_UNPROVEN");
+  else if (data.limit_remaining === 0) add("QUOTA_EXHAUSTED");
+  let failureClass = null;
+  if (!paidCredential) failureClass = "UNPAID_CREDENTIAL";
+  else if (data.is_management_key) failureClass = "INELIGIBLE_MANAGEMENT_KEY";
+  else if (data.is_provisioning_key)
+    failureClass = "INELIGIBLE_PROVISIONING_KEY";
+  else if (!Object.hasOwn(data, "expires_at")) failureClass = "EXPIRY_UNPROVEN";
+  else if (
+    data.expires_at !== null &&
+    Date.parse(data.expires_at) <= verificationInstantMs
+  )
+    failureClass = "EXPIRED_KEY";
+  else if (data.limit_remaining === null) {
+    failureClass = "QUOTA_UNPROVEN";
+  } else if (data.limit_remaining === 0) {
+    failureClass = "QUOTA_EXHAUSTED";
+  }
+  return { schemaValid: true, paidCredential, failureClass, diagnostics };
 }
 
 export async function reduceV5CredentialResponse(
   response,
   controller = new AbortController(),
-  { timeoutMs = 10_000 } = {},
+  { timeoutMs = 10_000, verificationInstantMs = Date.now() } = {},
 ) {
   const bytes = await boundedBytes(response, controller, timeoutMs);
   const contentTypeValid = /^application\/json(?:\s*;|$)/iu.test(
@@ -494,14 +708,42 @@ export async function reduceV5CredentialResponse(
   );
   const urlValid = response.url === ENDPOINT;
   let parsed = null;
+  let decision = null;
   try {
-    parsed = JSON.parse(new TextDecoder("utf8", { fatal: true }).decode(bytes));
+    const text = new TextDecoder("utf8", { fatal: true }).decode(bytes);
+    assertNoDuplicateOrHostileJsonKeys(text);
+    parsed = JSON.parse(text);
+    decision =
+      response.status === 200
+        ? extractKeyStatusDecision(parsed, verificationInstantMs)
+        : null;
   } catch {
-    /* digest-only reduction */
+    /* closed sanitized reduction */
   }
   const schemaValid =
-    urlValid && contentTypeValid && closedKeyStatusBody(parsed);
-  const accepted = response.status === 200 && schemaValid;
+    response.status === 200 &&
+    urlValid &&
+    contentTypeValid &&
+    decision?.schemaValid === true;
+  const paidCredential = schemaValid ? decision.paidCredential : null;
+  const accepted =
+    response.status === 200 && schemaValid && decision.failureClass === null;
+  const diagnostics = decision
+    ? Object.freeze(
+        [
+          "KNOWN_FIELD_TYPE_MISMATCH",
+          "MISSING_REQUIRED_FIELD",
+          "MISSING_PAID_STATUS",
+          "KEY_CLASS_UNPROVEN",
+          "EXPIRY_UNPROVEN",
+          "QUOTA_UNPROVEN",
+          "QUOTA_EXHAUSTED",
+          "UNKNOWN_FIELDS_DISCARDED",
+        ].filter((value) => decision.diagnostics.has(value)),
+      )
+    : Object.freeze(
+        response.status === 200 ? ["KNOWN_FIELD_TYPE_MISMATCH"] : [],
+      );
   const envelope = Object.freeze(
     assertV5SanitizedEnvelopeShape({
       endpointCapability: "OPENROUTER_KEY_STATUS_READ",
@@ -510,7 +752,7 @@ export async function reduceV5CredentialResponse(
       urlValid,
       contentTypeValid,
       schemaValid,
-      paidCredential: accepted ? true : null,
+      paidCredential,
       failureClass: accepted
         ? null
         : response.status === 401
@@ -520,14 +762,17 @@ export async function reduceV5CredentialResponse(
             : response.status >= 300 && response.status < 400
               ? "REDIRECT_RESPONSE"
               : response.status === 200
-                ? "INVALID_200_SCHEMA"
+                ? schemaValid
+                  ? decision.failureClass
+                  : "INVALID_200_SCHEMA"
                 : "OTHER_HTTP_STATUS",
       responseBodyPersisted: false,
       rawHeadersPersisted: false,
+      decisionDiagnostics: diagnostics,
     }),
   );
   return Object.freeze({
-    schemaVersion: "matchbase.slice3-v5-credential-result/v1",
+    schemaVersion: "matchbase.slice3-v5-credential-result/v2",
     disposition: accepted
       ? "CREDENTIAL_GATE_PASS_AWAITING_SEPARATE_LIVE_QUALIFICATION"
       : "BLOCKED_CREDENTIAL",
@@ -616,10 +861,11 @@ function blockedTransportResult({
             : "UNKNOWN_TRANSPORT_TIMEOUT_OR_REDIRECT",
       responseBodyPersisted: false,
       rawHeadersPersisted: false,
+      decisionDiagnostics: Object.freeze([]),
     }),
   );
   return Object.freeze({
-    schemaVersion: "matchbase.slice3-v5-credential-result/v1",
+    schemaVersion: "matchbase.slice3-v5-credential-result/v2",
     disposition: "BLOCKED_CREDENTIAL",
     sanitizedEnvelope: envelope,
     sanitizedEnvelopeDigest: sha256(JSON.stringify(envelope)),
@@ -687,6 +933,14 @@ async function executeAttestedV5(binding) {
       if (
         replay.digest !==
           lockedAcceptance.payload.replayIdentity.registryPreSignSha256 ||
+        replay.byteLength !==
+          lockedAcceptance.payload.replayIdentity.registryPreSignBytes ||
+        replay.records.length !==
+          lockedAcceptance.payload.replayIdentity.registryPreSignRecordCount ||
+        replay.records.at(-1)?.sequence !==
+          lockedAcceptance.payload.replayIdentity.registryPreSignLastSequence ||
+        replay.lastRecordSha256 !==
+          lockedAcceptance.payload.replayIdentity.registryPreSignTailSha256 ||
         replay.identityUsed
       )
         throw new Error("V5 replay identity is stale or already consumed.");
@@ -698,7 +952,7 @@ async function executeAttestedV5(binding) {
         observedAt: canonicalObservedAt(),
       });
       const authorizationEvent = {
-        schemaVersion: "matchbase.slice3-v5-authorization/v1",
+        schemaVersion: "matchbase.slice3-v5-authorization/v2",
         authorizationId: V5_AUTHORIZATION_ID,
         sessionId: V5_SESSION_ID,
         sourceAttestationDigest: lockedAttestation.digest,
@@ -722,7 +976,7 @@ async function executeAttestedV5(binding) {
       return {
         authorizationEvent,
         reservationEvent: {
-          schemaVersion: "matchbase.slice3-v5-key-get-reservation/v1",
+          schemaVersion: "matchbase.slice3-v5-key-get-reservation/v2",
           authorizationId: V5_AUTHORIZATION_ID,
           sessionId: V5_SESSION_ID,
           authorizationDigest,

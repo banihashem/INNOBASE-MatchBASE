@@ -24,6 +24,20 @@ const CORE_KEYS = Object.freeze(RECORD_KEYS.slice(0, -1));
 const SHA256 = /^[A-F0-9]{64}$/u;
 const UTC_SECOND =
   /^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$/u;
+const PREDECESSOR = Object.freeze({
+  sequence: 1,
+  decisionId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET",
+  sessionId: "v5-53676308BAD073D07FFC88B8",
+  nonce: "B5E913955E9D6F0812DEB32E03771901",
+  payloadSha256:
+    "1B1BF7632DFCE078E3ED04D4AC8872C90CC2CF5EB88E8EAC16E0B2F09DF1888C",
+  registryPreSignSha256:
+    "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+  previousRecordSha256: null,
+  observedAt: "2026-08-23T08:32:50Z",
+  recordSha256:
+    "D1D0EE0DE2A545D0395427565EB154E0F7B70D93265BF42C3E013D8A705765EB",
+});
 
 const exactKeys = (value, keys) =>
   value &&
@@ -44,11 +58,7 @@ export function validateV5ReplayRegistryBytes(bytes) {
   if (!Buffer.isBuffer(bytes) || bytes.length > 1_048_576)
     throw new Error("V5 replay registry is not bounded bytes.");
   if (bytes.length === 0)
-    return Object.freeze({
-      records: Object.freeze([]),
-      digest: sha256(bytes),
-      lastRecordSha256: null,
-    });
+    throw new Error("V5 replay registry empty rollback is forbidden.");
   if (bytes.at(-1) !== 0x0a)
     throw new Error("V5 replay registry is not LF-terminated JSONL.");
   const text = new TextDecoder("utf8", { fatal: true }).decode(bytes);
@@ -65,19 +75,36 @@ export function validateV5ReplayRegistryBytes(bytes) {
     const expectedRecordSha256 = sha256(
       Buffer.from(rfc8785Canonicalize(core), "utf8"),
     );
+    const predecessorValid =
+      index === 0 &&
+      record.sequence === PREDECESSOR.sequence &&
+      record.decisionId === PREDECESSOR.decisionId &&
+      record.sessionId === PREDECESSOR.sessionId &&
+      record.nonce === PREDECESSOR.nonce &&
+      record.payloadSha256 === PREDECESSOR.payloadSha256 &&
+      record.registryPreSignSha256 === PREDECESSOR.registryPreSignSha256 &&
+      record.previousRecordSha256 === PREDECESSOR.previousRecordSha256 &&
+      record.observedAt === PREDECESSOR.observedAt &&
+      record.recordSha256 === PREDECESSOR.recordSha256;
+    const successorValid =
+      index === 1 &&
+      record.sequence === 2 &&
+      record.decisionId === V5_TPM_CONTRACT.decisionId &&
+      record.sessionId === V5_TPM_CONTRACT.sessionId &&
+      record.nonce === V5_TPM_CONTRACT.nonce &&
+      record.registryPreSignSha256 === V5_TPM_CONTRACT.replayPreSignSha256 &&
+      record.previousRecordSha256 === V5_TPM_CONTRACT.replayPreSignTailSha256;
     if (
       record.schemaVersion !== "matchbase.role2-v5-replay-consumption/v1" ||
       record.sequence !== index + 1 ||
       record.workspaceClaim !== V5_TPM_CONTRACT.workspaceClaim ||
-      record.decisionId !== V5_TPM_CONTRACT.decisionId ||
-      !/^v5-[A-F0-9]{24}$/u.test(record.sessionId) ||
-      !/^[A-F0-9]{32}$/u.test(record.nonce) ||
       record.keyId !== V5_TPM_CONTRACT.keyId ||
       !SHA256.test(record.payloadSha256) ||
       !SHA256.test(record.registryPreSignSha256) ||
       record.previousRecordSha256 !== previousRecordSha256 ||
       !canonicalUtc(record.observedAt) ||
-      record.recordSha256 !== expectedRecordSha256
+      record.recordSha256 !== expectedRecordSha256 ||
+      (!predecessorValid && !successorValid)
     )
       throw new Error("V5 replay registry hash chain is invalid.");
     records.push(Object.freeze(record));
@@ -92,6 +119,7 @@ export function validateV5ReplayRegistryBytes(bytes) {
   return Object.freeze({
     records: Object.freeze(records),
     digest: sha256(bytes),
+    byteLength: bytes.length,
     lastRecordSha256: previousRecordSha256,
   });
 }

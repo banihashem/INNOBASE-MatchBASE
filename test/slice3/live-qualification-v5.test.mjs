@@ -51,6 +51,31 @@ function response(body, status = 200, headers = {}) {
   return result;
 }
 
+function keyData(overrides = {}) {
+  return {
+    byok_usage: 0,
+    byok_usage_daily: 0,
+    byok_usage_monthly: 0,
+    byok_usage_weekly: 0,
+    creator_user_id: null,
+    expires_at: null,
+    include_byok_in_limit: false,
+    is_free_tier: false,
+    is_management_key: false,
+    is_provisioning_key: false,
+    label: "discard",
+    limit: null,
+    limit_remaining: 1,
+    limit_reset: null,
+    rate_limit: { requests: -1, interval: "legacy", note: "discard" },
+    usage: 0,
+    usage_daily: 0,
+    usage_monthly: 0,
+    usage_weekly: 0,
+    ...overrides,
+  };
+}
+
 const sha256 = (value) =>
   createHash("sha256").update(value).digest("hex").toUpperCase();
 
@@ -61,8 +86,8 @@ async function temporaryState() {
 
 function events(sessionId) {
   const authorizationEvent = {
-    schemaVersion: "matchbase.slice3-v5-authorization/v1",
-    authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET",
+    schemaVersion: "matchbase.slice3-v5-authorization/v2",
+    authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S2",
     sessionId,
     sourceAttestationDigest: "A".repeat(64),
     role2PayloadSha256: "B".repeat(64),
@@ -82,8 +107,8 @@ function events(sessionId) {
   return {
     authorizationEvent,
     reservationEvent: {
-      schemaVersion: "matchbase.slice3-v5-key-get-reservation/v1",
-      authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET",
+      schemaVersion: "matchbase.slice3-v5-key-get-reservation/v2",
+      authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S2",
       sessionId,
       authorizationDigest: sha256(`${JSON.stringify(authorizationEvent)}\n`),
       replayRecordSha256: "F".repeat(64),
@@ -112,9 +137,10 @@ function terminalResult(created, overrides = {}) {
     failureClass: "CREDENTIAL_READ_OR_PRE_SEND_FAILURE",
     responseBodyPersisted: false,
     rawHeadersPersisted: false,
+    decisionDiagnostics: [],
   };
   return {
-    schemaVersion: "matchbase.slice3-v5-credential-result/v1",
+    schemaVersion: "matchbase.slice3-v5-credential-result/v2",
     disposition: "BLOCKED_CREDENTIAL",
     sanitizedEnvelope,
     sanitizedEnvelopeDigest: sha256(JSON.stringify(sanitizedEnvelope)),
@@ -141,7 +167,7 @@ function terminalResult(created, overrides = {}) {
 }
 
 const ledgerValidation = Object.freeze({
-  authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET",
+  authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S2",
   sessionId: "v5-0123456789ABCDEF01234567",
   sourceAttestationDigest: "A".repeat(64),
   role2PayloadSha256: "B".repeat(64),
@@ -203,6 +229,7 @@ async function exerciseInertV5StateMachine({
             : "UNKNOWN_TRANSPORT_TIMEOUT_OR_REDIRECT",
       responseBodyPersisted: false,
       rawHeadersPersisted: false,
+      decisionDiagnostics: [],
     };
     evidence = terminalResult(created, {
       sanitizedEnvelope,
@@ -242,8 +269,8 @@ test(
       { ...disposition, sourceAttestationDigest: "DIGEST" },
       {
         schemaVersion: "matchbase.slice3-v5-source-binding/v1",
-        authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET",
-        sessionId: "v5-53676308BAD073D07FFC88B8",
+        authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S2",
+        sessionId: "v5-6092A20EE13791B32198C4B6",
         disposition: "PRE_EXECUTION_PENDING",
         reason: "ROLE2_ACCEPTANCE_PAYLOAD_ABSENT",
         sourceAttestationDigest: "DIGEST",
@@ -539,7 +566,7 @@ test("test-only inert accepted state machine sends one exact GET and writes a va
       assert.equal(url, "https://openrouter.ai/api/v1/key");
       assert.equal(options.method, "GET");
       assert.equal(options.redirect, "error");
-      return response({ data: { is_free_tier: false } });
+      return response({ data: keyData() });
     },
   });
   assert.equal(fetches, 1);
@@ -604,8 +631,8 @@ test("test-only inert state machine validates every closed HTTP failure tuple", 
   const cases = [
     [401, { error: {} }, "HTTP_401"],
     [403, { error: {} }, "HTTP_403"],
-    [302, { data: { is_free_tier: false } }, "REDIRECT_RESPONSE"],
-    [200, { data: { is_free_tier: true } }, "INVALID_200_SCHEMA"],
+    [302, { data: keyData() }, "REDIRECT_RESPONSE"],
+    [200, { data: keyData({ is_free_tier: true }) }, "UNPAID_CREDENTIAL"],
     [500, { error: {} }, "OTHER_HTTP_STATUS"],
   ];
   for (const [status, body, failureClass] of cases) {
@@ -850,7 +877,7 @@ test(
     const replayPath =
       "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.role2-signing-replay-registry\\consumed-v5.jsonl";
     const sessionPath =
-      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-live-qualification-state\\v5-53676308BAD073D07FFC88B8";
+      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-live-qualification-state\\v5-6092A20EE13791B32198C4B6";
     const replayBefore = sha256(await readFile(replayPath));
     await assert.rejects(lstat(sessionPath), /ENOENT/u);
     const moduleUrl = pathToFileURL(
@@ -876,12 +903,9 @@ test(
 test("HTTP 200 is reduced to closed sanitized credential-gate PASS only", async () => {
   const result = await reduceV5CredentialResponse(
     response({
-      data: {
-        is_free_tier: false,
+      data: keyData({
         label: "sensitive-account-label-not-for-evidence",
-        usage: 0,
-        limit: null,
-      },
+      }),
     }),
   );
   assert.equal(

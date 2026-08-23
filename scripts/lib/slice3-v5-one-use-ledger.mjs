@@ -227,59 +227,82 @@ export async function validateOneUseCredentialLedger(
     Date.parse(result.observedAt),
   ];
   const envelope = result.sanitizedEnvelope;
+  const isV2 =
+    result.schemaVersion === "matchbase.slice3-v5-credential-result/v2";
+  const decisionFailureValid =
+    isV2 &&
+    result.credentialGets === 1 &&
+    envelope?.callOccurred === true &&
+    envelope.httpStatus === 200 &&
+    envelope.urlValid === true &&
+    envelope.contentTypeValid === true &&
+    envelope.schemaValid === true &&
+    ((envelope.failureClass === "UNPAID_CREDENTIAL" &&
+      envelope.paidCredential === false) ||
+      (new Set([
+        "INELIGIBLE_MANAGEMENT_KEY",
+        "INELIGIBLE_PROVISIONING_KEY",
+        "EXPIRED_KEY",
+        "KEY_CLASS_UNPROVEN",
+        "EXPIRY_UNPROVEN",
+        "QUOTA_UNPROVEN",
+        "QUOTA_EXHAUSTED",
+      ]).has(envelope.failureClass) &&
+        envelope.paidCredential === true));
   const blockedTupleValid =
     result.disposition === "BLOCKED_CREDENTIAL" &&
-    envelope?.paidCredential === null &&
-    ((envelope.failureClass === "CREDENTIAL_READ_OR_PRE_SEND_FAILURE" &&
-      result.credentialGets === 0 &&
-      envelope.callOccurred === false &&
-      envelope.httpStatus === null &&
-      envelope.urlValid === false &&
-      envelope.contentTypeValid === false &&
-      envelope.schemaValid === false) ||
-      (envelope.failureClass === "UNKNOWN_TRANSPORT_TIMEOUT_OR_REDIRECT" &&
-        result.credentialGets === null &&
-        envelope.callOccurred === null &&
-        envelope.httpStatus === null &&
-        envelope.urlValid === false &&
-        envelope.contentTypeValid === false &&
-        envelope.schemaValid === false) ||
-      (envelope.failureClass === "RESPONSE_REDUCTION_FAILURE" &&
-        result.credentialGets === 1 &&
-        envelope.callOccurred === true &&
-        Number.isInteger(envelope.httpStatus) &&
-        envelope.schemaValid === false) ||
-      (envelope.failureClass === "HTTP_401" &&
-        result.credentialGets === 1 &&
-        envelope.callOccurred === true &&
-        envelope.httpStatus === 401 &&
-        envelope.urlValid === true &&
-        envelope.schemaValid === false) ||
-      (envelope.failureClass === "HTTP_403" &&
-        result.credentialGets === 1 &&
-        envelope.callOccurred === true &&
-        envelope.httpStatus === 403 &&
-        envelope.urlValid === true &&
-        envelope.schemaValid === false) ||
-      (envelope.failureClass === "REDIRECT_RESPONSE" &&
-        result.credentialGets === 1 &&
-        envelope.callOccurred === true &&
-        envelope.httpStatus >= 300 &&
-        envelope.httpStatus < 400) ||
-      (envelope.failureClass === "INVALID_200_SCHEMA" &&
-        result.credentialGets === 1 &&
-        envelope.callOccurred === true &&
-        envelope.httpStatus === 200 &&
-        envelope.schemaValid === false) ||
-      (envelope.failureClass === "OTHER_HTTP_STATUS" &&
-        result.credentialGets === 1 &&
-        envelope.callOccurred === true &&
-        Number.isInteger(envelope.httpStatus) &&
-        envelope.httpStatus !== 200 &&
-        envelope.httpStatus !== 401 &&
-        envelope.httpStatus !== 403 &&
-        !(envelope.httpStatus >= 300 && envelope.httpStatus < 400) &&
-        envelope.schemaValid === false));
+    (decisionFailureValid ||
+      (envelope?.paidCredential === null &&
+        ((envelope.failureClass === "CREDENTIAL_READ_OR_PRE_SEND_FAILURE" &&
+          result.credentialGets === 0 &&
+          envelope.callOccurred === false &&
+          envelope.httpStatus === null &&
+          envelope.urlValid === false &&
+          envelope.contentTypeValid === false &&
+          envelope.schemaValid === false) ||
+          (envelope.failureClass === "UNKNOWN_TRANSPORT_TIMEOUT_OR_REDIRECT" &&
+            result.credentialGets === null &&
+            envelope.callOccurred === null &&
+            envelope.httpStatus === null &&
+            envelope.urlValid === false &&
+            envelope.contentTypeValid === false &&
+            envelope.schemaValid === false) ||
+          (envelope.failureClass === "RESPONSE_REDUCTION_FAILURE" &&
+            result.credentialGets === 1 &&
+            envelope.callOccurred === true &&
+            Number.isInteger(envelope.httpStatus) &&
+            envelope.schemaValid === false) ||
+          (envelope.failureClass === "HTTP_401" &&
+            result.credentialGets === 1 &&
+            envelope.callOccurred === true &&
+            envelope.httpStatus === 401 &&
+            envelope.urlValid === true &&
+            envelope.schemaValid === false) ||
+          (envelope.failureClass === "HTTP_403" &&
+            result.credentialGets === 1 &&
+            envelope.callOccurred === true &&
+            envelope.httpStatus === 403 &&
+            envelope.urlValid === true &&
+            envelope.schemaValid === false) ||
+          (envelope.failureClass === "REDIRECT_RESPONSE" &&
+            result.credentialGets === 1 &&
+            envelope.callOccurred === true &&
+            envelope.httpStatus >= 300 &&
+            envelope.httpStatus < 400) ||
+          (envelope.failureClass === "INVALID_200_SCHEMA" &&
+            result.credentialGets === 1 &&
+            envelope.callOccurred === true &&
+            envelope.httpStatus === 200 &&
+            envelope.schemaValid === false) ||
+          (envelope.failureClass === "OTHER_HTTP_STATUS" &&
+            result.credentialGets === 1 &&
+            envelope.callOccurred === true &&
+            Number.isInteger(envelope.httpStatus) &&
+            envelope.httpStatus !== 200 &&
+            envelope.httpStatus !== 401 &&
+            envelope.httpStatus !== 403 &&
+            !(envelope.httpStatus >= 300 && envelope.httpStatus < 400) &&
+            envelope.schemaValid === false))));
   if (
     !exactKeys(authorization, [
       "schemaVersion",
@@ -351,11 +374,18 @@ export async function validateOneUseCredentialLedger(
       "failureClass",
       "responseBodyPersisted",
       "rawHeadersPersisted",
+      ...(isV2 ? ["decisionDiagnostics"] : []),
     ]) ||
-    authorization.schemaVersion !== "matchbase.slice3-v5-authorization/v1" ||
-    reservation.schemaVersion !==
-      "matchbase.slice3-v5-key-get-reservation/v1" ||
-    result.schemaVersion !== "matchbase.slice3-v5-credential-result/v1" ||
+    !(
+      (authorization.schemaVersion === "matchbase.slice3-v5-authorization/v1" &&
+        reservation.schemaVersion ===
+          "matchbase.slice3-v5-key-get-reservation/v1" &&
+        result.schemaVersion === "matchbase.slice3-v5-credential-result/v1") ||
+      (authorization.schemaVersion === "matchbase.slice3-v5-authorization/v2" &&
+        reservation.schemaVersion ===
+          "matchbase.slice3-v5-key-get-reservation/v2" &&
+        result.schemaVersion === "matchbase.slice3-v5-credential-result/v2")
+    ) ||
     authorization.authorizationId !== authorizationId ||
     authorization.sessionId !== sessionId ||
     authorization.sourceAttestationDigest !== sourceAttestationDigest ||
@@ -396,6 +426,23 @@ export async function validateOneUseCredentialLedger(
       "OPENROUTER_KEY_STATUS_READ" ||
     result.sanitizedEnvelope.responseBodyPersisted !== false ||
     result.sanitizedEnvelope.rawHeadersPersisted !== false ||
+    (isV2 &&
+      (!Array.isArray(result.sanitizedEnvelope.decisionDiagnostics) ||
+        new Set(result.sanitizedEnvelope.decisionDiagnostics).size !==
+          result.sanitizedEnvelope.decisionDiagnostics.length ||
+        result.sanitizedEnvelope.decisionDiagnostics.some(
+          (value) =>
+            !new Set([
+              "KNOWN_FIELD_TYPE_MISMATCH",
+              "MISSING_REQUIRED_FIELD",
+              "MISSING_PAID_STATUS",
+              "KEY_CLASS_UNPROVEN",
+              "EXPIRY_UNPROVEN",
+              "QUOTA_UNPROVEN",
+              "QUOTA_EXHAUSTED",
+              "UNKNOWN_FIELDS_DISCARDED",
+            ]).has(value),
+        ))) ||
     ![0, 1, null].includes(result.credentialGets) ||
     zeroFields.some((field) => result[field] !== 0) ||
     result.terminal !== true ||
@@ -414,6 +461,18 @@ export async function validateOneUseCredentialLedger(
       "CREDENTIAL_READ_OR_PRE_SEND_FAILURE",
       "RESPONSE_REDUCTION_FAILURE",
       "UNKNOWN_TRANSPORT_TIMEOUT_OR_REDIRECT",
+      ...(isV2
+        ? [
+            "UNPAID_CREDENTIAL",
+            "INELIGIBLE_MANAGEMENT_KEY",
+            "INELIGIBLE_PROVISIONING_KEY",
+            "EXPIRED_KEY",
+            "KEY_CLASS_UNPROVEN",
+            "EXPIRY_UNPROVEN",
+            "QUOTA_UNPROVEN",
+            "QUOTA_EXHAUSTED",
+          ]
+        : []),
     ]).has(result.sanitizedEnvelope.failureClass) ||
     (result.disposition ===
     "CREDENTIAL_GATE_PASS_AWAITING_SEPARATE_LIVE_QUALIFICATION"

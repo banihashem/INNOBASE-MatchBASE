@@ -90,9 +90,11 @@ const postReviewCurrent =
   postReview.integrationCritic?.major === 0 &&
   postReview.integrationCritic?.minor === 0;
 const artifactPaths = [
+  "package.json",
   "config/slice3/provider-evidence-register.v1.json",
   "config/slice3/research-route-policy.v1.json",
   "config/slice3/openrouter-key-status-response-contract.v1.json",
+  "config/slice3/openrouter-key-status-response-contract.v2.json",
   "config/slice3/role2-v5-tpm-ecdsa-p256-public.pem",
   "packages/contracts/src/v1/research-route.ts",
   "packages/contracts/src/v1/evidence-lineage.ts",
@@ -117,6 +119,8 @@ const artifactPaths = [
   "scripts/qualify-slice3-live-v4.mjs",
   "scripts/qualify-slice3-live-v5.mjs",
   "scripts/archive-slice3-v5-invalid-pair.mjs",
+  "scripts/archive-slice3-v5-invalid-200-schema.mjs",
+  "scripts/generate-slice3-v5-successor-schema.mjs",
   "scripts/lib/slice3-live-qualification-runner.mjs",
   "scripts/lib/slice3-live-qualification-v4.mjs",
   "scripts/lib/slice3-live-qualification-v5.mjs",
@@ -154,6 +158,8 @@ const artifactPaths = [
   "test/slice3/live-qualification-v4.test.mjs",
   "test/slice3/live-qualification-v5.test.mjs",
   "test/slice3/live-qualification-v5-tpm-contract.test.mjs",
+  "test/slice3/live-qualification-v5-response-v2.test.mjs",
+  "test/slice3/live-qualification-v5-replay-successor.test.mjs",
   "test/slice3/v5-invalid-pair-archive.test.mjs",
   "test/slice3/support/v5-replay-registry-test-harness.mjs",
   "test/slice3/dashboard-policy.test.mjs",
@@ -257,24 +263,44 @@ const evidence = {
             "5674E94E9D2F27AC16D9F0C793D6222F67C4EE4FFEDA0B10D2F9A09D50F99CFB",
         },
         payloadSchema: {
-          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.json",
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.json",
           sha256:
-            "772232A6D9DFFD70391EFD39FBD0E78F438DFE37201DB5371806DBFC213A0C9B",
+            "761B079C422AD28A8F846A642D1141622EFC1DB9EB5CF18E28A8C4F3903C8B77",
         },
         signingContract: {
-          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.md",
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.md",
           sha256:
-            "97B02588101654E614FCE8C7226013475D2D94CC55DBB81504DFE23918F03C76",
+            "7678893C5AC9FDFB95DF549C6C2AF7BA277DCDADC172B148FCED96757801FD0F",
         },
         successorAuthorization: {
-          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_AUTHORIZATION_REQUIREMENTS_AFTER_HOSTED_TIME_BINDING_FAILURE.md",
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_REQUIREMENTS_AFTER_INVALID_200_SCHEMA_V1.md",
           sha256:
-            "84BE0EADC0E27886B7B13E5211999F1BD2557D435A843C33A7CC1D86368C97FE",
+            "A028A2AEFCA11F0002906F7483821C039E9AD82B272DA5235B531A426AC7E98A",
         },
         forensicArchiveAudit: {
-          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_INVALID_PAIR_FORENSIC_ARCHIVE_AUDIT_2026-08-22.json",
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_INVALID_200_SCHEMA_FORENSIC_ARCHIVE_AUDIT_2026-08-23.json",
           sha256:
-            "9221C3A297DA7BE4D7C9E0CBE0DAD61F72F89B340658AA9687C8F83DE6F46A1D",
+            "3168FE64F5DC1B73B60E71345533B48141381CAED3D6394F46ECB2BC2CF40043",
+        },
+        forensicArchiveManifest: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-v5-signing\\archive\\V5-INVALID-200-SCHEMA-001\\CONSUMED_SESSION_v5-53676308BAD073D07FFC88B8_MANIFEST.json",
+          sha256:
+            "21961F79292119938F00E6A1C7888671B021F9821A24C65D08AEC92813E199A9",
+        },
+        officialDocsEvidence: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_OPENROUTER_KEY_STATUS_OFFICIAL_DOCS_EVIDENCE_V2_2026-08-23.json",
+          sha256:
+            "F73071B74AC60D557697ACE6278E1B0091185AFEC065D61C7E4D3CC0900607D4",
+        },
+        officialDocsEvidenceAudit: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_OPENROUTER_KEY_STATUS_OFFICIAL_DOCS_EVIDENCE_V2_AUDIT_2026-08-23.json",
+          sha256:
+            "A01BF254BD41CA0896D43F132E97DBEDE2E736FE0E4A3742EB09B060691584C3",
+        },
+        rateLimitAmendment: {
+          path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_GOVERNANCE_AMENDMENT_RATE_LIMIT_REQUESTS_V1.md",
+          sha256:
+            "AFCC3A48B201393EA9E20F8690B5E604571B71B984B5C618FA3F374FA4551566",
         },
         preservedV3Schema: {
           path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V3.json",
@@ -309,7 +335,12 @@ const evidence = {
         replayRegistry: {
           path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.role2-signing-replay-registry\\consumed-v5.jsonl",
           sha256:
-            "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+            "E28CE25E057EFF410BDCD0812CFC3E43BD6ECBE520DBC07FE1C31BAFA4057A87",
+          bytes: 671,
+          recordCount: 1,
+          lastSequence: 1,
+          tailSha256:
+            "D1D0EE0DE2A545D0395427565EB154E0F7B70D93265BF42C3E013D8A705765EB",
         },
       },
       role2PublicKeyPinned: true,
@@ -366,7 +397,7 @@ const evidence = {
       skipped: 1,
       failed: 0,
     },
-    note: "V5 successor PRE_EXECUTION_PENDING basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 43/43, V5 TPM credential and forensic-archive infrastructure 53 PASS plus 1 intentional noncanonical-host skip, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, Slice 3 Node total 254 PASS of 255 with 1 intentional skip, standalone repeat 1/1, and Chrome 18/18. The revoked file-backed Ed25519 authority remains unused. The Role 2 TPM ECDSA-P256 v4 successor contract and public trust anchor are pinned; the failed v3 attempt is preserved in its verified forensic archive; and the fresh detached signed acceptance payload/envelope are absent. Slice 3 remains PRE_EXECUTION_PENDING and BLOCKED_CREDENTIAL. V5 has no session, credential GET, credential reread, provider/model/search call, replay consumption, activation or external mutation. Six fresh successor audits, final critic, hosted infrastructure release and a new Role 2 signed acceptance remain separately gated.",
+    note: "V5 successor PRE_EXECUTION_PENDING basis: contracts 7/7, AI/evidence 75/75, V3+V4 qualification 43/43, V5 TPM credential and forensic-archive infrastructure 53 PASS plus 1 intentional noncanonical-host skip, PostgreSQL 18 data 22/22, application/combined-worker/provider-HTTP 4/4, preflight/admission 7/7, dashboard handoff/policy 15/15, predecessor policy 41/41, Slice 3 Node total 254 PASS of 255 with 1 intentional skip, standalone repeat 1/1, and Chrome 18/18. The revoked file-backed Ed25519 authority remains unused. The Role 2 TPM ECDSA-P256 v5 successor contract and public trust anchor are pinned; the failed v3 attempt is preserved in its verified forensic archive; and the fresh detached signed acceptance payload/envelope are absent. Slice 3 remains PRE_EXECUTION_PENDING and BLOCKED_CREDENTIAL. V5 has no session, credential GET, credential reread, provider/model/search call, replay consumption, activation or external mutation. Six fresh successor audits, final critic, hosted infrastructure release and a new Role 2 signed acceptance remain separately gated.",
   },
   acceptance,
   artifacts,

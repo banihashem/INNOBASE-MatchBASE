@@ -377,6 +377,18 @@ export function validateSlice3Evidence(value, options = {}) {
     forensicArchiveAudit:
       value.qualificationPreflight.v5Admission.role2TpmAuthority
         .forensicArchiveAudit,
+    forensicArchiveManifest:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .forensicArchiveManifest,
+    officialDocsEvidence:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .officialDocsEvidence,
+    officialDocsEvidenceAudit:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .officialDocsEvidenceAudit,
+    rateLimitAmendment:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .rateLimitAmendment,
     preservedV3Schema:
       value.qualificationPreflight.v5Admission.role2TpmAuthority
         .preservedV3Schema,
@@ -391,8 +403,6 @@ export function validateSlice3Evidence(value, options = {}) {
     replayInitialization:
       value.qualificationPreflight.v5Admission.role2TpmAuthority
         .replayInitialization,
-    replayRegistry:
-      value.qualificationPreflight.v5Admission.role2TpmAuthority.replayRegistry,
   }))
     closed(
       source,
@@ -409,6 +419,10 @@ export function validateSlice3Evidence(value, options = {}) {
       "signingContract",
       "successorAuthorization",
       "forensicArchiveAudit",
+      "forensicArchiveManifest",
+      "officialDocsEvidence",
+      "officialDocsEvidenceAudit",
+      "rateLimitAmendment",
       "preservedV3Schema",
       "preservedV3Contract",
       "supersession",
@@ -418,6 +432,11 @@ export function validateSlice3Evidence(value, options = {}) {
       "replayRegistry",
     ],
     "Slice 3 V5 TPM authority is not closed.",
+  );
+  closed(
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.replayRegistry,
+    ["path", "sha256", "bytes", "recordCount", "lastSequence", "tailSha256"],
+    "Slice 3 V5 replayRegistry source is not closed.",
   );
   if (
     value.qualificationPreflight.schemaVersion !==
@@ -458,16 +477,28 @@ export function validateSlice3Evidence(value, options = {}) {
       "5674E94E9D2F27AC16D9F0C793D6222F67C4EE4FFEDA0B10D2F9A09D50F99CFB" ||
     value.qualificationPreflight.v5Admission.role2TpmAuthority.payloadSchema
       .sha256 !==
-      "772232A6D9DFFD70391EFD39FBD0E78F438DFE37201DB5371806DBFC213A0C9B" ||
+      "761B079C422AD28A8F846A642D1141622EFC1DB9EB5CF18E28A8C4F3903C8B77" ||
     value.qualificationPreflight.v5Admission.role2TpmAuthority.signingContract
       .sha256 !==
-      "97B02588101654E614FCE8C7226013475D2D94CC55DBB81504DFE23918F03C76" ||
+      "7678893C5AC9FDFB95DF549C6C2AF7BA277DCDADC172B148FCED96757801FD0F" ||
     value.qualificationPreflight.v5Admission.role2TpmAuthority
       .successorAuthorization.sha256 !==
-      "84BE0EADC0E27886B7B13E5211999F1BD2557D435A843C33A7CC1D86368C97FE" ||
+      "A028A2AEFCA11F0002906F7483821C039E9AD82B272DA5235B531A426AC7E98A" ||
     value.qualificationPreflight.v5Admission.role2TpmAuthority
       .forensicArchiveAudit.sha256 !==
-      "9221C3A297DA7BE4D7C9E0CBE0DAD61F72F89B340658AA9687C8F83DE6F46A1D" ||
+      "3168FE64F5DC1B73B60E71345533B48141381CAED3D6394F46ECB2BC2CF40043" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority
+      .forensicArchiveManifest.sha256 !==
+      "21961F79292119938F00E6A1C7888671B021F9821A24C65D08AEC92813E199A9" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority
+      .officialDocsEvidence.sha256 !==
+      "F73071B74AC60D557697ACE6278E1B0091185AFEC065D61C7E4D3CC0900607D4" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority
+      .officialDocsEvidenceAudit.sha256 !==
+      "A01BF254BD41CA0896D43F132E97DBEDE2E736FE0E4A3742EB09B060691584C3" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority
+      .rateLimitAmendment.sha256 !==
+      "AFCC3A48B201393EA9E20F8690B5E604571B71B984B5C618FA3F374FA4551566" ||
     value.qualificationPreflight.v5Admission.role2TpmAuthority.preservedV3Schema
       .sha256 !==
       "B9F704789FC30F368D8F297A9A5B18E0F5CDD7CBB6CFBD4486AFC746EFC2A68F" ||
@@ -488,7 +519,16 @@ export function validateSlice3Evidence(value, options = {}) {
       "DF6F2B352BCE80ECC1B4BCFDC70041B3015E4866C5494A00F3DF94DF116EA146" ||
     value.qualificationPreflight.v5Admission.role2TpmAuthority.replayRegistry
       .sha256 !==
-      "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855" ||
+      "E28CE25E057EFF410BDCD0812CFC3E43BD6ECBE520DBC07FE1C31BAFA4057A87" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.replayRegistry
+      .bytes !== 671 ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.replayRegistry
+      .recordCount !== 1 ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.replayRegistry
+      .lastSequence !== 1 ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.replayRegistry
+      .tailSha256 !==
+      "D1D0EE0DE2A545D0395427565EB154E0F7B70D93265BF42C3E013D8A705765EB" ||
     value.qualificationPreflight.v5Admission.role2PublicKeyPinned !== true ||
     value.qualificationPreflight.v5Admission.reason !==
       "ROLE2_ACCEPTANCE_PAYLOAD_ABSENT" ||

@@ -26,6 +26,7 @@
     "slice3:wrapper:record": "node scripts/record-slice3-wrapper-result.mjs",
     "slice3:qualify:live": "pnpm --filter @matchbase/application build && node scripts/qualify-slice3-live.mjs",
     "slice3:qualify:v5:preflight": "node scripts/qualify-slice3-live-v5.mjs",
+    "slice3:qualify:v5:execute": "node scripts/qualify-slice3-live-v5.mjs --execute",
     "boundary:check": "node scripts/verify-boundaries.mjs",
     "protected:check": "node scripts/validate-protected-baseline.mjs",
     "secrets:scan": "node scripts/secret-scan.mjs",

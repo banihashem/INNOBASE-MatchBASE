@@ -167,6 +167,19 @@ for (const sourceBinding of [
   evidence.qualificationPreflight.v5Admission.role2TpmAuthority.signingContract,
   evidence.qualificationPreflight.v5Admission.role2TpmAuthority
     .successorAuthorization,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority.s2PayloadSchema,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority
+    .s2SigningContract,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority
+    .s2SuccessorAuthorization,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority
+    .recoveryGovernance,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority
+    .s2IndeterminateArchiveManifest,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority
+    .s2IndeterminateArchiveAudit,
+  evidence.qualificationPreflight.v5Admission.role2TpmAuthority
+    .s2IndeterminateAttemptEvidence,
   evidence.qualificationPreflight.v5Admission.role2TpmAuthority
     .forensicArchiveAudit,
   evidence.qualificationPreflight.v5Admission.role2TpmAuthority

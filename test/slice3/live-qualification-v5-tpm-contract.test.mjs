@@ -82,7 +82,7 @@ function payloadFixture() {
     ),
   );
   return {
-    schemaVersion: "matchbase.role2-detached-acceptance/v5",
+    schemaVersion: "matchbase.role2-detached-acceptance/v6",
     payloadType: "V5_OPENROUTER_CREDENTIAL_GET_AUTHORIZATION",
     decisionId: V5_TPM_CONTRACT.decisionId,
     sessionId: V5_TPM_CONTRACT.sessionId,
@@ -148,21 +148,70 @@ function payloadFixture() {
         },
       ),
       successorAuthorization: binding(
-        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_REQUIREMENTS_AFTER_INVALID_200_SCHEMA_V1.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_S3_SUCCESSOR_REQUIREMENTS_AFTER_S2_LOST_OUTPUT_SIGNING_V1.md",
         {
           sha256: V5_TPM_CONTRACT.successorAuthorizationSha256,
           bytes: V5_TPM_CONTRACT.successorAuthorizationBytes,
         },
       ),
-      payloadSchema: binding(
+      s2PayloadSchema: binding(
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.json",
+        {
+          sha256: V5_TPM_CONTRACT.s2SchemaSha256,
+          bytes: V5_TPM_CONTRACT.s2SchemaBytes,
+        },
+      ),
+      s2SigningContract: binding(
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.md",
+        {
+          sha256: V5_TPM_CONTRACT.s2ContractSha256,
+          bytes: V5_TPM_CONTRACT.s2ContractBytes,
+        },
+      ),
+      s2SuccessorAuthorization: binding(
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_REQUIREMENTS_AFTER_INVALID_200_SCHEMA_V1.md",
+        {
+          sha256: V5_TPM_CONTRACT.s2AuthorizationSha256,
+          bytes: V5_TPM_CONTRACT.s2AuthorizationBytes,
+        },
+      ),
+      recoveryGovernance: binding(
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_S3_SUCCESSOR_REQUIREMENTS_AFTER_S2_LOST_OUTPUT_SIGNING_V1.md",
+        {
+          sha256: V5_TPM_CONTRACT.successorAuthorizationSha256,
+          bytes: V5_TPM_CONTRACT.successorAuthorizationBytes,
+        },
+      ),
+      s2IndeterminateArchiveManifest: binding(
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-v5-signing\\archive\\V5-S2-INDETERMINATE-SIGNING-001\\INDETERMINATE_SESSION_v5-6092A20EE13791B32198C4B6_MANIFEST.json",
+        {
+          sha256: V5_TPM_CONTRACT.s2IndeterminateArchiveManifestSha256,
+          bytes: V5_TPM_CONTRACT.s2IndeterminateArchiveManifestBytes,
+        },
+      ),
+      s2IndeterminateArchiveAudit: binding(
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_S2_INDETERMINATE_SIGNING_FORENSIC_ARCHIVE_AUDIT_2026-08-23.json",
+        {
+          sha256: V5_TPM_CONTRACT.s2IndeterminateArchiveAuditSha256,
+          bytes: V5_TPM_CONTRACT.s2IndeterminateArchiveAuditBytes,
+        },
+      ),
+      s2IndeterminateAttemptEvidence: binding(
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-v5-signing\\archive\\V5-S2-INDETERMINATE-SIGNING-001\\INDETERMINATE_SESSION_v5-6092A20EE13791B32198C4B6_ATTEMPT_EVIDENCE.json",
+        {
+          sha256: V5_TPM_CONTRACT.s2IndeterminateAttemptEvidenceSha256,
+          bytes: V5_TPM_CONTRACT.s2IndeterminateAttemptEvidenceBytes,
+        },
+      ),
+      payloadSchema: binding(
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V6.json",
         {
           sha256: V5_TPM_CONTRACT.schemaSha256,
           bytes: V5_TPM_CONTRACT.schemaBytes,
         },
       ),
       signingContract: binding(
-        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V6.md",
         {
           sha256: V5_TPM_CONTRACT.contractSha256,
           bytes: V5_TPM_CONTRACT.contractBytes,
@@ -273,7 +322,7 @@ function payloadFixture() {
       critic: passBinding(V5_FIXED_SIGNED_PATHS.critic),
       hosted: {
         observationPath:
-          "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_GITHUB_HOSTED_OBSERVATION_PO_001_SLICE_3_V5_SUCCESSOR_2.json",
+          "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_GITHUB_HOSTED_OBSERVATION_PO_001_SLICE_3_V5_SUCCESSOR_3.json",
         observationSha256: DIGEST,
         runId: 32_134_102_849,
         jobId: 95_701_395_827,
@@ -286,7 +335,7 @@ function payloadFixture() {
         observedAt: "2026-08-22T11:50:00Z",
       },
       preSignRole2Audit: passBinding(
-        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN_LOOP_2.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN_LOOP_3.md",
       ),
     },
     authorizationPolicy: {
@@ -367,7 +416,7 @@ function envelopeFixture(payload) {
     Buffer.from(rfc8785Canonicalize(payload), "utf8"),
   );
   return {
-    schemaVersion: "matchbase.role2-detached-signature/v5",
+    schemaVersion: "matchbase.role2-detached-signature/v6",
     sessionId: payload.sessionId,
     replayIdentitySha256: sha256(
       Buffer.from(rfc8785Canonicalize(payload.replayIdentity), "utf8"),
@@ -702,6 +751,10 @@ test("replay reservation is one-winner, durable, restart-safe, and rejects unsaf
     1,
   );
   const record = attempts.find(({ status }) => status === "fulfilled").value;
+  assert.equal(record.sequence, 2);
+  assert.equal(record.decisionId, V5_TPM_CONTRACT.decisionId);
+  assert.equal(record.sessionId, V5_TPM_CONTRACT.sessionId);
+  assert.equal(record.nonce, V5_TPM_CONTRACT.nonce);
   assert.equal(
     (await verifyV5ReplayReservationAt(registryPath, record.recordSha256))
       .recordSha256,
@@ -713,6 +766,34 @@ test("replay reservation is one-winner, durable, restart-safe, and rejects unsaf
   );
   assert.equal(restarted.identityUsed, true);
   await assert.rejects(reserveV5ReplayIdentityAt(input), /stale|consumed/u);
+
+  const historicalS2Core = {
+    schemaVersion: "matchbase.role2-v5-replay-consumption/v1",
+    sequence: 2,
+    workspaceClaim: replayIdentity.workspaceClaim,
+    decisionId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S2",
+    sessionId: "v5-6092A20EE13791B32198C4B6",
+    nonce: "7F974EECA2C846990DD06499284DA28A",
+    keyId: replayIdentity.keyId,
+    payloadSha256: DIGEST,
+    registryPreSignSha256: replayIdentity.registryPreSignSha256,
+    previousRecordSha256: V5_TPM_CONTRACT.replayPreSignTailSha256,
+    observedAt: "2026-08-23T09:00:00Z",
+  };
+  const historicalS2Record = {
+    ...historicalS2Core,
+    recordSha256: sha256(
+      Buffer.from(rfc8785Canonicalize(historicalS2Core), "utf8"),
+    ),
+  };
+  const historicalS2Bytes = Buffer.concat([
+    await readFile(REPLAY_PREDECESSOR_FIXTURE_PATH),
+    Buffer.from(`${JSON.stringify(historicalS2Record)}\n`, "utf8"),
+  ]);
+  assert.throws(
+    () => validateV5ReplayRegistryBytes(historicalS2Bytes),
+    /hash chain/u,
+  );
 
   const malformedRoot = join(root, "malformed");
   await mkdir(malformedRoot);

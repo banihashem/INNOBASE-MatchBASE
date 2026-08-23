@@ -4,7 +4,7 @@ import {
   verify,
   X509Certificate,
 } from "node:crypto";
-import { lstat, readFile, realpath } from "node:fs/promises";
+import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -18,14 +18,35 @@ export const V5_TPM_CONTRACT = Object.freeze({
     "5674E94E9D2F27AC16D9F0C793D6222F67C4EE4FFEDA0B10D2F9A09D50F99CFB",
   certificateBytes: 414,
   schemaSha256:
-    "761B079C422AD28A8F846A642D1141622EFC1DB9EB5CF18E28A8C4F3903C8B77",
-  schemaBytes: 27_650,
+    "66C53191D6552990E528834E35033D8F5208F1FFE7CB32FFCEEC6D14AE07F910",
+  schemaBytes: 32_757,
   contractSha256:
-    "7678893C5AC9FDFB95DF549C6C2AF7BA277DCDADC172B148FCED96757801FD0F",
-  contractBytes: 8_520,
+    "9C35E4BCEE0A74745C31794A2E42A39ABB97F1A44D171399C86A4F612C2B175F",
+  contractBytes: 9_955,
   successorAuthorizationSha256:
+    "9627F5CC3FDC6D08B91E0C8C8685C9B409A889067B82B689563B596E9B8B29F8",
+  successorAuthorizationBytes: 7_874,
+  s2SchemaSha256:
+    "761B079C422AD28A8F846A642D1141622EFC1DB9EB5CF18E28A8C4F3903C8B77",
+  s2SchemaBytes: 27_650,
+  s2ContractSha256:
+    "7678893C5AC9FDFB95DF549C6C2AF7BA277DCDADC172B148FCED96757801FD0F",
+  s2ContractBytes: 8_520,
+  s2AuthorizationSha256:
     "A028A2AEFCA11F0002906F7483821C039E9AD82B272DA5235B531A426AC7E98A",
-  successorAuthorizationBytes: 24_178,
+  s2AuthorizationBytes: 24_178,
+  s2IndeterminateArchiveManifestSha256:
+    "48B479DADD281D0CFB77A44276DDB7313F27B5BBC316E904D8A9E9EB569B2E72",
+  s2IndeterminateArchiveManifestBytes: 3_602,
+  s2IndeterminateArchiveAuditSha256:
+    "4867AC5D0D06A81312CE0A5FAC0BDFA41D07C6A070DC2CF1D9EC6F6BEBC96B1F",
+  s2IndeterminateArchiveAuditBytes: 3_498,
+  s2IndeterminateAttemptEvidenceSha256:
+    "F976281003E739524FBCA97AEC3FE5E14AF999ED31EFEB112C34D49925B7091B",
+  s2IndeterminateAttemptEvidenceBytes: 3_009,
+  s2IndeterminateArchivedPayloadSha256:
+    "C90205AFF3FF1B3402E0A094F8ED4BE7E3B9468C74764823688941D75EDBF010",
+  s2IndeterminateArchivedPayloadBytes: 15_097,
   forensicArchiveAuditSha256:
     "3168FE64F5DC1B73B60E71345533B48141381CAED3D6394F46ECB2BC2CF40043",
   forensicArchiveAuditBytes: 2_321,
@@ -86,9 +107,9 @@ export const V5_TPM_CONTRACT = Object.freeze({
   authoritativeRoot: "C:\\INNOBASE\\MatchBASE\\00_Authoritative_Sources",
   managementLogPath:
     "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\PRODUCT_MANAGEMENT_LOOP_LOG.md",
-  decisionId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S2",
-  sessionId: "v5-6092A20EE13791B32198C4B6",
-  nonce: "7F974EECA2C846990DD06499284DA28A",
+  decisionId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S3",
+  sessionId: "v5-DFF5A5718703A502AAF5EA9C",
+  nonce: "A971E3541D959B94E9EACF28D5F3D6B9",
   replayPreSignSha256:
     "E28CE25E057EFF410BDCD0812CFC3E43BD6ECBE520DBC07FE1C31BAFA4057A87",
   replayPreSignBytes: 671,
@@ -101,7 +122,7 @@ export const V5_TPM_CONTRACT = Object.freeze({
 });
 
 const SIGNATURE_DOMAIN_TEXT =
-  "INNOBASE-MATCHBASE\0ROLE2\0PO-001-S3-V5-CREDENTIAL-GET-S2\0ECDSA-P256-SHA256\0V1\0";
+  "INNOBASE-MATCHBASE\0ROLE2\0PO-001-S3-V5-CREDENTIAL-GET-S3\0ECDSA-P256-SHA256\0V1\0";
 
 export const V5_AUTHORITATIVE_SOURCE_PATHS = Object.freeze([
   "C:\\INNOBASE\\MatchBASE\\00_Authoritative_Sources\\IB-BrdDev-VisIdn-V1R1.pdf",
@@ -121,12 +142,12 @@ export const V5_AUTHORITATIVE_SOURCE_PATHS = Object.freeze([
 ]);
 
 export const V5_DISCIPLINE_AUDIT_PATHS = Object.freeze([
-  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_2_AUDIT_AI_EVIDENCE.json",
-  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_2_AUDIT_DATA_MIGRATION.json",
-  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_2_AUDIT_QA_ACCESSIBILITY.json",
-  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_2_AUDIT_REPOSITORY_RELEASE_PRESERVATION.json",
-  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_2_AUDIT_SECURITY_PRIVACY_IAM.json",
-  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_2_AUDIT_SRE_COST_RECOVERY.json",
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_3_AUDIT_AI_EVIDENCE.json",
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_3_AUDIT_DATA_MIGRATION.json",
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_3_AUDIT_QA_ACCESSIBILITY.json",
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_3_AUDIT_REPOSITORY_RELEASE_PRESERVATION.json",
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_3_AUDIT_SECURITY_PRIVACY_IAM.json",
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_3_AUDIT_SRE_COST_RECOVERY.json",
 ]);
 
 export const V5_FIXED_SIGNED_PATHS = Object.freeze({
@@ -135,7 +156,7 @@ export const V5_FIXED_SIGNED_PATHS = Object.freeze({
   candidateWrapper:
     "C:\\INNOBASE\\MatchBASE\\03_Implementation\\INNOBASE-MatchBASE\\evidence\\slice3\\full-wrapper-result.json",
   critic:
-    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_2_FINAL_INTEGRATION_CRITIC.json",
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_SUCCESSOR_3_FINAL_INTEGRATION_CRITIC.json",
   responseContract:
     "C:\\INNOBASE\\MatchBASE\\03_Implementation\\INNOBASE-MatchBASE\\config\\slice3\\openrouter-key-status-response-contract.v2.json",
 });
@@ -147,11 +168,25 @@ const PUBLIC_MATERIALS = Object.freeze({
   managementCer:
     "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_AUTHORITY_PO_001_SLICE_3_V5_TPM_ECDSA_P256_PUBLIC.cer",
   schema:
-    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.json",
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V6.json",
   contract:
-    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.md",
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V6.md",
   successorAuthorization:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_S3_SUCCESSOR_REQUIREMENTS_AFTER_S2_LOST_OUTPUT_SIGNING_V1.md",
+  s2Schema:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.json",
+  s2Contract:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.md",
+  s2SuccessorAuthorization:
     "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_REQUIREMENTS_AFTER_INVALID_200_SCHEMA_V1.md",
+  s2IndeterminateArchiveManifest:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-v5-signing\\archive\\V5-S2-INDETERMINATE-SIGNING-001\\INDETERMINATE_SESSION_v5-6092A20EE13791B32198C4B6_MANIFEST.json",
+  s2IndeterminateArchiveAudit:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_S2_INDETERMINATE_SIGNING_FORENSIC_ARCHIVE_AUDIT_2026-08-23.json",
+  s2IndeterminateAttemptEvidence:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-v5-signing\\archive\\V5-S2-INDETERMINATE-SIGNING-001\\INDETERMINATE_SESSION_v5-6092A20EE13791B32198C4B6_ATTEMPT_EVIDENCE.json",
+  s2IndeterminateArchivedPayload:
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-v5-signing\\archive\\V5-S2-INDETERMINATE-SIGNING-001\\INDETERMINATE_SESSION_v5-6092A20EE13791B32198C4B6_PAYLOAD.json",
   forensicArchiveAudit:
     "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_INVALID_200_SCHEMA_FORENSIC_ARCHIVE_AUDIT_2026-08-23.json",
   forensicArchiveManifest:
@@ -431,6 +466,9 @@ export async function verifyPinnedV5PublicMaterials() {
   const invalid200ArchiveRoot = dirname(
     PUBLIC_MATERIALS.forensicArchiveManifest,
   );
+  const indeterminateArchiveRoot = dirname(
+    PUBLIC_MATERIALS.s2IndeterminateArchiveManifest,
+  );
   await Promise.all([
     assertCanonicalNonReparseDirectory(managementRoot),
     assertCanonicalNonReparseDirectory(
@@ -440,7 +478,35 @@ export async function verifyPinnedV5PublicMaterials() {
     assertCanonicalNonReparseDirectory(archiveRoot),
     assertV5ArchiveRootIdentity(dirname(invalid200ArchiveRoot)),
     assertV5ArchiveRootIdentity(invalid200ArchiveRoot),
+    assertV5ArchiveRootIdentity(dirname(indeterminateArchiveRoot)),
+    assertV5ArchiveRootIdentity(indeterminateArchiveRoot),
   ]);
+  const indeterminateMembers = (
+    await readdir(indeterminateArchiveRoot, { withFileTypes: true })
+  )
+    .map((entry) => ({
+      name: entry.name,
+      isFile: entry.isFile(),
+      isSymbolicLink: entry.isSymbolicLink(),
+    }))
+    .sort((left, right) =>
+      left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
+    );
+  const expectedIndeterminateMembers = [
+    "INDETERMINATE_SESSION_v5-6092A20EE13791B32198C4B6_ATTEMPT_EVIDENCE.json",
+    "INDETERMINATE_SESSION_v5-6092A20EE13791B32198C4B6_MANIFEST.json",
+    "INDETERMINATE_SESSION_v5-6092A20EE13791B32198C4B6_PAYLOAD.json",
+  ];
+  if (
+    indeterminateMembers.length !== expectedIndeterminateMembers.length ||
+    indeterminateMembers.some(
+      ({ name, isFile, isSymbolicLink }, index) =>
+        name !== expectedIndeterminateMembers[index] ||
+        !isFile ||
+        isSymbolicLink,
+    )
+  )
+    throw new Error("V5 S2 indeterminate archive member set is invalid.");
   const [repositoryPem, managementPem, certificateBytes] = await Promise.all([
     checkedPublicBytes(
       PUBLIC_MATERIALS.repositoryPem,
@@ -477,6 +543,48 @@ export async function verifyPinnedV5PublicMaterials() {
       managementRoot,
       V5_TPM_CONTRACT.successorAuthorizationBytes,
       V5_TPM_CONTRACT.successorAuthorizationSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.s2Schema,
+      managementRoot,
+      V5_TPM_CONTRACT.s2SchemaBytes,
+      V5_TPM_CONTRACT.s2SchemaSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.s2Contract,
+      managementRoot,
+      V5_TPM_CONTRACT.s2ContractBytes,
+      V5_TPM_CONTRACT.s2ContractSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.s2SuccessorAuthorization,
+      managementRoot,
+      V5_TPM_CONTRACT.s2AuthorizationBytes,
+      V5_TPM_CONTRACT.s2AuthorizationSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.s2IndeterminateArchiveManifest,
+      managementRoot,
+      V5_TPM_CONTRACT.s2IndeterminateArchiveManifestBytes,
+      V5_TPM_CONTRACT.s2IndeterminateArchiveManifestSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.s2IndeterminateArchiveAudit,
+      managementRoot,
+      V5_TPM_CONTRACT.s2IndeterminateArchiveAuditBytes,
+      V5_TPM_CONTRACT.s2IndeterminateArchiveAuditSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.s2IndeterminateAttemptEvidence,
+      managementRoot,
+      V5_TPM_CONTRACT.s2IndeterminateAttemptEvidenceBytes,
+      V5_TPM_CONTRACT.s2IndeterminateAttemptEvidenceSha256,
+    ),
+    checkedPublicBytes(
+      PUBLIC_MATERIALS.s2IndeterminateArchivedPayload,
+      managementRoot,
+      V5_TPM_CONTRACT.s2IndeterminateArchivedPayloadBytes,
+      V5_TPM_CONTRACT.s2IndeterminateArchivedPayloadSha256,
     ),
     checkedPublicBytes(
       PUBLIC_MATERIALS.forensicArchiveAudit,
@@ -600,7 +708,11 @@ export async function verifyPinnedV5PublicMaterials() {
     certificate.verify(certificate.publicKey) !== true
   )
     throw new Error("V5 certificate public identity or metadata is invalid.");
-  return Object.freeze({ publicKeyPem: repositoryPem, publicKey: pemKey });
+  return Object.freeze({
+    publicKeyPem: repositoryPem,
+    publicKey: pemKey,
+    certificateBytes,
+  });
 }
 
 function closed(value, keys, label) {
@@ -804,6 +916,13 @@ function validateGovernance(value) {
       "oneGetAllocation",
       "transitionDecision",
       "successorAuthorization",
+      "s2PayloadSchema",
+      "s2SigningContract",
+      "s2SuccessorAuthorization",
+      "recoveryGovernance",
+      "s2IndeterminateArchiveManifest",
+      "s2IndeterminateArchiveAudit",
+      "s2IndeterminateAttemptEvidence",
       "payloadSchema",
       "signingContract",
       "custodyEvidence",
@@ -837,17 +956,68 @@ function validateGovernance(value) {
     bytes: V5_TPM_CONTRACT.transitionBytes,
   });
   digestBinding(value.successorAuthorization, "V5 successor authorization", {
-    path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_REQUIREMENTS_AFTER_INVALID_200_SCHEMA_V1.md",
+    path: PUBLIC_MATERIALS.successorAuthorization,
     sha256: V5_TPM_CONTRACT.successorAuthorizationSha256,
     bytes: V5_TPM_CONTRACT.successorAuthorizationBytes,
   });
+  digestBinding(value.s2PayloadSchema, "V5 S2 payload schema", {
+    path: PUBLIC_MATERIALS.s2Schema,
+    sha256: V5_TPM_CONTRACT.s2SchemaSha256,
+    bytes: V5_TPM_CONTRACT.s2SchemaBytes,
+  });
+  digestBinding(value.s2SigningContract, "V5 S2 signing contract", {
+    path: PUBLIC_MATERIALS.s2Contract,
+    sha256: V5_TPM_CONTRACT.s2ContractSha256,
+    bytes: V5_TPM_CONTRACT.s2ContractBytes,
+  });
+  digestBinding(
+    value.s2SuccessorAuthorization,
+    "V5 S2 successor authorization",
+    {
+      path: PUBLIC_MATERIALS.s2SuccessorAuthorization,
+      sha256: V5_TPM_CONTRACT.s2AuthorizationSha256,
+      bytes: V5_TPM_CONTRACT.s2AuthorizationBytes,
+    },
+  );
+  digestBinding(value.recoveryGovernance, "V5 S3 recovery governance", {
+    path: PUBLIC_MATERIALS.successorAuthorization,
+    sha256: V5_TPM_CONTRACT.successorAuthorizationSha256,
+    bytes: V5_TPM_CONTRACT.successorAuthorizationBytes,
+  });
+  digestBinding(
+    value.s2IndeterminateArchiveManifest,
+    "V5 S2 indeterminate archive manifest",
+    {
+      path: PUBLIC_MATERIALS.s2IndeterminateArchiveManifest,
+      sha256: V5_TPM_CONTRACT.s2IndeterminateArchiveManifestSha256,
+      bytes: V5_TPM_CONTRACT.s2IndeterminateArchiveManifestBytes,
+    },
+  );
+  digestBinding(
+    value.s2IndeterminateArchiveAudit,
+    "V5 S2 indeterminate archive audit",
+    {
+      path: PUBLIC_MATERIALS.s2IndeterminateArchiveAudit,
+      sha256: V5_TPM_CONTRACT.s2IndeterminateArchiveAuditSha256,
+      bytes: V5_TPM_CONTRACT.s2IndeterminateArchiveAuditBytes,
+    },
+  );
+  digestBinding(
+    value.s2IndeterminateAttemptEvidence,
+    "V5 S2 indeterminate attempt evidence",
+    {
+      path: PUBLIC_MATERIALS.s2IndeterminateAttemptEvidence,
+      sha256: V5_TPM_CONTRACT.s2IndeterminateAttemptEvidenceSha256,
+      bytes: V5_TPM_CONTRACT.s2IndeterminateAttemptEvidenceBytes,
+    },
+  );
   digestBinding(value.payloadSchema, "V5 payload schema", {
-    path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.json",
+    path: PUBLIC_MATERIALS.schema,
     sha256: V5_TPM_CONTRACT.schemaSha256,
     bytes: V5_TPM_CONTRACT.schemaBytes,
   });
   digestBinding(value.signingContract, "V5 signing contract", {
-    path: "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.md",
+    path: PUBLIC_MATERIALS.contract,
     sha256: V5_TPM_CONTRACT.contractSha256,
     bytes: V5_TPM_CONTRACT.contractBytes,
   });
@@ -973,7 +1143,7 @@ function validateReviewEvidence(value, repository) {
   passBinding(value.preSignRole2Audit, "V5 pre-sign Role2 audit");
   if (
     value.preSignRole2Audit.path !==
-    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN_LOOP_2.md"
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN_LOOP_3.md"
   )
     throw new Error("V5 pre-sign Role2 audit path is invalid.");
   closed(
@@ -996,7 +1166,7 @@ function validateReviewEvidence(value, repository) {
   canonicalUtcMs(value.hosted.observedAt, "V5 hosted observedAt");
   if (
     value.hosted.observationPath !==
-      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_GITHUB_HOSTED_OBSERVATION_PO_001_SLICE_3_V5_SUCCESSOR_2.json" ||
+      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_GITHUB_HOSTED_OBSERVATION_PO_001_SLICE_3_V5_SUCCESSOR_3.json" ||
     !SHA256.test(value.hosted.observationSha256) ||
     !Number.isSafeInteger(value.hosted.runId) ||
     value.hosted.runId < 1 ||
@@ -1081,7 +1251,7 @@ function validateAuthorizationPolicy(value) {
 export function validateV5Role2Payload(payload, { nowMs = Date.now() } = {}) {
   closed(payload, TOP_LEVEL_KEYS, "V5 signed payload");
   if (
-    payload.schemaVersion !== "matchbase.role2-detached-acceptance/v5" ||
+    payload.schemaVersion !== "matchbase.role2-detached-acceptance/v6" ||
     payload.payloadType !== "V5_OPENROUTER_CREDENTIAL_GET_AUTHORIZATION" ||
     payload.decisionId !== V5_TPM_CONTRACT.decisionId ||
     !SESSION.test(payload.sessionId) ||
@@ -1164,7 +1334,7 @@ export function validateV5Role2Envelope(envelope, payload, payloadSha256) {
     Buffer.from(rfc8785Canonicalize(payload.replayIdentity), "utf8"),
   );
   if (
-    envelope.schemaVersion !== "matchbase.role2-detached-signature/v5" ||
+    envelope.schemaVersion !== "matchbase.role2-detached-signature/v6" ||
     envelope.sessionId !== payload.sessionId ||
     envelope.replayIdentitySha256 !== replayIdentitySha256 ||
     envelope.payloadSha256 !== payloadSha256 ||

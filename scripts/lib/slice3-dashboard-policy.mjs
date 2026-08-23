@@ -374,6 +374,27 @@ export function validateSlice3Evidence(value, options = {}) {
     successorAuthorization:
       value.qualificationPreflight.v5Admission.role2TpmAuthority
         .successorAuthorization,
+    s2PayloadSchema:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .s2PayloadSchema,
+    s2SigningContract:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .s2SigningContract,
+    s2SuccessorAuthorization:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .s2SuccessorAuthorization,
+    recoveryGovernance:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .recoveryGovernance,
+    s2IndeterminateArchiveManifest:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .s2IndeterminateArchiveManifest,
+    s2IndeterminateArchiveAudit:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .s2IndeterminateArchiveAudit,
+    s2IndeterminateAttemptEvidence:
+      value.qualificationPreflight.v5Admission.role2TpmAuthority
+        .s2IndeterminateAttemptEvidence,
     forensicArchiveAudit:
       value.qualificationPreflight.v5Admission.role2TpmAuthority
         .forensicArchiveAudit,
@@ -418,6 +439,13 @@ export function validateSlice3Evidence(value, options = {}) {
       "payloadSchema",
       "signingContract",
       "successorAuthorization",
+      "s2PayloadSchema",
+      "s2SigningContract",
+      "s2SuccessorAuthorization",
+      "recoveryGovernance",
+      "s2IndeterminateArchiveManifest",
+      "s2IndeterminateArchiveAudit",
+      "s2IndeterminateAttemptEvidence",
       "forensicArchiveAudit",
       "forensicArchiveManifest",
       "officialDocsEvidence",
@@ -477,13 +505,34 @@ export function validateSlice3Evidence(value, options = {}) {
       "5674E94E9D2F27AC16D9F0C793D6222F67C4EE4FFEDA0B10D2F9A09D50F99CFB" ||
     value.qualificationPreflight.v5Admission.role2TpmAuthority.payloadSchema
       .sha256 !==
-      "761B079C422AD28A8F846A642D1141622EFC1DB9EB5CF18E28A8C4F3903C8B77" ||
+      "66C53191D6552990E528834E35033D8F5208F1FFE7CB32FFCEEC6D14AE07F910" ||
     value.qualificationPreflight.v5Admission.role2TpmAuthority.signingContract
+      .sha256 !==
+      "9C35E4BCEE0A74745C31794A2E42A39ABB97F1A44D171399C86A4F612C2B175F" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority
+      .successorAuthorization.sha256 !==
+      "9627F5CC3FDC6D08B91E0C8C8685C9B409A889067B82B689563B596E9B8B29F8" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.s2PayloadSchema
+      .sha256 !==
+      "761B079C422AD28A8F846A642D1141622EFC1DB9EB5CF18E28A8C4F3903C8B77" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority.s2SigningContract
       .sha256 !==
       "7678893C5AC9FDFB95DF549C6C2AF7BA277DCDADC172B148FCED96757801FD0F" ||
     value.qualificationPreflight.v5Admission.role2TpmAuthority
-      .successorAuthorization.sha256 !==
+      .s2SuccessorAuthorization.sha256 !==
       "A028A2AEFCA11F0002906F7483821C039E9AD82B272DA5235B531A426AC7E98A" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority
+      .recoveryGovernance.sha256 !==
+      "9627F5CC3FDC6D08B91E0C8C8685C9B409A889067B82B689563B596E9B8B29F8" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority
+      .s2IndeterminateArchiveManifest.sha256 !==
+      "48B479DADD281D0CFB77A44276DDB7313F27B5BBC316E904D8A9E9EB569B2E72" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority
+      .s2IndeterminateArchiveAudit.sha256 !==
+      "4867AC5D0D06A81312CE0A5FAC0BDFA41D07C6A070DC2CF1D9EC6F6BEBC96B1F" ||
+    value.qualificationPreflight.v5Admission.role2TpmAuthority
+      .s2IndeterminateAttemptEvidence.sha256 !==
+      "F976281003E739524FBCA97AEC3FE5E14AF999ED31EFEB112C34D49925B7091B" ||
     value.qualificationPreflight.v5Admission.role2TpmAuthority
       .forensicArchiveAudit.sha256 !==
       "3168FE64F5DC1B73B60E71345533B48141381CAED3D6394F46ECB2BC2CF40043" ||

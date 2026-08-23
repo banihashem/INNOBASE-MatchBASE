@@ -87,7 +87,7 @@ async function temporaryState() {
 function events(sessionId) {
   const authorizationEvent = {
     schemaVersion: "matchbase.slice3-v5-authorization/v2",
-    authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S2",
+    authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S3",
     sessionId,
     sourceAttestationDigest: "A".repeat(64),
     role2PayloadSha256: "B".repeat(64),
@@ -108,7 +108,7 @@ function events(sessionId) {
     authorizationEvent,
     reservationEvent: {
       schemaVersion: "matchbase.slice3-v5-key-get-reservation/v2",
-      authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S2",
+      authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S3",
       sessionId,
       authorizationDigest: sha256(`${JSON.stringify(authorizationEvent)}\n`),
       replayRecordSha256: "F".repeat(64),
@@ -167,7 +167,7 @@ function terminalResult(created, overrides = {}) {
 }
 
 const ledgerValidation = Object.freeze({
-  authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S2",
+  authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S3",
   sessionId: "v5-0123456789ABCDEF01234567",
   sourceAttestationDigest: "A".repeat(64),
   role2PayloadSha256: "B".repeat(64),
@@ -269,8 +269,8 @@ test(
       { ...disposition, sourceAttestationDigest: "DIGEST" },
       {
         schemaVersion: "matchbase.slice3-v5-source-binding/v1",
-        authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S2",
-        sessionId: "v5-6092A20EE13791B32198C4B6",
+        authorizationId: "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S3",
+        sessionId: "v5-DFF5A5718703A502AAF5EA9C",
         disposition: "PRE_EXECUTION_PENDING",
         reason: "ROLE2_ACCEPTANCE_PAYLOAD_ABSENT",
         sourceAttestationDigest: "DIGEST",
@@ -877,7 +877,7 @@ test(
     const replayPath =
       "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.role2-signing-replay-registry\\consumed-v5.jsonl";
     const sessionPath =
-      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-live-qualification-state\\v5-6092A20EE13791B32198C4B6";
+      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-live-qualification-state\\v5-DFF5A5718703A502AAF5EA9C";
     const replayBefore = sha256(await readFile(replayPath));
     await assert.rejects(lstat(sessionPath), /ENOENT/u);
     const moduleUrl = pathToFileURL(

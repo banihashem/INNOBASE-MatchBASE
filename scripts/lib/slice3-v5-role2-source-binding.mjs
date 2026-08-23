@@ -3,11 +3,14 @@ import { lstat, readdir, realpath } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
+  rfc8785Canonicalize,
   sha256,
+  validateV5Role2Payload,
   verifyPinnedV5PublicMaterials,
   verifyPinnedV5Role2Acceptance,
   V5_TPM_CONTRACT,
 } from "./slice3-v5-role2-tpm-verifier.mjs";
+import { inspectCanonicalV5ReplayRegistry } from "./slice3-v5-replay-registry.mjs";
 import { readExactRegularContainedSource } from "./slice3-v5-source-verifier.mjs";
 import { validateV5ResponseContractArtifact } from "./slice3-v5-response-contract.mjs";
 import {
@@ -356,6 +359,13 @@ async function verifyGovernanceSources(payload) {
     payload.governanceBindings.oneGetAllocation,
     payload.governanceBindings.transitionDecision,
     payload.governanceBindings.successorAuthorization,
+    payload.governanceBindings.s2PayloadSchema,
+    payload.governanceBindings.s2SigningContract,
+    payload.governanceBindings.s2SuccessorAuthorization,
+    payload.governanceBindings.recoveryGovernance,
+    payload.governanceBindings.s2IndeterminateArchiveManifest,
+    payload.governanceBindings.s2IndeterminateArchiveAudit,
+    payload.governanceBindings.s2IndeterminateAttemptEvidence,
     payload.governanceBindings.payloadSchema,
     payload.governanceBindings.signingContract,
     payload.governanceBindings.custodyEvidence,
@@ -370,6 +380,91 @@ async function verifyGovernanceSources(payload) {
   ])
     await exactBinding(binding, PM_ROOT);
   await verifyResponseContract(payload.authorizationPolicy.responseContract);
+}
+
+async function verifyUnsignedPayloadSourcesAndState(payload) {
+  await Promise.all([
+    verifyGovernanceSources(payload),
+    verifyAuthoritativeSourceSet(payload.authoritativeSourceSet),
+    verifyManagementLogPrefix(payload.managementLogPrefix),
+    verifyCandidate(payload),
+    verifyReviewSources(payload),
+  ]);
+  const head = git(["rev-parse", "HEAD"]);
+  const tree = git(["rev-parse", "HEAD^{tree}"]);
+  const originMain = git(["rev-parse", "origin/main"]);
+  const branch = git(["branch", "--show-current"]);
+  const originUrl = git(["remote", "get-url", "origin"]);
+  if (
+    head !== payload.repository.commit ||
+    originMain !== head ||
+    tree !== payload.repository.tree ||
+    branch !== "main" ||
+    git(["status", "--porcelain=v1"]) !== "" ||
+    !new Set([
+      "https://github.com/banihashem/INNOBASE-MatchBASE.git",
+      "git@github.com:banihashem/INNOBASE-MatchBASE.git",
+    ]).has(originUrl)
+  )
+    throw new Error("V5 repository clean parity or remote identity drifted.");
+  const replay = await inspectCanonicalV5ReplayRegistry(payload.replayIdentity);
+  const sessionDirectory = join(V5_TPM_CONTRACT.stateRoot, payload.sessionId);
+  if (
+    replay.digest !== payload.replayIdentity.registryPreSignSha256 ||
+    replay.byteLength !== payload.replayIdentity.registryPreSignBytes ||
+    replay.records.length !==
+      payload.replayIdentity.registryPreSignRecordCount ||
+    replay.records.at(-1)?.sequence !==
+      payload.replayIdentity.registryPreSignLastSequence ||
+    replay.lastRecordSha256 !==
+      payload.replayIdentity.registryPreSignTailSha256 ||
+    replay.identityUsed ||
+    !(await absent(`${V5_TPM_CONTRACT.replayRegistryPath}.lock`)) ||
+    !(await absent(sessionDirectory)) ||
+    !(await absent(`${sessionDirectory}.authorization.lock`)) ||
+    !(await absent(`${sessionDirectory}.run.lock`))
+  )
+    throw new Error(
+      "V5 unsigned payload replay or state precondition drifted.",
+    );
+}
+
+export async function verifyCurrentPinnedV5UnsignedPayload({
+  nowMs = Date.now(),
+} = {}) {
+  await Promise.all([
+    assertCanonicalV5Workspace(),
+    assertCanonicalV5ManagementRoot(),
+  ]);
+  const publicMaterials = await verifyPinnedV5PublicMaterials();
+  if (
+    (await absent(V5_TPM_CONTRACT.payloadPath)) ||
+    !(await absent(V5_TPM_CONTRACT.envelopePath))
+  )
+    throw new Error("V5 unsigned payload state is not exact.");
+  await assertCanonicalV5SigningRoot();
+  const payloadBytes = await readExactRegularContainedSource(
+    V5_TPM_CONTRACT.payloadPath,
+    dirname(V5_TPM_CONTRACT.payloadPath),
+    null,
+  );
+  if (payloadBytes.length < 2 || payloadBytes.length > 262_144)
+    throw new Error("V5 unsigned payload byte length is invalid.");
+  const payload = JSON.parse(
+    new TextDecoder("utf8", { fatal: true }).decode(payloadBytes),
+  );
+  validateV5Role2Payload(payload, { nowMs });
+  if (!payloadBytes.equals(Buffer.from(rfc8785Canonicalize(payload), "utf8")))
+    throw new Error("V5 unsigned payload bytes are not exact JCS.");
+  await verifyUnsignedPayloadSourcesAndState(payload);
+  return Object.freeze({
+    payload,
+    payloadBytes,
+    payloadSha256: sha256(payloadBytes),
+    publicKey: publicMaterials.publicKey,
+    publicKeyPem: publicMaterials.publicKeyPem,
+    certificateBytes: publicMaterials.certificateBytes,
+  });
 }
 
 export async function loadCurrentPinnedV5Acceptance({
@@ -431,6 +526,9 @@ export async function loadCurrentPinnedV5Acceptance({
     throw new Error("V5 repository clean parity or remote identity drifted.");
   return Object.freeze({
     ...verified,
+    payloadBytes,
+    envelopeBytes,
+    envelopeSha256: sha256(envelopeBytes),
     sourceSetSha256: sha256(
       Buffer.from(
         [

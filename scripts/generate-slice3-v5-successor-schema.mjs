@@ -1,31 +1,23 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 const source =
-  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V4.json";
-const target =
   "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.json";
+const target =
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V6.json";
 const schema = JSON.parse(await readFile(source, "utf8"));
 
 schema.$id =
-  "https://matchbase.innobase.app/schemas/role2-detached-acceptance-v5.json";
+  "https://matchbase.innobase.app/schemas/role2-detached-acceptance-v6.json";
 schema.title =
-  "MatchBASE Role 2 V5 Successor-2 Single-GET Detached Acceptance Payload v5";
+  "MatchBASE Role 2 V5 Successor-3 Single-GET Detached Acceptance Payload v6";
 schema.properties.schemaVersion.const =
-  "matchbase.role2-detached-acceptance/v5";
+  "matchbase.role2-detached-acceptance/v6";
 schema.properties.decisionId.const =
-  "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S2";
-schema.properties.sessionId.const = "v5-6092A20EE13791B32198C4B6";
-schema.properties.nonce.const = "7F974EECA2C846990DD06499284DA28A";
+  "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S3";
+schema.properties.sessionId.const = "v5-DFF5A5718703A502AAF5EA9C";
+schema.properties.nonce.const = "A971E3541D959B94E9EACF28D5F3D6B9";
 
 const replay = schema.properties.replayIdentity;
-replay.required.splice(
-  replay.required.indexOf("nonceAbsentBeforeSign"),
-  0,
-  "registryPreSignBytes",
-  "registryPreSignRecordCount",
-  "registryPreSignLastSequence",
-  "registryPreSignTailSha256",
-);
 replay.properties.decisionId.const = schema.properties.decisionId.const;
 replay.properties.sessionId.const = schema.properties.sessionId.const;
 replay.properties.nonce.const = schema.properties.nonce.const;
@@ -39,26 +31,22 @@ replay.properties.registryPreSignTailSha256 = {
 };
 
 const governance = schema.properties.governanceBindings;
+const newGovernanceKeys = [
+  "s2PayloadSchema",
+  "s2SigningContract",
+  "s2SuccessorAuthorization",
+  "recoveryGovernance",
+  "s2IndeterminateArchiveManifest",
+  "s2IndeterminateArchiveAudit",
+  "s2IndeterminateAttemptEvidence",
+];
 governance.required.splice(
   governance.required.indexOf("forensicArchiveAudit"),
   0,
-  "forensicArchiveManifest",
-  "officialDocsEvidence",
-  "officialDocsEvidenceAudit",
-  "rateLimitAmendment",
+  ...newGovernanceKeys,
 );
-governance.properties.forensicArchiveManifest = {
-  $ref: "#/$defs/forensicArchiveManifestBinding",
-};
-governance.properties.officialDocsEvidence = {
-  $ref: "#/$defs/officialDocsEvidenceBinding",
-};
-governance.properties.officialDocsEvidenceAudit = {
-  $ref: "#/$defs/officialDocsEvidenceAuditBinding",
-};
-governance.properties.rateLimitAmendment = {
-  $ref: "#/$defs/rateLimitAmendmentBinding",
-};
+for (const key of newGovernanceKeys)
+  governance.properties[key] = { $ref: `#/$defs/${key}Binding` };
 
 const binding = (path, sha256, bytes) => ({
   allOf: [
@@ -72,7 +60,42 @@ const binding = (path, sha256, bytes) => ({
     },
   ],
 });
+schema.$defs.s2PayloadSchemaBinding = binding(
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNED_ACCEPTANCE_PAYLOAD_SCHEMA_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.json",
+  "761B079C422AD28A8F846A642D1141622EFC1DB9EB5CF18E28A8C4F3903C8B77",
+  27_650,
+);
+schema.$defs.s2SigningContractBinding = binding(
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.md",
+  "7678893C5AC9FDFB95DF549C6C2AF7BA277DCDADC172B148FCED96757801FD0F",
+  8_520,
+);
+schema.$defs.recoveryGovernanceBinding = binding(
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_S3_SUCCESSOR_REQUIREMENTS_AFTER_S2_LOST_OUTPUT_SIGNING_V1.md",
+  "9627F5CC3FDC6D08B91E0C8C8685C9B409A889067B82B689563B596E9B8B29F8",
+  7_874,
+);
 schema.$defs.successorAuthorizationBinding = binding(
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_S3_SUCCESSOR_REQUIREMENTS_AFTER_S2_LOST_OUTPUT_SIGNING_V1.md",
+  "9627F5CC3FDC6D08B91E0C8C8685C9B409A889067B82B689563B596E9B8B29F8",
+  7_874,
+);
+schema.$defs.s2IndeterminateArchiveManifestBinding = binding(
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-v5-signing\\archive\\V5-S2-INDETERMINATE-SIGNING-001\\INDETERMINATE_SESSION_v5-6092A20EE13791B32198C4B6_MANIFEST.json",
+  "48B479DADD281D0CFB77A44276DDB7313F27B5BBC316E904D8A9E9EB569B2E72",
+  3_602,
+);
+schema.$defs.s2IndeterminateArchiveAuditBinding = binding(
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_SLICE_3_V5_S2_INDETERMINATE_SIGNING_FORENSIC_ARCHIVE_AUDIT_2026-08-23.json",
+  "4867AC5D0D06A81312CE0A5FAC0BDFA41D07C6A070DC2CF1D9EC6F6BEBC96B1F",
+  3_498,
+);
+schema.$defs.s2IndeterminateAttemptEvidenceBinding = binding(
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-v5-signing\\archive\\V5-S2-INDETERMINATE-SIGNING-001\\INDETERMINATE_SESSION_v5-6092A20EE13791B32198C4B6_ATTEMPT_EVIDENCE.json",
+  "F976281003E739524FBCA97AEC3FE5E14AF999ED31EFEB112C34D49925B7091B",
+  3_009,
+);
+schema.$defs.s2SuccessorAuthorizationBinding = binding(
   "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_V5_SUCCESSOR_REQUIREMENTS_AFTER_INVALID_200_SCHEMA_V1.md",
   "A028A2AEFCA11F0002906F7483821C039E9AD82B272DA5235B531A426AC7E98A",
   24_178,
@@ -104,13 +127,13 @@ schema.$defs.rateLimitAmendmentBinding = binding(
 );
 schema.$defs.schemaBinding.allOf[1].properties.path.const = target;
 schema.$defs.contractBinding.allOf[1].properties.path.const =
-  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V5.md";
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_SIGNING_CONTRACT_AMENDMENT_PO_001_SLICE_3_V5_TPM_ECDSA_P256_V6.md";
 schema.properties.reviewEvidence.properties.preSignRole2Audit.allOf[1].properties.path.const =
-  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN_LOOP_2.md";
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE2_INDEPENDENT_AUDIT_PO_001_SLICE_3_V5_SUCCESSOR_PRE_SIGN_LOOP_3.md";
 schema.properties.reviewEvidence.properties.hosted.properties.observationPath.const =
-  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_GITHUB_HOSTED_OBSERVATION_PO_001_SLICE_3_V5_SUCCESSOR_2.json";
+  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\ROLE3_GITHUB_HOSTED_OBSERVATION_PO_001_SLICE_3_V5_SUCCESSOR_3.json";
 schema.$defs.detachedSignatureEnvelope.properties.schemaVersion.const =
-  "matchbase.role2-detached-signature/v5";
+  "matchbase.role2-detached-signature/v6";
 schema.$defs.detachedSignatureEnvelope.properties.sessionId.const =
   schema.properties.sessionId.const;
 

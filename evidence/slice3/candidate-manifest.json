@@ -11,8 +11,8 @@
     "apps/dashboard/public/current-snapshot.json",
     "apps/dashboard/dist/current-snapshot.json"
   ],
-  "fileCount": 72,
-  "aggregateSha256": "E517EDC36F565310DD31B1D7C75217687EEF75C2F715DE1FA4FBD9A5896A5C1D",
+  "fileCount": 75,
+  "aggregateSha256": "A1402AF2CF9296F623E2D99A7E159EAEAFC1E7AEABC559B1878F8ED1ED4DD6C7",
   "files": [
     {
       "path": ".gitignore",
@@ -56,7 +56,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "04ED050138C862B84E56860FB9E386F22616F5124F7CB4BADCCFF6B27F2B7F5C"
+      "sha256": "87EFB9E1D8F47ED466D9BC0FDD04E161C71B9EC90F071D8AFB6ED3FDAB807C76"
     },
     {
       "path": "packages/ai-evidence/src/adapters/gemini-direct.ts",
@@ -140,11 +140,11 @@
     },
     {
       "path": "scripts/generate-slice3-evidence.mjs",
-      "sha256": "53658DDF914D42B7437E94DDB9E6AB6B1EE2514F3C57671356BE8541054DF49A"
+      "sha256": "A1FD4103FFA61C3A2444CC47B9E1D7F8CBC1ED2A64D6346218316F3790F99A7E"
     },
     {
       "path": "scripts/generate-slice3-v5-successor-schema.mjs",
-      "sha256": "0FE473309622D4909534AF4F8B968FE3DA5B3E0AD5B50A0B41DB020976F80375"
+      "sha256": "CE2598CBE50C79393267D9683CD5980DADEC56EB2136DD9A1E48B95B51314B90"
     },
     {
       "path": "scripts/lib/slice3-dashboard-handoff-policy.mjs",
@@ -152,7 +152,7 @@
     },
     {
       "path": "scripts/lib/slice3-dashboard-policy.mjs",
-      "sha256": "D0423959DA70DF89DE8FE98A6F6F3CFFF0D045D3514941ED68489D076F6AAAEC"
+      "sha256": "A7F862FE2F19068CD96AF7460150A101B131DF79EAD64B0B2A7EF6F46F7E42F7"
     },
     {
       "path": "scripts/lib/slice3-live-qualification-runner.mjs",
@@ -164,7 +164,7 @@
     },
     {
       "path": "scripts/lib/slice3-live-qualification-v5.mjs",
-      "sha256": "5BEC8D68B86CC5E89F2194FA9C1B0801E97C8988CD2D4167FC9314A8A90545AA"
+      "sha256": "847D7CD9012D3BC2A76D51DD321FF201584458316971B5211D18BAC1C6177928"
     },
     {
       "path": "scripts/lib/slice3-v5-canonical-workspace.mjs",
@@ -177,6 +177,10 @@
     {
       "path": "scripts/lib/slice3-v5-credential-file-controls.mjs",
       "sha256": "E6888D4CE66B694E30FD41B441AD9DED7C203A6EE88624379955163CDEEA37D5"
+    },
+    {
+      "path": "scripts/lib/slice3-v5-durable-tpm-signer.mjs",
+      "sha256": "F3CD58AD1E503E156C0326EEBD8DE4A9DE2AAF940BCC42692E5DBD18C206191E"
     },
     {
       "path": "scripts/lib/slice3-v5-one-use-ledger.mjs",
@@ -192,11 +196,11 @@
     },
     {
       "path": "scripts/lib/slice3-v5-role2-source-binding.mjs",
-      "sha256": "1C8828C6A620679983F627A3A95EE0074D6C1BCACC84A3CF3C1581B5509BE090"
+      "sha256": "44A35FCBA3F02D319CC7B8864DBB8F007BF2854B0991F9C7DA421808B1814B20"
     },
     {
       "path": "scripts/lib/slice3-v5-role2-tpm-verifier.mjs",
-      "sha256": "0D4A413695DDF4340010FA1C1A04745875CE462286862EE4FA3CF2AB930A3ABF"
+      "sha256": "536FC39C35BF6728FDBFC5097718EDE5A2E5448E575507EE37B0EA32E7A0B6A4"
     },
     {
       "path": "scripts/lib/slice3-v5-source-verifier.mjs",
@@ -223,12 +227,16 @@
       "sha256": "7DC296FFE0BA9280466EAC4B333134EA66BD80FBF20B484ADB4D903A3CC54328"
     },
     {
+      "path": "scripts/sign-slice3-v5-s3-durable.mjs",
+      "sha256": "48F51361F2280C36E8359E19BEC89FB5991B654B99DCE49B3016EB8FCBA8B488"
+    },
+    {
       "path": "scripts/validate-dashboard-snapshot.mjs",
       "sha256": "C84A949BFD9D1FF5B10DEE1C29B40A63A04C6EDB8AE0625165569BF0CD130DF2"
     },
     {
       "path": "scripts/validate-slice3-local.mjs",
-      "sha256": "FE146AF6355E4FDFB38DD5756754E1E8F7D24FE53A53266834B44FBB3E173285"
+      "sha256": "28A25F5B6FE0B819CA397F1342803ADA79E4407DA808A32EDC4F164234C2AE44"
     },
     {
       "path": "scripts/verify-boundaries.mjs",
@@ -280,11 +288,11 @@
     },
     {
       "path": "test/slice3/live-qualification-v5-tpm-contract.test.mjs",
-      "sha256": "3CDA70655AFD030BD1005A2E58996EF1A5956DAFADEA6808EE4A28728A7098F9"
+      "sha256": "70DCFC8222B9C09F0642CF578D8BD4676368B1F08D3576D2EB62911470A4C7CE"
     },
     {
       "path": "test/slice3/live-qualification-v5.test.mjs",
-      "sha256": "FDDB7245E33C7CBBB22BA7ABDFDEBB75BA32B8CB90EA24002FDBA902924CE326"
+      "sha256": "2EDC6EDE74285F5254B25BA2BFFBB1FA9E99495DFB1287B5A8AF0BC6134DA061"
     },
     {
       "path": "test/slice3/live-research-application-postgres.test.mjs",
@@ -293,6 +301,10 @@
     {
       "path": "test/slice3/support/v5-replay-registry-test-harness.mjs",
       "sha256": "4D4289D4C32B404C6215811096E5E949BFABC1AF85AEBB6D20A7D8E7DFD6A19D"
+    },
+    {
+      "path": "test/slice3/v5-durable-tpm-signer.test.mjs",
+      "sha256": "1F91CEA6FDABEA6D53A2D338470562126FED98C22BD43B5D9EEDF31D7E361608"
     },
     {
       "path": "test/slice3/v5-invalid-pair-archive.test.mjs",

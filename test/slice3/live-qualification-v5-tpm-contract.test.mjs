@@ -26,6 +26,9 @@ import {
   V5_FIXED_SIGNED_PATHS,
   V5_TPM_CONTRACT,
 } from "../../scripts/lib/slice3-v5-role2-tpm-verifier.mjs";
+
+const REPLAY_PREDECESSOR_FIXTURE_PATH =
+  "test/slice3/fixtures/v5-replay-predecessor-seq1.jsonl";
 import {
   inspectCanonicalV5ReplayRegistry,
   validateV5ReplayRegistryBytes,
@@ -602,7 +605,7 @@ test(
 );
 
 test("replay registry fixes the exact nonempty predecessor and rejects rollback", async () => {
-  const predecessor = await readFile(V5_TPM_CONTRACT.replayRegistryPath);
+  const predecessor = await readFile(REPLAY_PREDECESSOR_FIXTURE_PATH);
   const validated = validateV5ReplayRegistryBytes(predecessor);
   assert.equal(validated.digest, V5_TPM_CONTRACT.replayPreSignSha256);
   assert.equal(validated.byteLength, V5_TPM_CONTRACT.replayPreSignBytes);
@@ -676,7 +679,7 @@ test("replay reservation is one-winner, durable, restart-safe, and rejects unsaf
   await mkdir(registryRoot);
   await writeFile(
     registryPath,
-    await readFile(V5_TPM_CONTRACT.replayRegistryPath),
+    await readFile(REPLAY_PREDECESSOR_FIXTURE_PATH),
     { flag: "wx" },
   );
   const replayIdentity = payloadFixture().replayIdentity;

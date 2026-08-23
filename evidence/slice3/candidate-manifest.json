@@ -11,8 +11,8 @@
     "apps/dashboard/public/current-snapshot.json",
     "apps/dashboard/dist/current-snapshot.json"
   ],
-  "fileCount": 71,
-  "aggregateSha256": "FAD62CE4A0CA1036933A5B5B04A73A531EA05869CA1DDA9F1E1E8DDB08D8E348",
+  "fileCount": 72,
+  "aggregateSha256": "E517EDC36F565310DD31B1D7C75217687EEF75C2F715DE1FA4FBD9A5896A5C1D",
   "files": [
     {
       "path": ".gitignore",
@@ -247,6 +247,10 @@
       "sha256": "46CA7352B8D9C5B16E80F818E3F9B848BD1EE3CEEBCDA5196115F3832BAB2753"
     },
     {
+      "path": "test/slice3/fixtures/v5-replay-predecessor-seq1.jsonl",
+      "sha256": "E28CE25E057EFF410BDCD0812CFC3E43BD6ECBE520DBC07FE1C31BAFA4057A87"
+    },
+    {
       "path": "test/slice3/live-qualification-durable-runner.test.mjs",
       "sha256": "57B1CCC819ABDEC9FA0CF27F89D85A7149EA8E13C31B8435DC3F00DBCF1D2324"
     },
@@ -268,7 +272,7 @@
     },
     {
       "path": "test/slice3/live-qualification-v5-replay-successor.test.mjs",
-      "sha256": "49D5D9006C3A32E5F5CA7B694A83424A06B59BBD70CB0F05BCF4BAB6CD1F01FD"
+      "sha256": "B15C7E78BDFEF495EC51DD181628252C1F8892B2F845E6CAD5C14EAE292B00B8"
     },
     {
       "path": "test/slice3/live-qualification-v5-response-v2.test.mjs",
@@ -276,7 +280,7 @@
     },
     {
       "path": "test/slice3/live-qualification-v5-tpm-contract.test.mjs",
-      "sha256": "6EB63B325A065A2B61F8AD177AA0C705443118760DECBAB941A1121488512DE1"
+      "sha256": "3CDA70655AFD030BD1005A2E58996EF1A5956DAFADEA6808EE4A28728A7098F9"
     },
     {
       "path": "test/slice3/live-qualification-v5.test.mjs",

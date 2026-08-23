@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "slice": "SLICE-3",
-  "observedAt": "2026-08-23T10:04:22.301Z",
+  "observedAt": "2026-08-23T10:20:10.485Z",
   "lifecyclePhase": "DURING_REVIEW",
   "candidateStatus": "LOCAL_REPOSITORY_IMPLEMENTATION_FROZEN_LIVE_BLOCKED",
   "repositoryImplementation": "PASS",
@@ -132,20 +132,20 @@
   },
   "candidate": {
     "manifestPath": "evidence/slice3/candidate-manifest.json",
-    "manifestSha256": "3B52610DBC83DF0A89CDC315E90F057D1ADBD8521264DFBD50F9E6BD6EE96275",
-    "aggregateSha256": "FAD62CE4A0CA1036933A5B5B04A73A531EA05869CA1DDA9F1E1E8DDB08D8E348",
-    "fileCount": 71
+    "manifestSha256": "07FA918EFB6494F40AA7F497B295EA4FE8330C7EA2D22EF66DCFFD31F3FF23A6",
+    "aggregateSha256": "E517EDC36F565310DD31B1D7C75217687EEF75C2F715DE1FA4FBD9A5896A5C1D",
+    "fileCount": 72
   },
   "localGate": {
     "status": "PASS",
     "fullWrapper": {
       "command": "pnpm test:ci && pnpm dependency:audit",
-      "durationMs": 471014,
+      "durationMs": 459363,
       "result": "PASS",
-      "observedAt": "2026-08-23T10:04:21.876Z",
+      "observedAt": "2026-08-23T10:20:10.115Z",
       "sourceRef": {
         "path": "evidence/slice3/full-wrapper-result.json",
-        "sha256": "88B2B20A05DA22D73B083B287277AC5DBC24387037C48342C4EE2C1C218F563B"
+        "sha256": "FC56B1207E9B89B3A650D158FFF5A3D41E044366EB7F0DCBF931963AC1CEACA1"
       }
     },
     "testCounts": {
@@ -2598,7 +2598,7 @@
     {
       "id": "S3-ART-068",
       "path": "test/slice3/live-qualification-v5-tpm-contract.test.mjs",
-      "sha256": "6EB63B325A065A2B61F8AD177AA0C705443118760DECBAB941A1121488512DE1"
+      "sha256": "3CDA70655AFD030BD1005A2E58996EF1A5956DAFADEA6808EE4A28728A7098F9"
     },
     {
       "id": "S3-ART-069",
@@ -2608,7 +2608,7 @@
     {
       "id": "S3-ART-070",
       "path": "test/slice3/live-qualification-v5-replay-successor.test.mjs",
-      "sha256": "49D5D9006C3A32E5F5CA7B694A83424A06B59BBD70CB0F05BCF4BAB6CD1F01FD"
+      "sha256": "B15C7E78BDFEF495EC51DD181628252C1F8892B2F845E6CAD5C14EAE292B00B8"
     },
     {
       "id": "S3-ART-071",

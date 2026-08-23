@@ -10,8 +10,7 @@ import {
   reserveV5ReplayIdentityAt,
 } from "./support/v5-replay-registry-test-harness.mjs";
 
-const BASELINE_PATH =
-  "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.role2-signing-replay-registry\\consumed-v5.jsonl";
+const BASELINE_PATH = "test/slice3/fixtures/v5-replay-predecessor-seq1.jsonl";
 
 function identity() {
   return {

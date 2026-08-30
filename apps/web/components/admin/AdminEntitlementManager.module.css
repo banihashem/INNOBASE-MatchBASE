@@ -1,0 +1,319 @@
+.shell {
+  width: min(100% - 2rem, 58rem);
+  margin-inline: auto;
+  padding-block: 2rem 4rem;
+}
+
+.skipLink {
+  position: fixed;
+  z-index: 10;
+  inset: 0.5rem auto auto 0.5rem;
+  padding: 0.75rem 1rem;
+  color: white;
+  background: var(--forest);
+  transform: translateY(-200%);
+}
+
+.skipLink:focus {
+  transform: translateY(0);
+}
+
+.header,
+.panel,
+.notice,
+.result {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0.5rem 0.5rem 0 var(--forest);
+}
+
+.header,
+.panel,
+.result {
+  padding: clamp(1.25rem, 4vw, 2.25rem);
+}
+
+.header {
+  margin-bottom: 1.5rem;
+  border-top: 0.4rem solid var(--lime);
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  color: var(--forest-2);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.header h1,
+.panel h2,
+.result h2 {
+  margin-top: 0;
+}
+
+.lede,
+.hint {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.scopeNote {
+  padding: 0.75rem 1rem;
+  border-left: 0.3rem solid var(--forest);
+  background: var(--paper);
+  line-height: 1.55;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0;
+  margin: 1.5rem 0;
+  list-style: none;
+}
+
+.step {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--surface);
+  font-weight: 750;
+}
+
+.currentStep {
+  border-color: var(--forest);
+  color: var(--ink);
+  box-shadow: inset 0 -0.25rem var(--lime);
+}
+
+.notice {
+  margin-block: 1rem;
+  padding: 1rem 1.25rem;
+  box-shadow: none;
+}
+
+.error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.field label,
+.legend {
+  font-weight: 800;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem;
+  color: var(--ink);
+  background: white;
+  border: 2px solid var(--line);
+  border-radius: 0;
+}
+
+.field textarea {
+  min-height: 8rem;
+  resize: vertical;
+}
+
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible,
+.button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.invalid {
+  border-color: var(--danger) !important;
+}
+
+.fieldError {
+  margin: 0;
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.errorList {
+  margin-block: 0.5rem 0;
+  padding-inline-start: 1.25rem;
+}
+
+.errorList li,
+.errorList a {
+  min-width: 0;
+  color: inherit;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.button {
+  max-width: 100%;
+  min-height: 2.75rem;
+  padding: 0.7rem 1rem;
+  border: 2px solid var(--forest);
+  color: white;
+  background: var(--forest);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--forest-2);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.secondary {
+  color: var(--forest);
+  background: transparent;
+}
+
+.button.secondary:hover {
+  color: white;
+  background: var(--forest);
+}
+
+.review,
+.snapshot {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.35fr) minmax(0, 1fr);
+  gap: 0.65rem 1rem;
+  margin-block: 1.25rem;
+}
+
+.review dt,
+.snapshot dt {
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.review dd,
+.snapshot dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.confirmation {
+  margin: 1.5rem 0 0.75rem;
+  padding: 1rem;
+  border-left: 0.4rem solid var(--danger);
+  background: #fff5f3;
+  line-height: 1.6;
+}
+
+.result {
+  margin-top: 1.5rem;
+  box-shadow: 0.5rem 0.5rem 0 var(--lime);
+}
+
+.auditId {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.readPanel {
+  width: 100%;
+  min-width: 0;
+  margin-block: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.readPanel section {
+  width: 100%;
+  min-width: 0;
+}
+
+.readPanel h3 {
+  margin-top: 0;
+}
+
+.tableScroll {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.tableScroll:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.historyTable {
+  width: 100%;
+  min-width: 64rem;
+  border-collapse: collapse;
+}
+
+.historyTable caption {
+  padding-block: 0.75rem;
+  text-align: left;
+  font-weight: 800;
+}
+
+.historyTable th,
+.historyTable td {
+  padding: 0.65rem;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.historyTable th {
+  color: white;
+  background: var(--forest);
+}
+
+@media (max-width: 36rem) {
+  .shell {
+    width: min(100% - 1rem, 58rem);
+    padding-top: 0.5rem;
+  }
+
+  .header,
+  .panel,
+  .result {
+    padding: 1rem;
+  }
+
+  .steps,
+  .review,
+  .snapshot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

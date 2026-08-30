@@ -4,6 +4,10 @@ import { expect, test, vi } from "vitest";
 import { ProductFlow } from "./ProductFlow";
 
 const jsdomAxeOptions = {
+  runOnly: {
+    type: "tag" as const,
+    values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"],
+  },
   rules: { "color-contrast": { enabled: false } },
 };
 

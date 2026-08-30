@@ -1,0 +1,2 @@
+DROP TRIGGER IF EXISTS google_risc_event_receipt_append_only ON google_risc_event_receipt;
+DROP TABLE IF EXISTS google_risc_event_receipt;

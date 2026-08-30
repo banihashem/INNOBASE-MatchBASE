@@ -143,6 +143,8 @@ const base = (ledger: MemoryLedger) => ({
       {
         sourceId: "SRC-PUBLIC-001",
         canonicalUrl: "https://example.com/source",
+        publisherDomain: "example.com",
+        retrievedAt: "2026-08-15T00:00:00.000Z",
         contentSha256: "a".repeat(64),
         excerpt: "Public industrial evidence excerpt.",
       },

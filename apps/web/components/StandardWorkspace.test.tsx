@@ -32,6 +32,13 @@ const emptyRuns = {
   items: [],
   synthetic_warning: "Synthetic evaluation data — not a sourcing result",
 };
+const jsdomAxeOptions = {
+  runOnly: {
+    type: "tag" as const,
+    values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"],
+  },
+  rules: { "color-contrast": { enabled: false } },
+};
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -55,6 +62,7 @@ test("routes Standard identity into the owner workspace without changing Demo en
   expect(
     await screen.findByRole("heading", { name: "Requests" }),
   ).toBeVisible();
+  expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   expect(
     screen.getByText("Synthetic evaluation data — not a sourcing result"),
   ).toBeVisible();
@@ -84,6 +92,29 @@ test("preserves the server polling cadence on a private 304", async () => {
     notModified: true,
     pollAfterMs: 1750,
   });
+});
+
+test("associates the missing Standard source error and focuses its field", async () => {
+  render(
+    <StructuredIntake
+      session={session}
+      onCanonical={() => undefined}
+      onCancel={() => undefined}
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Resolve product category" }),
+  );
+  const source = screen.getByLabelText("Source-language input");
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Enter the transient sourcing requirement first.",
+  );
+  await waitFor(() => expect(source).toHaveFocus());
+  expect(source).toHaveAttribute("aria-invalid", "true");
+  expect(source).toHaveAttribute(
+    "aria-describedby",
+    "standard-source-hint standard-intake-error",
+  );
 });
 
 test("adds multiple independently editable constraints, exclusions, and conditional requirements", async () => {
@@ -183,11 +214,31 @@ const result: StandardResultProjectionV1 = {
   run_id: "run-fixture",
   outcome: "matched",
   scarcity: "limited",
-  projection_version: 3,
+  projection_version: 4,
   synthetic_warning: "Synthetic evaluation data — not a sourcing result",
   gate_eliminations: [
     { gate_id: "gate-1", label: "Hard constraints", eliminated_count: 2 },
   ],
+  scarcity_analysis: {
+    reducing_constraints: [
+      {
+        constraint_id: "constraint-1",
+        field_id: "annual_volume",
+        label: "Annual volume minimum",
+        eliminated_count: 2,
+      },
+    ],
+    unmet_mandatory_constraints: [],
+    permitted_relaxations: [
+      {
+        constraint_id: "constraint-1",
+        field_id: "annual_volume",
+        label: "Annual volume minimum",
+        direction: "lower_is_acceptable",
+        tolerance: "10",
+      },
+    ],
+  },
   limitations: {
     unknown_count: 1,
     not_asked_count: 2,
@@ -287,26 +338,98 @@ const result: StandardResultProjectionV1 = {
 
 test("renders the closed Standard projection and no arithmetic probability language", async () => {
   render(<StandardResult result={result} onBack={() => undefined} />);
-  expect(
-    screen.getByRole("heading", { name: "Responsible candidate comparison" }),
-  ).toBeVisible();
+  const resultHeading = screen.getByRole("heading", {
+    name: "Responsible candidate comparison",
+  });
+  expect(resultHeading).toBeVisible();
+  expect(resultHeading.nextElementSibling).toHaveAttribute("role", "status");
   expect(
     screen.getByRole("region", { name: "Six-dimension candidate comparison" }),
   ).toBeVisible();
   expect(screen.getAllByRole("row")).toHaveLength(7);
   expect(screen.getByText("78")).toBeVisible();
+  const compatibilityMeter = screen.getByRole("meter", {
+    name: "Synthetic Industrial Candidate compatibility score",
+  });
+  expect(compatibilityMeter).toHaveAttribute("aria-valuemin", "0");
+  expect(compatibilityMeter).toHaveAttribute("aria-valuemax", "100");
+  expect(compatibilityMeter).toHaveAttribute("aria-valuenow", "78");
+  expect(compatibilityMeter).toHaveAttribute(
+    "aria-valuetext",
+    "78 of 100, strong fit",
+  );
+  expect(
+    screen.getByText(
+      "1 candidate met all mandatory constraints. Fewer than three met them, so fewer than three are shown.",
+    ),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "Which constraints reduced the set" }),
+  ).toBeVisible();
+  expect(
+    screen
+      .getAllByText("Annual volume minimum")
+      .some((item) =>
+        item
+          .closest("li")
+          ?.textContent?.includes("Annual volume minimum: 2 eliminated"),
+      ),
+  ).toBe(true);
   expect(screen.getByText(/No padding/)).toBeVisible();
   expect(screen.getByText(/not probabilities or guarantees/i)).toBeVisible();
   fireEvent.click(screen.getByText(/Evidence and citations/));
   expect(screen.getByText("Synthetic support text.")).toBeVisible();
   await waitFor(async () =>
-    expect(
-      (
-        await axe.run(document, {
-          rules: { "color-contrast": { enabled: false } },
-        })
-      ).violations,
-    ).toEqual([]),
+    expect((await axe.run(document, jsdomAxeOptions)).violations).toEqual([]),
+  );
+});
+
+test("renders no responsible match as a neutral success with enumerated constraints", async () => {
+  const zeroResult: StandardResultProjectionV1 = {
+    ...result,
+    outcome: "no_responsible_match",
+    scarcity: "zero",
+    candidates: [],
+    scarcity_analysis: {
+      reducing_constraints: result.scarcity_analysis.reducing_constraints,
+      unmet_mandatory_constraints: [
+        {
+          constraint_id: "constraint-1",
+          field_id: "annual_volume",
+          label: "Annual volume minimum",
+        },
+      ],
+      permitted_relaxations: result.scarcity_analysis.permitted_relaxations,
+    },
+  };
+  render(<StandardResult result={zeroResult} onBack={() => undefined} />);
+  const noMatchHeading = screen.getByRole("heading", {
+    name: "No responsible match",
+  });
+  expect(noMatchHeading).toBeVisible();
+  expect(noMatchHeading.nextElementSibling).toHaveAttribute("role", "status");
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "No candidate met the mandatory constraints for this request.",
+  );
+  expect(
+    screen.getByRole("heading", {
+      name: "Which mandatory constraints could not be met",
+    }),
+  ).toBeVisible();
+  expect(screen.getAllByText("Annual volume minimum").length).toBeGreaterThan(
+    0,
+  );
+  const rendered = document.body.textContent ?? "";
+  for (const prohibited of [
+    "No suppliers exist",
+    "no results",
+    "search failed",
+    "empty",
+  ])
+    expect(rendered.toLowerCase()).not.toContain(prohibited.toLowerCase());
+  await waitFor(async () =>
+    expect((await axe.run(document, jsdomAxeOptions)).violations).toEqual([]),
   );
 });
 
@@ -324,6 +447,12 @@ test("refuses an oversized projection before rendering candidate data", () => {
   expect(screen.getByRole("alert")).toHaveTextContent(
     "exceeded the Standard disclosure limit",
   );
+  expect(
+    screen.getByRole("heading", {
+      level: 1,
+      name: "Result disclosure refused",
+    }),
+  ).toBeVisible();
   expect(
     screen.queryByText("Synthetic Industrial Candidate"),
   ).not.toBeInTheDocument();
@@ -399,11 +528,10 @@ test("shows translation confidence and requires an owner contradiction choice wi
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Select one owner resolution",
   );
-  expect(
-    (
-      await axe.run(document, {
-        rules: { "color-contrast": { enabled: false } },
-      })
-    ).violations,
-  ).toEqual([]);
+  await waitFor(() => expect(screen.getAllByRole("radio")[0]).toHaveFocus());
+  expect(screen.getAllByRole("radio")[0]).toHaveAttribute(
+    "aria-describedby",
+    "canonical-review-error",
+  );
+  expect((await axe.run(document, jsdomAxeOptions)).violations).toEqual([]);
 });

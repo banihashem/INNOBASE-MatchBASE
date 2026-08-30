@@ -31,6 +31,49 @@ function stableJson(value) {
   return JSON.stringify(value) ?? "null";
 }
 
+const syntheticScenarios = ["zero", "one", "two", "three", "many"];
+
+function scarcityHardConstraints(suffix) {
+  const selector =
+    typeof suffix === "number" ? suffix : digest(String(suffix))[0];
+  return [
+    {
+      constraint_id: `mandatory-demand-${suffix}`,
+      field_id: "FLD-CORE-TR-01",
+      operator: "minimum",
+      target: {
+        value_state: "provided",
+        value: String(45 + (selector % 40)),
+      },
+      relaxability: "non_relaxable",
+    },
+    {
+      constraint_id: `relaxable-capacity-${suffix}`,
+      field_id: "FLD-CORE-SP-04",
+      operator: "minimum",
+      target: { value_state: "provided", value: String(1200 + selector) },
+      relaxability: "relaxable",
+      tolerance: "200",
+      direction: "lower_is_acceptable",
+    },
+  ];
+}
+
+function selectedSyntheticScenario(canonicalDocument) {
+  const material = {
+    selector_version: "canonical-registry.v1",
+    domain_pack: canonicalDocument.domain_pack,
+    fields: canonicalDocument.fields,
+    hard_constraints: canonicalDocument.hard_constraints.map(
+      ({ constraint_id: _constraintId, ...constraint }) => constraint,
+    ),
+    exclusions: canonicalDocument.exclusions,
+    conditional_requirements: canonicalDocument.conditional_requirements,
+    contradictions: canonicalDocument.contradictions,
+  };
+  return syntheticScenarios[digest(stableJson(material))[0] % 5];
+}
+
 async function seedOwner(pool) {
   const ids = {
     accountId: randomUUID(),
@@ -110,7 +153,8 @@ async function createFixture(app, ctx, key, overrides = {}) {
     source_language: overrides.source_language ?? "en",
     source_text: source,
     fields: overrides.fields ?? fields(overrides.field_value),
-    hard_constraints: overrides.hard_constraints ?? [],
+    hard_constraints:
+      overrides.hard_constraints ?? scarcityHardConstraints(key),
     exclusions: overrides.exclusions ?? [],
     conditional_requirements: overrides.conditional_requirements ?? [],
   });
@@ -247,6 +291,15 @@ postgresTest(
               target: { value_state: "provided", value: "At least 45 kg" },
               relaxability: "non_relaxable",
             },
+            {
+              constraint_id: "constraint-relaxable-capacity",
+              field_id: "FLD-CORE-SP-04",
+              operator: "minimum",
+              target: { value_state: "provided", value: "1200" },
+              relaxability: "relaxable",
+              tolerance: "200",
+              direction: "lower_is_acceptable",
+            },
           ],
           exclusions: [],
           conditional_requirements: [],
@@ -319,7 +372,7 @@ postgresTest(
         ["run_result", result],
       ];
       for (const [kind, body] of surfaces) {
-        assert.equal(body.projection_version, 3, kind);
+        assert.equal(body.projection_version, 4, kind);
         const ledger = await pool.query(
           `SELECT pv.version,pv.definition,pv.content_sha256,p.fields_released,
                   p.projection_version_id AS serving_projection_version_id,
@@ -340,12 +393,12 @@ postgresTest(
           ],
         );
         const row = ledger.rows[0];
-        assert.equal(row.version, 3, `${kind} registry version`);
+        assert.equal(row.version, 4, `${kind} registry version`);
         assert.equal(
           row.definition.schema_version,
-          "standard-disclosure-projection.v3",
+          "standard-disclosure-projection.v4",
         );
-        assert.equal(row.definition.version, 3);
+        assert.equal(row.definition.version, 4);
         assert.ok(row.definition.resources[kind]);
         assert.ok(
           row.content_sha256.equals(digest(stableJson(row.definition))),
@@ -355,7 +408,13 @@ postgresTest(
           standardReleasedFieldPaths(body),
           `${kind} released fields`,
         );
-        assert.equal(row.detail.projectionVersion, 3, `${kind} audit detail`);
+        assert.equal(row.detail.projectionVersion, 4, `${kind} audit detail`);
+        if (kind === "run_result")
+          assert.match(
+            row.detail.projectionAsOf,
+            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u,
+            "run_result records the exact DB-clock projection instant",
+          );
         assert.equal(
           row.audit_projection_version_id,
           row.serving_projection_version_id,
@@ -367,8 +426,8 @@ postgresTest(
       const cursorPayload = JSON.parse(
         Buffer.from(encoded, "base64url").toString("utf8"),
       );
-      assert.equal(cursorPayload.projection, 3);
-      cursorPayload.projection = 2;
+      assert.equal(cursorPayload.projection, 4);
+      cursorPayload.projection = 3;
       const staleEncoded = Buffer.from(JSON.stringify(cursorPayload)).toString(
         "base64url",
       );
@@ -426,7 +485,7 @@ postgresTest(
       assert.deepEqual(notModified.rows[0].fields_released, []);
       assert.equal(notModified.rows[0].detail.notModified, true);
       assert.equal(notModified.rows[0].detail.bodyReleased, false);
-      assert.equal(notModified.rows[0].detail.projectionVersion, 3);
+      assert.equal(notModified.rows[0].detail.projectionVersion, 4);
 
       for (const personCanary of [
         "Jane Mary Smith",
@@ -444,6 +503,131 @@ postgresTest(
           [personCanary],
         );
         assert.equal(leaked.rows[0].findings, 0, personCanary);
+      }
+    } finally {
+      await migrateDown(pool).catch(() => false);
+      await pool.end();
+    }
+  },
+);
+
+postgresTest(
+  "zero one and two candidate runs bind scarcity to canonical hard constraints and persisted analysis",
+  async () => {
+    const pool = createPool({ connectionString: databaseUrl, max: 4 });
+    try {
+      await migrateDown(pool).catch(() => false);
+      await migrateUp(pool);
+      const ids = await seedOwner(pool);
+      const ctx = context(ids);
+      const app = new StandardWorkspaceApplication({ pool, privacyKey });
+      const fixtures = new Map();
+
+      for (let index = 0; index < 128 && fixtures.size < 3; index += 1) {
+        const created = await createFixture(
+          app,
+          ctx,
+          `scarcity-scenario-${index}`,
+          { hard_constraints: scarcityHardConstraints(index) },
+        );
+        const scenario = selectedSyntheticScenario(created);
+        if (
+          ["zero", "one", "two"].includes(scenario) &&
+          !fixtures.has(scenario)
+        )
+          fixtures.set(scenario, created);
+      }
+      assert.deepEqual([...fixtures.keys()].sort(), ["one", "two", "zero"]);
+
+      const expectedCandidateCounts = { zero: 0, one: 1, two: 2 };
+      for (const scenario of ["zero", "one", "two"]) {
+        const created = fixtures.get(scenario);
+        assert.equal(created.hard_constraints.length, 2, scenario);
+        assert.equal(
+          created.hard_constraints.filter(
+            (constraint) => constraint.relaxability === "relaxable",
+          ).length,
+          1,
+          scenario,
+        );
+        await app.confirmVersion(ctx, created.request_id, 1, true);
+        const submitted = await app.submitRun(
+          ctx,
+          `scarcity-run-${scenario}`,
+          created.request_id,
+          1,
+        );
+        assert.equal(
+          await app.executeSyntheticRun(ctx, submitted.run_id),
+          true,
+        );
+        const result = await app.getResult(ctx, submitted.run_id);
+        assert.equal(result.projection_version, 4, scenario);
+        assert.equal(
+          result.candidates.length,
+          expectedCandidateCounts[scenario],
+        );
+        assert.equal(
+          result.outcome,
+          scenario === "zero" ? "no_responsible_match" : "matched",
+          scenario,
+        );
+        assert.equal(
+          result.scarcity,
+          scenario === "zero" ? "zero" : "limited",
+          scenario,
+        );
+        assert.equal(
+          result.scarcity_analysis.reducing_constraints.length,
+          scenario === "two" ? 1 : 2,
+          scenario,
+        );
+        assert.equal(
+          result.scarcity_analysis.unmet_mandatory_constraints.length,
+          scenario === "zero" ? 2 : 0,
+          scenario,
+        );
+        assert.equal(
+          result.scarcity_analysis.permitted_relaxations.length,
+          scenario === "two" ? 0 : 1,
+          scenario,
+        );
+
+        const stored = await pool.query(
+          `SELECT outcome,unmet_constraints,permitted_relaxations
+             FROM scarcity_analysis
+            WHERE account_id=$1 AND run_id=$2`,
+          [ids.accountId, submitted.run_id],
+        );
+        assert.equal(stored.rowCount, 1, scenario);
+        assert.equal(
+          stored.rows[0].outcome,
+          scenario === "zero" ? "no_responsible_match" : "scarcity",
+          scenario,
+        );
+        assert.deepEqual(
+          stored.rows[0].unmet_constraints,
+          result.scarcity_analysis.reducing_constraints.map(
+            ({ constraint_id, eliminated_count }) => ({
+              constraint_id,
+              eliminated_count,
+            }),
+          ),
+          `${scenario} persisted reducing constraints`,
+        );
+        assert.deepEqual(
+          stored.rows[0].permitted_relaxations,
+          result.scarcity_analysis.permitted_relaxations.map(
+            ({ constraint_id }) => constraint_id,
+          ),
+          `${scenario} persisted permitted relaxations`,
+        );
+        const reread = await app.getResult(ctx, submitted.run_id);
+        assert.deepEqual(
+          reread.scarcity_analysis,
+          result.scarcity_analysis,
+          `${scenario} read integrity`,
+        );
       }
     } finally {
       await migrateDown(pool).catch(() => false);
@@ -514,16 +698,16 @@ postgresTest(
       await pool.query(
         `INSERT INTO projection_version
            (projection_version_id,version,definition,content_sha256,released_at)
-         VALUES($1,3,$2::jsonb,$3,clock_timestamp())`,
+         VALUES($1,4,$2::jsonb,$3,clock_timestamp())`,
         [
           randomUUID(),
           JSON.stringify({
-            schema_version: "standard-disclosure-projection.v3",
-            version: 3,
+            schema_version: "standard-disclosure-projection.v4",
+            version: 4,
             tier: "standard",
             resources: { same_shape_different_identity: [] },
           }),
-          digest("forged-standard-projection-v3"),
+          digest("forged-standard-projection-v4"),
         ],
       );
       await assert.rejects(

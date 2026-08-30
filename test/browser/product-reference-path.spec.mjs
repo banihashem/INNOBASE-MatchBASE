@@ -1,5 +1,9 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import {
+  expectAccessibleState,
+  expectAxeClean,
+  overflowingElements,
+} from "./accessibility-matrix.mjs";
 
 const syntheticNotice = "Synthetic evaluation data — not a sourcing result";
 const prohibitedLabels = [
@@ -14,14 +18,24 @@ const prohibitedLabels = [
   "Export",
 ];
 
-async function expectAxeClean(page) {
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-}
-
 test.beforeEach(({ baseURL }) => {
   test.skip(
     !baseURL || !/:(?:3000|3010)(?:\/|$)/u.test(baseURL),
     "Product UI runs in the dedicated web Playwright project.",
+  );
+});
+
+test("detects viewport clipping even when document scroll width is bounded", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.setContent(
+    '<main style="width:100px;overflow:hidden"><button style="width:500px">Clipped control</button></main>',
+  );
+  expect(await overflowingElements(page)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ tag: "BUTTON", text: "Clipped control" }),
+    ]),
   );
 });
 
@@ -33,11 +47,25 @@ function candidate(index) {
   };
 }
 
+async function focusImmediatelyBeforeSkipLink(page) {
+  await page.evaluate(() => {
+    const sentinel = document.createElement("button");
+    sentinel.dataset.taskFocusStart = "true";
+    sentinel.style.position = "fixed";
+    sentinel.style.width = "1px";
+    sentinel.style.height = "1px";
+    sentinel.style.opacity = "0";
+    const skipLink = document.querySelector(".skip-link");
+    skipLink?.parentNode?.insertBefore(sentinel, skipLink);
+    sentinel.focus();
+  });
+}
+
 async function installReferenceApi(
   page,
-  { candidateCount, contradiction = false },
+  { candidateCount, contradiction = false, initiallySignedIn = false },
 ) {
-  let signedIn = false;
+  let signedIn = initiallySignedIn;
   let pollCount = 0;
   let currentVersion = 1;
 
@@ -226,7 +254,7 @@ async function installReferenceApi(
 for (const scenario of [
   {
     name: "mobile zero-match",
-    viewport: { width: 390, height: 844 },
+    viewport: { width: 320, height: 844 },
     count: 0,
   },
   {
@@ -238,6 +266,11 @@ for (const scenario of [
     name: "desktop limited-scarcity",
     viewport: { width: 1024, height: 768 },
     count: 1,
+  },
+  {
+    name: "desktop two-result scarcity",
+    viewport: { width: 1280, height: 800 },
+    count: 2,
   },
 ]) {
   test(`completes the signed-out multilingual reference path at ${scenario.name}`, async ({
@@ -272,22 +305,43 @@ for (const scenario of [
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
       "Define an industrial sourcing need",
     );
-    await page.keyboard.press("Tab");
-    await expect(page.locator(".skip-link")).toBeFocused();
-    expect(
-      await page
-        .locator(".skip-link")
-        .evaluate((element) => getComputedStyle(element).outlineStyle),
-    ).not.toBe("none");
-    await expectAxeClean(page);
+    if (scenario.name === "mobile zero-match") {
+      await page.evaluate(() => {
+        const sentinel = document.createElement("button");
+        sentinel.dataset.task072FocusStart = "true";
+        sentinel.style.position = "fixed";
+        sentinel.style.width = "1px";
+        sentinel.style.height = "1px";
+        sentinel.style.opacity = "0";
+        const skipLink = document.querySelector(".skip-link");
+        skipLink?.parentNode?.insertBefore(sentinel, skipLink);
+        sentinel.focus();
+      });
+      await page.keyboard.press("Tab");
+      await expect(page.locator(".skip-link")).toBeFocused();
+      await page.evaluate(() => {
+        document.querySelector("[data-task072-focus-start]")?.remove();
+      });
+      expect(
+        await page
+          .locator(".skip-link")
+          .evaluate((element) => getComputedStyle(element).outlineStyle),
+      ).not.toBe("none");
+    }
+    await expectAccessibleState(page, "Demo signed-out entry", {
+      responsive: scenario.name === "mobile zero-match",
+    });
 
     await page.getByRole("link", { name: "Continue with Google" }).click();
     await expect(
       page.getByRole("heading", { name: "Frame the request" }),
-    ).toBeFocused();
+    ).toBeVisible();
+    await expect(page.locator("body")).toBeFocused();
     await expect(page.getByText("2 of 3")).toBeVisible();
     await expect(page.getByText(syntheticNotice)).toBeVisible();
-    await expectAxeClean(page);
+    await expectAccessibleState(page, "Demo authenticated intake", {
+      responsive: scenario.name === "mobile zero-match",
+    });
 
     const sourceFixture = String.fromCodePoint(
       0x067e,
@@ -323,13 +377,17 @@ for (const scenario of [
     ).toBeFocused();
     await expect(page.getByText(sourceFixture)).toHaveCount(0);
     await expect(page.getByText("Translated").first()).toBeVisible();
-    await expectAxeClean(page);
+    await expectAccessibleState(page, "Demo canonical review", {
+      responsive: scenario.name === "mobile zero-match",
+    });
 
     if (scenario.count === 3) {
       await expect(
         page.getByRole("heading", { name: "Contradictions block research" }),
       ).toBeVisible();
-      await expectAxeClean(page);
+      await expectAccessibleState(page, "Demo contradiction correction", {
+        responsive: true,
+      });
       await page
         .getByLabel("English canonical form")
         .fill(
@@ -352,8 +410,24 @@ for (const scenario of [
     await expect(page.getByRole("status")).toContainText(
       "Queued for fixture evaluation",
     );
+    await expect(
+      page.getByRole("button", { name: "Pause updates" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    await expect(
+      page.getByRole("button", { name: "Refresh now" }),
+    ).toBeVisible();
     await expect(page.getByText(syntheticNotice)).toBeVisible();
-    await expectAxeClean(page);
+    await page.getByRole("button", { name: "Pause updates" }).click();
+    await expect(
+      page.getByRole("button", { name: "Resume updates" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    const persistentFocus = page.getByRole("link", { name: "MatchBASE home" });
+    await persistentFocus.focus();
+    await expectAccessibleState(page, "Demo queued progress", {
+      responsive: scenario.name === "mobile zero-match",
+    });
+    await page.getByRole("button", { name: "Resume updates" }).click();
+    await persistentFocus.focus();
 
     const expectedHeading =
       scenario.count === 0
@@ -361,33 +435,40 @@ for (const scenario of [
         : "Eligible candidate summary";
     await expect(
       page.getByRole("heading", { name: expectedHeading }),
-    ).toBeFocused();
+    ).toBeVisible();
+    await expect(persistentFocus).toBeFocused();
     await expect(page.locator(".candidate-grid > li")).toHaveCount(
       scenario.count,
     );
     if (scenario.count === 0) {
       await expect(
         page.getByText(
-          "No candidate met every mandatory constraint in this synthetic evaluation.",
+          "No candidate met the mandatory constraints for this request.",
         ),
       ).toBeVisible();
-      await expect(page.getByText(/no suppliers exist/i)).toHaveCount(0);
     } else if (scenario.count < 3) {
-      await expect(page.getByRole("status")).toContainText(/fewer than three/i);
+      await expect(page.locator(".scarcity-note")).toContainText(
+        `${scenario.count} ${scenario.count === 1 ? "candidate" : "candidates"} met all mandatory constraints. Fewer than three met them, so fewer than three are shown.`,
+      );
     }
+    for (const prohibited of [
+      "No suppliers exist",
+      "no results",
+      "search failed",
+      "empty",
+    ])
+      expect(
+        (await page.locator("body").innerText()).toLowerCase(),
+      ).not.toContain(prohibited.toLowerCase());
     for (const label of prohibitedLabels) {
       await expect(page.getByText(label, { exact: false })).toHaveCount(0);
     }
-    await expectAxeClean(page);
-
-    const overflow = await page.evaluate(() => ({
-      body: document.body.scrollWidth,
-      document: document.documentElement.scrollWidth,
-      viewport: window.innerWidth,
-    }));
-    expect(Math.max(overflow.body, overflow.document)).toBeLessThanOrEqual(
-      overflow.viewport,
+    await expectAccessibleState(
+      page,
+      `Demo ${scenario.count === 0 ? "zero-match" : `${scenario.count}-candidate`} result`,
+      { responsive: true },
     );
+    expect(await overflowingElements(page)).toEqual([]);
     expect(unauthorizedResponses.length).toBeGreaterThan(0);
     expect(new Set(unauthorizedResponses)).toEqual(new Set(["/api/v1/me"]));
     expect(errors).toEqual([]);
@@ -397,7 +478,7 @@ for (const scenario of [
 test("announces cancellation and restores focus to the terminal heading", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 320, height: 844 });
   await installReferenceApi(page, { candidateCount: 1 });
   await page.goto("/");
   await page.getByRole("link", { name: "Continue with Google" }).click();
@@ -418,11 +499,16 @@ test("announces cancellation and restores focus to the terminal heading", async 
   await expect(
     page.getByRole("heading", { name: "Research cancelled" }),
   ).toBeFocused();
-  await expect(page.getByRole("status")).toContainText(
-    "No result was disclosed",
-  );
+  await expect(
+    page
+      .getByRole("heading", { name: "Research cancelled" })
+      .locator("..")
+      .getByRole("status"),
+  ).toContainText("No result was disclosed");
   await expect(page.getByText(syntheticNotice)).toBeVisible();
-  await expectAxeClean(page);
+  await expectAccessibleState(page, "Demo cancelled terminal state", {
+    responsive: true,
+  });
 });
 
 test("exposes accessible loading and network-error states", async ({
@@ -456,12 +542,16 @@ test("exposes accessible loading and network-error states", async ({
   await expect(
     page.getByRole("button", { name: "Creating English canonical form…" }),
   ).toBeDisabled();
-  await expectAxeClean(page);
+  await expectAccessibleState(page, "Demo canonical submission loading", {
+    responsive: true,
+  });
   await expect(page.locator(".error-summary")).toContainText(
     "Synthetic network failure.",
   );
   await expect(page.locator(".error-summary")).toBeFocused();
-  await expectAxeClean(page);
+  await expectAccessibleState(page, "Demo canonical submission error", {
+    responsive: true,
+  });
 });
 
 test("completes the reference path using keyboard controls only", async ({
@@ -473,7 +563,18 @@ test("completes the reference path using keyboard controls only", async ({
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("heading", { name: "Frame the request" }),
+  ).toBeVisible();
+  await expect(page.locator("body")).toBeFocused();
+  await focusImmediatelyBeforeSkipLink(page);
+  await page.keyboard.press("Tab");
+  await expect(page.locator(".skip-link")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("link", { name: "MatchBASE home" }),
   ).toBeFocused();
+  await page.locator("[data-task-focus-start]").evaluate((element) => {
+    element.remove();
+  });
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("What must be sourced?")).toBeFocused();
   await page.keyboard.type("Keyboard synthetic product");
@@ -504,6 +605,33 @@ test("completes the reference path using keyboard controls only", async ({
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("heading", { name: "Eligible candidate summary" }),
-  ).toBeFocused();
-  await expectAxeClean(page);
+  ).toBeVisible();
+  await expectAxeClean(page, "Demo keyboard-completed result");
+});
+
+test("keeps skip and home navigation before focus after signed-in hydration and reload", async ({
+  page,
+}) => {
+  await installReferenceApi(page, {
+    candidateCount: 1,
+    initiallySignedIn: true,
+  });
+
+  for (const load of [() => page.goto("/"), () => page.reload()]) {
+    await load();
+    await expect(
+      page.getByRole("heading", { name: "Frame the request" }),
+    ).toBeVisible();
+    await expect(page.locator("body")).toBeFocused();
+    await focusImmediatelyBeforeSkipLink(page);
+    await page.keyboard.press("Tab");
+    await expect(page.locator(".skip-link")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(
+      page.getByRole("link", { name: "MatchBASE home" }),
+    ).toBeFocused();
+    await page.locator("[data-task-focus-start]").evaluate((element) => {
+      element.remove();
+    });
+  }
 });

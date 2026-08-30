@@ -59,7 +59,9 @@ export function RequestHistory({
       <div className="standard-title-row">
         <div>
           <p className="eyebrow">Durable workspace</p>
-          <h1 id="requests-heading">Requests</h1>
+          <h1 id="requests-heading" tabIndex={-1}>
+            Requests
+          </h1>
         </div>
         <button className="primary-action" onClick={onNewRequest}>
           New structured request
@@ -123,7 +125,9 @@ export function RequestHistory({
                       <code>{item.request_id.slice(0, 8)}</code>
                     </button>
                   </th>
-                  <td>{item.canonical_summary}</td>
+                  <td>
+                    <bdi dir="auto">{item.canonical_summary}</bdi>
+                  </td>
                   <td>{item.version_count}</td>
                   <td>{item.latest_run_outcome.replaceAll("_", " ")}</td>
                   <td>
@@ -158,7 +162,9 @@ export function RequestHistory({
                   onClick={() => onOpenRun(run.run_id)}
                 >
                   <span>
-                    <strong>{run.phase_label}</strong>
+                    <strong>
+                      <bdi dir="auto">{run.phase_label}</bdi>
+                    </strong>
                     <small>
                       {run.outcome.replaceAll("_", " ")} ·{" "}
                       {run.scarcity.replaceAll("_", " ")}

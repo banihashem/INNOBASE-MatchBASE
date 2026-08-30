@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { ProductFlow } from "./ProductFlow";
 import { StandardWorkspace } from "./standard/StandardWorkspace";
 import type { WorkspaceSession } from "./standard/types";
+import { ConsultantWorkspace } from "./consultant/ConsultantWorkspace";
 
 type Resolution =
   | { state: "loading" }
   | { state: "demo-or-signed-out" }
   | { state: "standard"; session: WorkspaceSession }
+  | { state: "consultant"; session: WorkspaceSession }
   | { state: "unavailable"; tier: string }
   | { state: "error" };
 
@@ -33,6 +35,8 @@ export function ProductRouter({ authPath }: { authPath: string }) {
         const session = (await response.json()) as WorkspaceSession;
         if (session.tier === "standard") {
           setResolution({ state: "standard", session });
+        } else if (session.tier === "consultant") {
+          setResolution({ state: "consultant", session });
         } else if (session.tier === "demo") {
           setResolution({ state: "demo-or-signed-out" });
         } else {
@@ -56,6 +60,9 @@ export function ProductRouter({ authPath }: { authPath: string }) {
   }
   if (resolution.state === "standard") {
     return <StandardWorkspace initialSession={resolution.session} />;
+  }
+  if (resolution.state === "consultant") {
+    return <ConsultantWorkspace initialSession={resolution.session} />;
   }
   if (resolution.state === "error") {
     return (

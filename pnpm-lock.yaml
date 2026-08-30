@@ -180,6 +180,19 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
+  packages/reporting:
+    dependencies:
+      "@matchbase/contracts":
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      "@types/node":
+        specifier: 24.13.3
+        version: 24.13.3
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
   packages/auth:
     dependencies:
       "@matchbase/contracts":

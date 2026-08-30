@@ -1,0 +1,9 @@
+DROP FUNCTION IF EXISTS matchbase_purge_google_risc_receipts(uuid,timestamptz,text,text,text);
+DROP TRIGGER IF EXISTS google_risc_event_receipt_retention_governed ON google_risc_event_receipt;
+DROP FUNCTION IF EXISTS matchbase_google_risc_receipt_retention_guard();
+CREATE TRIGGER google_risc_event_receipt_append_only
+BEFORE UPDATE OR DELETE ON google_risc_event_receipt
+FOR EACH ROW EXECUTE FUNCTION matchbase_reject_mutation();
+ALTER TABLE google_risc_event_receipt ENABLE ALWAYS TRIGGER google_risc_event_receipt_append_only;
+DROP TRIGGER IF EXISTS google_risc_receipt_purge_audit_append_only ON google_risc_receipt_purge_audit;
+DROP TABLE IF EXISTS google_risc_receipt_purge_audit;

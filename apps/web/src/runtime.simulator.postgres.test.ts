@@ -74,6 +74,22 @@ describePostgres("native runtime signed simulator parity", () => {
     });
   }
 
+  async function authenticatedSession(
+    fixture: "demo" | "standard",
+  ): Promise<string> {
+    const started = await start(fixture);
+    const transactionCookie = cookiePair(
+      started,
+      "__Host-matchbase_simulator_transaction",
+    );
+    const callback = await fetch(
+      `${baseUrl}${started.headers.get("location")!}`,
+      { headers: { cookie: transactionCookie } },
+    );
+    expect(callback.status).toBe(200);
+    return cookiePair(callback, "__Host-matchbase_session");
+  }
+
   it("binds signed single-use transactions to Demo and Standard fixtures", async () => {
     for (const fixture of ["demo", "standard"] as const) {
       const started = await start(fixture);
@@ -141,5 +157,43 @@ describePostgres("native runtime signed simulator parity", () => {
     config.environment = "production";
     expect((await start("standard")).status).toBe(404);
     config.environment = "test";
+  });
+
+  it("returns the exact neutral raw 403 body and audits malformed artifact tokens", async () => {
+    const sessionCookie = await authenticatedSession("standard");
+    const correlationId = "3e9626b1-9f59-48f5-9ae6-7037ec3e0898";
+    const response = await fetch(
+      `${baseUrl}/api/v1/artifacts/9ffeb738-7e42-43c4-b0bd-9c3f33a3ee24/download`,
+      {
+        headers: {
+          cookie: sessionCookie,
+          "mb-artifact-token": "malformed",
+          "mb-correlation-id": correlationId,
+        },
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("mb-correlation-id")).toBe(correlationId);
+    expect(await response.text()).toBe(
+      JSON.stringify({
+        type: "about:matchbase/errors/artifact-not-visible",
+        title: "Forbidden",
+        status: 403,
+        code: "MB-403-ARTIFACT",
+        detail: "The artifact is not available.",
+        correlation_id: correlationId,
+        retryable: false,
+        errors: [],
+      }),
+    );
+    const audit = await pool.query<{ count: number }>(
+      `SELECT count(*)::integer AS count FROM audit_event
+        WHERE event_type='access.denied' AND resource_kind='api_route'
+          AND outcome='deny' AND request_correlation_id=$1
+          AND detail->>'routeClass'='/api/v1/artifacts'`,
+      [correlationId],
+    );
+    expect(audit.rows[0]?.count).toBe(1);
   });
 });

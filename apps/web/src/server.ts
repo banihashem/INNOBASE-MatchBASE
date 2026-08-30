@@ -5,15 +5,24 @@ import {
   type CanonicalizationCapability,
 } from "@matchbase/ai-evidence";
 import {
+  ConsultantResultApplication,
   MatchBaseApplication,
   StandardWorkspaceApplication,
 } from "@matchbase/application";
-import { createPool } from "@matchbase/data";
+import {
+  createPool,
+  DEFAULT_CONSULTANT_PROJECTION_CONFIG,
+} from "@matchbase/data";
 import { loadWebConfig } from "./config";
 import { createWebRuntime } from "./runtime";
 import { loadServerOwnedResearchAdmission } from "./server-owned-research-admission";
 
 const config = loadWebConfig();
+if (config.environment === "production") {
+  throw new Error(
+    "Legacy HTTP runtime is prohibited in production; use the packaged Next standalone runtime.",
+  );
+}
 const pool = createPool({ connectionString: config.databaseUrl, max: 20 });
 const canonicalizer: CanonicalizationCapability = config.syntheticFixtureEnabled
   ? new DeterministicFixtureCanonicalizer({
@@ -32,16 +41,22 @@ const application = new MatchBaseApplication({
   canonicalizer,
   privacyKey: config.digestKey,
   researchAdmission: loadServerOwnedResearchAdmission(config),
+  consultantProjectionConfig:
+    config.consultantProjectionConfig ?? DEFAULT_CONSULTANT_PROJECTION_CONFIG,
 });
 const standardApplication = new StandardWorkspaceApplication({
   pool,
   privacyKey: config.digestKey,
+  consultantProjectionConfig:
+    config.consultantProjectionConfig ?? DEFAULT_CONSULTANT_PROJECTION_CONFIG,
 });
+const consultantResultApplication = new ConsultantResultApplication(pool);
 const listener = createWebRuntime({
   config,
   pool,
   application,
   standardApplication,
+  consultantResultApplication,
 });
 const server = createServer(
   (request, response) => void listener(request, response),

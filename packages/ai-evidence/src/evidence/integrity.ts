@@ -296,6 +296,14 @@ function validateClosedEvidenceGraphShape(
     ) {
       throw new Error(`Evidence ${index} field types are invalid.`);
     }
+    if (
+      evidence.verificationDisposition === "excluded" &&
+      !String(evidence.exclusionReason).trim()
+    ) {
+      throw new Error(
+        `Evidence ${index} excluded disposition requires a non-empty reason.`,
+      );
+    }
   }
   if (graph.eligibleCandidateIds.some((item) => typeof item !== "string")) {
     throw new Error("Eligible candidate identifiers are invalid.");

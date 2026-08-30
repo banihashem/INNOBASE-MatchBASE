@@ -1,9 +1,6 @@
 import type { DemoProjectionV1, EvidenceGraphV1 } from "@matchbase/contracts";
 import { validateEvidenceGraph } from "../evidence/integrity.js";
 
-export const DEMO_LIMITATIONS_NOTICE =
-  "Synthetic evaluation data only. This is not a sourcing result, supplier verification, compliance conclusion, or supplier quotation.";
-
 const restrictedKeys = new Set([
   "compatibility_score",
   "compatibilityScore",
@@ -53,8 +50,18 @@ export function assertDemoProjectionSafe(value: unknown): void {
   }
 }
 
-export function projectDemoResult(graph: EvidenceGraphV1): DemoProjectionV1 {
+export function buildDemoProjection(
+  graph: EvidenceGraphV1,
+  runBoundMandatoryConstraints: readonly string[],
+): Omit<DemoProjectionV1, "limitations_notice"> {
   validateEvidenceGraph(graph);
+  const mandatoryConstraints = [
+    ...new Set(
+      runBoundMandatoryConstraints.map((constraint) => constraint.trim()),
+    ),
+  ];
+  if (mandatoryConstraints.some((constraint) => constraint.length === 0))
+    throw new Error("Run-bound mandatory constraints must be non-empty.");
   const byId = new Map(
     graph.candidates.map((candidate) => [candidate.candidateId, candidate]),
   );
@@ -76,19 +83,18 @@ export function projectDemoResult(graph: EvidenceGraphV1): DemoProjectionV1 {
       : candidates.length < 3
         ? "limited"
         : "none";
-  const projection: DemoProjectionV1 = {
+  if (outcome === "no_responsible_match" && mandatoryConstraints.length === 0)
+    throw new Error(
+      "A Demo no-match projection requires run-bound mandatory constraints.",
+    );
+  return {
     schema_version: "demo-projection.v1",
     run_id: graph.runId,
     outcome,
     scarcity,
     candidates,
     unmet_mandatory_constraints:
-      outcome === "no_responsible_match"
-        ? ["mandatory_fixture_constraints"]
-        : [],
-    limitations_notice: DEMO_LIMITATIONS_NOTICE,
+      outcome === "no_responsible_match" ? mandatoryConstraints : [],
     projection_version: 1,
   };
-  assertDemoProjectionSafe(projection);
-  return projection;
 }

@@ -4,7 +4,10 @@ import test from "node:test";
 
 import {
   GeminiServerOwnedSourceDiscovery,
+  canonicalResearchRoutePolicySha256,
   createPostgresLiveResearchCircuit,
+  createLiveResearchPipelineIdentity,
+  LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA,
   LiveResearchProcessInterrupted,
   LiveResearchExecutionService,
   PostgresLiveResearchAtomicLedger,
@@ -22,6 +25,30 @@ import { scanPostgresForCanaries } from "../../packages/security/dist/index.js";
 const databaseUrl = process.env.DATABASE_URL;
 const postgresTest = databaseUrl ? test : test.skip;
 const digest = (value) => createHash("sha256").update(value).digest();
+const approvedProductionWeightsBp = {
+  category_product_fit: 2500,
+  compliance_certification_fit: 2000,
+  volume_capacity_fit: 1500,
+  price_tier_fit: 1500,
+  positioning_brand_fit: 1500,
+  geographic_reach_fit: 1000,
+};
+
+function settlesWithin(promise, milliseconds, message) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), milliseconds);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 const policy = {
   schemaVersion: "research-route-policy.v1",
@@ -126,6 +153,7 @@ postgresTest(
   "application owns fetch, provider, source, cost, and terminal state exactly once",
   async () => {
     const pool = createPool({ connectionString: databaseUrl, max: 12 });
+    let releaseProvider = () => undefined;
     try {
       await migrateDown(pool);
       await migrateUp(pool);
@@ -136,6 +164,19 @@ postgresTest(
       const scoringId = randomUUID();
       const policyId = randomUUID();
       const version = Math.floor(Math.random() * 1_000_000_000) + 1;
+      const routePolicySha256 = canonicalResearchRoutePolicySha256(policy);
+      const testPipelineIdentity = createLiveResearchPipelineIdentity({
+        outputSchema: LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA,
+        researchRoutePolicyId: policyId,
+        routePolicyVersion: policy.policyVersion,
+        routePolicyCanonicalSha256: routePolicySha256,
+        modelPolicyVersionId: modelPolicyId,
+        modelPolicyVersion: String(version),
+        modelPolicyContentSha256: digest("model-policy").toString("hex"),
+        scoringConfigVersionId: scoringId,
+        scoringConfigVersion: String(version),
+        scoringConfigContentSha256: digest("scoring").toString("hex"),
+      });
       await pool.query(
         "INSERT INTO account(account_id,display_name,status) VALUES($1,'Slice 3 application','active')",
         [accountId],
@@ -163,13 +204,18 @@ postgresTest(
       );
       await pool.query(
         `INSERT INTO scoring_config_version(scoring_config_version_id,version,weights_bp,gate_definitions,content_sha256,released_at,product_owner_approval_ref,sme_approval_ref,evaluation_run_ref)
-         VALUES($1,$2,'{}','{}',$3,clock_timestamp(),'po','sme','evaluation')`,
-        [scoringId, version, digest("scoring")],
+         VALUES($1,$2,$4::jsonb,'{}',$3,clock_timestamp(),'po','SME-TASK137','evaluation')`,
+        [
+          scoringId,
+          version,
+          digest("scoring"),
+          JSON.stringify(approvedProductionWeightsBp),
+        ],
       );
       await pool.query(
-        `INSERT INTO research_route_policy(research_route_policy_id,schema_version,policy_version,environment,activation_state,official_evidence,qualification_budget)
-         VALUES($1,'research-route-policy.v1',$2,'test','qualified','["direct","openrouter"]','{"max_calls":2,"max_cost_usd":1}')`,
-        [policyId, policy.policyVersion],
+        `INSERT INTO research_route_policy(research_route_policy_id,schema_version,policy_version,environment,activation_state,official_evidence,qualification_budget,content_sha256)
+         VALUES($1,'research-route-policy.v1',$2,'test','qualified','["direct","openrouter"]','{"max_calls":2,"max_cost_usd":1}',$3)`,
+        [policyId, policy.policyVersion, Buffer.from(routePolicySha256, "hex")],
       );
       const directProviderRouteId = randomUUID();
       await pool.query(
@@ -183,7 +229,7 @@ postgresTest(
         [directProviderRouteId],
       );
 
-      const seedRun = async (label) => {
+      const seedRun = async (label, selectedScoringId = scoringId) => {
         const requestId = randomUUID();
         const canonicalizationId = randomUUID();
         const canonicalId = randomUUID();
@@ -223,7 +269,7 @@ postgresTest(
           idempotencyKeyHash: digest(`idempotency:${label}`),
           requestHash: digest(`request:${label}`),
           modelPolicyVersionId: modelPolicyId,
-          scoringConfigVersionId: scoringId,
+          scoringConfigVersionId: selectedScoringId,
           correlationId: randomUUID(),
           deploymentId: "slice3-application-test",
         });
@@ -237,10 +283,11 @@ postgresTest(
       };
 
       const runId = await seedRun("canonical fixture");
+      let providerRunId = runId;
+      let forgeExternalVerification = false;
       let fetchCalls = 0;
       let providerCalls = 0;
       let discoveryCalls = 0;
-      let releaseProvider;
       let providerStarted;
       const started = new Promise((resolve) => {
         providerStarted = resolve;
@@ -266,7 +313,7 @@ postgresTest(
             status: 200,
             body: {
               schemaVersion: "evidence-graph.v1",
-              runId,
+              runId: providerRunId,
               candidates: candidateIds.map((candidateId, index) => ({
                 candidateId,
                 displayName: index === 2 ? "." : "Verified Industrial Supplier",
@@ -277,9 +324,18 @@ postgresTest(
                 fitBand: "strong",
                 bandCeiling: "strong",
                 displayedBand: "strong",
-                dimensionScores: { technical: 80, trade: 76 },
+                dimensionScores: {
+                  category_product_fit: 80,
+                  compliance_certification_fit: 80,
+                  volume_capacity_fit: 80,
+                  price_tier_fit: 80,
+                  positioning_brand_fit: 80,
+                  geographic_reach_fit: 80,
+                },
                 citations: [source.sourceId],
-                verificationStatus: "externally_verified",
+                verificationStatus: forgeExternalVerification
+                  ? "externally_verified"
+                  : "claimed",
                 mandatoryConstraintsSatisfied: true,
                 failedConstraintIds: [],
                 deterministicRankKey: `022:${candidateId}`,
@@ -289,7 +345,9 @@ postgresTest(
                 candidateId,
                 text: "The supplier satisfies the bounded qualification claim.",
                 decisionBearing: true,
-                verificationStatus: "externally_verified",
+                verificationStatus: forgeExternalVerification
+                  ? "externally_verified"
+                  : "claimed",
                 evidenceConfidence: "high",
                 evidenceIds: [source.sourceId],
               })),
@@ -339,7 +397,12 @@ postgresTest(
             assert.equal(field in body.generationConfig, false);
           return {
             status: 200,
-            body: { sourceUrls: ["https://evidence.example.org/source"] },
+            body: {
+              sourceUrls: [
+                "https://evidence.example.org/source",
+                "https://unused.example.org/source",
+              ],
+            },
             servedIdentity: {
               providerId: "google",
               modelId: "gemini-2.5-flash",
@@ -389,19 +452,94 @@ postgresTest(
         validateOutput: (body) => body,
         backoff: async () => undefined,
         ledgerTiming: {
-          leaseMs: 1_000,
+          leaseMs: 60_000,
           heartbeatMs: 100,
           pollMs: 5,
           waitMs: 3_000,
         },
       };
+
+      const productionPolicy = {
+        ...structuredClone(policy),
+        policyVersion: "slice3-routes-production.v1",
+        environment: "production",
+      };
+      const productionPolicyId = randomUUID();
+      const productionPolicySha256 =
+        canonicalResearchRoutePolicySha256(productionPolicy);
+      await pool.query(
+        `INSERT INTO research_route_policy(research_route_policy_id,schema_version,policy_version,environment,activation_state,official_evidence,qualification_budget,content_sha256)
+         VALUES($1,'research-route-policy.v1',$2,'production','qualified','["direct","openrouter"]','{"max_calls":2,"max_cost_usd":1}',$3)`,
+        [
+          productionPolicyId,
+          productionPolicy.policyVersion,
+          Buffer.from(productionPolicySha256, "hex"),
+        ],
+      );
+      const unapprovedScoringId = randomUUID();
+      await pool.query(
+        `INSERT INTO scoring_config_version(scoring_config_version_id,version,weights_bp,gate_definitions,content_sha256,released_at,product_owner_approval_ref,sme_approval_ref,evaluation_run_ref)
+         VALUES($1,$2,'{}','{}',$3,clock_timestamp(),'po','','evaluation')`,
+        [unapprovedScoringId, version + 1, digest("unapproved-scoring")],
+      );
+      const unapprovedProductionRunId = await seedRun(
+        "unapproved production SME scoring",
+        unapprovedScoringId,
+      );
+      let productionDiscoveryCalls = 0;
+      const productionSourceDiscovery = {
+        async discover() {
+          productionDiscoveryCalls += 1;
+          throw new Error("PRODUCTION_SME_AUTHORITY_REACHED_TRANSPORT");
+        },
+      };
+      const forgedCallerSmeRecord = {
+        validation_record_id: "CALLER-FORGERY",
+        approved_at: "2026-08-25T00:00:00.000Z",
+        weight_config_sha256: "0".repeat(64),
+      };
+      const productionService = new LiveResearchExecutionService({
+        ...serviceOptions,
+        policyId: productionPolicyId,
+        sourceDiscovery: productionSourceDiscovery,
+        smeWeightValidation: forgedCallerSmeRecord,
+      });
+      await assert.rejects(
+        productionService.execute({
+          policy: productionPolicy,
+          executionId: "EXEC-S3-PRODUCTION-SME-UNAPPROVED",
+          runId: unapprovedProductionRunId,
+          capturedAt: "2026-08-15T00:01:00.000Z",
+          outputSchema: LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA,
+          signal: new AbortController().signal,
+        }),
+        /authoritative persisted SME validation/iu,
+      );
+      assert.equal(productionDiscoveryCalls, 0);
+
+      const approvedProductionRunId = await seedRun(
+        "approved production SME scoring",
+      );
+      await assert.rejects(
+        productionService.execute({
+          policy: productionPolicy,
+          executionId: "EXEC-S3-PRODUCTION-SME-APPROVED",
+          runId: approvedProductionRunId,
+          capturedAt: "2026-08-15T00:01:00.000Z",
+          outputSchema: LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA,
+          signal: new AbortController().signal,
+        }),
+        /PRODUCTION_SME_AUTHORITY_REACHED_TRANSPORT/iu,
+      );
+      assert.equal(productionDiscoveryCalls, 1);
+
       const service = new LiveResearchExecutionService(serviceOptions);
       const execution = {
         policy,
         executionId: "EXEC-S3-PG-CONCURRENT",
         runId,
         capturedAt: "2026-08-15T00:01:00.000Z",
-        outputSchema: { type: "object", additionalProperties: false },
+        outputSchema: LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA,
         signal: new AbortController().signal,
       };
       const first = service.execute(execution);
@@ -411,22 +549,74 @@ postgresTest(
           throw new Error("Live research completed before provider dispatch.");
         }),
       ]);
-      await new Promise((resolve) => setTimeout(resolve, 1_300));
-      const second = service.execute(execution);
-      await new Promise((resolve) => setTimeout(resolve, 30));
-      assert.equal(fetchCalls, 1);
-      assert.equal(providerCalls, 1);
-      assert.equal(discoveryCalls, 1);
-      const activeReservation = await pool.query(
-        `SELECT generation,state,lease_expires_at > clock_timestamp() lease_active
+      try {
+        await assert.rejects(
+          settlesWithin(
+            pool.query(
+              `UPDATE research_run
+                SET scoring_config_version_id=$3
+              WHERE account_id=$1 AND run_id=$2`,
+              [accountId, runId, randomUUID()],
+            ),
+            1_000,
+            "Run-bound scoring identity mutation blocked during provider call.",
+          ),
+          /run-bound live pipeline versions are immutable/iu,
+        );
+        await assert.rejects(
+          settlesWithin(
+            pool.query(
+              `UPDATE scoring_config_version
+                  SET content_sha256=$2
+                WHERE scoring_config_version_id=$1`,
+              [scoringId, digest("forged-in-flight-scoring-config")],
+            ),
+            1_000,
+            "Pinned scoring material mutation blocked during provider call.",
+          ),
+          /pinned live pipeline material is immutable/iu,
+        );
+        const updatedDuringProviderCall = await settlesWithin(
+          pool.query(
+            `UPDATE research_run
+              SET state_reason='provider_in_flight_lock_probe'
+            WHERE account_id=$1 AND run_id=$2 AND state='researching'
+            RETURNING run_id`,
+            [accountId, runId],
+          ),
+          1_000,
+          "Research-run update was blocked by provider admission locks.",
+        );
+        assert.equal(updatedDuringProviderCall.rowCount, 1);
+      } catch (error) {
+        releaseProvider();
+        await first.catch(() => undefined);
+        throw error;
+      }
+      let second;
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 1_300));
+        second = service.execute(execution);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        assert.equal(fetchCalls, 2);
+        assert.equal(providerCalls, 1);
+        assert.equal(discoveryCalls, 1);
+        const activeReservation = await pool.query(
+          `SELECT generation,state,lease_expires_at > clock_timestamp() lease_active
            FROM live_research_execution_reservation WHERE execution_id=$1`,
-        [execution.executionId],
-      );
-      assert.deepEqual(activeReservation.rows[0], {
-        generation: "1",
-        state: "in_progress",
-        lease_active: true,
-      });
+          [execution.executionId],
+        );
+        assert.deepEqual(activeReservation.rows[0], {
+          generation: "1",
+          state: "in_progress",
+          lease_active: true,
+        });
+      } catch (error) {
+        releaseProvider();
+        await first.catch(() => undefined);
+        await second?.catch(() => undefined);
+        throw error;
+      }
       releaseProvider();
       const [firstResult, secondResult] = await Promise.all([first, second]);
       assert.deepEqual(secondResult, firstResult);
@@ -465,9 +655,9 @@ postgresTest(
       assert.deepEqual(counts.rows[0], {
         reservations: 1,
         reservation_events: 2,
-        fetch_attempts: 1,
-        source_documents: 1,
-        source_links: 1,
+        fetch_attempts: 2,
+        source_documents: 2,
+        source_links: 2,
         search_attempts: 1,
         provider_calls: 2,
         provider_attempts: 2,
@@ -477,7 +667,7 @@ postgresTest(
         claims: 3,
         claim_evidence: 3,
         evidence_values: 3,
-        evidence_drivers: 6,
+        evidence_drivers: 18,
         identity_resolutions: 3,
         run_results: 1,
         result_candidates: 3,
@@ -517,7 +707,7 @@ postgresTest(
           eligible: true,
           exclusion_reason_code: null,
           value_count: 1,
-          driver_count: 2,
+          driver_count: 6,
         },
         {
           disposition: "duplicate",
@@ -526,7 +716,7 @@ postgresTest(
           eligible: false,
           exclusion_reason_code: "duplicate_identity",
           value_count: 1,
-          driver_count: 2,
+          driver_count: 6,
         },
         {
           disposition: "rejected_ambiguous",
@@ -535,17 +725,34 @@ postgresTest(
           eligible: false,
           exclusion_reason_code: "ambiguous_identity",
           value_count: 1,
-          driver_count: 2,
+          driver_count: 6,
         },
       ]);
       const persistedEligibility = await pool.query(
         `SELECT eligible_count,
-                complete_result_document->'eligibleCandidateIds' eligible_ids
+                complete_result_document->>'schema_version' schema_version,
+                complete_result_document->'eligible_candidate_ids' eligible_ids,
+                complete_result_document->'evidence' evidence
            FROM run_result WHERE run_id=$1`,
         [runId],
       );
       assert.equal(persistedEligibility.rows[0].eligible_count, 1);
+      assert.equal(
+        persistedEligibility.rows[0].schema_version,
+        "complete-result-foundation.v2",
+      );
       assert.equal(persistedEligibility.rows[0].eligible_ids.length, 1);
+      assert.equal(persistedEligibility.rows[0].evidence.length, 2);
+      assert.ok(
+        persistedEligibility.rows[0].evidence.every(
+          (item) => item.provenance === "live_secure_fetch",
+        ),
+      );
+      const unusedEvidence = persistedEligibility.rows[0].evidence.find(
+        (item) => item.publisher_domain === "unused.example.org",
+      );
+      assert.equal(unusedEvidence.verification_disposition, "excluded");
+      assert.ok(unusedEvidence.exclusion_reason.trim());
       const lineageAnchor = await pool.query(
         `SELECT v.candidate_id,v.claim_id,v.evidence_item_id,v.evidence_value_id
            FROM evidence_value v WHERE v.run_id=$1 LIMIT 1`,
@@ -671,6 +878,7 @@ postgresTest(
         accountId,
         userId,
         policyId,
+        pipelineIdentity: testPipelineIdentity,
       });
       const restrictedMaterialReservation =
         await restrictedMaterialLedger.reserveExecution(
@@ -769,7 +977,7 @@ postgresTest(
       });
       await assert.rejects(
         foreignService.execute({ ...execution, executionId: "EXEC-FOREIGN" }),
-        /canonical English research input is unavailable/iu,
+        /confirmed version-pinned live research admission is unavailable/iu,
       );
       assert.equal(providerCalls, 1);
 
@@ -846,6 +1054,7 @@ postgresTest(
         accountId,
         userId,
         policyId,
+        pipelineIdentity: testPipelineIdentity,
         leaseMs: 120,
         heartbeatMs: 30,
         waitMs: 100,
@@ -862,6 +1071,7 @@ postgresTest(
         accountId,
         userId,
         policyId,
+        pipelineIdentity: testPipelineIdentity,
         leaseMs: 1000,
         heartbeatMs: 30,
         now: () => fakeNow,
@@ -991,7 +1201,7 @@ postgresTest(
       const checkpointOptions = {
         ...serviceOptions,
         ledgerTiming: {
-          leaseMs: 120,
+          leaseMs: 500,
           heartbeatMs: 30,
           pollMs: 5,
           waitMs: 2_000,
@@ -1042,7 +1252,7 @@ postgresTest(
         }).execute(checkpointExecution),
         /simulated worker crash/iu,
       );
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 600));
       const checkpointTerminal = await new LiveResearchExecutionService(
         checkpointOptions,
       ).execute(checkpointExecution);
@@ -1093,7 +1303,7 @@ postgresTest(
       const dispatcher = new QualifiedLiveResearchWorkerDispatcher({
         pool,
         policy,
-        outputSchema: { type: "object", additionalProperties: false },
+        outputSchema: LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA,
         now: () => new Date("2026-08-15T00:01:00.000Z"),
         serviceFactory: (work, exactPolicyId) => {
           assert.equal(work.runId, dispatcherLiveRunId);
@@ -1212,9 +1422,9 @@ postgresTest(
           `INSERT INTO live_research_execution_reservation
              (execution_id,account_id,run_id,generation,ownership_token_sha256,state,
               execution_lease_slot,execution_lease_generation,
-              lease_expires_at,claimed_at,updated_at)
+              pipeline_identity_record,lease_expires_at,claimed_at,updated_at)
            VALUES($1,$2,$3,1,$4,'in_progress',$5,$6,
-                  clock_timestamp()-interval '1 second',clock_timestamp(),clock_timestamp())`,
+                  $7::jsonb,clock_timestamp()-interval '1 second',clock_timestamp(),clock_timestamp())`,
           [
             heldExecutionId,
             accountId,
@@ -1222,6 +1432,7 @@ postgresTest(
             heldTokenHash,
             heldSlot.rows[0].slot_no,
             heldSlot.rows[0].generation,
+            JSON.stringify(testPipelineIdentity),
           ],
         );
         await pool.query(
@@ -1241,6 +1452,7 @@ postgresTest(
           accountId,
           userId,
           policyId,
+          pipelineIdentity: testPipelineIdentity,
           leaseMs: 1000,
         });
         let reserveSettled = false;
@@ -1533,6 +1745,7 @@ postgresTest(
         accountId,
         userId,
         policyId,
+        pipelineIdentity: testPipelineIdentity,
         leaseMs: 1_000,
         heartbeatMs: 30,
         now: () => fetchFenceNow,
@@ -1698,13 +1911,25 @@ postgresTest(
       assert.equal(failedDiscoveryCalls, 3);
       const localCircuitPolicyId = randomUUID();
       const localCircuitPolicyVersion = "slice3-routes.local-circuit.v1";
+      const localCircuitPolicy = {
+        ...policy,
+        policyVersion: localCircuitPolicyVersion,
+        environment: "local",
+      };
       await pool.query(
         `INSERT INTO research_route_policy
            (research_route_policy_id,schema_version,policy_version,environment,
-            activation_state,official_evidence,qualification_budget)
+            activation_state,official_evidence,qualification_budget,content_sha256)
          VALUES($1,'research-route-policy.v1',$2,'local','qualified',
-                '["direct","openrouter"]','{"max_calls":2,"max_cost_usd":1}')`,
-        [localCircuitPolicyId, localCircuitPolicyVersion],
+                '["direct","openrouter"]','{"max_calls":2,"max_cost_usd":1}',$3)`,
+        [
+          localCircuitPolicyId,
+          localCircuitPolicyVersion,
+          Buffer.from(
+            canonicalResearchRoutePolicySha256(localCircuitPolicy),
+            "hex",
+          ),
+        ],
       );
       const localCircuitProviderRouteId = randomUUID();
       await pool.query(
@@ -1740,11 +1965,6 @@ postgresTest(
         environment: "local",
         probeAfterMs: circuitProbeAfterMs,
       });
-      const localCircuitPolicy = {
-        ...policy,
-        policyVersion: localCircuitPolicyVersion,
-        environment: "local",
-      };
       const halfOpenFailureService = new LiveResearchExecutionService({
         ...serviceOptions,
         policyId: localCircuitPolicyId,
@@ -1807,6 +2027,22 @@ postgresTest(
         circuit_disposition: "open",
         source_is_present: true,
       });
+      for (let index = 0; index < 2; index += 1)
+        await pool.query(
+          `INSERT INTO quota_ledger
+             (quota_entry_id,account_id,user_id,run_id,entry_kind,units,
+              charged_at,reason_code,compensates_entry_id)
+           SELECT $3,q.account_id,q.user_id,q.run_id,'compensation',-1,
+                  clock_timestamp(),'late_fixture_quota_isolation',q.quota_entry_id
+             FROM quota_ledger q
+            WHERE q.account_id=$1 AND q.user_id=$2 AND q.entry_kind='charge'
+              AND NOT EXISTS (
+                SELECT 1 FROM quota_ledger c
+                 WHERE c.compensates_entry_id=q.quota_entry_id)
+            ORDER BY q.charged_at,q.quota_entry_id
+            LIMIT 1`,
+          [accountId, userId, randomUUID()],
+        );
       const healthSuccessRunId = await seedRun("circuit health success");
       const healthSuccessExecutionId = "EXEC-CIRCUIT-HEALTH-SUCCESS";
       const healthSuccessLedger = new PostgresLiveResearchAtomicLedger({
@@ -1814,6 +2050,7 @@ postgresTest(
         accountId,
         userId,
         policyId,
+        pipelineIdentity: testPipelineIdentity,
       });
       const healthSuccessReservation =
         await healthSuccessLedger.reserveExecution(
@@ -1962,6 +2199,31 @@ postgresTest(
           ],
         );
       }
+      const forgedVerificationRunId = await seedRun(
+        "provider forged external verification",
+      );
+      providerRunId = forgedVerificationRunId;
+      forgeExternalVerification = true;
+      await assert.rejects(
+        service.execute({
+          ...execution,
+          executionId: "EXEC-PROVIDER-FORGED-EXTERNAL",
+          runId: forgedVerificationRunId,
+          capturedAt: new Date().toISOString(),
+        }),
+        /provider output cannot assert externally_verified|output schema validation failed/iu,
+      );
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT count(*)::int count FROM run_result WHERE run_id=$1",
+            [forgedVerificationRunId],
+          )
+        ).rows[0].count,
+        0,
+      );
+      forgeExternalVerification = false;
+      providerRunId = runId;
       const capacityRunIds = await Promise.all(
         Array.from({ length: 4 }, (_, index) =>
           seedRun(`global live capacity ${index + 1}`),
@@ -1974,6 +2236,7 @@ postgresTest(
             accountId,
             userId,
             policyId,
+            pipelineIdentity: testPipelineIdentity,
           }),
       );
       const capacityReservations = await Promise.all(
@@ -2050,6 +2313,7 @@ postgresTest(
       assert.ok(canaryScan.tables > 0);
       assert.ok(canaryScan.columns > 0);
     } finally {
+      releaseProvider();
       await migrateDown(pool).catch(() => undefined);
       await pool.end();
     }

@@ -693,7 +693,9 @@
           "outputHashes": [
             {
               "path": "packages/auth/src/index.ts",
-              "sha256": "FA0ADB23CC137D29492E592E427229B8D6B8A6FD4320E587E4BF15FF52FACE44"
+              "sha256": "FA0ADB23CC137D29492E592E427229B8D6B8A6FD4320E587E4BF15FF52FACE44",
+              "gitCommit": "9ba20d0e60992b844d036a32d8e1bae8934f291c",
+              "gitBlob": "66c721de887b7512269ac556202eb982e06f9c96"
             }
           ]
         },
@@ -846,6 +848,91 @@
           {
             "path": "evidence/slice2/local-validation.json",
             "sha256": "228E1EC5F9464004C167D5613CE6C90CABDEB67E62BFD8D287A6E3D5ABB6D74A"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AGENT-P4-ORCHESTRATOR",
+      "role": "P4 isolated-local integration and evidence orchestrator",
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "xhigh",
+      "executionStatus": "COMPLETED",
+      "scope": "P4 authorization, projection, reporting, browser, runtime and release-candidate integration",
+      "independent": false,
+      "allowedTargets": [
+        "evidence/p4/**",
+        "governance/**",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P4_RELEASE_CANDIDATE_FREEZE_2026-08-29.md"
+      ],
+      "deliverables": [
+        {
+          "target": "evidence/p4/local-validation.json",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "evidence/p4/local-validation.json",
+              "sha256": "3D421AFBF8F1762D2802CB6F01B65FDB46457F02EA3327D23254FEE573123737"
+            }
+          ]
+        },
+        {
+          "target": "evidence/p4/zero-defect-audit.json",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "evidence/p4/zero-defect-audit.json",
+              "sha256": "1276C3957045E288E9958F1D04657F036711F5AA3A9CBEDD0D27B2A70E866A74"
+            }
+          ]
+        },
+        {
+          "target": "evidence/p4/candidate-manifest.json",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "evidence/p4/candidate-manifest.json",
+              "sha256": "B19CAF9C8F05C47BE84821A72C4C019B4D0999D1C4F06BD17730EE19AF95DC03"
+            }
+          ]
+        },
+        {
+          "target": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P4_RELEASE_CANDIDATE_FREEZE_2026-08-29.md",
+          "status": "COMPLETED",
+          "outputHashes": [
+            {
+              "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P4_RELEASE_CANDIDATE_FREEZE_2026-08-29.md",
+              "sha256": "0547BF67403726E61E7E03BB6A22E872DD6F622D72CE83966083BB0E77B36E6A"
+            }
+          ]
+        }
+      ],
+      "testEvidence": [
+        {
+          "id": "P4-LOCAL-FROZEN-VALIDATION",
+          "status": "PASS",
+          "commandOrMethod": "pnpm build, pnpm test, pnpm test:browser, P4 reporting qualification and exact runtime health checks",
+          "evidenceRefs": [
+            {
+              "path": "evidence/p4/local-validation.json",
+              "sha256": "3D421AFBF8F1762D2802CB6F01B65FDB46457F02EA3327D23254FEE573123737"
+            }
+          ]
+        }
+      ],
+      "dependencies": [
+        "named external target",
+        "Gate B raw evidence and Security Owner signature",
+        "legal, PDF accessibility and SME authority decisions",
+        "target object-store binding"
+      ],
+      "independentAudit": {
+        "auditorRole": "P4 authorization, governance and reporting discipline agents",
+        "disposition": "PASS",
+        "evidenceRefs": [
+          {
+            "path": "evidence/p4/zero-defect-audit.json",
+            "sha256": "1276C3957045E288E9958F1D04657F036711F5AA3A9CBEDD0D27B2A70E866A74"
           }
         ]
       }

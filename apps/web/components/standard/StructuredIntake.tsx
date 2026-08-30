@@ -68,6 +68,9 @@ export function StructuredIntake({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
+  const sourceRef = useRef<HTMLTextAreaElement>(null);
+  const sourceRequiredError =
+    error === "Enter the transient sourcing requirement first.";
 
   const fields = useMemo(
     () => [...(pack?.core_fields ?? []), ...(pack?.domain_fields ?? [])],
@@ -101,8 +104,11 @@ export function StructuredIntake({
   }
 
   async function resolveCategory(confirmedCategoryId?: string) {
-    if (!sourceText.trim())
-      return fail("Enter the transient sourcing requirement first.");
+    if (!sourceText.trim()) {
+      setError("Enter the transient sourcing requirement first.");
+      requestAnimationFrame(() => sourceRef.current?.focus());
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -233,6 +239,7 @@ export function StructuredIntake({
             ) : (
               <input
                 aria-label={`${field.label} value`}
+                dir="auto"
                 value={draft.value}
                 inputMode={
                   ["integer", "decimal", "quantity"].includes(field.kind)
@@ -261,6 +268,7 @@ export function StructuredIntake({
             ) : null}
             <input
               aria-label={`${field.label} raw expression`}
+              dir="auto"
               value={draft.raw}
               onChange={(event) =>
                 updateField(field.field_id, { raw: event.target.value })
@@ -397,13 +405,16 @@ export function StructuredIntake({
   return (
     <section className="standard-section" aria-labelledby="intake-heading">
       <p className="eyebrow">Structured intake</p>
-      <h2 id="intake-heading">Define the sourcing request</h2>
+      <h1 id="intake-heading" tabIndex={-1}>
+        Define the sourcing request
+      </h1>
       {error ? (
         <div
           className="error-summary"
           role="alert"
           tabIndex={-1}
           ref={errorRef}
+          id="standard-intake-error"
         >
           {error}
         </div>
@@ -431,7 +442,14 @@ export function StructuredIntake({
           <label htmlFor="standard-source">Source-language input</label>
           <textarea
             id="standard-source"
+            ref={sourceRef}
             dir="auto"
+            aria-invalid={sourceRequiredError}
+            aria-describedby={
+              sourceRequiredError
+                ? "standard-source-hint standard-intake-error"
+                : "standard-source-hint"
+            }
             value={sourceText}
             onChange={(event) => {
               setSourceText(event.target.value);
@@ -440,7 +458,7 @@ export function StructuredIntake({
             }}
             required
           />
-          <p className="field-hint">
+          <p className="field-hint" id="standard-source-hint">
             Validated synchronously, canonicalized to English, then discarded.
           </p>
           <button
@@ -454,7 +472,7 @@ export function StructuredIntake({
         </fieldset>
         {resolution?.activation_state === "confirmation_required" ? (
           <div className="validation-summary" role="status">
-            <h3>Confirm the product category</h3>
+            <h2>Confirm the product category</h2>
             <p>
               The deterministic resolver needs owner confirmation for{" "}
               {resolution.category_id.replaceAll("_", " ")}.
@@ -489,7 +507,7 @@ export function StructuredIntake({
         {pack ? (
           <>
             <section aria-labelledby="constraints-heading">
-              <h3 id="constraints-heading">Hard constraints</h3>
+              <h2 id="constraints-heading">Hard constraints</h2>
               {constraints.map((constraint, index) => (
                 <fieldset key={constraint.id}>
                   <legend>Hard constraint {index + 1}</legend>
@@ -514,6 +532,7 @@ export function StructuredIntake({
                   <label>
                     Required value
                     <input
+                      dir="auto"
                       value={constraint.value}
                       onChange={(event) =>
                         updateConstraint(constraint.id, {
@@ -542,6 +561,7 @@ export function StructuredIntake({
                       <label>
                         Tolerance
                         <input
+                          dir="auto"
                           value={constraint.tolerance}
                           onChange={(event) =>
                             updateConstraint(constraint.id, {
@@ -607,11 +627,12 @@ export function StructuredIntake({
               </button>
             </section>
             <section aria-labelledby="exclusions-heading">
-              <h3 id="exclusions-heading">Named exclusions</h3>
+              <h2 id="exclusions-heading">Named exclusions</h2>
               {exclusions.map((exclusion, index) => (
                 <label key={`exclusion-${index}`}>
                   Exclusion {index + 1}
                   <input
+                    dir="auto"
                     value={exclusion}
                     onChange={(event) =>
                       setExclusions((current) =>
@@ -643,13 +664,14 @@ export function StructuredIntake({
               </button>
             </section>
             <section aria-labelledby="conditionals-heading">
-              <h3 id="conditionals-heading">Conditional requirements</h3>
+              <h2 id="conditionals-heading">Conditional requirements</h2>
               {conditionals.map((conditional, index) => (
                 <fieldset key={conditional.id}>
                   <legend>Conditional requirement {index + 1}</legend>
                   <label>
                     Condition
                     <input
+                      dir="auto"
                       value={conditional.condition}
                       onChange={(event) =>
                         updateConditional(conditional.id, {
@@ -661,6 +683,7 @@ export function StructuredIntake({
                   <label>
                     Required result
                     <input
+                      dir="auto"
                       value={conditional.result}
                       onChange={(event) =>
                         updateConditional(conditional.id, {
@@ -672,13 +695,13 @@ export function StructuredIntake({
                   <label>
                     Verbatim source substring
                     <textarea
+                      dir="auto"
                       value={conditional.source}
                       onChange={(event) =>
                         updateConditional(conditional.id, {
                           source: event.target.value,
                         })
                       }
-                      dir="auto"
                     />
                   </label>
                   <button

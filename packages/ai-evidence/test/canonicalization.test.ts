@@ -135,6 +135,27 @@ test("deterministically preserves model, code, and quantity spans without retain
   );
 });
 
+test("preserves a grouped quantity and unit as one byte-identical protected span", async () => {
+  const request = input("Need monthly capacity of 2,000 units.");
+  request.fixtureCanonicalText = "Need monthly industrial capacity.";
+  const result = await canonicalizer().canonicalize(
+    request,
+    new AbortController().signal,
+    { record: () => undefined },
+  );
+
+  assert.deepEqual(
+    result.protectedSpans.map((span) => [span.category, span.canonicalValue]),
+    [["quantity_unit", "2,000 units"]],
+  );
+  assert.equal(result.canonicalText.includes("2,000 units"), true);
+  assert.equal(
+    result.protectedSpans.some((span) => span.canonicalValue === "000 units"),
+    false,
+  );
+  assert.equal(result.canonicalText.split("2,000 units").length - 1, 1);
+});
+
 test("enforces the bounded timeout with a source-free retryable error", async () => {
   const never: CanonicalizationCapability = {
     capabilityId: "CAP-TRANSLATE",

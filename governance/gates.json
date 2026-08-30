@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-15T07:00:00+04:00",
+  "updatedAt": "2026-08-29T09:18:40Z",
   "gates": [
     {
       "id": "AG0",
@@ -249,6 +249,43 @@
       "owner": "Role 2",
       "evidence": ["evidence/slice3/local-validation.json"],
       "summary": "Role 2 Loop 1 rejected D001 through D004; all four are corrected pending Role 2 re-audit, and Slice 3 acceptance remains unclaimed while live qualification is blocked.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "TASK137-LOCAL-G0",
+      "name": "TASK137 isolated-local qualification closure",
+      "status": "PASS",
+      "owner": "Role 3 and independent qualification agents",
+      "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\TASK137_EXECUTION_STATUS_2026-08-25.md"
+      ],
+      "summary": "Synthetic isolated-local TASK137 qualification and same-byte final audits passed. This additive gate does not rewrite or supersede historical Slice 3 Role 2 and hosted-handoff records.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "P4-LOCAL-G0",
+      "name": "P4 isolated-local product-surface closure",
+      "status": "PASS",
+      "owner": "Role 3 and P4 discipline agents",
+      "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P4_RELEASE_CANDIDATE_EXECUTION_RECORD_2026-08-29.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P4_RELEASE_CANDIDATE_FREEZE_2026-08-29.md",
+        "evidence/p4/local-validation.json",
+        "evidence/p4/zero-defect-audit.json"
+      ],
+      "summary": "The isolated-local product surface is frozen with build PASS, 853 repository tests PASS, 42 Chrome tests PASS, zero runtime privacy findings, reporting qualification PASS and zero known defects in the tested local scope. Production release remains blocked by external target and authority gates.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "P4-GATE-B",
+      "name": "P4 external Edge and Identity preflight",
+      "status": "BLOCKED",
+      "owner": "Security owner and named environment operator",
+      "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P4_GATE_B_PREFLIGHT_EVIDENCE_2026-08-29.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P4_RELEASE_CANDIDATE_FREEZE_2026-08-29.md"
+      ],
+      "summary": "All 26 PF-8.1 through PF-12.8 controls remain fail-closed until a named target is tested, raw evidence is attached, OAuth is In production and the Security Owner signs the exact result set.",
       "traceabilityIds": []
     }
   ]

@@ -8,20 +8,28 @@ import {
   SYNTHETIC_DOMAIN_PACK,
   STANDARD_SYNTHETIC_WARNING,
   buildStandardSyntheticEvidenceGraph,
+  normalizeStandardSyntheticScenarioForConstraints,
   canonicalizeStandardCondition,
   canonicalizeStandardConstraintComparand,
   canonicalizeStandardExclusion,
   canonicalizeStandardFieldValue,
   canonicalizeStandardRequiredResult,
-  projectStandardResult,
-  prepareStandardRelease,
+  prepareStandardCompleteResultForPersistence,
   requireSyntheticDomainPackActivation,
   resolveSyntheticDomainPack,
   type StandardSyntheticScenario,
   type StandardStructuredSourceLanguage,
 } from "@matchbase/ai-evidence/standard";
+import {
+  projectStoredResult,
+  standardEvidenceGraphFromStoredCompleteResult,
+  standardEvidenceGraphFromCompleteResultFoundationV2,
+  type ResultProjectionMetadata,
+  type StandardStoredResultProjection,
+} from "@matchbase/ai-evidence";
 import type {
   DomainPackFieldV1,
+  CompleteResultFoundationV2,
   DomainPackResolutionV1,
   StandardFieldValueV1,
   StandardHardConstraintV1,
@@ -35,8 +43,11 @@ import {
   admitRunWithinQuota,
   acquireExecutionLease,
   appendAuditEvent,
+  bindConsultantProjectionPolicyAtResultProduction,
+  DEFAULT_CONSULTANT_PROJECTION_CONFIG,
   inTransaction,
   releaseExecutionLease,
+  type ConsultantProjectionConfigRelease,
   type ConnectionPool,
   type TransactionClient,
 } from "@matchbase/data";
@@ -55,6 +66,10 @@ import {
   TERMINAL_RUN_STATES,
   type RequestContext,
 } from "./types.js";
+import {
+  guardFreshRunOutputRead,
+  outputRestrictedFault,
+} from "./result-output-guard.js";
 
 const STANDARD_PROJECTION_VERSION = STANDARD_DISCLOSURE_PROJECTION_VERSION;
 const HISTORY_LIMIT = 20;
@@ -211,6 +226,19 @@ const PROJECTION_FIELDS = {
     "scarcity",
     "candidates",
     "gate_eliminations",
+    "scarcity_analysis",
+    "scarcity_analysis.reducing_constraints[].constraint_id",
+    "scarcity_analysis.reducing_constraints[].field_id",
+    "scarcity_analysis.reducing_constraints[].label",
+    "scarcity_analysis.reducing_constraints[].eliminated_count",
+    "scarcity_analysis.unmet_mandatory_constraints[].constraint_id",
+    "scarcity_analysis.unmet_mandatory_constraints[].field_id",
+    "scarcity_analysis.unmet_mandatory_constraints[].label",
+    "scarcity_analysis.permitted_relaxations[].constraint_id",
+    "scarcity_analysis.permitted_relaxations[].field_id",
+    "scarcity_analysis.permitted_relaxations[].label",
+    "scarcity_analysis.permitted_relaxations[].direction",
+    "scarcity_analysis.permitted_relaxations[].tolerance",
     "limitations",
     "synthetic_warning",
     "projection_version",
@@ -234,8 +262,91 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 
+export function standardDisclosureProjectionRegistryRelease(): {
+  readonly definition: string;
+  readonly contentSha256: Buffer;
+} {
+  const definition = stableJson({
+    schema_version: "standard-disclosure-projection.v4",
+    version: STANDARD_PROJECTION_VERSION,
+    tier: "standard",
+    resources: PROJECTION_FIELDS,
+  });
+  return Object.freeze({
+    definition,
+    contentSha256: sha256(definition),
+  });
+}
+
 function jsonHash(value: unknown): Buffer {
   return sha256(stableJson(value));
+}
+
+export const LEGACY_STANDARD_RESULT_INTEGRITY_RUN_ID =
+  "stable-canonical-run" as const;
+
+export type StoredCompleteResultIntegrityMode =
+  | "complete_result_foundation_v1_exact"
+  | "complete_result_foundation_v2_exact"
+  | "legacy_standard_evidence_graph_v1_normalized_run_id";
+
+export function standardCompleteResultDocumentSha256(
+  document: unknown,
+): Buffer {
+  return jsonHash(document);
+}
+
+export function legacyStandardCompleteResultDocumentSha256(
+  document: unknown,
+): Buffer {
+  if (
+    document === null ||
+    typeof document !== "object" ||
+    Array.isArray(document)
+  )
+    throw new Error("Legacy Standard complete result must be an object.");
+  return jsonHash({
+    ...(document as Record<string, unknown>),
+    run_id: LEGACY_STANDARD_RESULT_INTEGRITY_RUN_ID,
+  });
+}
+
+export function assertStoredCompleteResultIntegrity(
+  document: unknown,
+  storedSha256: unknown,
+  expectedRunId: string,
+): StoredCompleteResultIntegrityMode {
+  if (
+    document === null ||
+    typeof document !== "object" ||
+    Array.isArray(document)
+  )
+    throw new Error("Stored complete result must be an object.");
+  if (!Buffer.isBuffer(storedSha256) || storedSha256.length !== 32)
+    throw new Error("Stored complete-result integrity digest is invalid.");
+  const record = document as Record<string, unknown>;
+  if (record.run_id !== expectedRunId)
+    throw new Error("Stored complete-result run identity is invalid.");
+
+  let expected: Buffer;
+  let mode: StoredCompleteResultIntegrityMode;
+  if (record.schema_version === "complete-result-foundation.v2") {
+    expected = standardCompleteResultDocumentSha256(document);
+    mode = "complete_result_foundation_v2_exact";
+  } else if (record.schema_version === "complete-result-foundation.v1") {
+    expected = standardCompleteResultDocumentSha256(document);
+    mode = "complete_result_foundation_v1_exact";
+  } else if (record.schema_version === "standard-evidence-graph.v1") {
+    expected = legacyStandardCompleteResultDocumentSha256(document);
+    mode = "legacy_standard_evidence_graph_v1_normalized_run_id";
+  } else {
+    throw new Error(
+      "Stored complete-result integrity schema version is unsupported.",
+    );
+  }
+  if (!timingSafeEqual(storedSha256, expected))
+    throw new Error("Stored complete-result integrity check failed.");
+  return mode;
 }
 
 export function standardReleasedFieldPaths(value: unknown): string[] {
@@ -381,6 +492,7 @@ interface StandardWorkspaceOptions {
   pool: ConnectionPool;
   privacyKey: Uint8Array | string;
   activationTtlSeconds?: number;
+  consultantProjectionConfig?: ConsultantProjectionConfigRelease;
 }
 
 interface CursorPayload {
@@ -398,6 +510,7 @@ export class StandardWorkspaceApplication {
   readonly pool: ConnectionPool;
   private readonly secret: Buffer;
   private readonly activationTtlSeconds: number;
+  private readonly consultantProjectionConfig: ConsultantProjectionConfigRelease;
 
   constructor(options: StandardWorkspaceOptions) {
     this.pool = options.pool;
@@ -407,6 +520,9 @@ export class StandardWorkspaceApplication {
         "Standard workspace privacy key must contain at least 32 bytes.",
       );
     this.activationTtlSeconds = options.activationTtlSeconds ?? 900;
+    this.consultantProjectionConfig =
+      options.consultantProjectionConfig ??
+      DEFAULT_CONSULTANT_PROJECTION_CONFIG;
   }
 
   async authorize(context: RequestContext, action: string): Promise<void> {
@@ -1864,21 +1980,34 @@ export class StandardWorkspaceApplication {
     recordProjection = true,
   ): Promise<Record<string, unknown>> {
     await assertStandardWorkspaceAuthorized(this.pool, context, "run.read");
-    const result = await this.pool.query<{
-      run_id: string;
-      request_id: string;
-      version: number;
-      state: string;
-      queued_at: Date;
-      started_at: Date | null;
-      completed_at: Date | null;
-      eligible_count: number | null;
-    }>(
-      `SELECT rr.run_id,v.request_id,v.version,rr.state,rr.queued_at,rr.started_at,rr.completed_at,rs.eligible_count FROM research_run rr JOIN canonical_request_version v USING(canonical_request_version_id) LEFT JOIN run_result rs USING(run_id) WHERE rr.run_id=$1 AND rr.account_id=$2 AND rr.requested_by_user_id=$3`,
-      [runId, context.accountId, context.userId],
-    );
-    const row = result.rows[0];
-    if (!row) throw standardNotVisible();
+    const guarded = await inTransaction(this.pool, async (client) => {
+      const guard = await guardFreshRunOutputRead(
+        client,
+        context,
+        runId,
+        "run.status",
+      );
+      if (guard.kind !== "allowed") return guard;
+      const result = await client.query<{
+        run_id: string;
+        request_id: string;
+        version: number;
+        queued_at: Date;
+        started_at: Date | null;
+        completed_at: Date | null;
+        eligible_count: number | null;
+      }>(
+        `SELECT rr.run_id,v.request_id,v.version,rr.queued_at,rr.started_at,rr.completed_at,rs.eligible_count FROM research_run rr JOIN canonical_request_version v USING(canonical_request_version_id) LEFT JOIN run_result rs ON rs.account_id=rr.account_id AND rs.run_id=rr.run_id WHERE rr.run_id=$1 AND rr.account_id=$2 AND rr.requested_by_user_id=$3`,
+        [runId, context.accountId, context.userId],
+      );
+      const row = result.rows[0];
+      return row
+        ? { kind: "allowed" as const, row: { ...row, state: guard.state } }
+        : { kind: "not_visible" as const };
+    });
+    if (guarded.kind === "output_restricted") throw outputRestrictedFault();
+    if (guarded.kind === "not_visible") throw standardNotVisible();
+    const row = guarded.row;
     const body = this.runProjection(row, true);
     this.assertClosedProjection("run_status", body);
     if (recordProjection)
@@ -1894,39 +2023,139 @@ export class StandardWorkspaceApplication {
     return body;
   }
 
+  async getResultProjection(
+    context: RequestContext,
+    runId: string,
+  ): Promise<StandardStoredResultProjection> {
+    await assertStandardWorkspaceAuthorized(this.pool, context, "run.result");
+    const guarded = await inTransaction(this.pool, async (client) => {
+      const guard = await guardFreshRunOutputRead(
+        client,
+        context,
+        runId,
+        "run.result",
+      );
+      if (guard.kind !== "allowed") return guard;
+      const result = await client.query<{
+        complete_result_document: unknown;
+        result_sha256: Buffer;
+        canonical_document: StructuredStandardRequestV1;
+        scarcity_outcome: "scarcity" | "no_responsible_match" | null;
+        unmet_constraints: unknown;
+        permitted_relaxations: unknown;
+        projection_as_of: Date;
+      }>(
+        `SELECT rs.complete_result_document,rs.result_sha256,v.canonical_document,
+              sa.outcome AS scarcity_outcome,sa.unmet_constraints,sa.permitted_relaxations,
+              transaction_timestamp() AS projection_as_of
+         FROM research_run rr
+         JOIN canonical_request_version v
+           ON v.account_id=rr.account_id
+          AND v.canonical_request_version_id=rr.canonical_request_version_id
+         LEFT JOIN run_result rs
+           ON rs.account_id=rr.account_id AND rs.run_id=rr.run_id
+         LEFT JOIN scarcity_analysis sa
+           ON sa.account_id=rr.account_id AND sa.run_id=rr.run_id
+        WHERE rr.run_id=$1 AND rr.account_id=$2 AND rr.requested_by_user_id=$3`,
+        [runId, context.accountId, context.userId],
+      );
+      const row = result.rows[0];
+      if (!row) return { kind: "not_visible" as const };
+      if (
+        !row.complete_result_document ||
+        !["complete", "no_responsible_match"].includes(guard.state)
+      )
+        throw new ApplicationFault(
+          409,
+          "run-not-complete",
+          "MB-409-RUN",
+          "Run result is not available.",
+          true,
+        );
+      const legacyEmptyScarcityLedger =
+        row.scarcity_outcome !== null &&
+        Array.isArray(row.unmet_constraints) &&
+        row.unmet_constraints.length === 0 &&
+        Array.isArray(row.permitted_relaxations) &&
+        row.permitted_relaxations.length === 0;
+      assertStoredCompleteResultIntegrity(
+        row.complete_result_document,
+        row.result_sha256,
+        runId,
+      );
+      const completeResult =
+        (row.complete_result_document as Record<string, unknown>)
+          .schema_version === "complete-result-foundation.v2"
+          ? standardEvidenceGraphFromCompleteResultFoundationV2(
+              row.complete_result_document as CompleteResultFoundationV2,
+            )
+          : standardEvidenceGraphFromStoredCompleteResult(
+              row.complete_result_document,
+            );
+      const projected = projectStoredResult({
+        tier: "standard",
+        completeResult,
+        projectionAsOf: row.projection_as_of.toISOString(),
+        runBoundCanonicalHardConstraints:
+          row.canonical_document.hard_constraints,
+        allowLegacyEmptyScarcityLedger: legacyEmptyScarcityLedger,
+      });
+      const body = projected.body;
+      if (body.scarcity === "none") {
+        if (row.scarcity_outcome !== null)
+          throw new ApplicationFault(
+            500,
+            "scarcity-analysis-integrity",
+            "MB-500-SCARCITY",
+            "Stored scarcity analysis conflicts with the completed result.",
+            false,
+          );
+      } else {
+        const expectedOutcome =
+          body.scarcity === "zero" ? "no_responsible_match" : "scarcity";
+        const expectedReducing =
+          body.scarcity_analysis.reducing_constraints.map(
+            ({ constraint_id, eliminated_count }) => ({
+              constraint_id,
+              eliminated_count,
+            }),
+          );
+        const expectedRelaxations =
+          body.scarcity_analysis.permitted_relaxations.map(
+            ({ constraint_id }) => constraint_id,
+          );
+        if (
+          row.scarcity_outcome !== expectedOutcome ||
+          stableJson(row.unmet_constraints) !== stableJson(expectedReducing) ||
+          stableJson(row.permitted_relaxations) !==
+            stableJson(expectedRelaxations)
+        )
+          throw new ApplicationFault(
+            500,
+            "scarcity-analysis-integrity",
+            "MB-500-SCARCITY",
+            "Stored scarcity analysis does not match the run-bound canonical result.",
+            false,
+          );
+      }
+      this.assertClosedProjection(
+        "run_result",
+        body as unknown as Record<string, unknown>,
+      );
+      return { kind: "allowed" as const, projected };
+    });
+    if (guarded.kind === "output_restricted") throw outputRestrictedFault();
+    if (guarded.kind === "not_visible") throw standardNotVisible();
+    return guarded.projected;
+  }
+
   async getResult(
     context: RequestContext,
     runId: string,
     recordProjection = true,
   ): Promise<StandardResultProjectionV1> {
-    await assertStandardWorkspaceAuthorized(this.pool, context, "run.result");
-    const result = await this.pool.query<{
-      state: string;
-      complete_result_document: Parameters<typeof projectStandardResult>[0];
-    }>(
-      `SELECT rr.state,rs.complete_result_document FROM research_run rr LEFT JOIN run_result rs USING(run_id) WHERE rr.run_id=$1 AND rr.account_id=$2 AND rr.requested_by_user_id=$3`,
-      [runId, context.accountId, context.userId],
-    );
-    const row = result.rows[0];
-    if (!row) throw standardNotVisible();
-    if (
-      !row.complete_result_document ||
-      !["complete", "no_responsible_match"].includes(row.state)
-    )
-      throw new ApplicationFault(
-        409,
-        "run-not-complete",
-        "MB-409-RUN",
-        "Run result is not available.",
-        true,
-      );
-    const body = projectStandardResult(row.complete_result_document, {
-      now: new Date(),
-    });
-    this.assertClosedProjection(
-      "run_result",
-      body as unknown as Record<string, unknown>,
-    );
+    const projected = await this.getResultProjection(context, runId);
+    const { body, metadata } = projected;
     if (recordProjection)
       await this.recordProjection(
         context,
@@ -1934,8 +2163,10 @@ export class StandardWorkspaceApplication {
         runId,
         undefined,
         runId,
-        standardReleasedFieldPaths(body),
-        body.candidates.length,
+        [...metadata.fieldsReleased],
+        metadata.itemCount,
+        false,
+        metadata.projectionAsOf,
       );
     return body;
   }
@@ -2043,23 +2274,42 @@ export class StandardWorkspaceApplication {
         "three",
         "many",
       ];
+      const hardConstraints = Array.isArray(
+        row.canonical_document.hard_constraints,
+      )
+        ? row.canonical_document.hard_constraints
+        : [];
       const scenarioMaterial = {
         selector_version: "canonical-registry.v1",
         domain_pack: row.canonical_document.domain_pack,
         fields: row.canonical_document.fields,
-        hard_constraints: row.canonical_document.hard_constraints,
+        hard_constraints: hardConstraints.map(
+          ({ constraint_id: _constraintId, ...constraint }) => constraint,
+        ),
         exclusions: row.canonical_document.exclusions,
         conditional_requirements:
           row.canonical_document.conditional_requirements,
         contradictions: row.canonical_document.contradictions,
       };
       const scenarioDigest = jsonHash(scenarioMaterial);
-      const scenario = scenarios[scenarioDigest[0]! % scenarios.length]!;
-      const rawGraph = buildStandardSyntheticEvidenceGraph(runId, scenario);
-      const preparedRelease = prepareStandardRelease(rawGraph, {
-        now: new Date("2026-08-15T00:00:00Z"),
-      });
+      const scenario = normalizeStandardSyntheticScenarioForConstraints(
+        scenarios[scenarioDigest[0]! % scenarios.length]!,
+        hardConstraints.length,
+      );
+      const rawGraph = buildStandardSyntheticEvidenceGraph(
+        runId,
+        scenario,
+        hardConstraints,
+      );
+      const preparedRelease = prepareStandardCompleteResultForPersistence(
+        rawGraph,
+        {
+          now: new Date("2026-08-15T00:00:00Z"),
+          runBoundCanonicalHardConstraints: hardConstraints,
+        },
+      );
       const graph = preparedRelease.persistence_graph;
+      const completeResultFoundation = preparedRelease.persistence_foundation;
       const projection = preparedRelease.projection;
       await inTransaction(this.pool, async (client) => {
         const locked = await client.query<{ state: string }>(
@@ -2324,10 +2574,15 @@ export class StandardWorkspaceApplication {
             graph.candidates.length,
             JSON.stringify({ state: projection.scarcity }),
             STANDARD_SYNTHETIC_WARNING,
-            JSON.stringify(graph),
-            jsonHash({ ...graph, run_id: "stable-canonical-run" }),
+            JSON.stringify(completeResultFoundation),
+            standardCompleteResultDocumentSha256(completeResultFoundation),
           ],
         );
+        await bindConsultantProjectionPolicyAtResultProduction(client, {
+          accountId: context.accountId,
+          runId,
+          release: this.consultantProjectionConfig,
+        });
         for (const [
           index,
           candidateId,
@@ -2347,15 +2602,28 @@ export class StandardWorkspaceApplication {
         );
         if (eligibleCount < 3)
           await client.query(
-            `INSERT INTO scarcity_analysis(scarcity_analysis_id,account_id,run_id,outcome,unmet_constraints,permitted_relaxations,analysis_english) VALUES($1,$2,$3,$4,'[]'::jsonb,'[]'::jsonb,$5)`,
+            `INSERT INTO scarcity_analysis(scarcity_analysis_id,account_id,run_id,outcome,unmet_constraints,permitted_relaxations,analysis_english) VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7)`,
             [
               randomUUID(),
               context.accountId,
               runId,
               eligibleCount === 0 ? "no_responsible_match" : "scarcity",
+              JSON.stringify(
+                projection.scarcity_analysis.reducing_constraints.map(
+                  ({ constraint_id, eliminated_count }) => ({
+                    constraint_id,
+                    eliminated_count,
+                  }),
+                ),
+              ),
+              JSON.stringify(
+                projection.scarcity_analysis.permitted_relaxations.map(
+                  ({ constraint_id }) => constraint_id,
+                ),
+              ),
               eligibleCount === 0
-                ? "No responsible synthetic match passed all gates."
-                : "Fewer than three responsible synthetic matches passed all gates.",
+                ? "No candidate met the mandatory constraints for this synthetic request."
+                : "Fewer than three candidates met all mandatory constraints for this synthetic request.",
             ],
           );
         await client.query(
@@ -2573,6 +2841,7 @@ export class StandardWorkspaceApplication {
     resourceId: string,
     requestId?: string,
     runId?: string,
+    resultProjectionMetadata?: ResultProjectionMetadata,
   ): Promise<void> {
     await this.recordProjection(
       context,
@@ -2583,6 +2852,7 @@ export class StandardWorkspaceApplication {
       [],
       0,
       true,
+      resultProjectionMetadata?.projectionAsOf,
     );
   }
 
@@ -2594,6 +2864,7 @@ export class StandardWorkspaceApplication {
     requestId: string | undefined,
     runId: string | undefined,
     body: Record<string, unknown>,
+    resultProjectionMetadata?: ResultProjectionMetadata,
   ): Promise<void> {
     const collection = Array.isArray(body.items)
       ? body.items
@@ -2606,8 +2877,12 @@ export class StandardWorkspaceApplication {
       resourceId,
       requestId,
       runId,
-      standardReleasedFieldPaths(body),
-      collection?.length ?? 1,
+      resultProjectionMetadata
+        ? [...resultProjectionMetadata.fieldsReleased]
+        : standardReleasedFieldPaths(body),
+      resultProjectionMetadata?.itemCount ?? collection?.length ?? 1,
+      false,
+      resultProjectionMetadata?.projectionAsOf,
     );
   }
 
@@ -2714,6 +2989,7 @@ export class StandardWorkspaceApplication {
       "scarcity",
       "candidates",
       "gate_eliminations",
+      "scarcity_analysis",
       "limitations",
       "synthetic_warning",
       "projection_version",
@@ -2792,6 +3068,31 @@ export class StandardWorkspaceApplication {
     }
     for (const gate of items(body.gate_eliminations))
       this.exactKeys(gate, ["gate_id", "label", "eliminated_count"]);
+    this.exactKeys(body.scarcity_analysis, [
+      "reducing_constraints",
+      "unmet_mandatory_constraints",
+      "permitted_relaxations",
+    ]);
+    const scarcityAnalysis = body.scarcity_analysis as Record<string, unknown>;
+    for (const constraint of items(scarcityAnalysis.reducing_constraints))
+      this.exactKeys(constraint, [
+        "constraint_id",
+        "field_id",
+        "label",
+        "eliminated_count",
+      ]);
+    for (const constraint of items(
+      scarcityAnalysis.unmet_mandatory_constraints,
+    ))
+      this.exactKeys(constraint, ["constraint_id", "field_id", "label"]);
+    for (const constraint of items(scarcityAnalysis.permitted_relaxations))
+      this.exactKeys(constraint, [
+        "constraint_id",
+        "field_id",
+        "label",
+        "direction",
+        "tolerance",
+      ]);
     this.exactKeys(body.limitations, [
       "unknown_count",
       "not_asked_count",
@@ -3610,16 +3911,12 @@ export class StandardWorkspaceApplication {
     fields: string[],
     count: number,
     notModified = false,
+    projectionAsOf?: string,
   ): Promise<void> {
     await inTransaction(this.pool, async (client) => {
-      const definition = {
-        schema_version: "standard-disclosure-projection.v3",
-        version: STANDARD_PROJECTION_VERSION,
-        tier: "standard",
-        resources: PROJECTION_FIELDS,
-      } as const;
-      const serializedDefinition = stableJson(definition);
-      const definitionHash = sha256(serializedDefinition);
+      const release = standardDisclosureProjectionRegistryRelease();
+      const serializedDefinition = release.definition;
+      const definitionHash = release.contentSha256;
       await client.query(
         `INSERT INTO projection_version(projection_version_id,version,definition,content_sha256,released_at) VALUES($1,$2,$3::jsonb,$4,clock_timestamp()) ON CONFLICT(version) DO NOTHING`,
         [
@@ -3676,6 +3973,7 @@ export class StandardWorkspaceApplication {
             itemCount: count,
             notModified,
             bodyReleased: !notModified,
+            ...(projectionAsOf === undefined ? {} : { projectionAsOf }),
           },
         ),
         projectionVersionId,

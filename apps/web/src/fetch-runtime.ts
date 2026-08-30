@@ -6,7 +6,13 @@ import {
 } from "node:crypto";
 import {
   API_MINOR_VERSION,
+  AdminAuditApplication,
+  AdminEntitlementsApplication,
+  AdminRunsApplication,
+  AdminUnprojectedApplication,
+  ArtifactDownloadApplication,
   ApplicationFault,
+  ConsultantResultApplication,
   MatchBaseApplication,
   StandardWorkspaceApplication,
   assertSlice1EndpointAuthorized,
@@ -22,6 +28,7 @@ import {
 import {
   assertUnsafeRequest,
   createGoogleOidcAdapter,
+  createGoogleRiscVerifier,
   createPkceTransaction,
   issueSession,
   sha256Base64Url,
@@ -29,19 +36,36 @@ import {
 } from "@matchbase/auth";
 import {
   appendAuditEvent,
+  applyGoogleRiscEvent,
   createPool,
+  DEFAULT_CONSULTANT_PROJECTION_CONFIG,
+  ensureBootstrapEntitlement,
   inTransaction,
   resolveStoredAuthorization,
   type ConnectionPool,
   type TransactionClient,
+  type ArtifactObjectReader,
 } from "@matchbase/data";
 import { loadWebConfig, type WebConfig } from "./config";
+import {
+  createCloudRunMetadataTokenProvider,
+  createGcsArtifactObjectReader,
+} from "./gcs-artifact-object-reader";
+import { handleAdminEntitlementsRoute } from "./admin-entitlements-route-core";
+import { handleAdminAuditRoute } from "./admin-audit-route-core";
+import { handleAdminRunsRoute } from "./admin-runs-route-core";
+import { handleAdminUnprojectedRoute } from "./admin-unprojected-route-core";
+import { handleArtifactDownloadRoute } from "./artifact-download-route-core";
+import { handleConsultantRoute } from "./consultant-route-core";
+import { handleGoogleRiscRoute } from "./google-risc-route-core";
 import {
   handleStandardRoute,
   isSharedWorkspaceMutation,
   isStandardMutationIntent,
 } from "./standard-route-core";
 import { loadServerOwnedResearchAdmission } from "./server-owned-research-admission";
+import { readBoundedRequestBody } from "./bounded-request-body";
+import { assertProductionOriginAdmission } from "./origin-admission";
 
 const HOST_SESSION_COOKIE = "__Host-matchbase_session";
 const LOCAL_SESSION_COOKIE = "matchbase_session";
@@ -58,7 +82,14 @@ interface Services {
   pool: ConnectionPool;
   application: MatchBaseApplication;
   standardApplication: StandardWorkspaceApplication;
+  adminEntitlementsApplication: AdminEntitlementsApplication;
+  adminAuditApplication: AdminAuditApplication;
+  adminRunsApplication: AdminRunsApplication;
+  adminUnprojectedApplication: AdminUnprojectedApplication;
+  artifactDownloadApplication: ArtifactDownloadApplication;
+  consultantResultApplication: ConsultantResultApplication;
   googleProvider?: ReturnType<typeof createGoogleOidcAdapter>;
+  googleRiscVerifier?: ReturnType<typeof createGoogleRiscVerifier>;
 }
 
 interface SessionContext {
@@ -192,6 +223,21 @@ function services(): Services {
           jwksUri: config.googleJwksUri,
         })
       : undefined;
+  const artifactObjectReader: ArtifactObjectReader = config.artifactGcsBucket
+    ? createGcsArtifactObjectReader({
+        bucket: config.artifactGcsBucket,
+        accessTokenProvider: createCloudRunMetadataTokenProvider(),
+        maximumBytes: config.artifactMaximumBytes ?? 8 * 1_024 * 1_024,
+      })
+    : { read: async () => null };
+  const googleRiscVerifier =
+    config.googleClientId && config.googleIssuer && config.googleJwksUri
+      ? createGoogleRiscVerifier({
+          issuer: config.googleIssuer,
+          jwksUri: config.googleJwksUri,
+          audiences: [config.googleClientId],
+        })
+      : undefined;
   singleton = {
     config,
     pool,
@@ -200,12 +246,28 @@ function services(): Services {
       canonicalizer,
       privacyKey: config.digestKey,
       researchAdmission: loadServerOwnedResearchAdmission(config),
+      consultantProjectionConfig:
+        config.consultantProjectionConfig ??
+        DEFAULT_CONSULTANT_PROJECTION_CONFIG,
     }),
     standardApplication: new StandardWorkspaceApplication({
       pool,
       privacyKey: config.digestKey,
+      consultantProjectionConfig:
+        config.consultantProjectionConfig ??
+        DEFAULT_CONSULTANT_PROJECTION_CONFIG,
     }),
+    adminEntitlementsApplication: new AdminEntitlementsApplication(pool),
+    adminAuditApplication: new AdminAuditApplication(pool, config.digestKey),
+    adminRunsApplication: new AdminRunsApplication(pool, config.digestKey),
+    adminUnprojectedApplication: new AdminUnprojectedApplication(pool),
+    artifactDownloadApplication: new ArtifactDownloadApplication(
+      pool,
+      artifactObjectReader,
+    ),
+    consultantResultApplication: new ConsultantResultApplication(pool),
     ...(googleProvider ? { googleProvider } : {}),
+    ...(googleRiscVerifier ? { googleRiscVerifier } : {}),
   };
   return singleton;
 }
@@ -635,12 +697,15 @@ async function simulatorSession(
       ],
     );
     if (identity.tier === "demo") {
-      await client.query(
-        `INSERT INTO entitlement_grant
-           (grant_id, account_id, user_id, tier, grant_actor_kind, justification, effective_from)
-         VALUES ($1,$2,$3,'demo','system','default simulator grant',clock_timestamp())`,
-        [randomUUID(), accountId, userId],
-      );
+      await ensureBootstrapEntitlement(client, {
+        accountId,
+        subjectUserId: userId,
+        correlationId,
+        deploymentId: current.config.deploymentId,
+        environment: current.config.environment,
+        justification: "default simulator grant",
+        tier: "demo",
+      });
     } else {
       const grantorId = randomUUID();
       await client.query(
@@ -648,12 +713,16 @@ async function simulatorSession(
          VALUES($1,$2,$3,true,'active')`,
         [grantorId, accountId, `${identity.subject}:grantor`],
       );
-      await client.query(
-        `INSERT INTO entitlement_grant
-           (grant_id,account_id,user_id,tier,grant_actor_kind,granted_by_user_id,justification,effective_from)
-         VALUES($1,$2,$3,'standard','user',$4,'signed standard simulator fixture',clock_timestamp())`,
-        [randomUUID(), accountId, userId, grantorId],
-      );
+      await ensureBootstrapEntitlement(client, {
+        accountId,
+        subjectUserId: userId,
+        grantorUserId: grantorId,
+        correlationId,
+        deploymentId: current.config.deploymentId,
+        environment: current.config.environment,
+        justification: "signed standard simulator fixture",
+        tier: "standard",
+      });
     }
   }
   const issued = issueSession();
@@ -725,6 +794,16 @@ export async function handleRoute(request: Request): Promise<Response> {
     (parsedBody ??= requestBody(request));
   let session: SessionContext | null = null;
   try {
+    try {
+      assertProductionOriginAdmission(current.config, request.headers);
+    } catch {
+      throw new ApplicationFault(
+        403,
+        "origin-admission-refused",
+        "MB-403-ORIGIN",
+        "Request refused.",
+      );
+    }
     const pinned = request.headers.get("mb-api-version");
     if (pinned && pinned !== API_MINOR_VERSION) {
       throw new ApplicationFault(
@@ -898,6 +977,40 @@ export async function handleRoute(request: Request): Promise<Response> {
         `${SIMULATOR_TRANSACTION_COOKIE}=; ${sessionCookieAttributes(current.config, true)}; Max-Age=0`,
       );
       return new Response(null, { status: 303, headers });
+    }
+    if (path === "/auth/google/risc") {
+      let riscBody: string;
+      try {
+        riscBody = await readBoundedRequestBody(request, 32_768);
+      } catch {
+        throw new ApplicationFault(
+          400,
+          "invalid-security-event",
+          "MB-400-RISC",
+          "Security event token is invalid.",
+        );
+      }
+      const risc = await handleGoogleRiscRoute({
+        method: request.method,
+        pathname: path,
+        contentType: request.headers.get("content-type"),
+        body: riscBody,
+        correlationId,
+        deploymentId: current.config.deploymentId,
+        ...(current.googleRiscVerifier
+          ? { verifier: current.googleRiscVerifier }
+          : {}),
+        apply: (input) =>
+          inTransaction(current.pool, (client) =>
+            applyGoogleRiscEvent(client, input),
+          ),
+      });
+      if (risc) {
+        return new Response(null, {
+          status: risc.status,
+          headers: responseHeaders(current.config, correlationId, risc.headers),
+        });
+      }
     }
     if (request.method === "GET" && path === "/auth/google/start") {
       if (!current.googleProvider || !current.config.googleRedirectUri) {
@@ -1091,6 +1204,101 @@ export async function handleRoute(request: Request): Promise<Response> {
         session.requestContext.userId,
       );
       return json(current.config, correlationId, body);
+    }
+    const adminEntitlements = await handleAdminEntitlementsRoute({
+      method: request.method,
+      pathname: path,
+      searchParams: url.searchParams,
+      body: readRequestBody,
+      context: session.requestContext,
+      idempotencyKey,
+      application: current.adminEntitlementsApplication,
+    });
+    if (adminEntitlements) {
+      return json(
+        current.config,
+        correlationId,
+        adminEntitlements.body,
+        adminEntitlements.status,
+        adminEntitlements.headers,
+      );
+    }
+    const adminRuns = await handleAdminRunsRoute({
+      method: request.method,
+      pathname: path,
+      searchParams: url.searchParams,
+      context: session.requestContext,
+      application: current.adminRunsApplication,
+    });
+    if (adminRuns) {
+      return json(
+        current.config,
+        correlationId,
+        adminRuns.body,
+        adminRuns.status,
+      );
+    }
+    const adminAudit = await handleAdminAuditRoute({
+      method: request.method,
+      pathname: path,
+      searchParams: url.searchParams,
+      context: session.requestContext,
+      application: current.adminAuditApplication,
+    });
+    if (adminAudit) {
+      return json(
+        current.config,
+        correlationId,
+        adminAudit.body,
+        adminAudit.status,
+        adminAudit.headers,
+      );
+    }
+    const adminUnprojected = await handleAdminUnprojectedRoute({
+      method: request.method,
+      pathname: path,
+      body: readRequestBody,
+      context: session.requestContext,
+      application: current.adminUnprojectedApplication,
+    });
+    if (adminUnprojected) {
+      return json(
+        current.config,
+        correlationId,
+        adminUnprojected.body,
+        adminUnprojected.status,
+      );
+    }
+    const artifactDownload = await handleArtifactDownloadRoute({
+      method: request.method,
+      pathname: path,
+      artifactToken: request.headers.get("mb-artifact-token"),
+      context: session.requestContext,
+      application: current.artifactDownloadApplication,
+    });
+    if (artifactDownload) {
+      return new Response(Uint8Array.from(artifactDownload.bytes).buffer, {
+        status: artifactDownload.status,
+        headers: {
+          ...artifactDownload.headers,
+          "MB-Correlation-Id": correlationId,
+        },
+      });
+    }
+    const consultant = await handleConsultantRoute({
+      method: request.method,
+      pathname: path,
+      context: session.requestContext,
+      application: current.consultantResultApplication,
+    });
+    if (consultant) {
+      return json(
+        current.config,
+        correlationId,
+        consultant.body,
+        consultant.status,
+        consultant.headers,
+      );
     }
     const standardMutationIntent =
       session.requestContext.tier === "demo" &&

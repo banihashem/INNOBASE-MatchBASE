@@ -17,7 +17,11 @@ import type {
   EvidenceGraphV1,
   ResearchRoutePolicyV1,
 } from "@matchbase/contracts";
-import { inTransaction, type ConnectionPool } from "@matchbase/data";
+import {
+  consultantProjectionConfigFromEnvironment,
+  inTransaction,
+  type ConnectionPool,
+} from "@matchbase/data";
 import {
   createPinnedRobotsEvaluator,
   nodePinnedFetchTransport,
@@ -31,6 +35,7 @@ import {
   providerCredentialHandlePresent,
   type LiveResearchCredentialHandle,
 } from "./live-research-credential-policy.js";
+import { LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA } from "./live-research-pipeline-identity.js";
 
 export {
   LIVE_RESEARCH_CREDENTIAL_HANDLES,
@@ -439,29 +444,6 @@ export class EnvironmentProviderTransport implements ProviderTransport {
   }
 }
 
-const EVIDENCE_GRAPH_OUTPUT_SCHEMA = Object.freeze({
-  type: "object",
-  additionalProperties: false,
-  required: [
-    "schemaVersion",
-    "runId",
-    "candidates",
-    "claims",
-    "evidence",
-    "eligibleCandidateIds",
-    "gateEvaluationCompletedAt",
-  ],
-  properties: {
-    schemaVersion: { const: "evidence-graph.v1" },
-    runId: { type: "string" },
-    candidates: { type: "array" },
-    claims: { type: "array" },
-    evidence: { type: "array" },
-    eligibleCandidateIds: { type: "array", items: { type: "string" } },
-    gateEvaluationCompletedAt: { type: "string" },
-  },
-});
-
 export async function createEnvironmentLiveResearchDispatcher(options: {
   pool: ConnectionPool;
 }): Promise<QualifiedLiveResearchWorkerDispatcher | null> {
@@ -507,10 +489,13 @@ export async function createEnvironmentLiveResearchDispatcher(options: {
     resolver: resolvePublicDns,
     transport: nodePinnedFetchTransport,
   });
+  const consultantProjectionConfig = consultantProjectionConfigFromEnvironment(
+    process.env,
+  );
   return new QualifiedLiveResearchWorkerDispatcher({
     pool: options.pool,
     policy,
-    outputSchema: EVIDENCE_GRAPH_OUTPUT_SCHEMA,
+    outputSchema: LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA,
     serviceFactory: (work: QualifiedLiveWorkItem, policyId: string) =>
       new LiveResearchExecutionService({
         pool: options.pool,
@@ -530,6 +515,7 @@ export async function createEnvironmentLiveResearchDispatcher(options: {
           environment: policy.environment,
         }),
         validateOutput: (body) => body as EvidenceGraphV1,
+        consultantProjectionConfig,
       }),
   });
 }

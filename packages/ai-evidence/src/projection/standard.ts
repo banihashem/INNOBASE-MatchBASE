@@ -3,10 +3,16 @@ import type {
   StandardEvidenceGraphV1,
   StandardEvidenceItemV1,
   StandardEvidencedValueProjectionV1,
+  StandardHardConstraintV1,
   StandardResultProjectionV1,
+  StandardScarcityAnalysisProjectionV1,
   StandardVerificationStatus,
 } from "@matchbase/contracts";
 import { STANDARD_DISCLOSURE_PROJECTION_VERSION } from "@matchbase/contracts";
+import {
+  buildCompleteResultFoundation,
+  type CompleteResultFoundationV1,
+} from "../complete-result/foundation.js";
 import {
   STANDARD_EVIDENCE_VOLATILITY_POLICY,
   type EvidenceVolatilityPolicyV1,
@@ -123,8 +129,124 @@ function projectCitation(
 
 export interface StandardProjectionContext {
   now: Date;
+  runBoundCanonicalHardConstraints: readonly StandardHardConstraintV1[];
+  allowLegacyEmptyScarcityLedger?: boolean;
   volatilityPolicy?: EvidenceVolatilityPolicyV1;
   onSecurityEvent?: (event: StandardPiiSecurityEvent) => void;
+}
+
+function buildScarcityAnalysis(
+  graph: StandardEvidenceGraphV1,
+  hardConstraints: readonly StandardHardConstraintV1[],
+  outcome: StandardResultProjectionV1["outcome"],
+  allowLegacyEmptyScarcityLedger: boolean,
+): StandardScarcityAnalysisProjectionV1 {
+  const constraintsById = new Map<string, StandardHardConstraintV1>();
+  for (const constraint of hardConstraints) {
+    if (
+      !constraint.constraint_id ||
+      constraintsById.has(constraint.constraint_id)
+    )
+      throw new Error(
+        "Run-bound canonical hard constraints require unique identifiers.",
+      );
+    constraintsById.set(constraint.constraint_id, constraint);
+  }
+
+  const eligible = new Set(graph.eligible_candidate_ids);
+  const eliminatedCountByConstraintId = new Map<string, number>();
+  let candidatesEliminatedByMandatoryConstraints = 0;
+  for (const candidate of graph.candidates) {
+    const uniqueFailures = new Set(candidate.failed_constraint_ids);
+    if (uniqueFailures.size !== candidate.failed_constraint_ids.length)
+      throw new Error(
+        "Candidate failed constraint identifiers must be unique.",
+      );
+    if (candidate.mandatory_constraints_satisfied) {
+      if (uniqueFailures.size > 0)
+        throw new Error(
+          "A mandatory-constraint-satisfied candidate cannot report failures.",
+        );
+      continue;
+    }
+    if (eligible.has(candidate.candidate_id) || uniqueFailures.size === 0)
+      throw new Error(
+        "A mandatory-constraint elimination requires enumerated failures.",
+      );
+    candidatesEliminatedByMandatoryConstraints += 1;
+    for (const constraintId of uniqueFailures) {
+      if (!constraintsById.has(constraintId))
+        throw new Error(
+          "Candidate failure is not bound to the canonical hard constraints.",
+        );
+      eliminatedCountByConstraintId.set(
+        constraintId,
+        (eliminatedCountByConstraintId.get(constraintId) ?? 0) + 1,
+      );
+    }
+  }
+
+  const mandatoryGate = graph.gate_evaluations.find(
+    (gate) => gate.gate_id === "mandatory_constraints",
+  );
+  if (
+    (mandatoryGate?.eliminated_count ?? 0) !==
+      candidatesEliminatedByMandatoryConstraints &&
+    !allowLegacyEmptyScarcityLedger
+  )
+    throw new Error(
+      "Mandatory gate count does not match enumerated candidate failures.",
+    );
+
+  const targetLabel = (constraint: StandardHardConstraintV1): string => {
+    const target = constraint.target;
+    if (target.value_state !== "provided") return target.value_state;
+    return `${target.value}${target.unit === undefined ? "" : ` ${target.unit}`}`;
+  };
+  const label = (constraint: StandardHardConstraintV1): string =>
+    `${constraint.field_id} ${constraint.operator} ${targetLabel(constraint)}`;
+  const reducingConstraints = hardConstraints
+    .filter((constraint) =>
+      eliminatedCountByConstraintId.has(constraint.constraint_id),
+    )
+    .map((constraint) => ({
+      constraint_id: constraint.constraint_id,
+      field_id: constraint.field_id,
+      label: label(constraint),
+      eliminated_count: eliminatedCountByConstraintId.get(
+        constraint.constraint_id,
+      )!,
+    }));
+  const permittedRelaxations = hardConstraints
+    .filter(
+      (constraint) =>
+        eliminatedCountByConstraintId.has(constraint.constraint_id) &&
+        constraint.relaxability === "relaxable",
+    )
+    .map((constraint) => {
+      if (constraint.relaxability !== "relaxable")
+        throw new Error("Permitted relaxation lost its canonical marker.");
+      return {
+        constraint_id: constraint.constraint_id,
+        field_id: constraint.field_id,
+        label: label(constraint),
+        direction: constraint.direction,
+        tolerance: constraint.tolerance,
+      };
+    });
+
+  return {
+    reducing_constraints: reducingConstraints,
+    unmet_mandatory_constraints:
+      outcome === "no_responsible_match"
+        ? reducingConstraints.map(({ constraint_id, field_id, label }) => ({
+            constraint_id,
+            field_id,
+            label,
+          }))
+        : [],
+    permitted_relaxations: permittedRelaxations,
+  };
 }
 
 function buildStandardResultProjection(
@@ -332,6 +454,12 @@ function buildStandardResultProjection(
       label: gate.label,
       eliminated_count: gate.eliminated_count,
     })),
+    scarcity_analysis: buildScarcityAnalysis(
+      graph,
+      context.runBoundCanonicalHardConstraints,
+      outcome,
+      context.allowLegacyEmptyScarcityLedger ?? false,
+    ),
     limitations: {
       unknown_count: graph.unknown_count,
       not_asked_count: graph.not_asked_count,
@@ -357,10 +485,11 @@ function buildStandardResultProjection(
 export interface PreparedStandardRelease {
   projection: StandardResultProjectionV1;
   persistence_graph: StandardEvidenceGraphV1;
+  persistence_foundation: CompleteResultFoundationV1;
   security_events: StandardPiiSecurityEvent[];
 }
 
-export function prepareStandardRelease(
+export function prepareStandardCompleteResultForPersistence(
   graph: StandardEvidenceGraphV1,
   context: StandardProjectionContext,
 ): PreparedStandardRelease {
@@ -372,15 +501,16 @@ export function prepareStandardRelease(
   return {
     projection,
     persistence_graph: prepared.graph,
+    persistence_foundation: buildCompleteResultFoundation(prepared.graph),
     security_events: prepared.security_events,
   };
 }
 
-export function projectStandardResult(
+export function buildStandardProjection(
   graph: StandardEvidenceGraphV1,
   context: StandardProjectionContext,
 ): StandardResultProjectionV1 {
-  return prepareStandardRelease(graph, context).projection;
+  return prepareStandardCompleteResultForPersistence(graph, context).projection;
 }
 
 export function assertStandardProjectionEvidenceLinks(

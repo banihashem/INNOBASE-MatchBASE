@@ -87,14 +87,19 @@ test("renders the server-assigned qualified-live mode without provider topology"
   );
 });
 
-test("reports all three-part validation failures and focuses the summary", async () => {
+test("reports all three-part validation failures and focuses the first invalid field", async () => {
   render(<ProductFlow initialSession={session} />);
   fireEvent.click(
     screen.getByRole("button", { name: "Continue to English confirmation" }),
   );
   const summary = await screen.findByRole("alert");
-  expect(summary).toHaveFocus();
+  expect(summary).not.toHaveFocus();
   expect(screen.getAllByRole("listitem")).toHaveLength(3);
+  expect(screen.getByLabelText("What must be sourced?")).toHaveFocus();
+  for (const field of screen.getAllByRole("textbox")) {
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field.getAttribute("aria-describedby")).toMatch(/-error/u);
+  }
 });
 
 test("clears transient intake after canonicalization and renders only Demo projection fields", async () => {

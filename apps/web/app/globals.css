@@ -129,7 +129,7 @@ next-route-announcer {
   min-width: 0;
 }
 
-.standard-section > h2,
+.standard-section > h1,
 .standard-title-row h1 {
   max-width: none;
   margin: 0 0 1rem;
@@ -157,8 +157,11 @@ next-route-announcer {
 .standard-form select,
 .standard-form input,
 .standard-form textarea,
-.canonical-field input {
+.canonical-field input,
+.canonical-field select {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 2.8rem;
   padding: 0.65rem 0.75rem;
   color: var(--ink);
@@ -311,8 +314,11 @@ next-route-announcer {
 }
 
 .standard-form legend {
+  max-width: 100%;
   padding: 0 0.5rem;
   font-weight: 850;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .form-actions {
@@ -332,6 +338,7 @@ next-route-announcer {
   margin: 2rem 0 1rem;
   overflow: hidden;
   background: var(--line);
+  border: 2px solid var(--forest);
   border-radius: 99rem;
 }
 
@@ -348,6 +355,22 @@ next-route-announcer {
 
 .candidate-card {
   min-width: 0;
+}
+
+.candidate-card summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  padding-block: 0.5rem;
+  cursor: pointer;
+}
+
+.standard-results details > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  padding-block: 0.5rem;
+  cursor: pointer;
 }
 
 .candidate-heading {
@@ -423,6 +446,22 @@ next-route-announcer {
   .driver-grid,
   .result-facts {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .standard-field-grid,
+  .canonical-grid {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .standard-field,
+  .canonical-field,
+  .canonical-card,
+  .standard-empty,
+  .standard-form fieldset {
+    min-width: 0;
+    max-width: 100%;
+    padding: 16px;
   }
 
   .standard-history-card {
@@ -631,8 +670,9 @@ h3 {
 }
 
 .text-button {
-  min-height: auto;
-  padding: 0;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  padding: 0 0.15rem;
   color: inherit;
   background: transparent;
   text-decoration: underline;
@@ -643,6 +683,12 @@ h3 {
 .form-actions p {
   color: var(--muted);
   font-size: 0.88rem;
+}
+
+.field-error {
+  margin: 0.45rem 0 0;
+  color: var(--danger);
+  font-weight: 700;
 }
 
 .environment-disclosure {
@@ -719,16 +765,18 @@ h3 {
 
 .stepper {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-bottom: 2rem;
   border-bottom: 1px solid var(--line);
 }
 
 .stepper span {
+  min-width: 0;
   padding: 0.8rem 0;
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 750;
+  overflow-wrap: anywhere;
 }
 
 .stepper [aria-current="step"] {
@@ -765,10 +813,13 @@ fieldset {
 }
 
 legend {
+  max-width: 100%;
   padding: 0 0.5rem;
   color: var(--forest);
   font-family: Georgia, serif;
   font-size: 1.25rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 legend span {
@@ -822,8 +873,7 @@ textarea:disabled {
 
 .validation-summary,
 .error-summary,
-.contradiction,
-.scarcity-note {
+.contradiction {
   padding: 1rem 1.25rem;
   border-left: 5px solid var(--danger);
   background: #fff0ed;
@@ -889,6 +939,8 @@ progress {
   width: min(32rem, 100%);
   height: 1rem;
   accent-color: var(--forest);
+  border: 2px solid var(--forest);
+  border-radius: 99rem;
 }
 
 .indeterminate {
@@ -897,6 +949,7 @@ progress {
   margin: 2rem auto;
   overflow: hidden;
   background: var(--line);
+  border: 2px solid var(--forest);
   border-radius: 99rem;
 }
 
@@ -917,8 +970,24 @@ progress {
 
 .scarcity-note {
   margin-bottom: 2rem;
-  border-color: #b28400;
-  background: #fff6d4;
+  padding: 1rem 1.25rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--forest);
+}
+
+.scarcity-summary {
+  margin: 1rem 0 1.5rem;
+  padding: 1rem 1.25rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--forest);
+}
+
+.scarcity-summary p {
+  margin-bottom: 0;
 }
 
 .results li {
@@ -976,7 +1045,7 @@ footer {
   .site-header,
   .main,
   footer {
-    width: min(100% - 2rem, 1180px);
+    width: min(calc(100% - 16px), 1180px);
   }
 
   .site-header {
@@ -993,7 +1062,21 @@ footer {
 
   .landing,
   .workspace-summary {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing > *,
+  .workflow-panel > *,
+  .intake-form,
+  .form-intro,
+  .form-actions,
+  .form-intro > *,
+  .field-list > *,
+  fieldset,
+  fieldset > * {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .landing {
@@ -1001,19 +1084,28 @@ footer {
   }
 
   .principles {
-    box-shadow: 0.5rem 0.5rem 0 var(--lime);
+    padding: 24px;
+    box-shadow: 8px 8px 0 var(--lime);
+  }
+
+  .principles ul {
+    padding-left: 24px;
   }
 
   .workspace-metrics,
   .field-list,
   .candidate-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .form-intro,
   .form-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  fieldset {
+    padding: 16px;
   }
 
   .primary-action,
@@ -1039,4 +1131,8 @@ footer {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+.break-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }

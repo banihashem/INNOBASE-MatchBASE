@@ -7,7 +7,13 @@ import test from "node:test";
 
 import { StandardWorkspaceApplication } from "../../../packages/application/dist/index.js";
 import {
+  CONSULTANT_PROJECTION_MIGRATION_ID,
   LIVE_RESEARCH_MIGRATION_ID,
+  LIVE_PIPELINE_IDENTITY_MIGRATION_ID,
+  P4_AUDIT_ARTIFACT_FOUNDATION_MIGRATION_ID,
+  P4_GOOGLE_RISC_RECEIVER_MIGRATION_ID,
+  P4_GOOGLE_RISC_RETENTION_MIGRATION_ID,
+  SECURITY_ALERT_MIGRATION_ID,
   STANDARD_WORKSPACE_MIGRATION_ID,
   admitRunWithinQuota,
   createPool,
@@ -339,6 +345,27 @@ postgresTest(
     try {
       await migrateDown(pool).catch(() => false);
       await migrateUp(pool);
+      assert.equal(
+        await migrateDownLatest(pool),
+        P4_GOOGLE_RISC_RETENTION_MIGRATION_ID,
+      );
+      assert.equal(
+        await migrateDownLatest(pool),
+        P4_GOOGLE_RISC_RECEIVER_MIGRATION_ID,
+      );
+      assert.equal(
+        await migrateDownLatest(pool),
+        P4_AUDIT_ARTIFACT_FOUNDATION_MIGRATION_ID,
+      );
+      assert.equal(
+        await migrateDownLatest(pool),
+        CONSULTANT_PROJECTION_MIGRATION_ID,
+      );
+      assert.equal(
+        await migrateDownLatest(pool),
+        LIVE_PIPELINE_IDENTITY_MIGRATION_ID,
+      );
+      assert.equal(await migrateDownLatest(pool), SECURITY_ALERT_MIGRATION_ID);
       assert.equal(await migrateDownLatest(pool), LIVE_RESEARCH_MIGRATION_ID);
       assert.equal(
         await migrateDownLatest(pool),

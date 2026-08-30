@@ -1,0 +1,123 @@
+{
+  "schemaVersion": "matchbase.p4-staging-gate-b-cloud-state/v1",
+  "recordedAt": "2026-08-30T15:51:55Z",
+  "environment": "staging",
+  "projectId": "innobase-matchbase-stg",
+  "dataClass": "SYNTHETIC_ONLY",
+  "git": {
+    "head": "bfe1e64b903599f0b11b2168ee8119cb4d299d87",
+    "originMainEqual": true,
+    "githubRemoteMainEqual": true,
+    "publicationAuthorization": "AUTHORIZED_FOR_ONE_GOVERNED_COMMIT_TO_ORIGIN_MAIN",
+    "currentRemediationCommitted": false,
+    "currentRemediationPushed": false,
+    "stagedPathCount": 0
+  },
+  "cloud": {
+    "billingBudgetUsd": 100,
+    "billingBudgetType": "alert_only",
+    "billingThresholds": [0.5, 0.9, 1.0],
+    "artifactRegistry": {
+      "region": "me-central1",
+      "immutableTags": true,
+      "scanning": "SCANNING_ACTIVE",
+      "imageCount": 0
+    },
+    "objectStorage": {
+      "publicAccessPrevention": "enforced",
+      "uniformBucketLevelAccess": true,
+      "versioning": true,
+      "softDeleteSeconds": 2592000,
+      "runtimeIamExact": true
+    },
+    "cloudSql": {
+      "engine": "POSTGRES_18",
+      "region": "me-central1",
+      "availability": "REGIONAL",
+      "pointInTimeRecovery": true,
+      "deletionProtection": true,
+      "connectorEnforcement": "REQUIRED",
+      "authorizedNetworkCount": 0,
+      "migrationCount": 9,
+      "latestMigration": "0009_p4_google_risc_retention"
+    },
+    "runtimeDeployment": {
+      "cloudRunServiceCount": 0,
+      "loadBalancerCount": 0,
+      "immutableImageCount": 0
+    },
+    "googleOAuth": {
+      "platformConfiguration": "CONFIGURED",
+      "audience": "EXTERNAL_STAGING",
+      "applicationName": "MatchBASE Staging",
+      "supportEmailConfigured": true,
+      "webClient": "CONFIGURED",
+      "authorizedJavascriptOrigin": "https://matchbase-staging.innobase.app",
+      "authorizedRedirectUri": "https://matchbase-staging.innobase.app/auth/google/callback",
+      "clientIdSecretManagerBinding": "matchbase-google-client-id:1",
+      "clientSecretManagerBinding": "matchbase-google-client-secret:1",
+      "runtimeSecretAccessor": "matchbase-web@innobase-matchbase-stg.iam.gserviceaccount.com",
+      "credentialValuesRecorded": false
+    },
+    "cloudflareEdge": {
+      "zone": "innobase.app",
+      "authenticatedZoneAccess": true,
+      "stagingDnsRecordPresent": false,
+      "originAdmissionTransmission": "WITHHELD_FAIL_CLOSED",
+      "mutationReason": "No immutable staging image, Cloud Run service, external ALB, or static IPv4 target exists. Creating DNS or an origin-admission edge rule without that target would be invalid."
+    }
+  },
+  "qualification": {
+    "terminalDisposition": "BLOCKED_PROVIDER_CAPABILITY_CONTRADICTION",
+    "providerModelPosts": 3,
+    "credentialStatusGets": 1,
+    "externalHttpCalls": 6,
+    "costUsd": 0.0334865,
+    "remainingProviderCalls": 47,
+    "remainingCostUsd": 99.9665135,
+    "directGeminiServedIdentityVerified": true,
+    "directGeminiSearchQueryCount": 1,
+    "openRouterModelHttpStatus": 402,
+    "openRouterCredentialStatus": "UNPAID_CREDENTIAL",
+    "stagingPolicyGenerated": false,
+    "productionPolicyMutated": false,
+    "terminalEvidencePath": "evidence/slice3/staging-live-qualification-terminal.v3.json",
+    "terminalEvidenceSha256": "D9DC0949D2DE08712F78C171012CEC87DFC13E984CE99514B83D5F7DA30113CE"
+  },
+  "validation": {
+    "build": "PASS",
+    "test": "PASS",
+    "browser": {
+      "result": "PASS",
+      "passed": 42,
+      "failed": 0
+    },
+    "runtimePrivacy": {
+      "result": "PASS",
+      "regularArtifacts": 7519,
+      "symlinksNotFollowed": 2,
+      "canaries": 4,
+      "findings": 0
+    },
+    "lint": "PASS",
+    "governance": "PASS",
+    "boundary": "PASS",
+    "secretScan": "PASS",
+    "secretlint": "PASS",
+    "secretHistory": "PASS",
+    "dependencyPolicy": "PASS",
+    "dependencyAudit": "PASS",
+    "licensePolicy": "PASS",
+    "protectedBaseline": "PASS",
+    "historicalSlice3Candidate": "EXPECTED_IMMUTABLE_GOVERNANCE_GATES_MISMATCH"
+  },
+  "disposition": "STAGING_FOUNDATION_READY_RELEASE_BLOCKED_EXTERNAL",
+  "releaseBlockers": [
+    "OPENROUTER_CONFIGURED_CREDENTIAL_IS_UNPAID",
+    "STAGING_ROUTE_POLICY_NOT_QUALIFIED",
+    "IMMUTABLE_CONTAINER_IMAGE_ABSENT",
+    "CLOUD_RUN_AND_EDGE_NOT_DEPLOYED",
+    "CLOUDFLARE_DNS_AND_ORIGIN_ADMISSION_BLOCKED_UNTIL_EXTERNAL_ALB_EXISTS",
+    "CURRENT_REMEDIATION_NOT_COMMITTED_OR_PUSHED"
+  ]
+}

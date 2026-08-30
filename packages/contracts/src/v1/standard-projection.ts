@@ -21,9 +21,10 @@ export const STANDARD_REQUEST_DETAIL_SCHEMA_VERSION =
   "standard-request-detail.v1" as const;
 export const STANDARD_REQUEST_VERSION_HISTORY_SCHEMA_VERSION =
   "standard-request-version-history.v1" as const;
-// Version 3 is the first release whose body, cursor, registry, serving ledger,
-// and audit identities are defined as one immutable disclosure contract.
-export const STANDARD_DISCLOSURE_PROJECTION_VERSION = 3 as const;
+// Version 4 adds the closed, deterministic scarcity-analysis disclosure while
+// preserving the immutable body, cursor, registry, serving-ledger, and audit
+// identity boundary introduced by version 3.
+export const STANDARD_DISCLOSURE_PROJECTION_VERSION = 4 as const;
 
 export interface StandardCitationProjectionV1 {
   evidence_id: string;
@@ -36,7 +37,7 @@ export interface StandardCitationProjectionV1 {
   access_state: "available" | "blocked" | "unreachable";
   extract: string;
   content_sha256: string;
-  provenance: "synthetic_fixture" | "repository_fixture";
+  provenance: "synthetic_fixture" | "repository_fixture" | "live_secure_fetch";
 }
 
 export type StandardCitationV1 = StandardCitationProjectionV1 &
@@ -117,6 +118,27 @@ export interface StandardLimitationsProjectionV1 {
   advisory_boundary: string;
 }
 
+export interface StandardScarcityAnalysisProjectionV1 {
+  reducing_constraints: Array<{
+    constraint_id: string;
+    field_id: string;
+    label: string;
+    eliminated_count: number;
+  }>;
+  unmet_mandatory_constraints: Array<{
+    constraint_id: string;
+    field_id: string;
+    label: string;
+  }>;
+  permitted_relaxations: Array<{
+    constraint_id: string;
+    field_id: string;
+    label: string;
+    direction: "higher_is_acceptable" | "lower_is_acceptable" | "exact";
+    tolerance: string;
+  }>;
+}
+
 export interface StandardResultProjectionV1 {
   schema_version: typeof STANDARD_RESULT_PROJECTION_SCHEMA_VERSION;
   run_id: string;
@@ -128,6 +150,7 @@ export interface StandardResultProjectionV1 {
     label: string;
     eliminated_count: number;
   }>;
+  scarcity_analysis: StandardScarcityAnalysisProjectionV1;
   limitations: StandardLimitationsProjectionV1;
   synthetic_warning: string;
   projection_version: typeof STANDARD_DISCLOSURE_PROJECTION_VERSION;

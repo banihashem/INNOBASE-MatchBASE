@@ -14,6 +14,8 @@ import {
 } from "jose";
 import type { AdminSubRole, PersistedTier } from "@matchbase/contracts";
 
+export * from "./risc";
+
 export {
   ADMIN_SUB_ROLES,
   PERSISTED_TIERS,

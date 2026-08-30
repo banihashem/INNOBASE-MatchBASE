@@ -29,14 +29,19 @@ export function StandardWorkspace({
   const [runId, setRunId] = useState<string | null>(null);
   const [result, setResult] = useState<StandardResultProjectionV1 | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [workspaceAnnouncement, setWorkspaceAnnouncement] = useState("");
   const [versionHistory, setVersionHistory] = useState<
     StandardRequestVersionSummaryV1[]
   >([]);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
-  function transition(next: StandardScreen) {
+  function transition(next: StandardScreen, moveFocus = true) {
     setScreen(next);
-    requestAnimationFrame(() => headingRef.current?.focus());
+    if (moveFocus)
+      requestAnimationFrame(() =>
+        mainRef.current?.querySelector("h1")?.focus(),
+      );
   }
 
   async function refreshSession() {
@@ -90,14 +95,21 @@ export function StandardWorkspace({
           </button>
         </nav>
         <div className="identity">
-          <span>{session.display_name}</span>
+          <span>
+            <bdi dir="auto">{session.display_name}</bdi>
+          </span>
           <span className="tier-badge">Standard</span>
         </div>
       </header>
-      <main className="main standard-main" id="main-content">
-        <h1 className="sr-only" ref={headingRef} tabIndex={-1}>
-          Standard workspace: {screen}
-        </h1>
+      <main className="main standard-main" id="main-content" ref={mainRef}>
+        <p
+          className="sr-only"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {workspaceAnnouncement}
+        </p>
         <div className="standard-quota" aria-label="Weekly research capacity">
           <span>
             <strong>{session.quota.remaining ?? 0}</strong> of{" "}
@@ -164,24 +176,26 @@ export function StandardWorkspace({
             onResult={(value) => {
               setResult(value);
               void refreshSession();
-              transition("result");
+              transition("result", false);
             }}
             onTerminal={() => {
               void refreshSession();
               transition("requests");
             }}
+            onAnnouncement={setWorkspaceAnnouncement}
           />
         ) : null}
         {screen === "result" && result ? (
           <StandardResult
             result={result}
             onBack={() => transition("requests")}
+            headingRef={headingRef}
           />
         ) : null}
         {screen === "help" ? (
           <section className="standard-section">
             <p className="eyebrow">Help</p>
-            <h2>How this synthetic workspace behaves</h2>
+            <h1 tabIndex={-1}>How this synthetic workspace behaves</h1>
             <p>
               Canonical English is confirmed before research. Scores are
               deterministic compatibility measures, not probabilities or

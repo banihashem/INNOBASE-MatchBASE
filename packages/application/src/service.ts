@@ -6,7 +6,7 @@ import {
 } from "node:crypto";
 import {
   buildSyntheticEvidenceGraph,
-  projectDemoResult,
+  projectStoredResult,
   runCanonicalizationWithinBudget,
   type CanonicalizationCapability,
   type CapabilityInvocationTelemetry,
@@ -14,19 +14,24 @@ import {
 import type {
   CanonicalFieldV1,
   CanonicalRequestV1,
+  CompleteResultFoundationV2,
   EvidenceGraphV1,
 } from "@matchbase/contracts";
 import {
   acquireExecutionLease,
   admitRunWithinQuota,
   appendAuditEvent,
+  bindConsultantProjectionPolicyAtResultProduction,
+  DEFAULT_CONSULTANT_PROJECTION_CONFIG,
   inTransaction,
   releaseExecutionLease,
   ROLLING_QUOTA_LIMITS,
+  type ConsultantProjectionConfigRelease,
   type ConnectionPool,
   type TransactionClient,
 } from "@matchbase/data";
 import { assertSlice1EndpointAuthorized } from "./authorization.js";
+import { assertStoredCompleteResultIntegrity } from "./standard-workspace.js";
 import {
   ApplicationFault,
   TERMINAL_RUN_STATES,
@@ -40,6 +45,10 @@ import {
   syntheticResearchAdmission,
   type ServerOwnedResearchAdmission,
 } from "./research-admission.js";
+import {
+  guardFreshRunOutputRead,
+  outputRestrictedFault,
+} from "./result-output-guard.js";
 
 function sha256(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
@@ -96,6 +105,7 @@ interface ServiceOptions {
   privacyKey: Uint8Array;
   canonicalizationBudgetMs?: number;
   researchAdmission?: ServerOwnedResearchAdmission;
+  consultantProjectionConfig?: ConsultantProjectionConfigRelease;
 }
 
 export class MatchBaseApplication {
@@ -104,6 +114,7 @@ export class MatchBaseApplication {
   private readonly canonicalizationBudgetMs: number;
   private readonly privacyKey: Buffer;
   private readonly researchAdmission: ServerOwnedResearchAdmission;
+  private readonly consultantProjectionConfig: ConsultantProjectionConfigRelease;
 
   constructor(options: ServiceOptions) {
     this.pool = options.pool;
@@ -116,6 +127,9 @@ export class MatchBaseApplication {
     this.canonicalizationBudgetMs = options.canonicalizationBudgetMs ?? 20_000;
     this.researchAdmission =
       options.researchAdmission ?? syntheticResearchAdmission;
+    this.consultantProjectionConfig =
+      options.consultantProjectionConfig ??
+      DEFAULT_CONSULTANT_PROJECTION_CONFIG;
   }
 
   async readiness(): Promise<boolean> {
@@ -158,7 +172,9 @@ export class MatchBaseApplication {
     );
     const execution = await this.pool.query<{ active: number }>(
       `SELECT count(*)::int AS active FROM execution_lease
-        WHERE run_id IS NOT NULL AND expires_at > clock_timestamp()`,
+        WHERE run_id IS NOT NULL
+          AND released_at IS NULL
+          AND expires_at > clock_timestamp()`,
     );
     const researchMode = this.researchAdmission.decide(context.tier);
     return {
@@ -800,23 +816,36 @@ export class MatchBaseApplication {
     runId: string,
   ): Promise<RunStatus> {
     assertSlice1EndpointAuthorized(context, "GET /api/v1/runs/:runId");
-    const result = await this.pool.query<{
-      run_id: string;
-      state: string;
-      request_id: string;
-      version: number;
-      queued_at: Date;
-      started_at: Date | null;
-      completed_at: Date | null;
-    }>(
-      `SELECT rr.run_id, rr.state, v.request_id, v.version, rr.queued_at, rr.started_at, rr.completed_at
+    const guarded = await inTransaction(this.pool, async (client) => {
+      const guard = await guardFreshRunOutputRead(
+        client,
+        context,
+        runId,
+        "run.status",
+      );
+      if (guard.kind !== "allowed") return guard;
+      const result = await client.query<{
+        run_id: string;
+        request_id: string;
+        version: number;
+        queued_at: Date;
+        started_at: Date | null;
+        completed_at: Date | null;
+      }>(
+        `SELECT rr.run_id, v.request_id, v.version, rr.queued_at, rr.started_at, rr.completed_at
          FROM research_run rr
          JOIN canonical_request_version v USING (canonical_request_version_id)
         WHERE rr.run_id = $1 AND rr.account_id = $2 AND rr.requested_by_user_id = $3`,
-      [runId, context.accountId, context.userId],
-    );
-    const row = result.rows[0];
-    if (!row) throw this.notVisible();
+        [runId, context.accountId, context.userId],
+      );
+      const row = result.rows[0];
+      return row
+        ? { kind: "allowed" as const, row: { ...row, state: guard.state } }
+        : { kind: "not_visible" as const };
+    });
+    if (guarded.kind === "output_restricted") throw outputRestrictedFault();
+    if (guarded.kind === "not_visible") throw this.notVisible();
+    const row = guarded.row;
     const terminal = TERMINAL_RUN_STATES.has(row.state);
     const researching = ["researching", "scoring"].includes(row.state);
     const phase =
@@ -881,21 +910,36 @@ export class MatchBaseApplication {
     runId: string,
   ): Promise<ResultDisclosure> {
     assertSlice1EndpointAuthorized(context, "GET /api/v1/runs/:runId/result");
-    return inTransaction(this.pool, async (client) => {
+    const disclosure = await inTransaction(this.pool, async (client) => {
+      const guard = await guardFreshRunOutputRead(
+        client,
+        context,
+        runId,
+        "run.result",
+      );
+      if (guard.kind !== "allowed") return guard;
       const result = await client.query<{
-        state: string;
-        complete_result_document: EvidenceGraphV1 | null;
+        complete_result_document:
+          EvidenceGraphV1 | CompleteResultFoundationV2 | null;
+        result_sha256: Buffer | null;
         research_mode: "synthetic_reference" | "qualified_live_research";
+        canonical_document: { fields?: unknown };
       }>(
-        `SELECT rr.state, rr.research_mode, rs.complete_result_document
-           FROM research_run rr LEFT JOIN run_result rs USING (run_id)
+        `SELECT rr.research_mode, rs.complete_result_document,rs.result_sha256,
+                v.canonical_document
+           FROM research_run rr
+           JOIN canonical_request_version v
+             ON v.account_id=rr.account_id
+            AND v.canonical_request_version_id=rr.canonical_request_version_id
+           LEFT JOIN run_result rs
+             ON rs.account_id=rr.account_id AND rs.run_id=rr.run_id
           WHERE rr.run_id = $1 AND rr.account_id = $2 AND rr.requested_by_user_id = $3 FOR SHARE OF rr`,
         [runId, context.accountId, context.userId],
       );
       const row = result.rows[0];
       if (!row) throw this.notVisible();
       if (
-        !["complete", "no_responsible_match"].includes(row.state) ||
+        !["complete", "no_responsible_match"].includes(guard.state) ||
         !row.complete_result_document
       ) {
         throw new ApplicationFault(
@@ -906,33 +950,54 @@ export class MatchBaseApplication {
           true,
         );
       }
-      const projected = projectDemoResult(row.complete_result_document);
-      const projection =
-        row.research_mode === "qualified_live_research"
-          ? {
-              ...projected,
-              limitations_notice:
-                "Qualified live research used server-approved routes and source-bound external evidence. This remains advisory and is not supplier verification, a compliance conclusion, or a quotation.",
-            }
-          : projected;
-      const fields = [
-        "run_id",
-        "outcome",
-        "scarcity",
-        "candidates",
-        "unmet_mandatory_constraints",
-        "limitations_notice",
-        "projection_version",
-      ];
+      const canonicalFields = Array.isArray(row.canonical_document.fields)
+        ? row.canonical_document.fields
+        : [];
+      if (
+        "schema_version" in row.complete_result_document &&
+        row.complete_result_document.schema_version ===
+          "complete-result-foundation.v2"
+      )
+        assertStoredCompleteResultIntegrity(
+          row.complete_result_document,
+          row.result_sha256,
+          runId,
+        );
+      const runBoundMandatoryConstraints = canonicalFields.flatMap((field) => {
+        if (
+          !field ||
+          typeof field !== "object" ||
+          !("fieldId" in field) ||
+          field.fieldId !== "mandatory_constraints" ||
+          !("valueState" in field) ||
+          field.valueState !== "provided" ||
+          !("canonicalValue" in field) ||
+          typeof field.canonicalValue !== "string"
+        )
+          return [];
+        return [field.canonicalValue];
+      });
+      const projected = projectStoredResult({
+        tier: "demo",
+        completeResult: row.complete_result_document,
+        runBoundMandatoryConstraints,
+        researchMode: row.research_mode,
+      });
+      const projection = projected.body;
+      const fields = [...projected.metadata.fieldsReleased];
       const projectionVersion = await client.query<{
         projection_version_id: string;
       }>(
         `INSERT INTO projection_version
            (projection_version_id, version, definition, content_sha256, released_at)
-         VALUES ($1,1,'{"tier":"demo","allowlist":"demo-projection.v1"}'::jsonb,$2,clock_timestamp())
+         VALUES ($1,$2,'{"tier":"demo","allowlist":"demo-projection.v1"}'::jsonb,$3,clock_timestamp())
          ON CONFLICT (version) DO UPDATE SET version = EXCLUDED.version
          RETURNING projection_version_id`,
-        [randomUUID(), sha256("demo-projection.v1")],
+        [
+          randomUUID(),
+          projected.metadata.projectionVersion,
+          sha256("demo-projection.v1"),
+        ],
       );
       const projectionVersionId =
         projectionVersion.rows[0]!.projection_version_id;
@@ -948,7 +1013,7 @@ export class MatchBaseApplication {
         fieldsReleased: fields,
         correlationId: context.correlationId,
         deploymentId: context.deploymentId,
-        detail: { projectionVersion: 1 },
+        detail: { projectionVersion: projected.metadata.projectionVersion },
       });
       await client.query(
         `INSERT INTO projection_serving
@@ -963,12 +1028,15 @@ export class MatchBaseApplication {
           runId,
           projectionVersionId,
           fields,
-          projection.candidates.length,
+          projected.metadata.itemCount,
           context.correlationId,
         ],
       );
-      return { body: projection, auditId };
+      return { kind: "allowed" as const, body: projection, auditId };
     });
+    if (disclosure.kind === "output_restricted") throw outputRestrictedFault();
+    if (disclosure.kind === "not_visible") throw this.notVisible();
+    return { body: disclosure.body, auditId: disclosure.auditId };
   }
 
   async cancelRun(
@@ -1235,6 +1303,11 @@ export class MatchBaseApplication {
           sha256(JSON.stringify(graph)),
         ],
       );
+      await bindConsultantProjectionPolicyAtResultProduction(client, {
+        accountId: context.accountId,
+        runId: graph.runId,
+        release: this.consultantProjectionConfig,
+      });
       for (const candidateId of graph.eligibleCandidateIds) {
         const rank = graph.eligibleCandidateIds.indexOf(candidateId) + 1;
         await client.query(

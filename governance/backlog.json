@@ -118,6 +118,36 @@
       "gateIds": ["S2-G0", "S2-G1", "S2-G2"],
       "deploymentId": "DEPLOY-S2-LOCAL",
       "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "TASK137-ISOLATED-LOCAL",
+      "slice": "SLICE-3",
+      "title": "TASK137 isolated-local synthetic qualification",
+      "status": "PASS",
+      "owner": "Role 3 and independent qualification agents",
+      "priority": "MUST",
+      "dependencies": ["S2-001"],
+      "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\TASK137_EXECUTION_STATUS_2026-08-25.md"
+      ]
+    },
+    {
+      "id": "P4-RC-FREEZE",
+      "slice": "P4",
+      "title": "P4 closure and isolated-local release-candidate freeze",
+      "status": "IN_PROGRESS",
+      "owner": "Role 3 and P4 discipline agents",
+      "priority": "MUST",
+      "dependencies": ["TASK137-ISOLATED-LOCAL"],
+      "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P4_RELEASE_CANDIDATE_EXECUTION_RECORD_2026-08-29.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P4_RELEASE_CANDIDATE_FREEZE_2026-08-29.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P4_GATE_B_PREFLIGHT_EVIDENCE_2026-08-29.md",
+        "evidence/p4/local-validation.json",
+        "evidence/p4/zero-defect-audit.json",
+        "C:\\INNOBASE\\MatchBASE\\02_Product_Research_and_Planning\\05_Cloud_Repository_Delivery\\DELIVERY_ROADMAP.md"
+      ],
+      "blocker": "BLOCKED_EXTERNAL: isolated-local closure passed; production release remains prohibited until a target is named, Gate B is executed and signed, OAuth is In production, target object storage is bound, and legal, accessibility and SME authorities approve their exact records."
     }
   ]
 }

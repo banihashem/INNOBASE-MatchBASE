@@ -1,3 +1,4 @@
+import type { ReactNode, RefObject } from "react";
 import type { StandardResultProjectionV1 } from "./types";
 
 const label = (value: string) => value.replaceAll("_", " ");
@@ -5,19 +6,41 @@ const label = (value: string) => value.replaceAll("_", " ");
 export function StandardResult({
   result,
   onBack,
+  headingRef,
+  disclosureCandidateLimit = 3,
+  eyebrow = "Standard result",
+  heading,
+  backLabel = "Return to requests",
+  contextBanner,
 }: {
-  result: StandardResultProjectionV1;
+  result: Omit<
+    StandardResultProjectionV1,
+    "schema_version" | "projection_version"
+  > & { schema_version: string; projection_version: number };
   onBack: () => void;
+  headingRef?: RefObject<HTMLHeadingElement | null>;
+  disclosureCandidateLimit?: number;
+  eyebrow?: string;
+  heading?: string;
+  backLabel?: string;
+  contextBanner?: ReactNode;
 }) {
-  if (result.candidates.length > 3) {
+  if (result.candidates.length > disclosureCandidateLimit) {
     return (
-      <section className="standard-section">
+      <section
+        className="standard-section"
+        aria-labelledby="result-refusal-heading"
+      >
+        <p className="eyebrow">Standard result refused</p>
+        <h1 id="result-refusal-heading" ref={headingRef} tabIndex={-1}>
+          Result disclosure refused
+        </h1>
         <div className="error-summary" role="alert">
           The server projection exceeded the Standard disclosure limit. No
           candidate data was rendered.
         </div>
         <button className="secondary-action" onClick={onBack}>
-          Return to requests
+          {backLabel}
         </button>
       </section>
     );
@@ -27,26 +50,28 @@ export function StandardResult({
       className="standard-section standard-results"
       aria-labelledby="results-heading"
     >
-      <p className="eyebrow">Standard result</p>
-      <h2 id="results-heading">
-        {result.outcome === "matched"
-          ? "Responsible candidate comparison"
-          : "No responsible match"}
-      </h2>
-      <p className="lede">
-        Compatibility scores are deterministic synthetic measures, not
-        probabilities or guarantees.
-      </p>
+      <p className="eyebrow">{eyebrow}</p>
+      <h1 id="results-heading" ref={headingRef} tabIndex={-1}>
+        {heading ??
+          (result.outcome === "matched"
+            ? "Responsible candidate comparison"
+            : "No responsible match")}
+      </h1>
+      {contextBanner}
       {result.scarcity !== "none" ? (
-        <div className="validation-summary" role="status">
+        <div className="scarcity-summary" role="status">
           <strong>
             {result.scarcity === "zero"
-              ? "No responsible candidate passed the hard gates."
-              : "Limited responsible candidate availability."}
+              ? "No candidate met the mandatory constraints for this request."
+              : `${result.candidates.length} ${result.candidates.length === 1 ? "candidate" : "candidates"} met all mandatory constraints. Fewer than three met them, so fewer than three are shown.`}
           </strong>
           <p>No padding or speculative candidate was added.</p>
         </div>
       ) : null}
+      <p className="lede">
+        Compatibility scores are deterministic synthetic measures, not
+        probabilities or guarantees.
+      </p>
       {result.candidates.length > 0 ? (
         <div
           className="standard-table-scroll"
@@ -63,7 +88,7 @@ export function StandardResult({
                 <th scope="col">Dimension</th>
                 {result.candidates.map((candidate) => (
                   <th scope="col" key={candidate.display_name}>
-                    {candidate.display_name}
+                    <bdi dir="auto">{candidate.display_name}</bdi>
                   </th>
                 ))}
               </tr>
@@ -99,12 +124,20 @@ export function StandardResult({
             <div className="candidate-heading">
               <div>
                 <p className="eyebrow">Candidate {index + 1}</p>
-                <h3>
-                  <bdi>{candidate.display_name}</bdi>
-                </h3>
+                <h2>
+                  <bdi dir="auto">{candidate.display_name}</bdi>
+                </h2>
                 <p>{candidate.country_code}</p>
               </div>
-              <div className="score-chip">
+              <div
+                className="score-chip"
+                role="meter"
+                aria-label={`${candidate.display_name} compatibility score`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={candidate.compatibility_score}
+                aria-valuetext={`${candidate.compatibility_score} of 100, ${label(candidate.fit_band)}`}
+              >
                 <strong>{candidate.compatibility_score}</strong>
                 <span> of 100</span>
               </div>
@@ -129,24 +162,30 @@ export function StandardResult({
             </dl>
             {candidate.band_ceiling_reason ? (
               <p className="cap-notice">
-                Band cap: {candidate.band_ceiling_reason}
+                Band cap: <bdi dir="auto">{candidate.band_ceiling_reason}</bdi>
               </p>
             ) : null}
-            <p>{candidate.rationale_extended}</p>
+            <p>
+              <bdi dir="auto">{candidate.rationale_extended}</bdi>
+            </p>
             <div className="driver-grid">
               <section>
-                <h4>Positive drivers</h4>
+                <h3>Positive drivers</h3>
                 <ul>
-                  {candidate.positive_drivers.map((item) => (
-                    <li key={item.claim_id}>{item.explanation}</li>
+                  {candidate.positive_drivers.map((item, itemIndex) => (
+                    <li key={`positive-${item.claim_id}-${itemIndex}`}>
+                      <bdi dir="auto">{item.explanation}</bdi>
+                    </li>
                   ))}
                 </ul>
               </section>
               <section>
-                <h4>Limiting gaps</h4>
+                <h3>Limiting gaps</h3>
                 <ul>
-                  {candidate.limiting_gaps.map((item) => (
-                    <li key={item.claim_id}>{item.explanation}</li>
+                  {candidate.limiting_gaps.map((item, itemIndex) => (
+                    <li key={`limiting-${item.claim_id}-${itemIndex}`}>
+                      <bdi dir="auto">{item.explanation}</bdi>
+                    </li>
                   ))}
                 </ul>
               </section>
@@ -157,16 +196,16 @@ export function StandardResult({
               </summary>
               {candidate.citations.map((citation) => (
                 <article className="evidence-card" key={citation.evidence_id}>
-                  <h4>
-                    <bdi>{citation.title}</bdi>
-                  </h4>
+                  <h3>
+                    <bdi dir="auto">{citation.title}</bdi>
+                  </h3>
                   <p>
-                    {citation.publisher} ·{" "}
+                    <bdi dir="auto">{citation.publisher}</bdi> ·{" "}
                     {citation.source_tier.replaceAll("_", " ")} ·{" "}
                     {citation.status}
                   </p>
                   <p>
-                    <bdi>{citation.extract}</bdi>
+                    <bdi dir="auto">{citation.extract}</bdi>
                   </p>
                   {"exact_url" in citation ? (
                     <p>
@@ -212,7 +251,8 @@ export function StandardResult({
                     <div key={`${value.kind}-${valueIndex}`}>
                       <dt>{label(value.kind)}</dt>
                       <dd>
-                        {value.value} · {label(value.verification_status)}
+                        <bdi dir="auto">{value.value}</bdi> ·{" "}
+                        {label(value.verification_status)}
                       </dd>
                     </div>
                   ))}
@@ -222,27 +262,89 @@ export function StandardResult({
           </article>
         ))}
       </div>
-      <section aria-labelledby="gate-heading">
-        <h3 id="gate-heading">Hard-gate eliminations</h3>
-        <ul>
-          {result.gate_eliminations.map((gate) => (
-            <li key={gate.gate_id}>
-              {gate.label}: {gate.eliminated_count} eliminated
-            </li>
-          ))}
-        </ul>
-      </section>
+      {result.scarcity === "zero" ? (
+        <section aria-labelledby="unmet-constraints-heading">
+          <h2 id="unmet-constraints-heading">
+            Which mandatory constraints could not be met
+          </h2>
+          <ul>
+            {result.scarcity_analysis.unmet_mandatory_constraints.map(
+              (constraint) => (
+                <li key={constraint.constraint_id}>
+                  <bdi dir="auto">{constraint.label}</bdi>
+                </li>
+              ),
+            )}
+          </ul>
+        </section>
+      ) : null}
+      {result.scarcity !== "none" ? (
+        <section aria-labelledby="relaxations-heading">
+          <h2 id="relaxations-heading">What you could relax</h2>
+          {result.scarcity_analysis.permitted_relaxations.length > 0 ? (
+            <ul>
+              {result.scarcity_analysis.permitted_relaxations.map(
+                (constraint) => (
+                  <li key={constraint.constraint_id}>
+                    <bdi dir="auto">{constraint.label}</bdi>. Requester-marked
+                    direction: {label(constraint.direction)}; tolerance:{" "}
+                    <bdi dir="auto">{constraint.tolerance}</bdi>.
+                  </li>
+                ),
+              )}
+            </ul>
+          ) : (
+            <p>No requester-marked relaxable constraint is available.</p>
+          )}
+        </section>
+      ) : null}
+      {result.scarcity !== "none" ? (
+        <section aria-labelledby="gate-heading">
+          <h2 id="gate-heading">
+            {result.scarcity === "zero"
+              ? "How the candidate set was reduced"
+              : "Which constraints reduced the set"}
+          </h2>
+          {result.scarcity_analysis.reducing_constraints.length > 0 ? (
+            <ul>
+              {result.scarcity_analysis.reducing_constraints.map(
+                (constraint) => (
+                  <li key={constraint.constraint_id}>
+                    <bdi dir="auto">{constraint.label}</bdi>:{" "}
+                    {constraint.eliminated_count} eliminated
+                  </li>
+                ),
+              )}
+            </ul>
+          ) : null}
+          <h3>Hard-gate elimination counts</h3>
+          <ul>
+            {result.gate_eliminations.map((gate) => (
+              <li key={gate.gate_id}>
+                <bdi dir="auto">{gate.label}</bdi>: {gate.eliminated_count}{" "}
+                eliminated
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <section
         className="limitations-panel"
         aria-labelledby="limitations-heading"
       >
-        <h3 id="limitations-heading">Limitations and evidence state</h3>
+        <h2 id="limitations-heading">Limitations and evidence state</h2>
         <p>
           Unknown values: {result.limitations.unknown_count}. Not asked:{" "}
           {result.limitations.not_asked_count}.
         </p>
-        <p>{result.limitations.advisory_boundary}</p>
-        <p>{result.limitations.restricted_party_screening_notice}</p>
+        <p>
+          <bdi dir="auto">{result.limitations.advisory_boundary}</bdi>
+        </p>
+        <p>
+          <bdi dir="auto">
+            {result.limitations.restricted_party_screening_notice}
+          </bdi>
+        </p>
         {result.limitations.affected_low_confidence_dimensions.length > 0 ? (
           <p>
             Low-confidence dimensions:{" "}
@@ -253,7 +355,9 @@ export function StandardResult({
           </p>
         ) : null}
         {result.limitations.cap_notice ? (
-          <p>{result.limitations.cap_notice}</p>
+          <p>
+            <bdi dir="auto">{result.limitations.cap_notice}</bdi>
+          </p>
         ) : null}
         <ul>
           {result.limitations.evidence_states.map((state) => (
@@ -262,7 +366,7 @@ export function StandardResult({
         </ul>
       </section>
       <button className="secondary-action" onClick={onBack}>
-        Return to requests
+        {backLabel}
       </button>
     </section>
   );

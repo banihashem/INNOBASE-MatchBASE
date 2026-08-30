@@ -4,7 +4,10 @@ import {
   DeterministicFixtureCanonicalizer,
   DeterministicFixtureLanguageIdentifier,
 } from "@matchbase/ai-evidence";
-import { createPool } from "@matchbase/data";
+import {
+  consultantProjectionConfigFromEnvironment,
+  createPool,
+} from "@matchbase/data";
 import { MatchBaseApplication } from "./service.js";
 import type { PersistedTier, RequestContext } from "./types.js";
 import { probeDatabaseReadiness, WorkerReadiness } from "./worker-readiness.js";
@@ -49,6 +52,9 @@ const application = new MatchBaseApplication({
     digestKeyId: "synthetic-worker-v1",
     languageIdentifier: new DeterministicFixtureLanguageIdentifier(),
   }),
+  consultantProjectionConfig: consultantProjectionConfigFromEnvironment(
+    process.env,
+  ),
 });
 const delayMs = Math.max(
   0,

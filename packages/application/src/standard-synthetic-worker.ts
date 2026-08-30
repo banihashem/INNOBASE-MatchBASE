@@ -1,6 +1,10 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
-import { createPool, recoverExpiredExecutionLeases } from "@matchbase/data";
+import {
+  consultantProjectionConfigFromEnvironment,
+  createPool,
+  recoverExpiredExecutionLeases,
+} from "@matchbase/data";
 import { StandardWorkspaceApplication } from "./standard-workspace.js";
 import type { RequestContext } from "./types.js";
 import { probeDatabaseReadiness, WorkerReadiness } from "./worker-readiness.js";
@@ -31,6 +35,9 @@ const pool = createPool({
 const application = new StandardWorkspaceApplication({
   pool,
   privacyKey: digestKeyText,
+  consultantProjectionConfig: consultantProjectionConfigFromEnvironment(
+    process.env,
+  ),
 });
 const readiness = new WorkerReadiness();
 let stopping = false;

@@ -237,6 +237,23 @@ test("direct Gemini accepts only exact canonical identity and one Search query",
   }
 });
 
+test("direct Gemini accepts one final JSON part after bounded thought and signature parts", async () => {
+  const envelope = directEnvelope();
+  envelope.candidates[0].content.parts = [
+    { text: "internal reasoning", thought: true },
+    { thoughtSignature: "opaque-signature" },
+    envelope.candidates[0].content.parts[0],
+  ];
+  const evidence = await executeGeminiQualificationCall({
+    route: direct,
+    secret: "test-secret",
+    fetchImpl: async () => jsonResponse(envelope),
+  });
+  assert.equal(evidence.terminalDisposition, "PASS");
+  assert.equal(evidence.searchQueryCount, 1);
+  validateSanitizedQualificationEvidence(evidence);
+});
+
 test("OpenRouter binds Google Vertex catalog, canonical model, stop, and reported cost", async () => {
   const evidence = await executeOpenRouterQualificationCall({
     route: openrouter,

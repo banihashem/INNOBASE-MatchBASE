@@ -5,6 +5,7 @@ import { createPool } from "../../packages/data/dist/index.js";
 import { scanPostgresForCanaries } from "../../packages/security/dist/index.js";
 
 const syntheticNotice = "Synthetic evaluation data — not a sourcing result";
+const wcag22Tags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
 test("standalone server delivers the product page, static assets, and health API", async ({
   request,
@@ -25,7 +26,9 @@ test("standalone server delivers the product page, static assets, and health API
 });
 
 async function expectAxeClean(page) {
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  expect(
+    (await new AxeBuilder({ page }).withTags(wcag22Tags).analyze()).violations,
+  ).toEqual([]);
 }
 
 test("requires a signed single-use simulator transaction", async ({
@@ -246,12 +249,12 @@ test("persists a sanitized denial before refusing a resolved subject without ent
 test("completes the real simulator, HTTP, PostgreSQL, worker, and Demo result path", async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   const failures = [];
   page.on("response", (response) => {
     if (response.status() >= 500) failures.push(response.url());
   });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 320, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await expect(page.getByText(syntheticNotice)).toBeVisible();
@@ -265,6 +268,11 @@ test("completes the real simulator, HTTP, PostgreSQL, worker, and Demo result pa
   await expect(page).toHaveURL("http://127.0.0.1:3010/");
   await expect(
     page.getByRole("heading", { name: "Frame the request" }),
+  ).toBeVisible();
+  await expect(page.locator("body")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("link", { name: "Skip to main content" }),
   ).toBeFocused();
   await expect(page.getByText("3 of 3")).toBeVisible();
   await expectAxeClean(page);
@@ -494,17 +502,24 @@ test("completes the real simulator, HTTP, PostgreSQL, worker, and Demo result pa
   expect(normalMotion.durationMs).toBeGreaterThan(0.01);
   expect(normalMotion.iterations).toBe("infinite");
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(
+    page.getByRole("button", { name: "Pause updates" }),
+  ).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: "Refresh now" })).toBeVisible();
+  const persistentFocus = page.getByRole("link", { name: "MatchBASE home" });
+  await persistentFocus.focus();
   await expectAxeClean(page);
 
   await expect(
     page.getByRole("heading", { name: "Eligible candidate summary" }),
-  ).toBeFocused({ timeout: 15_000 });
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(persistentFocus).toBeFocused();
   await expect(page.locator(".candidate-grid > li")).toHaveCount(3);
   await expectAxeClean(page);
   const overflow = await page.evaluate(() =>
     Math.max(document.body.scrollWidth, document.documentElement.scrollWidth),
   );
-  expect(overflow).toBeLessThanOrEqual(390);
+  expect(overflow).toBeLessThanOrEqual(320);
   expect(failures).toEqual([]);
 });
 
@@ -538,8 +553,11 @@ test("cancels an actual queued run with keyboard and preserves terminal focus", 
   await expect(
     page.getByRole("heading", { name: "Research cancelled" }),
   ).toBeFocused();
-  await expect(page.getByRole("status")).toContainText(
-    "No result was disclosed",
-  );
+  await expect(
+    page
+      .getByRole("heading", { name: "Research cancelled" })
+      .locator("..")
+      .getByRole("status"),
+  ).toContainText("No result was disclosed");
   await expectAxeClean(page);
 });

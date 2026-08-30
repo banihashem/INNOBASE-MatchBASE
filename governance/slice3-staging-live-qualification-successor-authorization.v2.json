@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "matchbase.slice3-staging-live-qualification-successor-authorization/v2",
+  "authorizationId": "OWNER-SLICE3-STAGING-LIVE-QUALIFICATION-2026-08-30-V2",
+  "environment": "staging",
+  "syntheticOnly": true,
+  "realUserDataAuthorized": false,
+  "fixtureId": "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
+  "predecessor": {
+    "authorizationId": "OWNER-SLICE3-STAGING-LIVE-QUALIFICATION-2026-08-30-V1",
+    "sessionId": "v6-40CB8BEE95ABACB012107300",
+    "ledgerAggregateSha256": "DA4F6075133A448C021B49E4FF0CE520FF62FBA0A61D3B64744F4B2CB4504588",
+    "terminalDisposition": "FAIL",
+    "reasonCode": "QUALIFICATION_SEARCH_GROUNDING_FAILED",
+    "providerModelPostsConsumed": 1,
+    "costConsumedUsd": 0.011487
+  },
+  "ownerCeiling": {
+    "maximumProviderCalls": 50,
+    "maximumCostUsd": 100,
+    "remainingProviderCallsBeforeV2": 49,
+    "remainingCostUsdBeforeV2": 99.988513
+  },
+  "allocation": {
+    "maximumExternalHttpCalls": 50,
+    "maximumProviderModelPosts": 2,
+    "maximumCostUsd": 99.988513,
+    "routeOrder": ["gemini_direct", "openrouter"],
+    "retriesWithinAllocation": 0,
+    "fallbacks": 0
+  },
+  "openRouterRequestPolicy": {
+    "zdr": true,
+    "dataCollection": "deny",
+    "requireParameters": true,
+    "allowFallbacks": false,
+    "providerOnly": ["google-vertex"],
+    "providerOrder": ["google-vertex"],
+    "servedProviderId": "google-vertex",
+    "servedModelId": "google/gemini-3.6-flash"
+  },
+  "directGeminiRequestPolicy": {
+    "servedProviderId": "google",
+    "servedModelId": "gemini-3.6-flash",
+    "providerNativeSearchRequired": true,
+    "searchQueriesRequired": 1,
+    "answerFromMemoryProhibited": true
+  },
+  "productionPolicyMutationAuthorized": false,
+  "cloudMutationAuthorized": false,
+  "deploymentAuthorized": false
+}

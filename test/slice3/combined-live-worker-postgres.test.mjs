@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { LIVE_WORKER_FIXTURE_POLICY } from "./fixtures/live-worker-runtime.mjs";
+import { canonicalResearchRoutePolicySha256 } from "../../packages/application/dist/index.js";
 import {
   admitRunWithinQuota,
   createPool,
@@ -218,9 +219,16 @@ postgresTest(
 
       const policyId = randomUUID();
       await pool.query(
-        `INSERT INTO research_route_policy(research_route_policy_id,schema_version,policy_version,environment,activation_state,official_evidence,qualification_budget)
-         VALUES($1,'research-route-policy.v1',$2,'test','qualified','["fixture-a","fixture-b"]','{"max_calls":2,"max_cost_usd":1}')`,
-        [policyId, LIVE_WORKER_FIXTURE_POLICY.policyVersion],
+        `INSERT INTO research_route_policy(research_route_policy_id,schema_version,policy_version,environment,activation_state,official_evidence,qualification_budget,content_sha256)
+         VALUES($1,'research-route-policy.v1',$2,'test','qualified','["fixture-a","fixture-b"]','{"max_calls":2,"max_cost_usd":1}',$3)`,
+        [
+          policyId,
+          LIVE_WORKER_FIXTURE_POLICY.policyVersion,
+          Buffer.from(
+            canonicalResearchRoutePolicySha256(LIVE_WORKER_FIXTURE_POLICY),
+            "hex",
+          ),
+        ],
       );
       const providerRouteId = randomUUID();
       await pool.query(

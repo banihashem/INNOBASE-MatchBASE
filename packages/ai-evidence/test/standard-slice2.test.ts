@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import type { StandardEvidenceGraphV1 } from "@matchbase/contracts";
 import {
   canonicalizeStandardCondition,
   canonicalizeStandardConstraintComparand,
@@ -24,20 +25,56 @@ import {
 import {
   assertStandardProjectionEvidenceLinks,
   findForbiddenStandardProjectionKeys,
-  prepareStandardRelease,
-  projectStandardResult,
+  prepareStandardCompleteResultForPersistence,
+  type StandardProjectionContext,
 } from "../src/projection/standard.js";
+import { projectStoredResult } from "../src/projection/server-result.js";
 import {
   assertStandardPiiReleaseSafe,
   standardPiiFindings,
 } from "../src/projection/standard-privacy.js";
 import {
-  buildStandardSyntheticEvidenceGraph,
+  buildStandardSyntheticEvidenceGraph as buildStandardSyntheticEvidenceGraphFixture,
+  buildStandardSyntheticHardConstraints,
+  normalizeStandardSyntheticScenarioForConstraints,
   STANDARD_SYNTHETIC_SCENARIO_COUNTS,
 } from "../src/research/standard-synthetic-fixtures.js";
 import { scoreStandardCandidate } from "../src/scoring/standard.js";
 
 const NOW = new Date("2026-08-15T00:00:00.000Z");
+const RUN_BOUND_HARD_CONSTRAINTS = buildStandardSyntheticHardConstraints();
+const projectionContext = (now = NOW) => ({
+  now,
+  runBoundCanonicalHardConstraints: RUN_BOUND_HARD_CONSTRAINTS,
+});
+const projectStandard = (
+  completeResult: StandardEvidenceGraphV1,
+  context: StandardProjectionContext,
+) =>
+  projectStoredResult({
+    tier: "standard",
+    completeResult,
+    projectionAsOf: context.now.toISOString(),
+    runBoundCanonicalHardConstraints: context.runBoundCanonicalHardConstraints,
+    ...(context.allowLegacyEmptyScarcityLedger === undefined
+      ? {}
+      : {
+          allowLegacyEmptyScarcityLedger:
+            context.allowLegacyEmptyScarcityLedger,
+        }),
+    ...(context.volatilityPolicy === undefined
+      ? {}
+      : { volatilityPolicy: context.volatilityPolicy }),
+  }).body;
+const buildStandardSyntheticEvidenceGraph = (
+  runId: string,
+  scenario: keyof typeof STANDARD_SYNTHETIC_SCENARIO_COUNTS,
+) =>
+  buildStandardSyntheticEvidenceGraphFixture(
+    runId,
+    scenario,
+    RUN_BOUND_HARD_CONSTRAINTS,
+  );
 
 test("canonicalizes the closed EN/FA/AR/ES structured fixtures source-free", () => {
   const fieldFixtures = [
@@ -209,7 +246,7 @@ test("projects deterministic 0/1/2/3/>3 without padding or hidden keys", () => {
       `RUN-${scenario}`,
       scenario as keyof typeof STANDARD_SYNTHETIC_SCENARIO_COUNTS,
     );
-    const projection = projectStandardResult(graph, { now: NOW });
+    const projection = projectStandard(graph, projectionContext());
     assert.equal(projection.candidates.length, count);
     assert.deepEqual(findForbiddenStandardProjectionKeys(projection), []);
     assert.equal(
@@ -231,10 +268,155 @@ test("projects deterministic 0/1/2/3/>3 without padding or hidden keys", () => {
   );
   for (const dimension of highConfidence.candidates[0]!.dimensions)
     dimension.confidence = "high";
-  const capped = projectStandardResult(highConfidence, { now: NOW });
+  const capped = projectStandard(highConfidence, projectionContext());
   assert.deepEqual(capped.limitations.affected_low_confidence_dimensions, []);
   assert.match(capped.limitations.cap_notice ?? "", /scores are 45 or lower/iu);
   assert.doesNotMatch(capped.limitations.cap_notice ?? "", /confidence/iu);
+});
+
+test("derives structured scarcity only from run-bound constraints and failed candidate ids", () => {
+  const certification = {
+    constraint_id: "STD-CON-MANDATORY-CERTIFICATION",
+    field_id: "FLD-CORE-COMP-01",
+    label: "FLD-CORE-COMP-01 equals ISO-9001",
+  };
+  const capacity = {
+    constraint_id: "STD-CON-MINIMUM-CAPACITY",
+    field_id: "FLD-CORE-CAP-01",
+    label: "FLD-CORE-CAP-01 minimum 1200 units/month",
+  };
+  const relaxation = {
+    ...capacity,
+    direction: "lower_is_acceptable",
+    tolerance: "200 units/month",
+  };
+  const zero = projectStandard(
+    buildStandardSyntheticEvidenceGraph("RUN-SCARCITY-ZERO", "zero"),
+    projectionContext(),
+  );
+  assert.deepEqual(zero.scarcity_analysis, {
+    reducing_constraints: [
+      { ...certification, eliminated_count: 2 },
+      { ...capacity, eliminated_count: 1 },
+    ],
+    unmet_mandatory_constraints: [certification, capacity],
+    permitted_relaxations: [relaxation],
+  });
+  const one = projectStandard(
+    buildStandardSyntheticEvidenceGraph("RUN-SCARCITY-ONE", "one"),
+    projectionContext(),
+  );
+  assert.deepEqual(one.scarcity_analysis, {
+    reducing_constraints: [
+      { ...certification, eliminated_count: 1 },
+      { ...capacity, eliminated_count: 1 },
+    ],
+    unmet_mandatory_constraints: [],
+    permitted_relaxations: [relaxation],
+  });
+  const two = projectStandard(
+    buildStandardSyntheticEvidenceGraph("RUN-SCARCITY-TWO", "two"),
+    projectionContext(),
+  );
+  assert.deepEqual(two.scarcity_analysis, {
+    reducing_constraints: [{ ...certification, eliminated_count: 1 }],
+    unmet_mandatory_constraints: [],
+    permitted_relaxations: [],
+  });
+  for (const scenario of ["three", "many"] as const) {
+    const projection = projectStandard(
+      buildStandardSyntheticEvidenceGraph(`RUN-SCARCITY-${scenario}`, scenario),
+      projectionContext(),
+    );
+    assert.deepEqual(projection.scarcity_analysis, {
+      reducing_constraints: [],
+      unmet_mandatory_constraints: [],
+      permitted_relaxations: [],
+    });
+  }
+  const serialized = JSON.stringify(zero.scarcity_analysis);
+  assert.doesNotMatch(
+    serialized,
+    /source_text|raw_expression|failed_constraint_ids|eligible_total|considered_total/u,
+  );
+});
+
+test("normalizes no-constraint selectors and binds every scarcity elimination", () => {
+  for (const scenario of ["zero", "one", "two"] as const) {
+    assert.equal(
+      normalizeStandardSyntheticScenarioForConstraints(scenario, 0),
+      "three",
+    );
+    assert.throws(
+      () =>
+        buildStandardSyntheticEvidenceGraphFixture(
+          `RUN-NO-CON-${scenario}`,
+          scenario,
+          [],
+        ),
+      /requires a run-bound canonical hard constraint/iu,
+    );
+  }
+  assert.equal(
+    normalizeStandardSyntheticScenarioForConstraints("many", 0),
+    "many",
+  );
+  const singleConstraint = RUN_BOUND_HARD_CONSTRAINTS.slice(0, 1);
+  for (const scenario of ["zero", "one", "two"] as const) {
+    const graph = buildStandardSyntheticEvidenceGraphFixture(
+      `RUN-ONE-CON-${scenario}`,
+      scenario,
+      singleConstraint,
+    );
+    const projection = projectStandard(graph, {
+      now: NOW,
+      runBoundCanonicalHardConstraints: singleConstraint,
+    });
+    const eligible = new Set(graph.eligible_candidate_ids);
+    assert.equal(projection.scarcity_analysis.reducing_constraints.length, 1);
+    assert.equal(
+      graph.candidates
+        .filter((candidate) => !eligible.has(candidate.candidate_id))
+        .every(
+          (candidate) =>
+            !candidate.mandatory_constraints_satisfied &&
+            candidate.failed_constraint_ids.length > 0,
+        ),
+      true,
+    );
+    assert.equal(
+      graph.gate_evaluations.find(
+        (gate) => gate.gate_id === "mandatory_constraints",
+      )!.eliminated_count,
+      3 - STANDARD_SYNTHETIC_SCENARIO_COUNTS[scenario],
+    );
+    assert.equal(
+      graph.gate_evaluations.find(
+        (gate) => gate.gate_id === "evidence_sufficiency",
+      )!.eliminated_count,
+      0,
+    );
+  }
+});
+
+test("fails closed when scarcity references an unbound canonical constraint", () => {
+  const graph = buildStandardSyntheticEvidenceGraph("RUN-UNKNOWN-CON", "one");
+  graph.candidates[1]!.failed_constraint_ids = ["CONSTRAINT-NOT-BOUND"];
+  assert.throws(
+    () => projectStandard(graph, projectionContext()),
+    /not bound to the canonical hard constraints/iu,
+  );
+  const mismatch = buildStandardSyntheticEvidenceGraph(
+    "RUN-GATE-MISMATCH",
+    "one",
+  );
+  mismatch.gate_evaluations.find(
+    (gate) => gate.gate_id === "mandatory_constraints",
+  )!.eliminated_count = 1;
+  assert.throws(
+    () => projectStandard(mismatch, projectionContext()),
+    /gate count does not match/iu,
+  );
 });
 
 test("derives freshness at read time without mutating stored evidence or score", () => {
@@ -248,9 +430,10 @@ test("derives freshness at read time without mutating stored evidence or score",
   assert.equal(statuses.get(graph.evidence[0]!.evidence_id), "stale");
   assert.deepEqual(graph, before);
   assert.equal(
-    projectStandardResult(graph, {
-      now: new Date("2027-08-15T00:00:00.000Z"),
-    }).candidates[0]?.freshness,
+    projectStandard(
+      graph,
+      projectionContext(new Date("2027-08-15T00:00:00.000Z")),
+    ).candidates[0]?.freshness,
     "stale",
   );
 });
@@ -258,13 +441,17 @@ test("derives freshness at read time without mutating stored evidence or score",
 test("rejects dangling driver, gap, value, and evidence lineage", () => {
   const graph = buildStandardSyntheticEvidenceGraph("RUN-HOSTILE", "one");
   assert.doesNotThrow(() => validateStandardEvidenceGraph(graph));
-  const projection = projectStandardResult(graph, { now: NOW });
+  const projection = structuredClone(
+    projectStandard(graph, projectionContext()),
+  );
   projection.candidates[0]!.positive_drivers[0]!.evidence_ids = ["MISSING"];
   assert.throws(
     () => assertStandardProjectionEvidenceLinks(projection, graph),
     /dangling evidence lineage/iu,
   );
-  const valueProjection = projectStandardResult(graph, { now: NOW });
+  const valueProjection = structuredClone(
+    projectStandard(graph, projectionContext()),
+  );
   valueProjection.candidates[0]!.capacity_figures![0]!.evidence_ids = [
     "MISSING",
   ];
@@ -366,7 +553,7 @@ test("permits only closed organization channels with matching value-level eviden
       evidence_ids: [evidence.evidence_id],
     };
     assert.doesNotThrow(() => validateStandardEvidenceGraph(graph));
-    const projected = projectStandardResult(graph, { now: NOW });
+    const projected = projectStandard(graph, projectionContext());
     assert.deepEqual(projected.candidates[0]!.contact_details![0], {
       kind: "organization_contact",
       ...channel,
@@ -735,8 +922,8 @@ test("redacts person names adjacent to every valid organization channel before p
           ? { ...common, ...channel }
           : { ...common, channel_type: channel.channel_type };
       const events: unknown[] = [];
-      const prepared = prepareStandardRelease(graph, {
-        now: NOW,
+      const prepared = prepareStandardCompleteResultForPersistence(graph, {
+        ...projectionContext(),
         onSecurityEvent: (event) => events.push(event),
       });
       assert.equal(JSON.stringify(prepared.projection).includes(person), false);
@@ -783,7 +970,7 @@ test("recursively denies personal data outside redactable evidence excerpts", ()
     const graph = buildStandardSyntheticEvidenceGraph("RUN-PII-DENY", "one");
     mutate(graph);
     assert.throws(
-      () => projectStandardResult(graph, { now: NOW }),
+      () => projectStandard(graph, projectionContext()),
       /PII release membrane/iu,
     );
   }
@@ -851,9 +1038,17 @@ test("withholds the complete excerpt for ambiguous controls and denies entity-en
     const evidence = graph.evidence[0]!;
     evidence.extract = `${evidence.extract} Contact ${person}`;
     evidence.content_sha256 = standardContentSha256(evidence.extract);
-    const prepared = prepareStandardRelease(graph, { now: NOW });
+    const prepared = prepareStandardCompleteResultForPersistence(
+      graph,
+      projectionContext(),
+    );
     assert.equal(
       prepared.persistence_graph.evidence[0]!.extract,
+      "[personal data withheld]",
+      person,
+    );
+    assert.equal(
+      prepared.persistence_foundation.evidence[0]!.extract,
       "[personal data withheld]",
       person,
     );
@@ -905,7 +1100,10 @@ test("fails closed on unsupported and mixed Unicode letter scripts", () => {
     );
     graph.evidence[0]!.extract = person;
     graph.evidence[0]!.content_sha256 = standardContentSha256(person);
-    const release = prepareStandardRelease(graph, { now: NOW });
+    const release = prepareStandardCompleteResultForPersistence(
+      graph,
+      projectionContext(),
+    );
     assert.equal(
       release.persistence_graph.evidence[0]!.extract,
       "[personal data withheld]",
@@ -937,7 +1135,11 @@ test("fails closed on unsupported and mixed Unicode letter scripts", () => {
     evidence_ids: [contactEvidence.evidence_id],
   };
   assert.throws(
-    () => prepareStandardRelease(contactGraph, { now: NOW }),
+    () =>
+      prepareStandardCompleteResultForPersistence(
+        contactGraph,
+        projectionContext(),
+      ),
     /exact value-level contact evidence/,
   );
 

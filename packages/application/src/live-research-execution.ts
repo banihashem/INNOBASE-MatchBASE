@@ -5,6 +5,7 @@ import {
   executeQualifiedResearch,
   resolveCandidateIdentities,
   resolveActiveResearchRoute,
+  validateResearchRoutePolicy,
   validateEvidenceGraph,
   validateEvidenceLineageLedger,
   type Backoff,
@@ -21,7 +22,10 @@ import type {
   ResearchRoutePolicyV1,
 } from "@matchbase/contracts";
 import {
+  bindConsultantProjectionPolicyAtResultProduction,
+  DEFAULT_CONSULTANT_PROJECTION_CONFIG,
   inTransaction,
+  type ConsultantProjectionConfigRelease,
   type ConnectionPool,
   type Queryable,
 } from "@matchbase/data";
@@ -35,12 +39,78 @@ import {
   type SourceAccessEvaluator,
 } from "@matchbase/security";
 import { createHash, randomUUID } from "node:crypto";
+import {
+  admitLiveResearchProviderCall,
+  assertApprovedLiveResearchOutputSchema,
+  assertLiveResearchPipelineIdentityUnchanged,
+  createLiveResearchPipelineIdentity,
+  canonicalResearchRoutePolicySha256,
+  LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA,
+  LIVE_RESEARCH_EXTRACTION_VERSION,
+  type LiveResearchPipelineIdentityV1,
+} from "./live-research-pipeline-identity.js";
+import {
+  assertLiveEvidenceSourceBindings,
+  type LiveSourceBindingRecord,
+} from "./live-source-binding.js";
+import {
+  STANDARD_DIMENSION_WEIGHTS_SHA256,
+  buildOperationalLiveCompleteResultV2,
+  type SmeWeightValidationV2,
+} from "./live-complete-result-v2.js";
+import { standardCompleteResultDocumentSha256 } from "./standard-workspace.js";
+
+const PRODUCTION_STANDARD_WEIGHTS_BP = Object.freeze({
+  category_product_fit: 2500,
+  compliance_certification_fit: 2000,
+  volume_capacity_fit: 1500,
+  price_tier_fit: 1500,
+  positioning_brand_fit: 1500,
+  geographic_reach_fit: 1000,
+});
+
+function authoritativeSmeWeightValidation(input: {
+  readonly environment: string;
+  readonly weightsBp: unknown;
+  readonly smeApprovalRef: string | null;
+  readonly releasedAt: Date;
+}): SmeWeightValidationV2 | undefined {
+  if (input.environment !== "production") return undefined;
+  const weights = input.weightsBp;
+  const expectedEntries = Object.entries(PRODUCTION_STANDARD_WEIGHTS_BP).sort(
+    ([left], [right]) => left.localeCompare(right, "en"),
+  );
+  const actualEntries =
+    weights !== null && typeof weights === "object" && !Array.isArray(weights)
+      ? Object.entries(weights as Record<string, unknown>).sort(
+          ([left], [right]) => left.localeCompare(right, "en"),
+        )
+      : [];
+  if (
+    !input.smeApprovalRef?.trim() ||
+    actualEntries.length !== expectedEntries.length ||
+    actualEntries.some(
+      ([key, value], index) =>
+        key !== expectedEntries[index]?.[0] ||
+        value !== expectedEntries[index]?.[1],
+    )
+  )
+    throw new Error(
+      "Production scoring weights lack authoritative persisted SME validation.",
+    );
+  return Object.freeze({
+    validation_record_id: input.smeApprovalRef,
+    approved_at: input.releasedAt.toISOString(),
+    weight_config_sha256: STANDARD_DIMENSION_WEIGHTS_SHA256,
+  });
+}
 
 const sha = (value: string | Uint8Array): Buffer =>
   createHash("sha256").update(value).digest();
 const json = (value: unknown): string => JSON.stringify(value);
 
 interface ReservationRow {
+  execution_id: string;
   account_id: string;
   run_id: string;
   generation: number | string;
@@ -51,6 +121,7 @@ interface ReservationRow {
   execution_lease_slot: number | string;
   execution_lease_generation: number | string;
   terminal_record: unknown | null;
+  pipeline_identity_record: unknown | null;
 }
 
 export interface ServerOwnedSourceDiscovery {
@@ -344,6 +415,10 @@ export class PostgresLiveResearchAtomicLedger {
       pollMs?: number;
       waitMs?: number;
       now?: () => Date;
+      pipelineIdentity: LiveResearchPipelineIdentityV1;
+      authoritativeRegistryDomains?: readonly string[];
+      executionEnvironment?: "local" | "test" | "staging" | "production";
+      consultantProjectionConfig?: ConsultantProjectionConfigRelease;
     },
   ) {}
 
@@ -368,6 +443,100 @@ export class PostgresLiveResearchAtomicLedger {
     )
       throw new Error("Live research heartbeat duration is invalid.");
     return value;
+  }
+
+  private async authoritativePipelineIdentity(
+    runId: string,
+    database: Queryable,
+    lockRunRow = true,
+  ): Promise<LiveResearchPipelineIdentityV1> {
+    type IdentityRow = {
+      research_route_policy_id: string;
+      route_policy_version: string;
+      route_policy_content_sha256: Buffer | null;
+      model_policy_version_id: string;
+      model_policy_version: number | string;
+      model_policy_content_sha256: Buffer;
+      scoring_config_version_id: string;
+      scoring_config_version: number | string;
+      scoring_config_content_sha256: Buffer;
+    };
+    const result = lockRunRow
+      ? await database.query<IdentityRow>(
+          `SELECT rp.research_route_policy_id,
+              rp.policy_version route_policy_version,
+              rp.content_sha256 route_policy_content_sha256,
+              mp.model_policy_version_id,mp.version model_policy_version,
+              mp.content_sha256 model_policy_content_sha256,
+              sc.scoring_config_version_id,sc.version scoring_config_version,
+              sc.content_sha256 scoring_config_content_sha256
+         FROM research_run r
+         JOIN model_policy_version mp
+           ON mp.model_policy_version_id=r.model_policy_version_id
+         JOIN scoring_config_version sc
+           ON sc.scoring_config_version_id=r.scoring_config_version_id
+         JOIN research_route_policy rp
+           ON rp.research_route_policy_id=$3 AND rp.activation_state='qualified'
+        WHERE r.account_id=$1 AND r.run_id=$2
+        FOR SHARE OF r,mp,sc,rp`,
+          [this.options.accountId, runId, this.options.policyId],
+        )
+      : await (async () => {
+          const run = await database.query<{
+            model_policy_version_id: string;
+            scoring_config_version_id: string;
+          }>(
+            `SELECT model_policy_version_id,scoring_config_version_id
+               FROM research_run
+              WHERE account_id=$1 AND run_id=$2`,
+            [this.options.accountId, runId],
+          );
+          const pinned = run.rows[0];
+          if (!pinned)
+            throw new Error(
+              "Authoritative version-pinned live research admission is unavailable.",
+            );
+          return await database.query<IdentityRow>(
+            `SELECT rp.research_route_policy_id,
+                    rp.policy_version route_policy_version,
+                    rp.content_sha256 route_policy_content_sha256,
+                    mp.model_policy_version_id,mp.version model_policy_version,
+                    mp.content_sha256 model_policy_content_sha256,
+                    sc.scoring_config_version_id,sc.version scoring_config_version,
+                    sc.content_sha256 scoring_config_content_sha256
+               FROM model_policy_version mp
+               JOIN scoring_config_version sc
+                 ON sc.scoring_config_version_id=$2
+               JOIN research_route_policy rp
+                 ON rp.research_route_policy_id=$3 AND rp.activation_state='qualified'
+              WHERE mp.model_policy_version_id=$1
+              FOR SHARE OF mp,sc,rp`,
+            [
+              pinned.model_policy_version_id,
+              pinned.scoring_config_version_id,
+              this.options.policyId,
+            ],
+          );
+        })();
+    const row = result.rows[0];
+    if (!row?.route_policy_content_sha256)
+      throw new Error(
+        "Authoritative version-pinned live research admission is unavailable.",
+      );
+    return createLiveResearchPipelineIdentity({
+      outputSchema: LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA,
+      researchRoutePolicyId: row.research_route_policy_id,
+      routePolicyVersion: row.route_policy_version,
+      routePolicyCanonicalSha256:
+        row.route_policy_content_sha256.toString("hex"),
+      modelPolicyVersionId: row.model_policy_version_id,
+      modelPolicyVersion: String(row.model_policy_version),
+      modelPolicyContentSha256: row.model_policy_content_sha256.toString("hex"),
+      scoringConfigVersionId: row.scoring_config_version_id,
+      scoringConfigVersion: String(row.scoring_config_version),
+      scoringConfigContentSha256:
+        row.scoring_config_content_sha256.toString("hex"),
+    });
   }
 
   private async terminal(
@@ -426,17 +595,30 @@ export class PostgresLiveResearchAtomicLedger {
     const state = await inTransaction(this.options.pool, async (client) => {
       await client.query(
         "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
-        [executionId],
+        [`${this.options.accountId}:${runId}`],
+      );
+      const authoritativeIdentity = await this.authoritativePipelineIdentity(
+        runId,
+        client,
+      );
+      assertLiveResearchPipelineIdentityUnchanged(
+        authoritativeIdentity,
+        this.options.pipelineIdentity,
       );
       const existing = await client.query<ReservationRow>(
-        `SELECT r.account_id,r.run_id,r.generation,r.state,r.lease_expires_at,
+        `SELECT r.execution_id,r.account_id,r.run_id,r.generation,r.state,r.lease_expires_at,
                 r.ownership_token_sha256,r.execution_lease_slot,
-                r.execution_lease_generation,t.terminal_record
+                r.execution_lease_generation,r.pipeline_identity_record,t.terminal_record
            FROM live_research_execution_reservation r
            LEFT JOIN live_research_terminal t ON t.live_research_terminal_id=r.terminal_id
-          WHERE r.execution_id=$1 FOR UPDATE OF r`,
-        [executionId],
+          WHERE r.execution_id=$1 OR (r.account_id=$2 AND r.run_id=$3)
+          FOR UPDATE OF r`,
+        [executionId, this.options.accountId, runId],
       );
+      if (existing.rows.length > 1)
+        throw new Error(
+          "Live research execution identity belongs to another run.",
+        );
       const row = existing.rows[0];
       if (
         row &&
@@ -445,6 +627,13 @@ export class PostgresLiveResearchAtomicLedger {
         throw new Error(
           "Live research execution identity belongs to another run.",
         );
+      if (row)
+        assertLiveResearchPipelineIdentityUnchanged(
+          row.pipeline_identity_record,
+          authoritativeIdentity,
+        );
+      if (row && row.execution_id !== executionId)
+        throw new Error("Live research execution identity changed on resume.");
       if (row?.state === "terminal") return { state: "existing" as const };
       if (row && row.lease_expires_at > now)
         return { state: "existing" as const };
@@ -532,9 +721,10 @@ export class PostgresLiveResearchAtomicLedger {
         await client.query(
           `INSERT INTO live_research_execution_reservation
              (execution_id,account_id,run_id,generation,ownership_token_sha256,state,
-              execution_lease_slot,execution_lease_generation,lease_expires_at,claimed_at,updated_at)
+              execution_lease_slot,execution_lease_generation,pipeline_identity_record,
+              lease_expires_at,claimed_at,updated_at)
            VALUES ($1,$2,$3,$4,$5,'in_progress',$6,$7,
-                   $8::timestamptz+($9::int * interval '1 millisecond'),$8,$8)`,
+                   $8::jsonb,$9::timestamptz+($10::int * interval '1 millisecond'),$9,$9)`,
           [
             executionId,
             this.options.accountId,
@@ -543,6 +733,7 @@ export class PostgresLiveResearchAtomicLedger {
             tokenHash,
             globalLease.slot_no,
             globalLease.generation,
+            json(authoritativeIdentity),
             now,
             leaseMs,
           ],
@@ -597,6 +788,73 @@ export class PostgresLiveResearchAtomicLedger {
     );
     if (owned.rowCount !== 1)
       throw new Error("Live research execution ownership was fenced.");
+  }
+
+  async withPipelineIdentityAdmission<T>(
+    ownershipToken: string,
+    generation: number,
+    executionId: string,
+    runId: string,
+    providerCall: () => Promise<T>,
+  ): Promise<T> {
+    const verifyAdmission = async () =>
+      await inTransaction(this.options.pool, async (client) => {
+        const authoritativeIdentity = await this.authoritativePipelineIdentity(
+          runId,
+          client,
+          false,
+        );
+        assertLiveResearchPipelineIdentityUnchanged(
+          authoritativeIdentity,
+          this.options.pipelineIdentity,
+        );
+        const result = await client.query<{
+          pipeline_identity_record: unknown | null;
+        }>(
+          `SELECT pipeline_identity_record
+             FROM live_research_execution_reservation r
+             JOIN execution_lease e
+               ON e.slot_no=r.execution_lease_slot
+              AND e.generation=r.execution_lease_generation
+              AND e.run_id=r.run_id AND e.account_id=r.account_id
+              AND e.owner_token_hash=r.ownership_token_sha256
+            WHERE r.execution_id=$1 AND r.account_id=$2 AND r.run_id=$3
+              AND r.generation=$4 AND r.ownership_token_sha256=$5
+              AND r.state='in_progress'
+              AND r.lease_expires_at > $6::timestamptz
+              AND e.released_at IS NULL AND e.expires_at > $6::timestamptz`,
+          [
+            executionId,
+            this.options.accountId,
+            runId,
+            generation,
+            sha(ownershipToken),
+            this.now(),
+          ],
+        );
+        const pinnedIdentity = result.rows[0]?.pipeline_identity_record;
+        if (!pinnedIdentity)
+          throw new Error(
+            `Live research pipeline identity ownership was fenced for ${executionId}.`,
+          );
+        assertLiveResearchPipelineIdentityUnchanged(
+          pinnedIdentity,
+          authoritativeIdentity,
+        );
+        return { authoritativeIdentity, pinnedIdentity };
+      });
+    const before = await verifyAdmission();
+    const response = await admitLiveResearchProviderCall(
+      before.pinnedIdentity,
+      before.authoritativeIdentity,
+      providerCall,
+    );
+    const after = await verifyAdmission();
+    assertLiveResearchPipelineIdentityUnchanged(
+      after.authoritativeIdentity,
+      before.authoritativeIdentity,
+    );
+    return response;
   }
 
   async lockOwnership(
@@ -1455,8 +1713,10 @@ export class PostgresLiveResearchAtomicLedger {
       checkpoint_stage: string;
       source_discovery_record: unknown | null;
       search_attempt_id: string | null;
+      pipeline_identity_record: unknown | null;
     }>(
-      `SELECT checkpoint_stage,source_discovery_record,search_attempt_id
+      `SELECT checkpoint_stage,source_discovery_record,search_attempt_id,
+              pipeline_identity_record
          FROM live_research_execution_reservation
         WHERE execution_id=$1 AND account_id=$2 AND run_id=$3
           AND generation=$4 AND ownership_token_sha256=$5 AND state='in_progress'`,
@@ -1471,6 +1731,10 @@ export class PostgresLiveResearchAtomicLedger {
     const row = result.rows[0];
     if (!row)
       throw new Error("Source-discovery checkpoint ownership was fenced.");
+    assertLiveResearchPipelineIdentityUnchanged(
+      row.pipeline_identity_record,
+      this.options.pipelineIdentity,
+    );
     if (row.checkpoint_stage === "reserved") return null;
     if (
       row.checkpoint_stage !== "source_discovered" ||
@@ -1493,13 +1757,46 @@ export class PostgresLiveResearchAtomicLedger {
     validateEvidenceGraph(graph);
     if (graph.runId !== runId)
       throw new Error("Live evidence graph belongs to another run.");
+    let persistedSmeWeightValidation: SmeWeightValidationV2 | undefined;
+    if (this.options.executionEnvironment === "production") {
+      const scoring = await client.query<{
+        weights_bp: unknown;
+        sme_approval_ref: string | null;
+        released_at: Date;
+        content_sha256: Buffer;
+      }>(
+        `SELECT weights_bp,sme_approval_ref,released_at,content_sha256
+           FROM scoring_config_version
+          WHERE scoring_config_version_id=$1
+          FOR SHARE`,
+        [this.options.pipelineIdentity.scoringConfigVersionId],
+      );
+      const row = scoring.rows[0];
+      if (
+        !row ||
+        row.content_sha256.toString("hex") !==
+          this.options.pipelineIdentity.scoringConfigContentSha256
+      )
+        throw new Error(
+          "Production scoring authority does not match the pinned pipeline identity.",
+        );
+      persistedSmeWeightValidation = authoritativeSmeWeightValidation({
+        environment: "production",
+        weightsBp: row.weights_bp,
+        smeApprovalRef: row.sme_approval_ref,
+        releasedAt: row.released_at,
+      });
+    }
     const sources = await client.query<{
       evidence_item_id: string;
       canonical_url: string;
+      normalized_domain: string;
+      retrieved_at: Date;
       content_sha256: Buffer;
       bounded_extract: string;
     }>(
-      `SELECT p.evidence_item_id,s.canonical_url,s.content_sha256,s.bounded_extract
+      `SELECT p.evidence_item_id,s.canonical_url,s.normalized_domain,s.retrieved_at,
+              s.content_sha256,s.bounded_extract
          FROM live_source_provenance p
          JOIN source_document s
            ON s.account_id=p.account_id AND s.run_id=p.run_id
@@ -1507,23 +1804,15 @@ export class PostgresLiveResearchAtomicLedger {
         WHERE p.account_id=$1 AND p.run_id=$2 AND p.source_disposition='accepted'`,
       [this.options.accountId, runId],
     );
-    const sourceByEvidence = new Map(
-      sources.rows.map((source) => [source.evidence_item_id, source]),
-    );
-    for (const evidence of graph.evidence) {
-      const source = sourceByEvidence.get(evidence.evidenceId);
-      if (
-        evidence.sourceKind !== "external_url" ||
-        evidence.verificationDisposition !== "accepted" ||
-        !source ||
-        source.canonical_url !== evidence.url ||
-        source.content_sha256.toString("hex") !== evidence.contentSha256 ||
-        source.bounded_extract !== evidence.extract
-      )
-        throw new Error(
-          "Live evidence output is not exactly bound to a fetched source.",
-        );
-    }
+    const sourceBindings = sources.rows.map((source) => ({
+      evidenceId: source.evidence_item_id,
+      canonicalUrl: source.canonical_url,
+      publisherDomain: source.normalized_domain,
+      retrievedAt: source.retrieved_at.toISOString(),
+      contentSha256: source.content_sha256.toString("hex"),
+      boundedExcerpt: source.bounded_extract,
+    }));
+    assertLiveEvidenceSourceBindings(graph.evidence, sourceBindings);
     const identityResolutions = resolveCandidateIdentities({
       accountId: this.options.accountId,
       runId,
@@ -1554,6 +1843,24 @@ export class PostgresLiveResearchAtomicLedger {
         eligible.has(candidateId),
       ),
     };
+    const completeResult = buildOperationalLiveCompleteResultV2({
+      graph,
+      eligibleCandidateIds: persistedGraph.eligibleCandidateIds,
+      sourceBindings,
+      qualificationMode:
+        this.options.executionEnvironment === "production"
+          ? "production"
+          : "synthetic_qualification",
+      ...(persistedSmeWeightValidation === undefined
+        ? {}
+        : { smeWeightValidation: persistedSmeWeightValidation }),
+      ...(this.options.authoritativeRegistryDomains === undefined
+        ? {}
+        : {
+            authoritativeRegistryDomains:
+              this.options.authoritativeRegistryDomains,
+          }),
+    }).foundation;
     const values: EvidenceLineageLedgerV1["values"] = graph.claims.flatMap(
       (claim) =>
         claim.evidenceIds.map((evidenceId) => ({
@@ -1666,7 +1973,7 @@ export class PostgresLiveResearchAtomicLedger {
             claim.claimId,
             evidenceId,
             this.options.accountId,
-            json({ extraction_version: "untrusted-source-boundary.v1" }),
+            json({ extraction_version: LIVE_RESEARCH_EXTRACTION_VERSION }),
           ],
         );
       }
@@ -1708,7 +2015,7 @@ export class PostgresLiveResearchAtomicLedger {
         ],
       );
     }
-    const serialized = json(persistedGraph);
+    const serialized = json(completeResult);
     const outcome = eligible.size > 0 ? "candidates" : "no_responsible_match";
     await client.query(
       `INSERT INTO run_result
@@ -1723,9 +2030,16 @@ export class PostgresLiveResearchAtomicLedger {
         persistedGraph.candidates.length,
         "Unsupported claims are withheld; live evidence remains source-bound.",
         serialized,
-        sha(serialized),
+        standardCompleteResultDocumentSha256(completeResult),
       ],
     );
+    await bindConsultantProjectionPolicyAtResultProduction(client, {
+      accountId: this.options.accountId,
+      runId,
+      release:
+        this.options.consultantProjectionConfig ??
+        DEFAULT_CONSULTANT_PROJECTION_CONFIG,
+    });
     for (const [index, candidate] of graph.candidates.entries()) {
       await client.query(
         `INSERT INTO result_candidate
@@ -1772,6 +2086,8 @@ export class LiveResearchExecutionService {
       }>;
       circuit: LiveResearchCircuitPolicy;
       validateOutput: (body: unknown) => EvidenceGraphV1;
+      authoritativeRegistryDomains?: readonly string[];
+      consultantProjectionConfig?: ConsultantProjectionConfigRelease;
       backoff?: Backoff;
       phaseObserver?: (
         phase:
@@ -1796,28 +2112,116 @@ export class LiveResearchExecutionService {
     outputSchema: Readonly<Record<string, unknown>>;
     signal: AbortSignal;
   }): Promise<LiveResearchTerminalRecord<EvidenceGraphV1>> {
-    const canonical = await this.options.pool.query<{ canonical_text: string }>(
-      `SELECT v.canonical_document->>'canonical_text' canonical_text
+    assertApprovedLiveResearchOutputSchema(input.outputSchema);
+    const validatedPolicy = validateResearchRoutePolicy(input.policy);
+    const routePolicyCanonicalSha256 =
+      canonicalResearchRoutePolicySha256(validatedPolicy);
+    const admission = await this.options.pool.query<{
+      canonical_text: string;
+      research_route_policy_id: string;
+      route_policy_version: string;
+      route_policy_content_sha256: Buffer | null;
+      model_policy_version_id: string;
+      model_policy_version: number | string;
+      model_policy_content_sha256: Buffer;
+      scoring_config_version_id: string;
+      scoring_config_version: number | string;
+      scoring_config_content_sha256: Buffer;
+      scoring_weights_bp: unknown;
+      scoring_sme_approval_ref: string | null;
+      scoring_released_at: Date;
+    }>(
+      `SELECT v.canonical_document->>'canonical_text' canonical_text,
+              rp.research_route_policy_id,rp.policy_version route_policy_version,
+              rp.content_sha256 route_policy_content_sha256,
+              mp.model_policy_version_id,mp.version model_policy_version,
+              mp.content_sha256 model_policy_content_sha256,
+              sc.scoring_config_version_id,sc.version scoring_config_version,
+              sc.content_sha256 scoring_config_content_sha256,
+              sc.weights_bp scoring_weights_bp,
+              sc.sme_approval_ref scoring_sme_approval_ref,
+              sc.released_at scoring_released_at
          FROM research_run r
          JOIN canonical_request_version v
            ON v.account_id=r.account_id
           AND v.canonical_request_version_id=r.canonical_request_version_id
+         JOIN model_policy_version mp
+           ON mp.model_policy_version_id=r.model_policy_version_id
+         JOIN scoring_config_version sc
+           ON sc.scoring_config_version_id=r.scoring_config_version_id
+         JOIN research_route_policy rp
+           ON rp.research_route_policy_id=$3 AND rp.policy_version=$4
+          AND rp.activation_state='qualified'
         WHERE r.account_id=$1 AND r.run_id=$2 AND v.match_readiness <> 'not_ready'
           AND EXISTS (SELECT 1 FROM canonical_confirmation c
                        WHERE c.canonical_request_version_id=v.canonical_request_version_id
-                         AND c.accepted)`,
-      [this.options.accountId, input.runId],
+                         AND c.accepted)
+        FOR SHARE OF sc`,
+      [
+        this.options.accountId,
+        input.runId,
+        this.options.policyId,
+        validatedPolicy.policyVersion,
+      ],
     );
-    const canonicalEnglishRequest = canonical.rows[0]?.canonical_text;
-    if (!canonicalEnglishRequest)
+    const admitted = admission.rows[0];
+    const canonicalEnglishRequest = admitted?.canonical_text;
+    if (
+      !canonicalEnglishRequest ||
+      !admitted.research_route_policy_id ||
+      !admitted.route_policy_version ||
+      !admitted.route_policy_content_sha256 ||
+      !admitted.model_policy_version_id ||
+      !admitted.model_policy_version ||
+      !admitted.model_policy_content_sha256 ||
+      !admitted.scoring_config_version_id ||
+      !admitted.scoring_config_version ||
+      !admitted.scoring_config_content_sha256
+    )
       throw new Error(
-        "Confirmed canonical English research input is unavailable.",
+        "Confirmed version-pinned live research admission is unavailable.",
       );
+    const pipelineIdentity = createLiveResearchPipelineIdentity({
+      outputSchema: input.outputSchema,
+      researchRoutePolicyId: admitted.research_route_policy_id,
+      routePolicyVersion: admitted.route_policy_version,
+      routePolicyCanonicalSha256,
+      modelPolicyVersionId: admitted.model_policy_version_id,
+      modelPolicyVersion: String(admitted.model_policy_version),
+      modelPolicyContentSha256:
+        admitted.model_policy_content_sha256.toString("hex"),
+      scoringConfigVersionId: admitted.scoring_config_version_id,
+      scoringConfigVersion: String(admitted.scoring_config_version),
+      scoringConfigContentSha256:
+        admitted.scoring_config_content_sha256.toString("hex"),
+    });
+    if (
+      admitted.route_policy_content_sha256.toString("hex") !==
+      pipelineIdentity.routePolicyCanonicalSha256
+    )
+      throw new Error("Qualified route-policy content digest does not match.");
+    authoritativeSmeWeightValidation({
+      environment: validatedPolicy.environment,
+      weightsBp: admitted.scoring_weights_bp,
+      smeApprovalRef: admitted.scoring_sme_approval_ref,
+      releasedAt: admitted.scoring_released_at,
+    });
     const ledger = new PostgresLiveResearchAtomicLedger({
       pool: this.options.pool,
       accountId: this.options.accountId,
       userId: this.options.userId,
       policyId: this.options.policyId,
+      pipelineIdentity,
+      executionEnvironment: validatedPolicy.environment,
+      consultantProjectionConfig:
+        this.options.consultantProjectionConfig ??
+        DEFAULT_CONSULTANT_PROJECTION_CONFIG,
+      ...(this.options.authoritativeRegistryDomains === undefined
+        ? {}
+        : {
+            authoritativeRegistryDomains:
+              this.options.authoritativeRegistryDomains,
+          }),
       ...this.options.ledgerTiming,
     });
     const reservation = await ledger.reserveExecution(
@@ -1856,7 +2260,7 @@ export class LiveResearchExecutionService {
         sourceUrls = existingDiscovery.sourceUrls;
         searchAttemptId = existingDiscovery.searchAttemptId;
       } else {
-        const sourceRouteDefinition = input.policy.routes
+        const sourceRouteDefinition = validatedPolicy.routes
           .filter((route) => route.enabled && route.path === "gemini_direct")
           .sort(
             (left, right) => left.fallbackPosition - right.fallbackPosition,
@@ -1866,7 +2270,7 @@ export class LiveResearchExecutionService {
             "Qualified direct source-discovery route is unavailable.",
           );
         const sourceRoute = resolveActiveResearchRoute(
-          input.policy,
+          validatedPolicy,
           sourceRouteDefinition.routeId,
           input.capturedAt,
         );
@@ -1878,7 +2282,7 @@ export class LiveResearchExecutionService {
         if (!sourceCircuitAdmission) {
           const circuitOpenRoute: LiveResearchRouteRecord = {
             snapshot: createResearchRouteSnapshot({
-              policy: input.policy,
+              policy: validatedPolicy,
               route: sourceRoute,
               snapshotId: `${input.executionId}:SOURCE-DISCOVERY:${sourceRoute.routeId}`,
               runId: input.runId,
@@ -1917,15 +2321,22 @@ export class LiveResearchExecutionService {
         >;
         try {
           await sourceCircuitProbe?.assertOwnership();
-          discovery = await this.options.sourceDiscovery.discover({
-            policy: input.policy,
-            executionId: input.executionId,
-            runId: input.runId,
-            capturedAt: input.capturedAt,
-            canonicalEnglishRequest,
-            signal: sourceSignal,
-            assertOwnership: heartbeat.assertOwned,
-          });
+          discovery = await ledger.withPipelineIdentityAdmission(
+            ownershipToken,
+            generation,
+            input.executionId,
+            input.runId,
+            async () =>
+              await this.options.sourceDiscovery.discover({
+                policy: validatedPolicy,
+                executionId: input.executionId,
+                runId: input.runId,
+                capturedAt: input.capturedAt,
+                canonicalEnglishRequest,
+                signal: sourceSignal,
+                assertOwnership: heartbeat.assertOwned,
+              }),
+          );
           await sourceCircuitProbe?.assertOwnership();
         } catch (error) {
           const failedRoute =
@@ -2004,6 +2415,7 @@ export class LiveResearchExecutionService {
         capturedAt: input.capturedAt,
       };
       const sanitizedEvidence: SanitizedResearchEvidence[] = [];
+      const sourceBindings: LiveSourceBindingRecord[] = [];
       try {
         for (const url of sourceUrls) {
           await heartbeat.assertOwned();
@@ -2020,17 +2432,25 @@ export class LiveResearchExecutionService {
             throw new Error("A checkpointed secure fetch was denied.");
           if (checkpoint.disposition === "accepted") {
             sanitizedEvidence.push(checkpoint.evidence);
+            sourceBindings.push(checkpoint.binding);
             continue;
           }
           let fetched: SecureFetchResult;
           try {
-            fetched = await secureFetch({
-              url,
-              resolver: this.options.resolver,
-              accessEvaluator: this.options.accessEvaluator,
-              transport: this.options.fetchTransport,
-              signal: operationController.signal,
-            });
+            fetched = await ledger.withPipelineIdentityAdmission(
+              ownershipToken,
+              generation,
+              input.executionId,
+              input.runId,
+              async () =>
+                await secureFetch({
+                  url,
+                  resolver: this.options.resolver,
+                  accessEvaluator: this.options.accessEvaluator,
+                  transport: this.options.fetchTransport,
+                  signal: operationController.signal,
+                }),
+            );
           } catch (error) {
             if (error instanceof SecureFetchDenied)
               await this.persistFetchAttempts(
@@ -2054,15 +2474,20 @@ export class LiveResearchExecutionService {
             input.executionId,
           );
           const sealed = sealUntrustedSource(fetched.body);
-          const excerpt = sealed.normalizedText.slice(0, 4000).trim();
+          const excerpt = sealed.normalizedText.slice(0, 600).trim();
           if (!excerpt)
             throw new Error("Fetched evidence produced no safe excerpt.");
+          if (!persistedSource.binding)
+            throw new Error("Persisted live source binding is unavailable.");
           sanitizedEvidence.push({
             sourceId: persistedSource.evidenceItemId,
             canonicalUrl: fetched.canonicalUrl,
+            publisherDomain: persistedSource.binding.publisherDomain,
+            retrievedAt: persistedSource.binding.retrievedAt,
             contentSha256: fetched.contentSha256.toLowerCase(),
             excerpt,
           });
+          sourceBindings.push(persistedSource.binding);
           await this.options.phaseObserver?.("source_persisted", url);
         }
       } catch (error) {
@@ -2088,11 +2513,17 @@ export class LiveResearchExecutionService {
       ): ProviderTransport => ({
         send: async (request) => {
           await heartbeat.assertOwned();
-          return await transport.send(request);
+          return await ledger.withPipelineIdentityAdmission(
+            ownershipToken,
+            generation,
+            input.executionId,
+            input.runId,
+            async () => await transport.send(request),
+          );
         },
       });
       return await executeQualifiedResearch({
-        policy: input.policy,
+        policy: validatedPolicy,
         executionId: input.executionId,
         runId: input.runId,
         capturedAt: input.capturedAt,
@@ -2131,25 +2562,7 @@ export class LiveResearchExecutionService {
           validateEvidenceGraph(graph);
           if (graph.runId !== input.runId)
             throw new Error("Live evidence graph belongs to another run.");
-          const sourceById = new Map(
-            sanitizedEvidence.map((source) => [source.sourceId, source]),
-          );
-          if (
-            graph.evidence.some((evidence) => {
-              const source = sourceById.get(evidence.evidenceId);
-              return (
-                evidence.sourceKind !== "external_url" ||
-                evidence.verificationDisposition !== "accepted" ||
-                !source ||
-                evidence.url !== source.canonicalUrl ||
-                evidence.contentSha256 !== source.contentSha256 ||
-                evidence.extract !== source.excerpt
-              );
-            })
-          )
-            throw new Error(
-              "Live evidence graph is not exactly bound to sanitized sources.",
-            );
+          assertLiveEvidenceSourceBindings(graph.evidence, sourceBindings);
           return graph;
         },
         signal: operationController.signal,
@@ -2175,7 +2588,11 @@ export class LiveResearchExecutionService {
     ownershipToken: string,
     generation: number,
     executionId: string,
-  ): Promise<{ sourceDocumentId: string; evidenceItemId: string }> {
+  ): Promise<{
+    sourceDocumentId: string;
+    evidenceItemId: string;
+    binding: LiveSourceBindingRecord | null;
+  }> {
     return await inTransaction(this.options.pool, async (client) => {
       await ledger.lockOwnership(
         ownershipToken,
@@ -2238,12 +2655,16 @@ export class LiveResearchExecutionService {
           input.runId,
           client,
         );
-        return { sourceDocumentId: "", evidenceItemId: "" };
+        return {
+          sourceDocumentId: "",
+          evidenceItemId: "",
+          binding: null,
+        };
       }
       if (!acceptedFetchAttemptId)
         throw new Error("Secure fetch omitted a final accepted attempt.");
       const sealed = sealUntrustedSource(fetched.body);
-      const excerpt = sealed.normalizedText.slice(0, 4000).trim();
+      const excerpt = sealed.normalizedText.slice(0, 600).trim();
       const sourceDocumentId = randomUUID();
       const evidenceItemId = randomUUID();
       await client.query(
@@ -2252,7 +2673,7 @@ export class LiveResearchExecutionService {
             normalized_domain,content_type,content_sha256,bounded_extract,
             bounded_extract_sha256,extraction_version,active_content_removed,
             untrusted_data_only,retrieved_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'untrusted-source-boundary.v1',true,true,$11)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,true,$12)`,
         [
           sourceDocumentId,
           this.options.accountId,
@@ -2264,6 +2685,7 @@ export class LiveResearchExecutionService {
           Buffer.from(fetched.contentSha256, "hex"),
           excerpt,
           sha(excerpt),
+          LIVE_RESEARCH_EXTRACTION_VERSION,
           input.capturedAt,
         ],
       );
@@ -2290,7 +2712,7 @@ export class LiveResearchExecutionService {
             extraction_method,extraction_version,bounded_excerpt_sha256,
             source_disposition,created_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'deterministic_text_boundary',
-                 'untrusted-source-boundary.v1',$9,'accepted',$10)`,
+                 $9,$10,'accepted',$11)`,
         [
           randomUUID(),
           this.options.accountId,
@@ -2300,6 +2722,7 @@ export class LiveResearchExecutionService {
           sourceDocumentId,
           fetched.canonicalUrl,
           fetched.publisherDomain,
+          LIVE_RESEARCH_EXTRACTION_VERSION,
           sha(excerpt),
           input.capturedAt,
         ],
@@ -2311,7 +2734,18 @@ export class LiveResearchExecutionService {
         input.runId,
         client,
       );
-      return { sourceDocumentId, evidenceItemId };
+      return {
+        sourceDocumentId,
+        evidenceItemId,
+        binding: Object.freeze({
+          evidenceId: evidenceItemId,
+          canonicalUrl: fetched.canonicalUrl,
+          publisherDomain: fetched.publisherDomain,
+          retrievedAt: input.capturedAt,
+          contentSha256: fetched.contentSha256.toLowerCase(),
+          boundedExcerpt: excerpt,
+        }),
+      };
     });
   }
 
@@ -2326,7 +2760,11 @@ export class LiveResearchExecutionService {
   ): Promise<
     | { disposition: "none" }
     | { disposition: "denied" }
-    | { disposition: "accepted"; evidence: SanitizedResearchEvidence }
+    | {
+        disposition: "accepted";
+        evidence: SanitizedResearchEvidence;
+        binding: LiveSourceBindingRecord;
+      }
   > {
     return await inTransaction(this.options.pool, async (client) => {
       await ledger.assertOwnership(
@@ -2339,10 +2777,13 @@ export class LiveResearchExecutionService {
       const accepted = await client.query<{
         evidence_item_id: string;
         canonical_url: string;
+        normalized_domain: string;
+        retrieved_at: Date;
         content_sha256: Buffer;
         bounded_extract: string;
       }>(
-        `SELECT p.evidence_item_id,s.canonical_url,s.content_sha256,s.bounded_extract
+        `SELECT p.evidence_item_id,s.canonical_url,s.normalized_domain,s.retrieved_at,
+                s.content_sha256,s.bounded_extract
            FROM fetch_attempt f
            JOIN source_document s
              ON s.account_id=f.account_id AND s.run_id=f.run_id
@@ -2363,8 +2804,18 @@ export class LiveResearchExecutionService {
           evidence: Object.freeze({
             sourceId: source.evidence_item_id,
             canonicalUrl: source.canonical_url,
+            publisherDomain: source.normalized_domain,
+            retrievedAt: source.retrieved_at.toISOString(),
             contentSha256: source.content_sha256.toString("hex"),
             excerpt: source.bounded_extract,
+          }),
+          binding: Object.freeze({
+            evidenceId: source.evidence_item_id,
+            canonicalUrl: source.canonical_url,
+            publisherDomain: source.normalized_domain,
+            retrievedAt: source.retrieved_at.toISOString(),
+            contentSha256: source.content_sha256.toString("hex"),
+            boundedExcerpt: source.bounded_extract,
           }),
         };
       const denied = await client.query(

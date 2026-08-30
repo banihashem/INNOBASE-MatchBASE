@@ -19,7 +19,7 @@ export default defineConfig({
     {
       name: "product-reference",
       testMatch:
-        /product-(?:(?:live|standard|qualified)-)?reference-path\.spec\.mjs/u,
+        /product-(?:(?:(?:live|standard|qualified)-)?reference-path|admin-(?:entitlements|requests)|consultant-result)\.spec\.mjs/u,
       use: { baseURL: "http://127.0.0.1:3010" },
     },
   ],
@@ -33,7 +33,7 @@ export default defineConfig({
     },
     {
       command:
-        "pnpm --filter @matchbase/data migrate && pnpm --filter @matchbase/data seed:local && pnpm --filter @matchbase/web start",
+        "pnpm --filter @matchbase/data migrate && pnpm --filter @matchbase/data seed:local && pnpm --filter @matchbase/web exec next dev -H 127.0.0.1 -p 3010",
       url: "http://127.0.0.1:3010",
       reuseExistingServer: false,
       timeout: 60_000,

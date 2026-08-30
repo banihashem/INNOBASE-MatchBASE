@@ -4,7 +4,11 @@ import {
   DeterministicFixtureCanonicalizer,
   DeterministicFixtureLanguageIdentifier,
 } from "@matchbase/ai-evidence";
-import { createPool, recoverExpiredExecutionLeases } from "@matchbase/data";
+import {
+  consultantProjectionConfigFromEnvironment,
+  createPool,
+  recoverExpiredExecutionLeases,
+} from "@matchbase/data";
 import { createEnvironmentLiveResearchDispatcher } from "./live-research-environment-runtime.js";
 import type { QualifiedLiveResearchWorkerDispatcher } from "./live-research-worker.js";
 import { MatchBaseApplication } from "./service.js";
@@ -31,6 +35,9 @@ const pool = createPool({
   connectionTimeoutMillis: probeMs,
 });
 const digestKey = Buffer.from(digestKeyText, "utf8");
+const consultantProjectionConfig = consultantProjectionConfigFromEnvironment(
+  process.env,
+);
 const demoApplication = syntheticEnabled
   ? new MatchBaseApplication({
       pool,
@@ -40,10 +47,15 @@ const demoApplication = syntheticEnabled
         digestKeyId: "combined-worker-v1",
         languageIdentifier: new DeterministicFixtureLanguageIdentifier(),
       }),
+      consultantProjectionConfig,
     })
   : null;
 const standardApplication = syntheticEnabled
-  ? new StandardWorkspaceApplication({ pool, privacyKey: digestKey })
+  ? new StandardWorkspaceApplication({
+      pool,
+      privacyKey: digestKey,
+      consultantProjectionConfig,
+    })
   : null;
 
 async function createLiveDispatcher(): Promise<QualifiedLiveResearchWorkerDispatcher | null> {

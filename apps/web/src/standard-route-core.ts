@@ -9,6 +9,7 @@ import {
   type RequestContext,
   type StandardRouteResult,
 } from "@matchbase/application";
+import type { ResultProjectionMetadata } from "@matchbase/ai-evidence";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -147,6 +148,7 @@ async function conditionalProjectionResult(
   body: Record<string, unknown>,
   ifNoneMatch: string | null,
   headers: Record<string, string> = {},
+  resultProjectionMetadata?: ResultProjectionMetadata,
 ): Promise<StandardRouteResult> {
   const result = conditionalResult(
     application,
@@ -162,6 +164,7 @@ async function conditionalProjectionResult(
       resourceId,
       requestId,
       runId,
+      resultProjectionMetadata,
     );
   else
     await application.recordServedProjection(
@@ -172,6 +175,7 @@ async function conditionalProjectionResult(
       requestId,
       runId,
       body as unknown as Record<string, unknown>,
+      resultProjectionMetadata,
     );
   return result;
 }
@@ -433,7 +437,8 @@ export async function handleStandardRoute(
   const result = /^\/api\/v1\/runs\/([^/]+)\/result$/u.exec(path);
   if (method === "GET" && result) {
     const runId = visibleUuid(result[1]);
-    const body = await application.getResult(context, runId, false);
+    const projected = await application.getResultProjection(context, runId);
+    const body = projected.body;
     return conditionalProjectionResult(
       application,
       context,
@@ -444,6 +449,8 @@ export async function handleStandardRoute(
       runId,
       body as unknown as Record<string, unknown>,
       request.headers.get("if-none-match"),
+      {},
+      projected.metadata,
     );
   }
   const cancellation = /^\/api\/v1\/runs\/([^/]+)\/cancellation$/u.exec(path);

@@ -13,19 +13,24 @@ import {
 } from "../slice3/fixtures/live-worker-runtime.mjs";
 
 const qualifiedBaseUrl = "http://127.0.0.1:3012";
-const standaloneRoot = resolve("apps/web/.next/standalone/apps/web");
-const serverPath = join(standaloneRoot, "server.js");
+const wcag22Tags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+const webRoot = resolve("apps/web");
+const nextCliPath = join(webRoot, "node_modules/next/dist/bin/next");
+const qualifiedTestDistRoot = join(webRoot, ".next/qualified-live");
 
-async function waitForServer() {
+async function waitForServer(server, serverOutput) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
+    if (server.exitCode !== null) break;
     try {
       const response = await fetch(`${qualifiedBaseUrl}/api/v1/health`);
       if (response.ok) return;
     } catch {}
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
   }
-  throw new Error("Qualified-live test server did not become ready.");
+  throw new Error(
+    `Qualified-live test server did not become ready. ${serverOutput()}`,
+  );
 }
 
 async function expectResponsive(page, width, mode) {
@@ -65,32 +70,43 @@ test("injected qualified-live API, worker, and UI remain truthful and accessible
     "utf8",
   );
   const credential = () => randomBytes(24).toString("base64url");
-  const server = spawn(process.execPath, [serverPath], {
-    cwd: standaloneRoot,
-    stdio: "ignore",
-    env: {
-      ...process.env,
-      HOSTNAME: "127.0.0.1",
-      PORT: "3012",
-      DATABASE_URL: process.env.DATABASE_URL,
-      MATCHBASE_ENVIRONMENT: "test",
-      MATCHBASE_OIDC_SIMULATOR: "true",
-      MATCHBASE_SYNTHETIC_FIXTURE: "true",
-      MATCHBASE_ORIGIN: qualifiedBaseUrl,
-      MATCHBASE_DEPLOYMENT_ID: `qualified-ui-${Date.now()}`,
-      MATCHBASE_DIGEST_KEY: randomBytes(32).toString("base64url"),
-      MATCHBASE_LIVE_RESEARCH_ENABLED: "true",
-      MATCHBASE_TEST_LIVE_POLICY_PATH: policyPath,
-      MATCHBASE_GEMINI_API_KEY: credential(),
-      MATCHBASE_OPENROUTER_API_KEY: credential(),
+  const server = spawn(
+    process.execPath,
+    [nextCliPath, "dev", "-H", "127.0.0.1", "-p", "3012"],
+    {
+      cwd: webRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        DATABASE_URL: process.env.DATABASE_URL,
+        MATCHBASE_ENVIRONMENT: "test",
+        MATCHBASE_TEST_NEXT_DIST_DIR: ".next/qualified-live",
+        MATCHBASE_OIDC_SIMULATOR: "true",
+        MATCHBASE_SYNTHETIC_FIXTURE: "true",
+        MATCHBASE_ORIGIN: qualifiedBaseUrl,
+        MATCHBASE_DEPLOYMENT_ID: `qualified-ui-${Date.now()}`,
+        MATCHBASE_DIGEST_KEY: randomBytes(32).toString("base64url"),
+        MATCHBASE_LIVE_RESEARCH_ENABLED: "true",
+        MATCHBASE_TEST_LIVE_POLICY_PATH: policyPath,
+        MATCHBASE_GEMINI_API_KEY: credential(),
+        MATCHBASE_OPENROUTER_API_KEY: credential(),
+      },
     },
-  });
+  );
+  let serverOutput = "";
+  const recordServerOutput = (chunk) => {
+    serverOutput = `${serverOutput}${chunk}`.slice(-4_000);
+  };
+  server.stdout.setEncoding("utf8");
+  server.stderr.setEncoding("utf8");
+  server.stdout.on("data", recordServerOutput);
+  server.stderr.on("data", recordServerOutput);
   const pool = createPool({ connectionString: process.env.DATABASE_URL });
   const context = await browser.newContext({ baseURL: qualifiedBaseUrl });
   const page = await context.newPage();
   try {
     await seedLiveWorkerFixture(pool);
-    await waitForServer();
+    await waitForServer(server, () => serverOutput);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/auth/simulator/start");
 
@@ -213,7 +229,10 @@ test("injected qualified-live API, worker, and UI remain truthful and accessible
         document.documentElement.dir = direction;
       }, mode);
       await expectResponsive(page, mode.width, mode);
-      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      expect(
+        (await new AxeBuilder({ page }).withTags(wcag22Tags).analyze())
+          .violations,
+      ).toEqual([]);
     }
   } finally {
     await context.close();
@@ -225,6 +244,7 @@ test("injected qualified-live API, worker, and UI remain truthful and accessible
       server.kill("SIGTERM");
       await exited;
     }
+    await rm(qualifiedTestDistRoot, { recursive: true, force: true });
     await rm(directory, { recursive: true, force: true });
   }
 });

@@ -564,6 +564,11 @@ postgresTest(
       assert.equal(runStatus.terminal, true);
       assert.equal(runStatus.result_available, true);
       assert.equal("counts" in runStatus, false);
+      const sessionAfterTerminal = await app.me(context(ids));
+      assert.deepEqual(sessionAfterTerminal.execution, {
+        active: 0,
+        capacity: 3,
+      });
 
       const disclosure = await app.getRunResult(context(ids), submitted.run_id);
       assert.equal(disclosure.body.candidates.length, 3);

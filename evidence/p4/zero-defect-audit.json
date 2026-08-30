@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "candidateId": "MB-P4-RC-LOCAL-2026-08-29",
+  "recordedAt": "2026-08-29T09:18:40Z",
+  "scope": "Agent-completable isolated-local product, data, authorization, reporting, accessibility, browser and governance controls",
+  "criticalDefects": 0,
+  "majorDefects": 0,
+  "minorDefects": 0,
+  "correctedDuringAudit": [
+    "Consultant entitlement could enter the Standard workspace",
+    "Historical Standard canonical documents could omit hard_constraints",
+    "Qualified-live result digest used non-canonical JSON bytes",
+    "Synthetic worker could race the qualified-live dispatcher",
+    "Automatic result transition suppressed required focus when the active control was removed",
+    "Standard Chrome fixture used values outside the closed domain pack",
+    "Synthetic scenario selection depended on random constraint identifiers",
+    "Expected worker lease contention was reported as a cycle failure"
+  ],
+  "releaseBlockers": [
+    {
+      "id": "P4-BLOCK-EDGE-IDENTITY",
+      "class": "BLOCKED_EXTERNAL",
+      "detail": "All 26 Gate B controls require one named external target, raw evidence, OAuth In production and Security Owner signature."
+    },
+    {
+      "id": "P4-BLOCK-OBJECT-STORE",
+      "class": "BLOCKED_TARGET_CONFIGURATION",
+      "detail": "A production ArtifactObjectReader/object-store binding cannot be selected until the target storage service is named and provisioned. The default remains fail-closed with HTTP 503."
+    },
+    {
+      "id": "P4-BLOCK-LEGAL",
+      "class": "BLOCKED_HUMAN_AUTHORITY",
+      "detail": "Counsel approval of the reporting notice and version is absent."
+    },
+    {
+      "id": "P4-BLOCK-PDF-ACCESSIBILITY",
+      "class": "BLOCKED_HUMAN_AUTHORITY",
+      "detail": "Formal PDF accessibility owner decision and native NVDA, JAWS or VoiceOver/PDF-UA validation are absent."
+    },
+    {
+      "id": "P4-BLOCK-SECURITY-SIGNATURE",
+      "class": "BLOCKED_HUMAN_AUTHORITY",
+      "detail": "Security Owner signature over the exact Gate B result set is absent."
+    },
+    {
+      "id": "P4-BLOCK-SME-WEIGHTS",
+      "class": "BLOCKED_HUMAN_AUTHORITY",
+      "detail": "The six production scoring weights lack attributable SME validation. Synthetic qualification remains valid."
+    }
+  ],
+  "disposition": "ZERO_KNOWN_DEFECTS_IN_TESTED_LOCAL_SCOPE_RELEASE_BLOCKED"
+}

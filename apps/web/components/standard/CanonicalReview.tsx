@@ -28,6 +28,7 @@ export function CanonicalReview({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
+  const contradictionRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const changed = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(baseline),
     [draft, baseline],
@@ -92,8 +93,14 @@ export function CanonicalReview({
   }
 
   async function confirmAndRun() {
-    if (unresolved.some((item) => !resolutions[item.contradiction_id])) {
-      fail("Select one owner resolution for every contradiction.");
+    const firstUnresolved = unresolved.find(
+      (item) => !resolutions[item.contradiction_id],
+    );
+    if (firstUnresolved) {
+      setError("Select one owner resolution for every contradiction.");
+      requestAnimationFrame(() =>
+        contradictionRefs.current[firstUnresolved.contradiction_id]?.focus(),
+      );
       return;
     }
     setBusy(true);
@@ -171,7 +178,9 @@ export function CanonicalReview({
   return (
     <section className="standard-section" aria-labelledby="canonical-heading">
       <p className="eyebrow">Canonical review</p>
-      <h2 id="canonical-heading">Confirm the canonical English request</h2>
+      <h1 id="canonical-heading" tabIndex={-1}>
+        Confirm the canonical English request
+      </h1>
       <p className="lede">
         Source language: <strong>{draft.source_language}</strong>. Canonical
         language: <strong>English</strong>.
@@ -207,6 +216,7 @@ export function CanonicalReview({
           role="alert"
           tabIndex={-1}
           ref={errorRef}
+          id="canonical-review-error"
         >
           {error}
         </div>
@@ -290,7 +300,7 @@ export function CanonicalReview({
       </div>
       {draft.conditional_requirements.length > 0 ? (
         <section aria-labelledby="conditional-review">
-          <h3 id="conditional-review">Conditional requirements</h3>
+          <h2 id="conditional-review">Conditional requirements</h2>
           {draft.conditional_requirements.map((item) => (
             <article className="canonical-card" key={item.requirement_id}>
               <p>
@@ -309,19 +319,38 @@ export function CanonicalReview({
       ) : null}
       {unresolved.length > 0 ? (
         <section aria-labelledby="contradictions-heading">
-          <h3 id="contradictions-heading">Resolve contradictions</h3>
+          <h2 id="contradictions-heading">Resolve contradictions</h2>
           {unresolved.map((item) => (
             <fieldset key={item.contradiction_id}>
               <legend>{item.contradiction_class.replaceAll("_", " ")}</legend>
               {item.alternatives.map((alternative) => (
                 <label key={alternative.alternative_id} className="radio-row">
                   <input
+                    ref={(node) => {
+                      if (
+                        alternative.alternative_id ===
+                        item.alternatives[0]?.alternative_id
+                      )
+                        contradictionRefs.current[item.contradiction_id] = node;
+                    }}
                     type="radio"
                     name={item.contradiction_id}
                     value={alternative.alternative_id}
                     checked={
                       resolutions[item.contradiction_id] ===
                       alternative.alternative_id
+                    }
+                    aria-invalid={
+                      error ===
+                        "Select one owner resolution for every contradiction." &&
+                      !resolutions[item.contradiction_id]
+                    }
+                    aria-describedby={
+                      error ===
+                        "Select one owner resolution for every contradiction." &&
+                      !resolutions[item.contradiction_id]
+                        ? "canonical-review-error"
+                        : undefined
                     }
                     onChange={() =>
                       setResolutions((current) => ({
@@ -330,7 +359,7 @@ export function CanonicalReview({
                       }))
                     }
                   />
-                  {alternative.canonical_english_value}
+                  <bdi dir="auto">{alternative.canonical_english_value}</bdi>
                 </label>
               ))}
             </fieldset>

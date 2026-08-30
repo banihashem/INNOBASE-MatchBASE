@@ -1,6 +1,8 @@
 export interface SanitizedResearchEvidence {
   readonly sourceId: string;
   readonly canonicalUrl: string;
+  readonly publisherDomain: string;
+  readonly retrievedAt: string;
   readonly contentSha256: string;
   readonly excerpt: string;
 }
@@ -21,6 +23,8 @@ const REQUEST_FIELDS = new Set([
 const EVIDENCE_FIELDS = new Set([
   "sourceId",
   "canonicalUrl",
+  "publisherDomain",
+  "retrievedAt",
   "contentSha256",
   "excerpt",
 ]);
@@ -118,6 +122,28 @@ export function validateQualifiedResearchRequest(
       throw new Error(
         `sanitizedEvidence[${index}].canonicalUrl must be canonical HTTPS.`,
       );
+    }
+    const publisherDomain = canonicalText(
+      evidence.publisherDomain,
+      `sanitizedEvidence[${index}].publisherDomain`,
+      253,
+    );
+    if (publisherDomain !== url.hostname) {
+      throw new Error(
+        `sanitizedEvidence[${index}].publisherDomain is invalid.`,
+      );
+    }
+    const retrievedAt = canonicalText(
+      evidence.retrievedAt,
+      `sanitizedEvidence[${index}].retrievedAt`,
+      35,
+    );
+    const retrievedTime = new Date(retrievedAt);
+    if (
+      Number.isNaN(retrievedTime.getTime()) ||
+      retrievedTime.toISOString() !== retrievedAt
+    ) {
+      throw new Error(`sanitizedEvidence[${index}].retrievedAt is invalid.`);
     }
     if (
       typeof evidence.contentSha256 !== "string" ||

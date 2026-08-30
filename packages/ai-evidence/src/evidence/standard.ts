@@ -328,6 +328,14 @@ function validateCitationShape(item: StandardEvidenceItemV1): void {
   if (!item.extract.trim() || item.extract.length > 600) {
     throw new Error(`Evidence ${item.evidence_id} extract is not bounded.`);
   }
+  if (
+    item.verification_disposition === "excluded" &&
+    !item.exclusion_reason.trim()
+  ) {
+    throw new Error(
+      `Excluded evidence ${item.evidence_id} requires a non-empty reason.`,
+    );
+  }
   if (item.content_sha256 !== standardContentSha256(item.extract)) {
     throw new Error(`Evidence ${item.evidence_id} content hash is invalid.`);
   }
@@ -531,6 +539,16 @@ export function validateStandardEvidenceGraph(
     ) {
       throw new Error(
         `Eligible candidate ${candidateId} relies on a non-supporting claim.`,
+      );
+    }
+  }
+  for (const candidate of graph.candidates) {
+    if (
+      candidate.mandatory_constraints_satisfied &&
+      !eligible.has(candidate.candidate_id)
+    ) {
+      throw new Error(
+        `Mandatory-constraint-satisfied candidate ${candidate.candidate_id} is missing from the eligible set.`,
       );
     }
   }

@@ -12,6 +12,17 @@ export const FOUNDATION_MIGRATION_ID = "0001_slice_1_foundation";
 export const STANDARD_WORKSPACE_MIGRATION_ID =
   "0002_slice_2_standard_workspace";
 export const LIVE_RESEARCH_MIGRATION_ID = "0003_slice_3_live_research";
+export const SECURITY_ALERT_MIGRATION_ID = "0004_task_105_security_alert";
+export const LIVE_PIPELINE_IDENTITY_MIGRATION_ID =
+  "0005_task_137_live_pipeline_identity";
+export const CONSULTANT_PROJECTION_MIGRATION_ID =
+  "0006_task_137_consultant_projection";
+export const P4_AUDIT_ARTIFACT_FOUNDATION_MIGRATION_ID =
+  "0007_p4_audit_artifact_foundation";
+export const P4_GOOGLE_RISC_RECEIVER_MIGRATION_ID =
+  "0008_p4_google_risc_receiver";
+export const P4_GOOGLE_RISC_RETENTION_MIGRATION_ID =
+  "0009_p4_google_risc_retention";
 
 export interface MigrationDefinition {
   readonly id: string;
@@ -21,6 +32,12 @@ export const MIGRATIONS: readonly MigrationDefinition[] = Object.freeze([
   Object.freeze({ id: FOUNDATION_MIGRATION_ID }),
   Object.freeze({ id: STANDARD_WORKSPACE_MIGRATION_ID }),
   Object.freeze({ id: LIVE_RESEARCH_MIGRATION_ID }),
+  Object.freeze({ id: SECURITY_ALERT_MIGRATION_ID }),
+  Object.freeze({ id: LIVE_PIPELINE_IDENTITY_MIGRATION_ID }),
+  Object.freeze({ id: CONSULTANT_PROJECTION_MIGRATION_ID }),
+  Object.freeze({ id: P4_AUDIT_ARTIFACT_FOUNDATION_MIGRATION_ID }),
+  Object.freeze({ id: P4_GOOGLE_RISC_RECEIVER_MIGRATION_ID }),
+  Object.freeze({ id: P4_GOOGLE_RISC_RETENTION_MIGRATION_ID }),
 ]);
 
 export const LATEST_MIGRATION_ID =

@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "matchbase.slice3-staging-live-qualification-blocker/v1",
+  "observedAt": "2026-08-30T13:06:10.865Z",
+  "terminalDisposition": "BLOCKED_GOVERNANCE_CONTRACT",
+  "syntheticOnly": true,
+  "ownerAuthorizationCeiling": {
+    "maximumProviderCalls": 50,
+    "maximumCostUsd": 100,
+    "realUserDataAuthorized": false
+  },
+  "enforcedCurrentContract": {
+    "qualificationVersion": "v5",
+    "authorizationId": "PO-001-S3-OPENROUTER-V5-CREDENTIAL-GET-S3",
+    "sessionId": "v5-DFF5A5718703A502AAF5EA9C",
+    "maximumCredentialGets": 1,
+    "maximumModelPosts": 0,
+    "maximumSearchCalls": 0,
+    "activationAuthorized": false
+  },
+  "preflight": {
+    "disposition": "PRE_EXECUTION_PENDING",
+    "reasonCode": "ROLE2_ACCEPTANCE_PAYLOAD_ABSENT",
+    "sourceAttestationDigest": "DD31AD2004A6492C1C52DB5A9F4C6884281256C1FB5FB1EB43910EAFB17CD5A8"
+  },
+  "repositoryIdentity": {
+    "head": "bfe1e64b903599f0b11b2168ee8119cb4d299d87",
+    "originMain": "bfe1e64b903599f0b11b2168ee8119cb4d299d87",
+    "worktreeClean": false
+  },
+  "frozenBlockedPolicy": {
+    "path": "config/slice3/research-route-policy.v1.json",
+    "sha256": "46FCAF0C2D2B66F8BAB8526C48E448A24B2E9F65B065AAA99135CA6AF048DB23",
+    "environment": "production",
+    "liveActivation": "blocked"
+  },
+  "requiredStagingPolicy": {
+    "path": "config/slice3/research-route-policy.staging.v1.json",
+    "exists": false,
+    "generated": false,
+    "reasonCode": "QUALIFIED_STAGING_ATTESTATION_ABSENT"
+  },
+  "externalEffects": {
+    "credentialValuesInspected": false,
+    "credentialGets": 0,
+    "providerModelPosts": 0,
+    "searchCalls": 0,
+    "billableCalls": 0,
+    "costUsd": 0,
+    "rawProviderPayloadPersisted": false,
+    "cloudMutations": 0
+  },
+  "blockers": [
+    "ROLE2_ACCEPTANCE_PAYLOAD_ABSENT",
+    "WORKTREE_NOT_CLEAN",
+    "V5_MODEL_POST_ALLOCATION_ZERO",
+    "V5_SEARCH_CALL_ALLOCATION_ZERO",
+    "SUCCESSOR_LIVE_QUALIFICATION_EXECUTOR_ABSENT",
+    "QUALIFIED_STAGING_POLICY_ABSENT"
+  ],
+  "machineRemediation": [
+    {
+      "sequence": 1,
+      "action": "ESTABLISH_CLEAN_PUSHED_SOURCE_IDENTITY",
+      "requiredOutcome": "worktreeClean=true and HEAD=origin/main"
+    },
+    {
+      "sequence": 2,
+      "action": "CREATE_FRESH_ROLE2_TPM_ACCEPTANCE",
+      "requiredOutcome": "V5 disposition=READY_FOR_ONE_CREDENTIAL_GET"
+    },
+    {
+      "sequence": 3,
+      "action": "EXECUTE_ONE_USE_V5_CREDENTIAL_GATE",
+      "requiredOutcome": "disposition=CREDENTIAL_GATE_PASS_AWAITING_SEPARATE_LIVE_QUALIFICATION"
+    },
+    {
+      "sequence": 4,
+      "action": "IMPLEMENT_AND_AUDIT_SUCCESSOR_SYNTHETIC_QUALIFICATION_CONTRACT",
+      "requiredOutcome": "exactly one direct Gemini call and exactly one explicit OpenRouter call with closed provider identity, request-level ZDR, deny data collection, required parameters, no fallback, bounded cost, and sanitized durable evidence"
+    },
+    {
+      "sequence": 5,
+      "action": "GENERATE_STAGING_POLICY_FROM_FINALIZED_ATTESTATION",
+      "requiredOutcome": "environment=staging, liveActivation=enabled, every route enabled=true and liveQualified=true, immutable policy SHA-256 recorded"
+    }
+  ]
+}

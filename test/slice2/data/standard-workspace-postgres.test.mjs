@@ -225,11 +225,17 @@ postgresTest(
       await installFoundationOnly(pool);
       const foundationCatalog = await catalogSnapshot(pool);
       assert.deepEqual(await getMigrationStatus(pool), {
-        latestMigrationId: "0003_slice_3_live_research",
+        latestMigrationId: "0009_p4_google_risc_retention",
         appliedMigrationIds: ["0001_slice_1_foundation"],
         pendingMigrationIds: [
           "0002_slice_2_standard_workspace",
           "0003_slice_3_live_research",
+          "0004_task_105_security_alert",
+          "0005_task_137_live_pipeline_identity",
+          "0006_task_137_consultant_projection",
+          "0007_p4_audit_artifact_foundation",
+          "0008_p4_google_risc_receiver",
+          "0009_p4_google_risc_retention",
         ],
         unknownMigrationIds: [],
         ready: false,
@@ -521,6 +527,80 @@ postgresTest(
         "keeps projection, audit, quota, and source-language evidence append-only",
         async () => {
           const runId = admissions[0].runId;
+          const scarcityAnalysisId = randomUUID();
+          const persistedReducingConstraints = [
+            {
+              constraint_id: "STD-CON-MANDATORY-CERTIFICATION",
+              eliminated_count: 1,
+            },
+            {
+              constraint_id: "STD-CON-MINIMUM-CAPACITY",
+              eliminated_count: 1,
+            },
+          ];
+          const persistedRelaxations = ["STD-CON-MINIMUM-CAPACITY"];
+          await pool.query(
+            `INSERT INTO run_result
+               (run_id,account_id,outcome,eligible_count,considered_count,
+                scarcity,limitations_text,complete_result_document,
+                result_sha256,assembled_at)
+             VALUES ($1,$2,'scarcity',1,3,'{"state":"one"}'::jsonb,
+                     'Synthetic fixture limitations.',
+                     '{"schema_version":"standard-evidence-graph.v1"}'::jsonb,
+                     $3,clock_timestamp())`,
+            [runId, ids.accountId, digest(`result-${runId}`)],
+          );
+          await pool.query(
+            `INSERT INTO scarcity_analysis
+               (scarcity_analysis_id,account_id,run_id,outcome,
+                unmet_constraints,permitted_relaxations,analysis_english)
+             VALUES ($1,$2,$3,'scarcity',$4::jsonb,$5::jsonb,
+                     'Fewer than three candidates met all mandatory constraints.')`,
+            [
+              scarcityAnalysisId,
+              ids.accountId,
+              runId,
+              JSON.stringify(persistedReducingConstraints),
+              JSON.stringify(persistedRelaxations),
+            ],
+          );
+          const persistedScarcity = await pool.query(
+            `SELECT outcome,unmet_constraints,permitted_relaxations
+               FROM scarcity_analysis
+              WHERE scarcity_analysis_id=$1 AND account_id=$2 AND run_id=$3`,
+            [scarcityAnalysisId, ids.accountId, runId],
+          );
+          assert.deepEqual(persistedScarcity.rows[0], {
+            outcome: "scarcity",
+            unmet_constraints: persistedReducingConstraints,
+            permitted_relaxations: persistedRelaxations,
+          });
+          await assert.rejects(
+            pool.query(
+              `UPDATE scarcity_analysis
+                  SET permitted_relaxations='[]'::jsonb
+                WHERE scarcity_analysis_id=$1`,
+              [scarcityAnalysisId],
+            ),
+            (error) => error.code === "55000",
+          );
+          await assert.rejects(
+            pool.query(
+              "DELETE FROM scarcity_analysis WHERE scarcity_analysis_id=$1",
+              [scarcityAnalysisId],
+            ),
+            (error) => error.code === "55000",
+          );
+          const scarcityAfterRejectedMutations = await pool.query(
+            `SELECT outcome,unmet_constraints,permitted_relaxations
+               FROM scarcity_analysis
+              WHERE scarcity_analysis_id=$1`,
+            [scarcityAnalysisId],
+          );
+          assert.deepEqual(
+            scarcityAfterRejectedMutations.rows[0],
+            persistedScarcity.rows[0],
+          );
           const projectionServingId = randomUUID();
           await pool.query(
             `INSERT INTO projection_serving
@@ -568,6 +648,30 @@ postgresTest(
         },
       );
 
+      assert.equal(
+        await migrateDownLatest(pool),
+        "0009_p4_google_risc_retention",
+      );
+      assert.equal(
+        await migrateDownLatest(pool),
+        "0008_p4_google_risc_receiver",
+      );
+      assert.equal(
+        await migrateDownLatest(pool),
+        "0007_p4_audit_artifact_foundation",
+      );
+      assert.equal(
+        await migrateDownLatest(pool),
+        "0006_task_137_consultant_projection",
+      );
+      assert.equal(
+        await migrateDownLatest(pool),
+        "0005_task_137_live_pipeline_identity",
+      );
+      assert.equal(
+        await migrateDownLatest(pool),
+        "0004_task_105_security_alert",
+      );
       assert.equal(await migrateDownLatest(pool), "0003_slice_3_live_research");
       assert.equal(
         await migrateDownLatest(pool),

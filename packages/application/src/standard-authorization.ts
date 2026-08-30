@@ -22,7 +22,7 @@ export async function assertStandardWorkspaceAuthorized(
       LIMIT 1`,
     [context.accountId, context.userId],
   );
-  if (grant.rows[0]?.tier === "standard" && context.tier === "standard") return;
+  if (context.tier === "standard" && grant.rows[0]?.tier === "standard") return;
   await inTransaction(pool, (client) =>
     appendAuditEvent(client, {
       accountId: context.accountId,

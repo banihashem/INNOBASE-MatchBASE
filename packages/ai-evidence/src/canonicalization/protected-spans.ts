@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import type { ProtectedSpanV1 } from "@matchbase/contracts";
 
 const persistableToken =
-  /\b(?:[A-Z]{2,}(?:-[A-Z0-9]+)*|[A-Z]{1,4}\d[A-Z0-9-]*|\d+(?:\.\d+)?\s?(?:kg|g|cm|mm|m|units?|USD|EUR))\b/gu;
+  /(?:\b(?:[A-Z]{2,}(?:-[A-Z0-9]+)*|[A-Z]{1,4}\d[A-Z0-9-]*)\b|(?<![\d.,])(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s?(?:kg|g|cm|mm|m|units?|USD|EUR)\b)/gu;
 
 function category(value: string): ProtectedSpanV1["category"] {
   if (/^\d/u.test(value)) return "quantity_unit";

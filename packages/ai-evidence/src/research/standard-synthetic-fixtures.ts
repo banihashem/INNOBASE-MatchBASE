@@ -2,6 +2,7 @@ import type {
   StandardDimensionScoreV1,
   StandardEvidenceGraphV1,
   StandardEvidenceItemV1,
+  StandardHardConstraintV1,
   StandardHiddenCandidateV1,
 } from "@matchbase/contracts";
 import { validateStandardEvidenceGraph } from "../evidence/standard.js";
@@ -17,6 +18,43 @@ export const STANDARD_SYNTHETIC_SCENARIO_COUNTS = {
 
 export type StandardSyntheticScenario =
   keyof typeof STANDARD_SYNTHETIC_SCENARIO_COUNTS;
+
+export function normalizeStandardSyntheticScenarioForConstraints(
+  scenario: StandardSyntheticScenario,
+  hardConstraintCount: number,
+): StandardSyntheticScenario {
+  if (!Number.isSafeInteger(hardConstraintCount) || hardConstraintCount < 0)
+    throw new Error("Synthetic hard-constraint count is invalid.");
+  return hardConstraintCount === 0 &&
+    STANDARD_SYNTHETIC_SCENARIO_COUNTS[scenario] < 3
+    ? "three"
+    : scenario;
+}
+
+export function buildStandardSyntheticHardConstraints(): StandardHardConstraintV1[] {
+  return [
+    {
+      constraint_id: "STD-CON-MANDATORY-CERTIFICATION",
+      field_id: "FLD-CORE-COMP-01",
+      operator: "equals",
+      target: { value_state: "provided", value: "ISO-9001" },
+      relaxability: "non_relaxable",
+    },
+    {
+      constraint_id: "STD-CON-MINIMUM-CAPACITY",
+      field_id: "FLD-CORE-CAP-01",
+      operator: "minimum",
+      target: {
+        value_state: "provided",
+        value: "1200",
+        unit: "units/month",
+      },
+      relaxability: "relaxable",
+      tolerance: "200 units/month",
+      direction: "lower_is_acceptable",
+    },
+  ];
+}
 
 const SCORE_FIXTURES = [
   [45, 100, 45, 100, 100, 100],
@@ -143,10 +181,35 @@ function standardFixtureRecord(index: number): {
 export function buildStandardSyntheticEvidenceGraph(
   runId: string,
   scenario: StandardSyntheticScenario,
+  runBoundCanonicalHardConstraints: readonly StandardHardConstraintV1[],
 ): StandardEvidenceGraphV1 {
-  const count = STANDARD_SYNTHETIC_SCENARIO_COUNTS[scenario];
-  const records = Array.from({ length: count }, (_, index) =>
+  const eligibleCount = STANDARD_SYNTHETIC_SCENARIO_COUNTS[scenario];
+  const rejectedCount = Math.max(0, 3 - eligibleCount);
+  const constraintIds = runBoundCanonicalHardConstraints.map(
+    (constraint) => constraint.constraint_id,
+  );
+  if (
+    new Set(constraintIds).size !== constraintIds.length ||
+    constraintIds.some((constraintId) => constraintId.length === 0)
+  )
+    throw new Error(
+      "Synthetic scarcity fixtures require unique run-bound canonical constraint identifiers.",
+    );
+  if (rejectedCount > 0 && constraintIds.length === 0)
+    throw new Error(
+      "Synthetic scarcity fixture requires a run-bound canonical hard constraint.",
+    );
+  const recordCount = eligibleCount + rejectedCount;
+  const records = Array.from({ length: recordCount }, (_, index) =>
     standardFixtureRecord(index + 1),
+  );
+  Array.from({ length: rejectedCount }, (_, index) => index).forEach(
+    (index) => {
+      const constraintId = constraintIds[index % constraintIds.length]!;
+      const candidate = records[eligibleCount + index]!.candidate;
+      candidate.mandatory_constraints_satisfied = false;
+      candidate.failed_constraint_ids = [constraintId];
+    },
   );
   const graph: StandardEvidenceGraphV1 = {
     schema_version: "standard-evidence-graph.v1",
@@ -155,19 +218,19 @@ export function buildStandardSyntheticEvidenceGraph(
     claims: records.map((record) => record.claim),
     evidence: records.map((record) => record.evidence),
     evidenced_values: records.map((record) => record.value),
-    eligible_candidate_ids: records.map(
-      (record) => record.candidate.candidate_id,
-    ),
+    eligible_candidate_ids: records
+      .slice(0, eligibleCount)
+      .map((record) => record.candidate.candidate_id),
     gate_evaluations: [
       {
         gate_id: "mandatory_constraints",
         label: "Mandatory constraint failures",
-        eliminated_count: scenario === "zero" ? 2 : 0,
+        eliminated_count: rejectedCount,
       },
       {
         gate_id: "evidence_sufficiency",
         label: "Insufficient decision evidence",
-        eliminated_count: scenario === "zero" ? 1 : 0,
+        eliminated_count: 0,
       },
     ],
     unknown_count: scenario === "zero" ? 2 : 0,

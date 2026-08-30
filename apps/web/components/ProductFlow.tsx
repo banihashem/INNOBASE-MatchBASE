@@ -3,15 +3,21 @@
 import {
   type FormEvent,
   type KeyboardEvent,
+  useCallback,
   useEffect,
   useId,
   useRef,
   useState,
 } from "react";
+import type { DemoProjectionV1 } from "@matchbase/contracts";
 
 const SYNTHETIC_NOTICE = "Synthetic evaluation data — not a sourcing result";
 const QUALIFIED_LIVE_NOTICE =
   "Qualified live research — external evidence is fetched and verified for this run";
+const NEED_REQUIRED = "Describe the product or capability you need.";
+const CONSTRAINTS_REQUIRED = "State at least one mandatory constraint.";
+const CONTEXT_REQUIRED =
+  "Add preferences and context, or mark this part unknown.";
 const PROHIBITED_RESULT_KEYS = new Set([
   "score",
   "compatibility_score",
@@ -82,23 +88,6 @@ type RunStatus = {
   links: { result: string | null; cancel: string };
 };
 
-type DemoCandidate = {
-  display_name: string;
-  country_code: string;
-  rationale_short: string;
-};
-
-type DemoResult = {
-  schema_version: "demo-projection.v1";
-  run_id: string;
-  outcome: "matched" | "no_responsible_match";
-  scarcity: "none" | "limited" | "zero";
-  candidates: DemoCandidate[];
-  unmet_mandatory_constraints: string[];
-  limitations_notice: string;
-  projection_version: 1;
-};
-
 type Screen =
   | "loading"
   | "signed-out"
@@ -106,7 +95,8 @@ type Screen =
   | "canonical"
   | "running"
   | "result"
-  | "cancelled";
+  | "cancelled"
+  | "failed";
 
 class RequestFailure extends Error {
   constructor(
@@ -149,7 +139,7 @@ async function requestJson<T>(
   return (body.data ?? body) as T;
 }
 
-function assertDemoProjection(value: DemoResult): DemoResult {
+function assertDemoProjection(value: DemoProjectionV1): DemoProjectionV1 {
   const scan = (subject: unknown): void => {
     if (Array.isArray(subject)) {
       subject.forEach(scan);
@@ -213,12 +203,22 @@ export function ProductFlow({
   const [canonical, setCanonical] = useState<CanonicalResponse | null>(null);
   const [canonicalText, setCanonicalText] = useState("");
   const [run, setRun] = useState<RunStatus | null>(null);
-  const [result, setResult] = useState<DemoResult | null>(null);
+  const [result, setResult] = useState<DemoProjectionV1 | null>(null);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<RequestFailure | null>(null);
+  const [runUpdateError, setRunUpdateError] = useState<string | null>(null);
+  const [pollAttempt, setPollAttempt] = useState(0);
+  const [updatesPaused, setUpdatesPaused] = useState(false);
+  const [runAnnouncement, setRunAnnouncement] = useState("");
   const mainHeading = useRef<HTMLHeadingElement>(null);
-  const validationSummary = useRef<HTMLDivElement>(null);
   const errorSummary = useRef<HTMLDivElement>(null);
+  const needInput = useRef<HTMLTextAreaElement>(null);
+  const constraintsInput = useRef<HTMLTextAreaElement>(null);
+  const contextInput = useRef<HTMLTextAreaElement>(null);
+  const lastAnnouncedState = useRef<string | null>(null);
+  const suppressNextScreenFocus = useRef(true);
+  const suppressFailureFocus = useRef(false);
+  const pollGeneration = useRef(0);
   const needId = useId();
   const qualifiedLive = session?.research_mode.live_qualified === true;
   const researchNotice = qualifiedLive
@@ -226,6 +226,10 @@ export function ProductFlow({
     : SYNTHETIC_NOTICE;
   const constraintsId = useId();
   const contextId = useId();
+  const needInvalid = validation.includes(NEED_REQUIRED);
+  const constraintsInvalid = validation.includes(CONSTRAINTS_REQUIRED);
+  const contextInvalid =
+    validation.includes(CONTEXT_REQUIRED) && !contextUnknown;
 
   useEffect(() => {
     if (initialSession !== undefined) return;
@@ -239,41 +243,100 @@ export function ProductFlow({
 
   useEffect(() => {
     if (screen !== "loading" && screen !== "signed-out") {
+      if (suppressNextScreenFocus.current) {
+        suppressNextScreenFocus.current = false;
+        return;
+      }
       mainHeading.current?.focus();
     }
   }, [screen]);
 
   useEffect(() => {
-    if (validation.length) validationSummary.current?.focus();
-  }, [validation]);
+    if (needInvalid) needInput.current?.focus();
+    else if (constraintsInvalid) constraintsInput.current?.focus();
+    else if (contextInvalid) contextInput.current?.focus();
+  }, [constraintsInvalid, contextInvalid, needInvalid]);
 
   useEffect(() => {
-    if (failure) errorSummary.current?.focus();
+    if (!failure) return;
+    if (suppressFailureFocus.current) {
+      suppressFailureFocus.current = false;
+      return;
+    }
+    errorSummary.current?.focus();
   }, [failure]);
 
-  useEffect(() => {
-    if (screen !== "running" || !run || run.terminal) return;
-    const delay = Math.max(250, Math.min(run.poll_after_ms ?? 2_000, 10_000));
-    const timer = window.setTimeout(async () => {
+  const refreshRunStatus = useCallback(
+    async (
+      currentRun: RunStatus,
+      announceWhilePaused = false,
+      expectedGeneration = pollGeneration.current,
+    ) => {
+      let next: RunStatus;
       try {
-        const next = await requestJson<RunStatus>(`/api/v1/runs/${run.run_id}`);
-        setRun(next);
+        next = await requestJson<RunStatus>(
+          `/api/v1/runs/${currentRun.run_id}`,
+        );
+        if (expectedGeneration !== pollGeneration.current) return;
+        setRunUpdateError(null);
+      } catch {
+        if (expectedGeneration !== pollGeneration.current) return;
+        const message = "Status updates are unavailable. Retrying.";
+        setRunUpdateError(message);
+        setRunAnnouncement(message);
+        setPollAttempt((attempt) => attempt + 1);
+        return;
+      }
+      setRun(next);
+      if (
+        announceWhilePaused &&
+        lastAnnouncedState.current !== next.state &&
+        !next.terminal
+      ) {
+        lastAnnouncedState.current = next.state;
+        setRunAnnouncement(
+          `${next.phase_label}. Stage ${next.progress.steps_completed} of ${next.progress.steps_total_planned}.`,
+        );
+      }
+      try {
         if (next.result_available && next.links.result) {
           const projection = assertDemoProjection(
-            await requestJson<DemoResult>(next.links.result),
+            await requestJson<DemoProjectionV1>(next.links.result),
+          );
+          if (expectedGeneration !== pollGeneration.current) return;
+          lastAnnouncedState.current = next.state;
+          setRunAnnouncement(
+            projection.candidates.length === 0
+              ? "Research complete. No candidate met the mandatory constraints."
+              : `Research complete. ${projection.candidates.length} eligible ${projection.candidates.length === 1 ? "candidate" : "candidates"}.`,
           );
           setResult(projection);
+          const activeElement = document.activeElement;
+          suppressNextScreenFocus.current =
+            activeElement instanceof HTMLElement &&
+            activeElement !== document.body &&
+            activeElement.closest("main") === null;
           setScreen("result");
         } else if (next.terminal && next.state === "cancelled") {
+          lastAnnouncedState.current = next.state;
+          setRunAnnouncement("Research cancelled.");
+          suppressNextScreenFocus.current = true;
           setScreen("cancelled");
         } else if (next.terminal) {
-          throw new RequestFailure(
-            "Research ended before a result was available.",
-            null,
-            true,
+          suppressFailureFocus.current = true;
+          suppressNextScreenFocus.current = true;
+          setFailure(
+            new RequestFailure(
+              "Research ended before a result was available.",
+              null,
+              true,
+            ),
           );
+          setScreen("failed");
         }
       } catch (error) {
+        suppressFailureFocus.current = true;
+        suppressNextScreenFocus.current = true;
         setFailure(
           error instanceof RequestFailure
             ? error
@@ -283,22 +346,49 @@ export function ProductFlow({
                 true,
               ),
         );
+        setScreen("failed");
       }
-    }, delay);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (screen !== "running" || !run || run.terminal || updatesPaused) return;
+    const expectedGeneration = pollGeneration.current;
+    const delay = Math.max(250, Math.min(run.poll_after_ms ?? 2_000, 10_000));
+    const timer = window.setTimeout(
+      () => void refreshRunStatus(run, false, expectedGeneration),
+      delay,
+    );
     return () => window.clearTimeout(timer);
-  }, [run, screen]);
+  }, [pollAttempt, refreshRunStatus, run, screen, updatesPaused]);
+
+  useEffect(() => {
+    if (
+      screen !== "running" ||
+      !run ||
+      updatesPaused ||
+      lastAnnouncedState.current === run.state
+    )
+      return;
+    lastAnnouncedState.current = run.state;
+    const timer = window.setTimeout(() => {
+      setRunAnnouncement(
+        `${run.phase_label}. Stage ${run.progress.steps_completed} of ${run.progress.steps_total_planned}.`,
+      );
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [run, screen, updatesPaused]);
 
   const resetFailure = () => setFailure(null);
 
   async function submitIntake(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const errors: string[] = [];
-    if (!source.need.trim())
-      errors.push("Describe the product or capability you need.");
-    if (!source.constraints.trim())
-      errors.push("State at least one mandatory constraint.");
+    if (!source.need.trim()) errors.push(NEED_REQUIRED);
+    if (!source.constraints.trim()) errors.push(CONSTRAINTS_REQUIRED);
     if (!contextUnknown && !source.context.trim()) {
-      errors.push("Add preferences and context, or mark this part unknown.");
+      errors.push(CONTEXT_REQUIRED);
     }
     setValidation(errors);
     if (errors.length || !session) return;
@@ -405,10 +495,14 @@ export function ProductFlow({
         session.csrf_token,
       );
       setRun(accepted);
+      pollGeneration.current += 1;
+      setUpdatesPaused(false);
+      setRunAnnouncement("");
+      lastAnnouncedState.current = null;
       if (accepted.result_available && accepted.links.result) {
         setResult(
           assertDemoProjection(
-            await requestJson<DemoResult>(accepted.links.result),
+            await requestJson<DemoProjectionV1>(accepted.links.result),
           ),
         );
         setScreen("result");
@@ -475,13 +569,23 @@ export function ProductFlow({
         </a>
         {session ? (
           <div className="identity">
-            <span>{session.display_name}</span>
+            <span>
+              <bdi dir="auto">{session.display_name}</bdi>
+            </span>
             <span className="tier-badge">Demo</span>
           </div>
         ) : null}
       </header>
 
       <main id="main-content" className="main">
+        <p
+          className="sr-only"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {runAnnouncement}
+        </p>
         {failure ? (
           <div
             className="error-summary"
@@ -599,17 +703,22 @@ export function ProductFlow({
                 </p>
               </div>
               {validation.length ? (
-                <div
-                  className="validation-summary"
-                  role="alert"
-                  tabIndex={-1}
-                  ref={validationSummary}
-                >
+                <div className="validation-summary" role="alert">
                   <h2>Correct the following</h2>
                   <ul>
-                    {validation.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
+                    {validation.map((item) => {
+                      const target =
+                        item === NEED_REQUIRED
+                          ? needId
+                          : item === CONSTRAINTS_REQUIRED
+                            ? constraintsId
+                            : contextId;
+                      return (
+                        <li key={item}>
+                          <a href={`#${target}`}>{item}</a>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ) : null}
@@ -624,12 +733,19 @@ export function ProductFlow({
                 </p>
                 <textarea
                   id={needId}
-                  aria-describedby={`${needId}-hint`}
+                  ref={needInput}
+                  aria-invalid={needInvalid}
+                  aria-describedby={`${needId}-hint${needInvalid ? ` ${needId}-error` : ""}`}
                   value={source.need}
                   onChange={(event) =>
                     setSource({ ...source, need: event.target.value })
                   }
                 />
+                {needInvalid ? (
+                  <p id={`${needId}-error`} className="field-error">
+                    {NEED_REQUIRED}
+                  </p>
+                ) : null}
               </fieldset>
               <fieldset>
                 <legend>
@@ -644,12 +760,19 @@ export function ProductFlow({
                 </p>
                 <textarea
                   id={constraintsId}
-                  aria-describedby={`${constraintsId}-hint`}
+                  ref={constraintsInput}
+                  aria-invalid={constraintsInvalid}
+                  aria-describedby={`${constraintsId}-hint${constraintsInvalid ? ` ${constraintsId}-error` : ""}`}
                   value={source.constraints}
                   onChange={(event) =>
                     setSource({ ...source, constraints: event.target.value })
                   }
                 />
+                {constraintsInvalid ? (
+                  <p id={`${constraintsId}-error`} className="field-error">
+                    {CONSTRAINTS_REQUIRED}
+                  </p>
+                ) : null}
               </fieldset>
               <fieldset>
                 <legend>
@@ -661,13 +784,20 @@ export function ProductFlow({
                 </p>
                 <textarea
                   id={contextId}
-                  aria-describedby={`${contextId}-hint`}
+                  ref={contextInput}
+                  aria-invalid={contextInvalid}
+                  aria-describedby={`${contextId}-hint${contextInvalid ? ` ${contextId}-error` : ""}`}
                   value={source.context}
                   disabled={contextUnknown}
                   onChange={(event) =>
                     setSource({ ...source, context: event.target.value })
                   }
                 />
+                {contextInvalid ? (
+                  <p id={`${contextId}-error`} className="field-error">
+                    {CONTEXT_REQUIRED}
+                  </p>
+                ) : null}
                 <label className="check-row">
                   <input
                     type="checkbox"
@@ -798,9 +928,7 @@ export function ProductFlow({
             <h1 id="status-title" ref={mainHeading} tabIndex={-1}>
               Research in progress
             </h1>
-            <p className="live-status" role="status" aria-live="polite">
-              {run.phase_label}
-            </p>
+            <p className="live-status">{runUpdateError ?? run.phase_label}</p>
             {run.progress.percent_complete === null ? (
               <div
                 className="indeterminate"
@@ -809,7 +937,11 @@ export function ProductFlow({
               />
             ) : (
               <div>
-                <progress max="100" value={run.progress.percent_complete}>
+                <progress
+                  max="100"
+                  value={run.progress.percent_complete}
+                  aria-label="Research progress"
+                >
                   {run.progress.percent_complete}%
                 </progress>
                 <p>
@@ -819,9 +951,36 @@ export function ProductFlow({
               </div>
             )}
             <p>
-              Keep this page open. Status refreshes automatically using the
-              server-provided interval.
+              You can close this page. Research continues and your result will
+              be here when you return.
             </p>
+            <button
+              type="button"
+              className="secondary-action"
+              aria-pressed={updatesPaused}
+              onClick={() =>
+                setUpdatesPaused((paused) => {
+                  if (!paused) pollGeneration.current += 1;
+                  return !paused;
+                })
+              }
+            >
+              {updatesPaused ? "Resume updates" : "Pause updates"}
+            </button>
+            <button
+              type="button"
+              className="secondary-action"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                const expectedGeneration = pollGeneration.current;
+                void refreshRunStatus(run, true, expectedGeneration).finally(
+                  () => setBusy(false),
+                );
+              }}
+            >
+              Refresh now
+            </button>
             <button
               type="button"
               className="danger-action"
@@ -853,6 +1012,26 @@ export function ProductFlow({
           </section>
         ) : null}
 
+        {screen === "failed" ? (
+          <section className="workflow-panel" aria-labelledby="failed-title">
+            <p className="eyebrow">Run closed</p>
+            <h1 id="failed-title" ref={mainHeading} tabIndex={-1}>
+              Research failed
+            </h1>
+            <p>No result was disclosed.</p>
+            <button
+              type="button"
+              className="primary-action"
+              onClick={() => {
+                resetFailure();
+                setScreen("intake");
+              }}
+            >
+              Return to workspace
+            </button>
+          </section>
+        ) : null}
+
         {screen === "result" && result ? (
           <section
             className="workflow-panel results"
@@ -870,10 +1049,8 @@ export function ProductFlow({
             {result.scarcity !== "none" ? (
               <div className="scarcity-note" role="status">
                 {result.scarcity === "zero"
-                  ? qualifiedLive
-                    ? "No candidate met every mandatory constraint in this qualified live run."
-                    : "No candidate met every mandatory constraint in this synthetic evaluation."
-                  : "Fewer than three candidates met every mandatory constraint. Results are not padded."}
+                  ? "No candidate met the mandatory constraints for this request."
+                  : `${result.candidates.length} ${result.candidates.length === 1 ? "candidate" : "candidates"} met all mandatory constraints. Fewer than three met them, so fewer than three are shown.`}
               </div>
             ) : null}
             <ol className="candidate-grid">
@@ -885,9 +1062,13 @@ export function ProductFlow({
                         result.candidates.indexOf(candidate) + 1,
                       ).padStart(2, "0")}
                     </span>
-                    <h2>{candidate.display_name}</h2>
+                    <h2>
+                      <bdi dir="auto">{candidate.display_name}</bdi>
+                    </h2>
                     <p className="country">{candidate.country_code}</p>
-                    <p>{candidate.rationale_short}</p>
+                    <p>
+                      <bdi dir="auto">{candidate.rationale_short}</bdi>
+                    </p>
                   </article>
                 </li>
               ))}
@@ -897,7 +1078,9 @@ export function ProductFlow({
                 <h2>Unmet mandatory constraints</h2>
                 <ul>
                   {result.unmet_mandatory_constraints.map((item) => (
-                    <li key={item}>{item}</li>
+                    <li key={item}>
+                      <bdi dir="auto">{item}</bdi>
+                    </li>
                   ))}
                 </ul>
               </div>

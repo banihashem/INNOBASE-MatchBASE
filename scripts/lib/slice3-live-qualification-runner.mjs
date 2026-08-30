@@ -9,6 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { parseGeminiV4Candidate } from "./slice3-live-qualification-v4.mjs";
 
 const AUTHORIZATION_ID =
   "PO-001-SLICE3-LIVE-QUALIFICATION-REPLACEMENT-2026-08-16-V3";
@@ -1464,7 +1465,8 @@ export function validateSanitizedQualificationEvidence(value) {
 function prompt() {
   return [
     "This is a benign synthetic qualification request containing no user data.",
-    "Using the public IANA example-domain documentation, state why example.com and example.org exist.",
+    "Before answering, invoke Google Search exactly once with the query IANA example domains reserved documentation; do not answer from memory.",
+    "Using the resulting public IANA example-domain documentation, state why example.com and example.org exist.",
     "Return only the requested JSON object. Do not include personal data.",
   ].join(" ");
 }
@@ -1842,7 +1844,7 @@ export async function executeGeminiQualificationCall({
       throw new Error("grounding");
     }
     failure.phase = "RESPONSE_PARSE";
-    const content = parseJsonText(candidate?.content?.parts?.[0]?.text);
+    const content = parseGeminiV4Candidate(candidate).content;
     const evidence = {
       ...baseEvidence(route, request.requestDigest, startedAt),
       responseContentDigest: sha256(JSON.stringify(content)),

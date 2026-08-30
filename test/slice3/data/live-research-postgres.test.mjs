@@ -108,6 +108,59 @@ postgresTest(
        VALUES($1,'research-route-policy.v1','slice3-fixture.v1','test','blocked','[]','{"max_calls":2,"max_cost_usd":1}')`,
         [policyId],
       );
+      const pipelineIdentity = {
+        schemaVersion: "live-research-pipeline-identity.v1",
+        outputSchemaIdentifier: "evidence-graph.v1",
+        outputSchemaCanonicalSha256:
+          "c56bb23f7aae6a8e7352d7dbf9563595cd606b4a246339d1a345c842f5553788",
+        researchRoutePolicyId: policyId,
+        routePolicyVersion: "slice3-fixture.v1",
+        routePolicyCanonicalSha256: "2".repeat(64),
+        modelPolicyVersionId: modelPolicyId,
+        modelPolicyVersion: String(version),
+        modelPolicyContentSha256: digest("model-policy").toString("hex"),
+        scoringConfigVersionId: scoringId,
+        scoringConfigVersion: String(version),
+        scoringConfigContentSha256: digest("scoring").toString("hex"),
+        extractionVersion: "untrusted-source-boundary.v1",
+      };
+      const reservationInsert = `INSERT INTO live_research_execution_reservation
+         (execution_id,account_id,run_id,generation,ownership_token_sha256,state,
+          execution_lease_slot,execution_lease_generation,pipeline_identity_record,
+          lease_expires_at,claimed_at,updated_at)
+       VALUES($1,$2,$3,1,$4,'in_progress',1,1,$5::jsonb,
+              clock_timestamp()+interval '5 minutes',clock_timestamp(),clock_timestamp())`;
+      await assert.rejects(
+        pool.query(reservationInsert, [
+          "INVALID-PIPELINE-IDENTITY",
+          accountId,
+          runId,
+          digest("invalid-pipeline-owner"),
+          JSON.stringify({ ...pipelineIdentity, unknown: "rejected" }),
+        ]),
+        /live_research_pipeline_identity_closed/,
+      );
+      await pool.query(reservationInsert, [
+        "VALID-PIPELINE-IDENTITY",
+        accountId,
+        runId,
+        digest("valid-pipeline-owner"),
+        JSON.stringify(pipelineIdentity),
+      ]);
+      await assert.rejects(
+        pool.query(
+          `UPDATE live_research_execution_reservation
+              SET pipeline_identity_record=pipeline_identity_record || '{"routePolicyVersion":"forged"}'::jsonb
+            WHERE execution_id='VALID-PIPELINE-IDENTITY'`,
+        ),
+        /Live research pipeline identity is immutable/,
+      );
+      await assert.rejects(
+        pool.query(
+          "DELETE FROM live_research_execution_reservation WHERE execution_id='VALID-PIPELINE-IDENTITY'",
+        ),
+        /Live research pipeline identity is immutable/,
+      );
       await pool.query(
         `INSERT INTO research_route_snapshot(research_route_snapshot_id,account_id,run_id,research_route_policy_id,snapshot_version,adapter_version,route_id,route_path,requested_provider,requested_model,expected_served_provider,expected_served_model,served_provider,served_model,terminal_disposition,capability_policy_version,parameter_policy_sha256,data_handling_evidence_version,fallback_position,qualification_state,captured_at)
        VALUES($1,$2,$3,$4,'research-route-snapshot.v1','adapter.v1','gemini-direct-fixture','gemini_direct','google','gemini-3.6-flash','google','gemini-3.6-flash','google','gemini-3.6-flash','ok','slice3-fixture.v1',$5,'official-evidence.v1',0,'fixture_only',clock_timestamp())`,

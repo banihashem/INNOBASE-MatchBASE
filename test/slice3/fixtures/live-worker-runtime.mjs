@@ -1,5 +1,7 @@
 import {
   GeminiServerOwnedSourceDiscovery,
+  canonicalResearchRoutePolicySha256,
+  LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA,
   LiveResearchExecutionService,
   QualifiedLiveResearchWorkerDispatcher,
 } from "../../../packages/application/dist/index.js";
@@ -128,11 +130,18 @@ export async function seedLiveWorkerFixture(pool) {
   await pool.query(
     `INSERT INTO research_route_policy
        (research_route_policy_id,schema_version,policy_version,environment,
-        activation_state,official_evidence,qualification_budget)
+        activation_state,official_evidence,qualification_budget,content_sha256)
      VALUES($1,'research-route-policy.v1',$2,'test','qualified',
-            '["fixture-a","fixture-b"]','{"max_calls":2,"max_cost_usd":1}')
+            '["fixture-a","fixture-b"]','{"max_calls":2,"max_cost_usd":1}',$3)
      ON CONFLICT(policy_version) DO NOTHING`,
-    [randomUUID(), LIVE_WORKER_FIXTURE_POLICY.policyVersion],
+    [
+      randomUUID(),
+      LIVE_WORKER_FIXTURE_POLICY.policyVersion,
+      Buffer.from(
+        canonicalResearchRoutePolicySha256(LIVE_WORKER_FIXTURE_POLICY),
+        "hex",
+      ),
+    ],
   );
   for (const route of LIVE_WORKER_FIXTURE_POLICY.routes) {
     const providerRouteId = randomUUID();
@@ -192,7 +201,7 @@ export async function createLiveWorkerFixture(pool) {
   return new QualifiedLiveResearchWorkerDispatcher({
     pool,
     policy: LIVE_WORKER_FIXTURE_POLICY,
-    outputSchema: { type: "object", additionalProperties: false },
+    outputSchema: LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA,
     now: () => new Date("2026-08-15T00:01:00.000Z"),
     serviceFactory: (work, policyId) =>
       new LiveResearchExecutionService({

@@ -1,0 +1,6 @@
+DROP TRIGGER IF EXISTS consultant_result_projection_policy_immutable
+  ON consultant_result_projection_policy;
+DROP TABLE IF EXISTS consultant_result_projection_policy;
+DROP TRIGGER IF EXISTS consultant_projection_config_release_immutable
+  ON consultant_projection_config_release;
+DROP TABLE IF EXISTS consultant_projection_config_release;

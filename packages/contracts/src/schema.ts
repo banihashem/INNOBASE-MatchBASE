@@ -2,6 +2,29 @@ import {
   STANDARD_ORGANIZATION_WEB_POLICY_VERSION,
   STANDARD_ORGANIZATION_WEB_PURPOSES,
 } from "./v1/standard-evidence.js";
+import {
+  COMPLETE_RESULT_FOUNDATION_SCHEMA_VERSION,
+  CONSULTANT_UNAVAILABLE_SOURCE_IDS,
+} from "./v1/complete-result-foundation.js";
+import {
+  COMPLETE_RESULT_FOUNDATION_V2_SCHEMA_VERSION,
+  DEMO_LOW_CONFIDENCE_CAUTION_TEXT,
+  DEMO_RATIONALE_TEXT_BY_RULE_OUTCOME,
+} from "./v2/complete-result-foundation.js";
+import {
+  CONSULTANT_RESULT_PROJECTION_SCHEMA_VERSION,
+  CONSULTANT_RESULT_PROJECTION_VERSION,
+} from "./v1/consultant-projection.js";
+import {
+  CONSULTANT_DOMAIN_PACK_ID,
+  CONSULTANT_DUE_DILIGENCE_CHECKS,
+  CONSULTANT_RESULT_PROJECTION_V2_SCHEMA_VERSION,
+  CONSULTANT_RESULT_PROJECTION_V2_VERSION,
+  CONSULTANT_SOURCE_POLICY_ID,
+  CONSULTANT_SOURCE_POLICY_CONTENT_SHA256,
+  CONSULTANT_SOURCE_POLICY_VERSION,
+  CONSULTANT_SYNTHETIC_RFQ_QUESTIONS,
+} from "./v2/consultant-projection.js";
 
 export type JsonSchema = Readonly<Record<string, unknown>>;
 
@@ -717,7 +740,7 @@ export function generateContractSchemas(): JsonSchema {
       extract: string(),
       content_sha256: string(),
       verification_disposition: string(["accepted", "excluded"]),
-      exclusion_reason: string(),
+      exclusion_reason: { type: "string", pattern: "\\S" },
       provenance: string(["synthetic_fixture", "repository_fixture"]),
     },
     allOf: [
@@ -749,6 +772,123 @@ export function generateContractSchemas(): JsonSchema {
           },
         ],
       },
+    ],
+  };
+  const completeResultEvidenceV2Properties = {
+    ...(standardEvidenceItem.properties as Readonly<
+      Record<string, JsonSchema>
+    >),
+    evidence_id: { type: "string", minLength: 1 },
+    exact_url: { type: "string", format: "uri", pattern: "^https://" },
+    publisher_domain: { type: "string", minLength: 1 },
+    accessed_at: { type: "string", format: "date-time" },
+    extract: { type: "string", minLength: 1, maxLength: 600 },
+    content_sha256: { type: "string", pattern: "^[a-f0-9]{64}$" },
+  } as const;
+  const completeResultNonLiveEvidenceV2: JsonSchema = {
+    ...standardEvidenceItem,
+    properties: {
+      ...completeResultEvidenceV2Properties,
+      provenance: string(["synthetic_fixture", "repository_fixture"]),
+    },
+  };
+  const noExternalVerificationBasisV2 = closedObject(["kind"], {
+    kind: { const: "not_externally_verified" },
+  });
+  const independentExternalVerificationBasisV2 = closedObject(
+    ["kind", "independent_evidence_ids"],
+    {
+      kind: { const: "independent_corroboration" },
+      independent_evidence_ids: {
+        type: "array",
+        items: { type: "string", minLength: 1 },
+        minItems: 2,
+        uniqueItems: true,
+      },
+    },
+  );
+  const registryExternalVerificationBasisV2 = closedObject(
+    ["kind", "registry_evidence_id"],
+    {
+      kind: { const: "authoritative_registry" },
+      registry_evidence_id: { type: "string", minLength: 1 },
+    },
+  );
+  const externalVerificationBasisV2: JsonSchema = {
+    oneOf: [
+      noExternalVerificationBasisV2,
+      independentExternalVerificationBasisV2,
+      registryExternalVerificationBasisV2,
+    ],
+  };
+  const completeResultLiveEvidenceV2: JsonSchema = {
+    ...standardEvidenceItem,
+    required: [
+      ...(standardEvidenceItem.required as readonly string[]),
+      "exact_url",
+      "external_verification_basis",
+    ],
+    properties: {
+      ...completeResultEvidenceV2Properties,
+      source_kind: { const: "reserved_url" },
+      provenance: { const: "live_secure_fetch" },
+      external_verification_basis: externalVerificationBasisV2,
+    },
+    not: { required: ["fixture_identity"] },
+    allOf: [
+      (standardEvidenceItem.allOf as readonly JsonSchema[])[1]!,
+      {
+        oneOf: [
+          {
+            properties: {
+              verification_status: { const: "externally_verified" },
+              external_verification_basis: {
+                oneOf: [
+                  independentExternalVerificationBasisV2,
+                  registryExternalVerificationBasisV2,
+                ],
+              },
+            },
+          },
+          {
+            properties: {
+              verification_status: string([
+                "claimed",
+                "inferred",
+                "stale",
+                "conflicting",
+                "unknown",
+              ]),
+              external_verification_basis: noExternalVerificationBasisV2,
+            },
+          },
+        ],
+      },
+    ],
+  };
+  const completeResultEvidenceV2: JsonSchema = {
+    oneOf: [completeResultNonLiveEvidenceV2, completeResultLiveEvidenceV2],
+  };
+  const demoRationaleSourceV2: JsonSchema = {
+    oneOf: Object.entries(DEMO_RATIONALE_TEXT_BY_RULE_OUTCOME).map(
+      ([ruleOutcome, rationaleShort]) =>
+        closedObject(["candidate_id", "rule_outcome", "rationale_short"], {
+          candidate_id: string(),
+          rule_outcome: { const: ruleOutcome },
+          rationale_short: { const: rationaleShort },
+        }),
+    ),
+  };
+  const demoLowConfidenceCautionV2: JsonSchema = {
+    oneOf: [
+      closedObject(["state", "text"], {
+        state: { const: "not_required" },
+        text: { const: "" },
+      }),
+      closedObject(["state", "text"], {
+        state: { const: "present" },
+        text: { const: DEMO_LOW_CONFIDENCE_CAUTION_TEXT },
+      }),
     ],
   };
   const corroboration = closedObject(
@@ -901,6 +1041,26 @@ export function generateContractSchemas(): JsonSchema {
       eliminated_count: { type: "integer", minimum: 0 },
     },
   );
+  const consultantMissingSources: JsonSchema = {
+    type: "array",
+    prefixItems: CONSULTANT_UNAVAILABLE_SOURCE_IDS.map((sourceId) =>
+      closedObject(["source_id", "status", "reason_code"], {
+        source_id: string([sourceId]),
+        status: string(["unavailable"]),
+        reason_code: string(["not_produced_by_current_pipeline"]),
+      }),
+    ),
+    items: false,
+    minItems: CONSULTANT_UNAVAILABLE_SOURCE_IDS.length,
+    maxItems: CONSULTANT_UNAVAILABLE_SOURCE_IDS.length,
+  };
+  const consultantProjectionReadiness = closedObject(
+    ["outcome", "missing_sources"],
+    {
+      outcome: string(["blocked"]),
+      missing_sources: consultantMissingSources,
+    },
+  );
   const standardCitation: JsonSchema = {
     type: "object",
     additionalProperties: false,
@@ -919,8 +1079,8 @@ export function generateContractSchemas(): JsonSchema {
     ],
     properties: {
       evidence_id: string(),
-      exact_url: string(),
-      fixture_identity: string(),
+      exact_url: { type: "string", format: "uri", pattern: "^https://" },
+      fixture_identity: { type: "string", minLength: 1 },
       title: string(),
       publisher: string(),
       published_or_updated: string(),
@@ -930,7 +1090,11 @@ export function generateContractSchemas(): JsonSchema {
       access_state: string(["available", "blocked", "unreachable"]),
       extract: string(),
       content_sha256: string(),
-      provenance: string(["synthetic_fixture", "repository_fixture"]),
+      provenance: string([
+        "synthetic_fixture",
+        "repository_fixture",
+        "live_secure_fetch",
+      ]),
     },
     oneOf: [
       {
@@ -1039,7 +1203,7 @@ export function generateContractSchemas(): JsonSchema {
       fit_band: standardFitBand,
       band_ceiling: standardFitBand,
       displayed_band: standardFitBand,
-      band_ceiling_reason: string(),
+      band_ceiling_reason: { type: "string", pattern: "\\S" },
       dimension_scores: standardDimensions,
       positive_drivers: { type: "array", items: explanation, maxItems: 3 },
       limiting_gaps: { type: "array", items: explanation, maxItems: 3 },
@@ -1072,6 +1236,395 @@ export function generateContractSchemas(): JsonSchema {
       advisory_boundary: string(),
     },
   );
+  const scarcityAnalysis = closedObject(
+    [
+      "reducing_constraints",
+      "unmet_mandatory_constraints",
+      "permitted_relaxations",
+    ],
+    {
+      reducing_constraints: {
+        type: "array",
+        items: closedObject(
+          ["constraint_id", "field_id", "label", "eliminated_count"],
+          {
+            constraint_id: string(),
+            field_id: string(),
+            label: string(),
+            eliminated_count: { type: "integer", minimum: 1 },
+          },
+        ),
+      },
+      unmet_mandatory_constraints: {
+        type: "array",
+        items: closedObject(["constraint_id", "field_id", "label"], {
+          constraint_id: string(),
+          field_id: string(),
+          label: string(),
+        }),
+      },
+      permitted_relaxations: {
+        type: "array",
+        items: closedObject(
+          ["constraint_id", "field_id", "label", "direction", "tolerance"],
+          {
+            constraint_id: string(),
+            field_id: string(),
+            label: string(),
+            direction: string([
+              "higher_is_acceptable",
+              "lower_is_acceptable",
+              "exact",
+            ]),
+            tolerance: string(),
+          },
+        ),
+      },
+    },
+  );
+  const consultantLandscape = closedObject(
+    [
+      "eligible_count",
+      "displayed_count",
+      "soft_cap",
+      "truncated",
+      "scarcity_override_applied",
+    ],
+    {
+      eligible_count: { type: "integer", minimum: 0 },
+      displayed_count: { type: "integer", minimum: 0 },
+      soft_cap: { type: "integer", minimum: 3 },
+      truncated: boolean,
+      scarcity_override_applied: boolean,
+      truncation_notice: { type: "string", pattern: "\\S" },
+    },
+  );
+  const consultantSourceReadiness = closedObject(["state", "notice"], {
+    state: string(["limited"]),
+    notice: { type: "string", pattern: "\\S" },
+  });
+  const consultantRankedCandidate = closedObject(
+    [
+      "candidate_id",
+      "rank",
+      "display_name",
+      "country_code",
+      "projection_index",
+      "evidence_ids",
+    ],
+    {
+      candidate_id: { type: "string", minLength: 1 },
+      rank: { type: "integer", minimum: 1 },
+      display_name: { type: "string", minLength: 1 },
+      country_code: { type: "string", minLength: 1 },
+      projection_index: {
+        oneOf: [{ type: "integer", minimum: 0 }, { type: "null" }],
+      },
+      evidence_ids: {
+        type: "array",
+        items: { type: "string", minLength: 1 },
+        uniqueItems: true,
+      },
+    },
+  );
+  const consultantReserveCandidate = closedObject(
+    [
+      "candidate_id",
+      "rank",
+      "display_name",
+      "country_code",
+      "projection_index",
+      "evidence_ids",
+      "eligibility_basis",
+      "promotion_state",
+    ],
+    {
+      candidate_id: { type: "string", minLength: 1 },
+      rank: { type: "integer", minimum: 1 },
+      display_name: { type: "string", minLength: 1 },
+      country_code: { type: "string", minLength: 1 },
+      projection_index: {
+        oneOf: [{ type: "integer", minimum: 0 }, { type: "null" }],
+      },
+      evidence_ids: {
+        type: "array",
+        items: { type: "string", minLength: 1 },
+        uniqueItems: true,
+      },
+      eligibility_basis: string(["eligible_candidate_ids_only"]),
+      promotion_state: string(["next_ranked_eligible"]),
+    },
+  );
+  const consultantConfigurationRelease = closedObject(
+    [
+      "config_id",
+      "config_version",
+      "content_sha256",
+      "bound_at",
+      "effective_release_at",
+      "soft_cap",
+    ],
+    {
+      config_id: { type: "string", format: "uuid" },
+      config_version: { type: "string", minLength: 1 },
+      content_sha256: { type: "string", pattern: "^[a-f0-9]{64}$" },
+      bound_at: { type: "string", format: "date-time", pattern: "Z$" },
+      effective_release_at: {
+        type: "string",
+        format: "date-time",
+        pattern: "Z$",
+      },
+      soft_cap: { type: "integer", minimum: 3 },
+    },
+  );
+  const consultantRfqExecutionSnapshot = closedObject(
+    [
+      "state",
+      "contact_state",
+      "response_state",
+      "qualified_response_count",
+      "expansion_model",
+      "wave_id",
+      "wave_sequence",
+      "wave_instance_id",
+      "selected_candidates",
+      "remaining_displayed_queue",
+      "stop_state",
+      "next_reserve_promotion",
+      "audit_identity",
+    ],
+    {
+      state: string(["synthetic_planning_only"]),
+      contact_state: string(["not_contacted"]),
+      response_state: string(["not_collected"]),
+      qualified_response_count: { type: "integer", enum: [0] },
+      expansion_model: closedObject(
+        [
+          "initial_wave_size",
+          "subsequent_wave_size",
+          "expansion_threshold",
+          "effective_expansion_threshold",
+        ],
+        {
+          initial_wave_size: { type: "integer", enum: [3] },
+          subsequent_wave_size: { type: "integer", enum: [2] },
+          expansion_threshold: { type: "integer", enum: [3] },
+          effective_expansion_threshold: {
+            type: "integer",
+            minimum: 0,
+            maximum: 3,
+          },
+        },
+      ),
+      wave_id: string(["RFQ_WAVE_INITIAL"]),
+      wave_sequence: { type: "integer", enum: [1] },
+      wave_instance_id: { type: "string", pattern: "^[a-f0-9]{64}$" },
+      selected_candidates: {
+        type: "array",
+        items: consultantRankedCandidate,
+        maxItems: 3,
+      },
+      remaining_displayed_queue: {
+        type: "array",
+        items: consultantRankedCandidate,
+      },
+      stop_state: string([
+        "awaiting_synthetic_checkpoint",
+        "exhausted_displayed_queue",
+      ]),
+      next_reserve_promotion: closedObject(
+        ["state", "candidate", "promotion_mode"],
+        {
+          state: string(["available", "exhausted"]),
+          candidate: {
+            oneOf: [consultantReserveCandidate, { type: "null" }],
+          },
+          promotion_mode: string(["one_next_ranked_eligible_only"]),
+        },
+      ),
+      audit_identity: closedObject(
+        [
+          "event_type",
+          "event_id",
+          "actor_type",
+          "actor_id",
+          "occurred_at",
+          "policy_id",
+          "policy_version",
+          "policy_content_sha256",
+          "config_id",
+          "config_version",
+          "config_content_sha256",
+        ],
+        {
+          event_type: string(["SYNTHETIC_WAVE_SNAPSHOT_PROJECTED"]),
+          event_id: { type: "string", pattern: "^[a-f0-9]{64}$" },
+          actor_type: string(["agent"]),
+          actor_id: string([
+            "matchbase_agent_research_and_implementation_team",
+          ]),
+          occurred_at: { type: "string", format: "date-time", pattern: "Z$" },
+          policy_id: string([CONSULTANT_SOURCE_POLICY_ID]),
+          policy_version: {
+            type: "integer",
+            enum: [CONSULTANT_SOURCE_POLICY_VERSION],
+          },
+          policy_content_sha256: string([
+            CONSULTANT_SOURCE_POLICY_CONTENT_SHA256,
+          ]),
+          config_id: { type: "string", format: "uuid" },
+          config_version: { type: "string", minLength: 1 },
+          config_content_sha256: {
+            type: "string",
+            pattern: "^[a-f0-9]{64}$",
+          },
+        },
+      ),
+    },
+  );
+  const consultantSourceFact: JsonSchema = {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "evidence_id",
+      "title",
+      "publisher",
+      "published_or_updated",
+      "accessed_at",
+      "source_tier",
+      "status",
+      "access_state",
+      "extract",
+      "content_sha256",
+      "provenance",
+      "verification_disposition",
+    ],
+    properties: {
+      evidence_id: { type: "string", minLength: 1 },
+      exact_url: { type: "string", format: "uri", pattern: "^https://" },
+      fixture_identity: { type: "string", minLength: 1 },
+      title: { type: "string", minLength: 1 },
+      publisher: { type: "string", minLength: 1 },
+      publisher_domain: { type: "string", minLength: 1 },
+      published_or_updated: {
+        type: "string",
+        pattern: "^\\d{4}-\\d{2}-\\d{2}(?:T.*Z)?$",
+      },
+      accessed_at: { type: "string", format: "date-time", pattern: "Z$" },
+      source_tier: string(["primary", "official_secondary", "secondary"]),
+      status: standardVerificationStatus,
+      access_state: string(["available", "blocked", "unreachable"]),
+      extract: { type: "string", minLength: 1, maxLength: 2000 },
+      content_sha256: { type: "string", pattern: "^[a-f0-9]{64}$" },
+      provenance: string([
+        "synthetic_fixture",
+        "repository_fixture",
+        "live_secure_fetch",
+      ]),
+      verification_disposition: string(["accepted", "excluded"]),
+      exclusion_reason: { type: "string", pattern: "\\S" },
+    },
+    allOf: [
+      {
+        oneOf: [
+          {
+            required: ["exact_url", "publisher_domain"],
+            properties: { provenance: { const: "live_secure_fetch" } },
+            not: { required: ["fixture_identity"] },
+          },
+          {
+            required: ["fixture_identity"],
+            properties: {
+              provenance: {
+                enum: ["synthetic_fixture", "repository_fixture"],
+              },
+            },
+            not: {
+              anyOf: [
+                { required: ["exact_url"] },
+                { required: ["publisher_domain"] },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        oneOf: [
+          {
+            properties: { verification_disposition: { const: "accepted" } },
+            not: { required: ["exclusion_reason"] },
+          },
+          {
+            required: ["exclusion_reason"],
+            properties: { verification_disposition: { const: "excluded" } },
+          },
+        ],
+      },
+    ],
+  };
+  const consultantExcludedEvidence: JsonSchema = {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "evidence_id",
+      "title",
+      "publisher",
+      "published_or_updated",
+      "accessed_at",
+      "source_tier",
+      "status",
+      "access_state",
+      "extract",
+      "content_sha256",
+      "provenance",
+      "verification_disposition",
+      "exclusion_reason",
+    ],
+    properties: {
+      evidence_id: { type: "string", minLength: 1 },
+      exact_url: { type: "string", format: "uri", pattern: "^https://" },
+      fixture_identity: { type: "string", minLength: 1 },
+      title: { type: "string", minLength: 1 },
+      publisher: { type: "string", minLength: 1 },
+      publisher_domain: { type: "string", minLength: 1 },
+      published_or_updated: {
+        type: "string",
+        pattern: "^\\d{4}-\\d{2}-\\d{2}(?:T.*Z)?$",
+      },
+      accessed_at: { type: "string", format: "date-time", pattern: "Z$" },
+      source_tier: string(["primary", "official_secondary", "secondary"]),
+      status: standardVerificationStatus,
+      access_state: string(["available", "blocked", "unreachable"]),
+      extract: { type: "string", minLength: 1, maxLength: 2000 },
+      content_sha256: { type: "string", pattern: "^[a-f0-9]{64}$" },
+      provenance: string([
+        "synthetic_fixture",
+        "repository_fixture",
+        "live_secure_fetch",
+      ]),
+      verification_disposition: string(["excluded"]),
+      exclusion_reason: { type: "string", pattern: "\\S" },
+    },
+    oneOf: [
+      {
+        required: ["exact_url", "publisher_domain"],
+        properties: { provenance: { const: "live_secure_fetch" } },
+        not: { required: ["fixture_identity"] },
+      },
+      {
+        required: ["fixture_identity"],
+        properties: {
+          provenance: { enum: ["synthetic_fixture", "repository_fixture"] },
+        },
+        not: {
+          anyOf: [
+            { required: ["exact_url"] },
+            { required: ["publisher_domain"] },
+          ],
+        },
+      },
+    ],
+  };
   const projectionLinks = closedObject(["request", "run"], {
     request: string(),
     run: string(),
@@ -1147,7 +1700,7 @@ export function generateContractSchemas(): JsonSchema {
     scarcity: string(["pending", "none", "limited", "zero", "not_applicable"]),
     limitations_notice: string(),
     links: projectionLinks,
-    projection_version: { type: "integer", enum: [3] },
+    projection_version: { type: "integer", enum: [4] },
   };
   const runStateRequired = [
     "run_id",
@@ -1592,6 +2145,75 @@ export function generateContractSchemas(): JsonSchema {
           gate_evaluation_completed_at: string(),
         },
       ),
+      completeResultFoundation: closedObject(
+        [
+          "schema_version",
+          "run_id",
+          "candidates",
+          "claims",
+          "evidence",
+          "evidenced_values",
+          "eligible_candidate_ids",
+          "gate_evaluations",
+          "unknown_count",
+          "not_asked_count",
+          "gate_evaluation_completed_at",
+          "consultant_projection_readiness",
+        ],
+        {
+          schema_version: string([COMPLETE_RESULT_FOUNDATION_SCHEMA_VERSION]),
+          run_id: string(),
+          candidates: { type: "array", items: standardHiddenCandidate },
+          claims: { type: "array", items: standardClaim },
+          evidence: { type: "array", items: standardEvidenceItem },
+          evidenced_values: { type: "array", items: standardEvidencedValue },
+          eligible_candidate_ids: strings,
+          gate_evaluations: { type: "array", items: gateEvaluation },
+          unknown_count: { type: "integer", minimum: 0 },
+          not_asked_count: { type: "integer", minimum: 0 },
+          gate_evaluation_completed_at: string(),
+          consultant_projection_readiness: consultantProjectionReadiness,
+        },
+      ),
+      completeResultFoundationV2: closedObject(
+        [
+          "schema_version",
+          "run_id",
+          "candidates",
+          "claims",
+          "evidence",
+          "evidenced_values",
+          "eligible_candidate_ids",
+          "gate_evaluations",
+          "unknown_count",
+          "not_asked_count",
+          "gate_evaluation_completed_at",
+          "demo_rationale_sources",
+          "demo_low_confidence_caution",
+          "consultant_projection_readiness",
+        ],
+        {
+          schema_version: string([
+            COMPLETE_RESULT_FOUNDATION_V2_SCHEMA_VERSION,
+          ]),
+          run_id: string(),
+          candidates: { type: "array", items: standardHiddenCandidate },
+          claims: { type: "array", items: standardClaim },
+          evidence: { type: "array", items: completeResultEvidenceV2 },
+          evidenced_values: { type: "array", items: standardEvidencedValue },
+          eligible_candidate_ids: strings,
+          gate_evaluations: { type: "array", items: gateEvaluation },
+          unknown_count: { type: "integer", minimum: 0 },
+          not_asked_count: { type: "integer", minimum: 0 },
+          gate_evaluation_completed_at: string(),
+          demo_rationale_sources: {
+            type: "array",
+            items: demoRationaleSourceV2,
+          },
+          demo_low_confidence_caution: demoLowConfidenceCautionV2,
+          consultant_projection_readiness: consultantProjectionReadiness,
+        },
+      ),
       standardResultProjection: closedObject(
         [
           "schema_version",
@@ -1600,6 +2222,7 @@ export function generateContractSchemas(): JsonSchema {
           "scarcity",
           "candidates",
           "gate_eliminations",
+          "scarcity_analysis",
           "limitations",
           "synthetic_warning",
           "projection_version",
@@ -1615,9 +2238,246 @@ export function generateContractSchemas(): JsonSchema {
             maxItems: 3,
           },
           gate_eliminations: { type: "array", items: gateEvaluation },
+          scarcity_analysis: scarcityAnalysis,
           limitations,
           synthetic_warning: string(),
-          projection_version: { type: "integer", enum: [3] },
+          projection_version: { type: "integer", enum: [4] },
+        },
+      ),
+      consultantResultProjection: closedObject(
+        [
+          "schema_version",
+          "run_id",
+          "outcome",
+          "scarcity",
+          "candidates",
+          "gate_eliminations",
+          "scarcity_analysis",
+          "limitations",
+          "synthetic_warning",
+          "landscape",
+          "consultant_source_readiness",
+          "projection_version",
+        ],
+        {
+          schema_version: string([CONSULTANT_RESULT_PROJECTION_SCHEMA_VERSION]),
+          run_id: string(),
+          outcome: string(["matched", "no_responsible_match"]),
+          scarcity: string(["none", "limited", "zero"]),
+          candidates: { type: "array", items: standardCandidateProjection },
+          gate_eliminations: { type: "array", items: gateEvaluation },
+          scarcity_analysis: scarcityAnalysis,
+          limitations,
+          synthetic_warning: string(),
+          landscape: consultantLandscape,
+          consultant_source_readiness: consultantSourceReadiness,
+          projection_version: {
+            type: "integer",
+            enum: [CONSULTANT_RESULT_PROJECTION_VERSION],
+          },
+        },
+      ),
+      consultantResultProjectionV2: closedObject(
+        [
+          "schema_version",
+          "run_id",
+          "outcome",
+          "scarcity",
+          "candidates",
+          "gate_eliminations",
+          "scarcity_analysis",
+          "limitations",
+          "synthetic_warning",
+          "landscape",
+          "source_policy",
+          "configuration_release",
+          "agent_authorship",
+          "rfq_questions",
+          "wave_recommendations",
+          "eligible_ranking",
+          "rfq_execution_snapshot",
+          "reserve_candidates",
+          "due_diligence_checklist",
+          "source_facts",
+          "excluded_evidence",
+          "full_limitations",
+          "projection_version",
+        ],
+        {
+          schema_version: string([
+            CONSULTANT_RESULT_PROJECTION_V2_SCHEMA_VERSION,
+          ]),
+          run_id: string(),
+          outcome: string(["matched", "no_responsible_match"]),
+          scarcity: string(["none", "limited", "zero"]),
+          candidates: { type: "array", items: standardCandidateProjection },
+          gate_eliminations: { type: "array", items: gateEvaluation },
+          scarcity_analysis: scarcityAnalysis,
+          limitations,
+          synthetic_warning: string(),
+          landscape: consultantLandscape,
+          source_policy: closedObject(
+            [
+              "policy_id",
+              "policy_version",
+              "content_sha256",
+              "domain_pack_id",
+              "mode",
+              "production_state",
+            ],
+            {
+              policy_id: string([CONSULTANT_SOURCE_POLICY_ID]),
+              policy_version: {
+                type: "integer",
+                enum: [CONSULTANT_SOURCE_POLICY_VERSION],
+              },
+              content_sha256: string([CONSULTANT_SOURCE_POLICY_CONTENT_SHA256]),
+              domain_pack_id: string([CONSULTANT_DOMAIN_PACK_ID]),
+              mode: string(["agent_researched_synthetic_qualification"]),
+              production_state: string([
+                "blocked_pending_attributable_sme_validation",
+              ]),
+            },
+          ),
+          configuration_release: consultantConfigurationRelease,
+          agent_authorship: closedObject(
+            [
+              "prepared_by",
+              "mode",
+              "human_consultant_authorship",
+              "production_sme_validation",
+            ],
+            {
+              prepared_by: string([
+                "matchbase_agent_research_and_implementation_team",
+              ]),
+              mode: string(["agent_researched_synthetic_qualification"]),
+              human_consultant_authorship: string(["not_claimed"]),
+              production_sme_validation: string(["not_claimed"]),
+            },
+          ),
+          rfq_questions: {
+            type: "array",
+            prefixItems: CONSULTANT_SYNTHETIC_RFQ_QUESTIONS.map(
+              ([questionId, requiredResponse], index) =>
+                closedObject(
+                  [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state",
+                  ],
+                  {
+                    order: { type: "integer", enum: [index + 1] },
+                    question_id: string([questionId]),
+                    required_response: string([requiredResponse]),
+                    response_state: string(["not_collected"]),
+                  },
+                ),
+            ),
+            items: false,
+            minItems: CONSULTANT_SYNTHETIC_RFQ_QUESTIONS.length,
+            maxItems: CONSULTANT_SYNTHETIC_RFQ_QUESTIONS.length,
+          },
+          wave_recommendations: {
+            type: "array",
+            prefixItems: [
+              closedObject(
+                ["wave_id", "action", "selection_rule", "candidates"],
+                {
+                  wave_id: string(["RFQ_WAVE_INITIAL"]),
+                  action: string([
+                    "prepare_synthetic_rfq",
+                    "no_eligible_candidates",
+                  ]),
+                  selection_rule: string([
+                    "first_min_initial_wave_size_displayed",
+                  ]),
+                  candidates: {
+                    type: "array",
+                    items: consultantRankedCandidate,
+                  },
+                },
+              ),
+            ],
+            items: false,
+            minItems: 1,
+            maxItems: 1,
+          },
+          eligible_ranking: {
+            type: "array",
+            items: consultantRankedCandidate,
+          },
+          rfq_execution_snapshot: consultantRfqExecutionSnapshot,
+          reserve_candidates: {
+            type: "array",
+            items: consultantReserveCandidate,
+          },
+          due_diligence_checklist: {
+            type: "array",
+            prefixItems: CONSULTANT_DUE_DILIGENCE_CHECKS.map(
+              ([checkId, label], index) =>
+                closedObject(
+                  [
+                    "order",
+                    "check_id",
+                    "label",
+                    "state",
+                    "required_before_production",
+                  ],
+                  {
+                    order: { type: "integer", enum: [index + 1] },
+                    check_id: string([checkId]),
+                    label: string([label]),
+                    state: string(["not_executed"]),
+                    required_before_production: {
+                      type: "boolean",
+                      enum: [true],
+                    },
+                  },
+                ),
+            ),
+            items: false,
+            minItems: CONSULTANT_DUE_DILIGENCE_CHECKS.length,
+            maxItems: CONSULTANT_DUE_DILIGENCE_CHECKS.length,
+          },
+          source_facts: {
+            type: "array",
+            items: consultantSourceFact,
+          },
+          excluded_evidence: {
+            type: "array",
+            items: consultantExcludedEvidence,
+          },
+          full_limitations: closedObject(
+            [
+              "qualification_scope",
+              "human_consultant_authorship",
+              "production_sme_validation",
+              "production_release",
+              "restricted_party_clearance",
+              "due_diligence_completeness",
+              "notices",
+            ],
+            {
+              qualification_scope: string(["synthetic_only"]),
+              human_consultant_authorship: string(["not_claimed"]),
+              production_sme_validation: string(["not_claimed"]),
+              production_release: string(["blocked"]),
+              restricted_party_clearance: string(["not_claimed"]),
+              due_diligence_completeness: string(["not_executed"]),
+              notices: {
+                type: "array",
+                items: { type: "string", minLength: 1 },
+                minItems: 5,
+                maxItems: 5,
+              },
+            },
+          ),
+          projection_version: {
+            type: "integer",
+            enum: [CONSULTANT_RESULT_PROJECTION_V2_VERSION],
+          },
         },
       ),
       standardRunProjection: {
@@ -1638,7 +2498,7 @@ export function generateContractSchemas(): JsonSchema {
           items: { type: "array", items: requestHistoryItem },
           next_cursor: string(),
           synthetic_warning: string(),
-          projection_version: { type: "integer", enum: [3] },
+          projection_version: { type: "integer", enum: [4] },
         },
       ),
       standardRequestDetail: closedObject(
@@ -1671,7 +2531,7 @@ export function generateContractSchemas(): JsonSchema {
             runs: string(),
           }),
           synthetic_warning: string(),
-          projection_version: { type: "integer", enum: [3] },
+          projection_version: { type: "integer", enum: [4] },
         },
       ),
       standardRequestVersionHistory: closedObject(
@@ -1692,7 +2552,7 @@ export function generateContractSchemas(): JsonSchema {
           },
           next_cursor: string(),
           synthetic_warning: string(),
-          projection_version: { type: "integer", enum: [3] },
+          projection_version: { type: "integer", enum: [4] },
         },
       ),
       standardRunHistory: closedObject(
@@ -1702,7 +2562,7 @@ export function generateContractSchemas(): JsonSchema {
           items: { type: "array", items: runHistoryItem },
           next_cursor: string(),
           synthetic_warning: string(),
-          projection_version: { type: "integer", enum: [3] },
+          projection_version: { type: "integer", enum: [4] },
         },
       ),
       costEvent: closedObject(
@@ -1759,7 +2619,12 @@ export function serializeContractSchemas(): string {
   return `${renderJson(generateContractSchemas(), 0, 0)}\n`;
 }
 
-function renderJson(value: unknown, depth: number, column: number): string {
+function renderJson(
+  value: unknown,
+  depth: number,
+  column: number,
+  trailingComma = false,
+): string {
   const indentation = "  ".repeat(depth);
   const childIndentation = "  ".repeat(depth + 1);
 
@@ -1769,11 +2634,20 @@ function renderJson(value: unknown, depth: number, column: number): string {
     const primitivesOnly = value.every(
       (entry) => entry === null || typeof entry !== "object",
     );
-    if (primitivesOnly && column + inline.length <= 80) return inline;
+    if (
+      primitivesOnly &&
+      column + inline.length + (trailingComma ? 1 : 0) <= 80
+    )
+      return inline;
     return `[\n${value
       .map(
-        (entry) =>
-          `${childIndentation}${renderJson(entry, depth + 1, childIndentation.length)}`,
+        (entry, index) =>
+          `${childIndentation}${renderJson(
+            entry,
+            depth + 1,
+            childIndentation.length,
+            index < value.length - 1,
+          )}`,
       )
       .join(",\n")}\n${indentation}]`;
   }
@@ -1782,9 +2656,14 @@ function renderJson(value: unknown, depth: number, column: number): string {
     const entries = Object.entries(value as Record<string, unknown>);
     if (entries.length === 0) return "{}";
     return `{\n${entries
-      .map(([key, entry]) => {
+      .map(([key, entry], index) => {
         const prefix = `${childIndentation}${JSON.stringify(key)}: `;
-        return `${prefix}${renderJson(entry, depth + 1, prefix.length)}`;
+        return `${prefix}${renderJson(
+          entry,
+          depth + 1,
+          prefix.length,
+          index < entries.length - 1,
+        )}`;
       })
       .join(",\n")}\n${indentation}}`;
   }

@@ -6,13 +6,25 @@ import { validateEvidenceGraph } from "../src/evidence/integrity.js";
 import {
   assertDemoProjectionSafe,
   findRestrictedProjectionKeys,
-  projectDemoResult,
 } from "../src/projection/demo.js";
+import { projectStoredResult } from "../src/projection/server-result.js";
 import {
   buildSyntheticEvidenceGraph,
   selectEligibleCandidateIds,
   SYNTHETIC_CASE_COUNTS,
 } from "../src/research/synthetic-fixtures.js";
+
+function projectDemo(
+  completeResult: EvidenceGraphV1,
+  runBoundMandatoryConstraints: readonly string[],
+) {
+  return projectStoredResult({
+    tier: "demo",
+    completeResult,
+    runBoundMandatoryConstraints,
+    researchMode: "synthetic_reference",
+  }).body;
+}
 
 test("fixture manifest covers zero, one, two, three and more-than-three", async () => {
   const manifest = JSON.parse(
@@ -60,11 +72,14 @@ test("applies hard constraints before ranking", () => {
 test("projects Demo with a server allowlist, maximum three, and no padding", () => {
   const expected = { zero: 0, one: 1, two: 2, three: 3, many: 3 } as const;
   for (const [fixture, count] of Object.entries(expected)) {
-    const projection = projectDemoResult(
+    const projection = projectDemo(
       buildSyntheticEvidenceGraph(
         `RUN-${fixture}`,
         fixture as keyof typeof SYNTHETIC_CASE_COUNTS,
       ),
+      fixture === "zero"
+        ? ["Synthetic mandatory capacity", "Synthetic certification"]
+        : [],
     );
     assert.equal(projection.candidates.length, count);
     assert.deepEqual(findRestrictedProjectionKeys(projection), []);
@@ -75,6 +90,11 @@ test("projects Demo with a server allowlist, maximum three, and no padding", () 
         "rationale_short",
       ]);
     }
+    if (fixture === "zero")
+      assert.deepEqual(projection.unmet_mandatory_constraints, [
+        "Synthetic mandatory capacity",
+        "Synthetic certification",
+      ]);
   }
 });
 
@@ -140,7 +160,7 @@ test("stores the complete hidden result independently of Demo projection", () =>
     "RUN-HIDDEN",
     "many",
   );
-  const projection = projectDemoResult(graph);
+  const projection = projectDemo(graph, []);
   assert.equal(graph.candidates.length, 4);
   assert.equal(projection.candidates.length, 3);
   assert.equal(

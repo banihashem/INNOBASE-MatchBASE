@@ -118,3 +118,17 @@ test("allowed text fields reject raw provider traces and encoded topology", () =
     /restricted provider material/iu,
   );
 });
+
+test("excluded provider evidence requires a non-empty trimmed reason", () => {
+  for (const exclusionReason of ["", "   ", "\t\r\n"]) {
+    const graph = structuredClone(
+      buildSyntheticEvidenceGraph("RUN-EXCLUDED-REASON", "one"),
+    );
+    graph.evidence[0]!.verificationDisposition = "excluded";
+    graph.evidence[0]!.exclusionReason = exclusionReason;
+    assert.throws(
+      () => validateEvidenceGraph(graph),
+      /excluded disposition requires a non-empty reason/iu,
+    );
+  }
+});

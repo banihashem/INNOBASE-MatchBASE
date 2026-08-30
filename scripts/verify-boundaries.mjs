@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { trackedIgnoredFiles } from "./lib/repository-files.mjs";
+import { verifyTierProjectionBoundary } from "./lib/tier-projection-boundary.mjs";
 
 const root = resolve(".");
 const forbidden = new Set([
@@ -76,6 +77,8 @@ function walk(directory) {
 }
 
 walk(root);
+for (const violation of verifyTierProjectionBoundary(root))
+  violations.push(`${violation} (tier projection boundary)`);
 if (violations.length)
   throw new Error(`Boundary violations:\n${violations.join("\n")}`);
 console.log("boundaries: PASS");

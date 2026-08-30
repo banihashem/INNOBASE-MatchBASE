@@ -4,7 +4,11 @@ import {
   DeterministicFixtureCanonicalizer,
   DeterministicFixtureLanguageIdentifier,
 } from "@matchbase/ai-evidence";
-import { createPool, recoverExpiredExecutionLeases } from "@matchbase/data";
+import {
+  consultantProjectionConfigFromEnvironment,
+  createPool,
+  recoverExpiredExecutionLeases,
+} from "@matchbase/data";
 import { MatchBaseApplication } from "./service.js";
 import { StandardWorkspaceApplication } from "./standard-workspace.js";
 import type { PersistedTier, RequestContext } from "./types.js";
@@ -34,6 +38,9 @@ const pool = createPool({
   max: 6,
   connectionTimeoutMillis: probeMs,
 });
+const consultantProjectionConfig = consultantProjectionConfigFromEnvironment(
+  process.env,
+);
 const demoApplication = new MatchBaseApplication({
   pool,
   privacyKey: digestKey,
@@ -42,14 +49,17 @@ const demoApplication = new MatchBaseApplication({
     digestKeyId: "combined-worker-v1",
     languageIdentifier: new DeterministicFixtureLanguageIdentifier(),
   }),
+  consultantProjectionConfig,
 });
 const standardApplication = new StandardWorkspaceApplication({
   pool,
   privacyKey: digestKey,
+  consultantProjectionConfig,
 });
 const readiness = new WorkerReadiness();
 let stopping = false;
 let nextCycle: NodeJS.Timeout | undefined;
+let lastCycleFailure = "";
 const delayMs = Math.max(
   0,
   Math.min(
@@ -83,7 +93,8 @@ async function work(): Promise<void> {
              AND effective_from<=clock_timestamp() AND (effective_to IS NULL OR effective_to>clock_timestamp()) AND revoked_at IS NULL
            ORDER BY effective_from DESC,created_at DESC LIMIT 1
          ) g ON true
-        WHERE rr.state IN ('queued','failed_retryable') AND g.tier IN ('demo','standard')
+        WHERE rr.research_mode='synthetic_reference'
+          AND rr.state IN ('queued','failed_retryable') AND g.tier IN ('demo','standard')
         ORDER BY rr.queued_at,rr.run_id LIMIT 6`,
     );
     await Promise.all(
@@ -98,18 +109,38 @@ async function work(): Promise<void> {
           correlationId: randomUUID(),
           deploymentId: "slice2-combined-local-worker",
         };
-        if (row.tier === "standard")
-          await standardApplication.executeSyntheticRun(context, row.run_id);
-        else
-          await demoApplication.executeSyntheticRun(
-            context,
-            row.run_id,
-            "three",
-          );
+        try {
+          if (row.tier === "standard")
+            await standardApplication.executeSyntheticRun(context, row.run_id);
+          else
+            await demoApplication.executeSyntheticRun(
+              context,
+              row.run_id,
+              "three",
+            );
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            error.message === "Run is not claimable"
+          )
+            return;
+          throw error;
+        }
       }),
     );
-  } catch {
+    lastCycleFailure = "";
+  } catch (error) {
     readiness.markUnready("database_operation_failed");
+    const diagnostic =
+      error instanceof Error
+        ? (error.stack ?? `${error.name}: ${error.message}`)
+        : "UnknownError: non-error failure";
+    if (diagnostic !== lastCycleFailure) {
+      process.stderr.write(
+        `combined synthetic worker cycle failed: ${diagnostic}\n`,
+      );
+      lastCycleFailure = diagnostic;
+    }
   } finally {
     if (!stopping) nextCycle = setTimeout(() => void work(), 50);
   }

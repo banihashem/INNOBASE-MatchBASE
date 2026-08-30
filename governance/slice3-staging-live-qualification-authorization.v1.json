@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "matchbase.slice3-staging-live-qualification-authorization/v1",
+  "authorizationId": "OWNER-SLICE3-STAGING-LIVE-QUALIFICATION-2026-08-30-V1",
+  "environment": "staging",
+  "syntheticOnly": true,
+  "realUserDataAuthorized": false,
+  "fixtureId": "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
+  "maximumExternalHttpCalls": 50,
+  "maximumProviderModelPosts": 2,
+  "maximumCostUsd": 100,
+  "currency": "USD",
+  "routeOrder": ["gemini_direct", "openrouter"],
+  "openRouterRequestPolicy": {
+    "zdr": true,
+    "dataCollection": "deny",
+    "requireParameters": true,
+    "allowFallbacks": false,
+    "providerOnly": ["google-vertex"],
+    "providerOrder": ["google-vertex"],
+    "servedProviderId": "google-vertex",
+    "servedModelId": "google/gemini-3.6-flash"
+  },
+  "directGeminiRequestPolicy": {
+    "servedProviderId": "google",
+    "servedModelId": "gemini-3.6-flash",
+    "providerNativeSearchRequired": true
+  },
+  "productionPolicyMutationAuthorized": false,
+  "cloudMutationAuthorized": false,
+  "deploymentAuthorized": false
+}

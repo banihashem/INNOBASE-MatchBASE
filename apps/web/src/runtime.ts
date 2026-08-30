@@ -7,7 +7,13 @@ import {
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   ApplicationFault,
+  AdminAuditApplication,
+  AdminEntitlementsApplication,
+  AdminRunsApplication,
+  AdminUnprojectedApplication,
+  ArtifactDownloadApplication,
   API_MINOR_VERSION,
+  ConsultantResultApplication,
   MatchBaseApplication,
   StandardWorkspaceApplication,
   assertSlice1EndpointAuthorized,
@@ -24,10 +30,18 @@ import {
 } from "@matchbase/auth";
 import {
   appendAuditEvent,
+  ensureBootstrapEntitlement,
   inTransaction,
   resolveStoredAuthorization,
   type ConnectionPool,
+  type ArtifactObjectReader,
 } from "@matchbase/data";
+import { handleAdminEntitlementsRoute } from "./admin-entitlements-route-core";
+import { handleAdminAuditRoute } from "./admin-audit-route-core";
+import { handleAdminRunsRoute } from "./admin-runs-route-core";
+import { handleAdminUnprojectedRoute } from "./admin-unprojected-route-core";
+import { handleArtifactDownloadRoute } from "./artifact-download-route-core";
+import { handleConsultantRoute } from "./consultant-route-core";
 import type { WebConfig } from "./config";
 import {
   handleStandardRoute,
@@ -62,6 +76,13 @@ interface RuntimeOptions {
   pool: ConnectionPool;
   application: MatchBaseApplication;
   standardApplication?: StandardWorkspaceApplication;
+  adminEntitlementsApplication?: AdminEntitlementsApplication;
+  adminAuditApplication?: AdminAuditApplication;
+  adminRunsApplication?: AdminRunsApplication;
+  adminUnprojectedApplication?: AdminUnprojectedApplication;
+  artifactDownloadApplication?: ArtifactDownloadApplication;
+  artifactObjectReader?: ArtifactObjectReader;
+  consultantResultApplication?: ConsultantResultApplication;
   googleProvider?: GoogleOidcProvider;
 }
 
@@ -304,6 +325,27 @@ export function createWebRuntime(
   const pendingOidc = new Map<string, PendingOidc>();
   const pendingSimulator = new Map<string, PendingSimulator>();
   const standardApplication = options.standardApplication;
+  const adminEntitlementsApplication =
+    options.adminEntitlementsApplication ??
+    new AdminEntitlementsApplication(options.pool);
+  const adminAuditApplication =
+    options.adminAuditApplication ??
+    new AdminAuditApplication(options.pool, options.config.digestKey);
+  const adminRunsApplication =
+    options.adminRunsApplication ??
+    new AdminRunsApplication(options.pool, options.config.digestKey);
+  const adminUnprojectedApplication =
+    options.adminUnprojectedApplication ??
+    new AdminUnprojectedApplication(options.pool);
+  const artifactDownloadApplication =
+    options.artifactDownloadApplication ??
+    new ArtifactDownloadApplication(
+      options.pool,
+      options.artifactObjectReader ?? { read: async () => null },
+    );
+  const consultantResultApplication =
+    options.consultantResultApplication ??
+    new ConsultantResultApplication(options.pool);
 
   async function resolveSession(
     request: IncomingMessage,
@@ -467,24 +509,31 @@ export function createWebRuntime(
           ],
         );
         if (tier === "demo") {
-          await client.query(
-            `INSERT INTO entitlement_grant
-               (grant_id, account_id, user_id, tier, grant_actor_kind, justification, effective_from)
-             VALUES ($1,$2,$3,'demo','system','default verified subject grant',clock_timestamp())`,
-            [randomUUID(), accountId, userId],
-          );
+          await ensureBootstrapEntitlement(client, {
+            accountId,
+            subjectUserId: userId,
+            correlationId,
+            deploymentId: options.config.deploymentId,
+            environment: options.config.environment,
+            justification: "default verified subject grant",
+            tier: "demo",
+          });
         } else {
           const grantorId = randomUUID();
           await client.query(
             "INSERT INTO app_user(user_id,account_id,google_sub,email_verified,status) VALUES($1,$2,$3,true,'active')",
             [grantorId, accountId, `${subject}:grantor`],
           );
-          await client.query(
-            `INSERT INTO entitlement_grant
-               (grant_id,account_id,user_id,tier,grant_actor_kind,granted_by_user_id,justification,effective_from)
-             VALUES($1,$2,$3,'standard','user',$4,'signed Standard simulator fixture',clock_timestamp())`,
-            [randomUUID(), accountId, userId, grantorId],
-          );
+          await ensureBootstrapEntitlement(client, {
+            accountId,
+            subjectUserId: userId,
+            grantorUserId: grantorId,
+            correlationId,
+            deploymentId: options.config.deploymentId,
+            environment: options.config.environment,
+            justification: "signed Standard simulator fixture",
+            tier: "standard",
+          });
         }
       }
       const issued = issueSession();
@@ -844,6 +893,92 @@ export function createWebRuntime(
         json(response, 200, {
           ...(await options.application.me(session.requestContext)),
           environment: options.config.environment,
+        });
+        return;
+      }
+      const adminEntitlements = await handleAdminEntitlementsRoute({
+        method: request.method ?? "GET",
+        pathname: path,
+        searchParams: url.searchParams,
+        body: readRequestBody,
+        context: session.requestContext,
+        idempotencyKey,
+        application: adminEntitlementsApplication,
+      });
+      if (adminEntitlements) {
+        json(
+          response,
+          adminEntitlements.status,
+          adminEntitlements.body,
+          adminEntitlements.headers ? { ...adminEntitlements.headers } : {},
+        );
+        return;
+      }
+      const adminRuns = await handleAdminRunsRoute({
+        method: request.method ?? "GET",
+        pathname: path,
+        searchParams: url.searchParams,
+        context: session.requestContext,
+        application: adminRunsApplication,
+      });
+      if (adminRuns) {
+        json(response, adminRuns.status, adminRuns.body);
+        return;
+      }
+      const adminAudit = await handleAdminAuditRoute({
+        method: request.method ?? "GET",
+        pathname: path,
+        searchParams: url.searchParams,
+        context: session.requestContext,
+        application: adminAuditApplication,
+      });
+      if (adminAudit) {
+        json(
+          response,
+          adminAudit.status,
+          adminAudit.body,
+          adminAudit.headers ? { ...adminAudit.headers } : {},
+        );
+        return;
+      }
+      const adminUnprojected = await handleAdminUnprojectedRoute({
+        method: request.method ?? "GET",
+        pathname: path,
+        body: readRequestBody,
+        context: session.requestContext,
+        application: adminUnprojectedApplication,
+      });
+      if (adminUnprojected) {
+        json(response, adminUnprojected.status, adminUnprojected.body);
+        return;
+      }
+      const artifactDownload = await handleArtifactDownloadRoute({
+        method: request.method ?? "GET",
+        pathname: path,
+        artifactToken:
+          typeof request.headers["mb-artifact-token"] === "string"
+            ? request.headers["mb-artifact-token"]
+            : null,
+        context: session.requestContext,
+        application: artifactDownloadApplication,
+      });
+      if (artifactDownload) {
+        response.writeHead(artifactDownload.status, {
+          ...artifactDownload.headers,
+          "MB-Correlation-Id": correlationId,
+        });
+        response.end(Buffer.from(artifactDownload.bytes));
+        return;
+      }
+      const consultant = await handleConsultantRoute({
+        method: request.method ?? "GET",
+        pathname: path,
+        context: session.requestContext,
+        application: consultantResultApplication,
+      });
+      if (consultant) {
+        json(response, consultant.status, consultant.body, {
+          ...consultant.headers,
         });
         return;
       }

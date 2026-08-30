@@ -1,0 +1,116 @@
+{
+  "schemaVersion": "matchbase.slice3-staging-live-qualification-terminal/v3",
+  "observedAt": "2026-08-30T13:21:28.846Z",
+  "terminalDisposition": "BLOCKED_PROVIDER_CAPABILITY_CONTRADICTION",
+  "environment": "staging",
+  "syntheticOnly": true,
+  "containsRealUserData": false,
+  "ownerCeiling": {
+    "maximumProviderCalls": 50,
+    "maximumCostUsd": 100,
+    "currency": "USD"
+  },
+  "cumulativeAccounting": {
+    "credentialStatusGets": 1,
+    "providerModelPosts": 3,
+    "externalHttpCalls": 6,
+    "costUsd": 0.0334865,
+    "remainingProviderCalls": 47,
+    "remainingCostUsd": 99.9665135
+  },
+  "allocations": [
+    {
+      "authorizationId": "OWNER-SLICE3-STAGING-LIVE-QUALIFICATION-2026-08-30-V1",
+      "sessionId": "v6-40CB8BEE95ABACB012107300",
+      "ledgerAggregateSha256": "DA4F6075133A448C021B49E4FF0CE520FF62FBA0A61D3B64744F4B2CB4504588",
+      "disposition": "FAIL",
+      "providerModelPosts": 1,
+      "externalHttpCalls": 1,
+      "costUsd": 0.011487,
+      "reasonCodes": ["QUALIFICATION_SEARCH_GROUNDING_FAILED"]
+    },
+    {
+      "authorizationId": "OWNER-SLICE3-STAGING-LIVE-QUALIFICATION-2026-08-30-V2",
+      "sessionId": "v6-4FA7336D74F38010CBEE9D66",
+      "ledgerAggregateSha256": "667F420151D3737063973C8E8C4A61E46981463A43553660CD92B6537EF8027F",
+      "disposition": "FAIL",
+      "providerModelPosts": 2,
+      "externalHttpCalls": 4,
+      "costUsd": 0.0219995,
+      "reasonCodes": [
+        "QUALIFICATION_RESPONSE_PARSE_FAILED",
+        "QUALIFICATION_HTTP_STATUS_FAILED"
+      ]
+    },
+    {
+      "authorizationId": "OWNER-SLICE3-OPENROUTER-CREDENTIAL-GATE-2026-08-30-V3",
+      "sessionId": "v6-A06CD705B4D7733589780E4C",
+      "ledgerAggregateSha256": "C05F31E05E0BAAE15E6229971ED6AEB6D3EA245EC6B1DD6E07BC769B2F18C9E2",
+      "disposition": "BLOCKED_CREDENTIAL",
+      "credentialStatusGets": 1,
+      "providerModelPosts": 0,
+      "costUsd": 0,
+      "httpStatus": 200,
+      "schemaValid": true,
+      "paidCredential": false,
+      "failureClass": "UNPAID_CREDENTIAL"
+    }
+  ],
+  "directGemini": {
+    "servedIdentityVerified": true,
+    "providerNativeSearchQueryCount": 1,
+    "searchGroundingGatePassedInV2": true,
+    "v2ParseFailure": "SANITIZED_RESPONSE_PARSE_FAILURE",
+    "rawPartShapeObserved": false,
+    "remediation": "AUDITED_V4_FINAL_PART_PARSER_REUSED",
+    "remediationTested": true,
+    "qualificationPassed": false
+  },
+  "openRouter": {
+    "endpointCatalogReadPassed": true,
+    "zdrCatalogReadPassed": true,
+    "requestPolicy": {
+      "zdr": true,
+      "dataCollection": "deny",
+      "requireParameters": true,
+      "allowFallbacks": false,
+      "providerOnly": ["google-vertex"],
+      "providerOrder": ["google-vertex"]
+    },
+    "modelPostHttpStatus": 402,
+    "credentialStatusHttpStatus": 200,
+    "credentialStatusSchemaValid": true,
+    "paidCredential": false,
+    "failureClass": "UNPAID_CREDENTIAL",
+    "servedIdentityVerified": false,
+    "qualificationPassed": false
+  },
+  "sourceIdentity": {
+    "productionPolicyPath": "config/slice3/research-route-policy.v1.json",
+    "productionPolicySha256": "46FCAF0C2D2B66F8BAB8526C48E448A24B2E9F65B065AAA99135CA6AF048DB23",
+    "productionPolicyLiveActivation": "blocked",
+    "runnerSha256": "7CC5E0FD267C99AA0BA60E23049C7997AD4D8930344674E05E0B0AE14D80E0D0",
+    "credentialGateExecutorSha256": "27F82D122646A7BF31D4CD0B5627D103A692B499B59CD810481276A394592E23"
+  },
+  "outputs": {
+    "stagingPolicyPath": "config/slice3/research-route-policy.staging.v1.json",
+    "stagingPolicyGenerated": false,
+    "qualifiedEvidenceGenerated": false,
+    "reasonCode": "BOTH_ROUTES_NOT_QUALIFIED"
+  },
+  "externalEffects": {
+    "credentialValuesDisclosed": false,
+    "credentialValuesPersisted": false,
+    "rawProviderPayloadPersisted": false,
+    "accountMutations": 0,
+    "cloudMutations": 0,
+    "deploymentMutations": 0,
+    "productionPolicyMutated": false
+  },
+  "requiredExternalStateChange": {
+    "system": "OpenRouter",
+    "condition": "The configured API key must resolve as a paid, non-management, non-provisioning, unexpired key with positive remaining quota.",
+    "machineAcceptance": "credential gate disposition=CREDENTIAL_GATE_PASS_AWAITING_SEPARATE_LIVE_QUALIFICATION",
+    "codeRemediationAvailable": false
+  }
+}

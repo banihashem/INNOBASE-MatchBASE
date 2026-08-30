@@ -26,6 +26,28 @@ export interface StandardScoreExplanation {
   explanation: string;
 }
 
+export function weightedScoreNumerator(
+  ratings: readonly number[],
+  weights: readonly number[],
+): number {
+  if (
+    ratings.length !== weights.length ||
+    ratings.length === 0 ||
+    ratings.some(
+      (rating) => !Number.isInteger(rating) || rating < 0 || rating > 100,
+    ) ||
+    weights.some((weight) => !Number.isInteger(weight) || weight < 0) ||
+    weights.reduce((total, weight) => total + weight, 0) !== 100
+  )
+    throw new Error(
+      "Weighted scoring requires equally sized integer ratings and non-negative integer weights totaling 100.",
+    );
+  return ratings.reduce(
+    (total, rating, index) => total + rating * (weights[index] ?? 0),
+    0,
+  );
+}
+
 export function assertStandardDimensions(
   dimensions: readonly StandardDimensionScoreV1[],
 ): asserts dimensions is [
@@ -92,9 +114,9 @@ export function scoreStandardCandidate(
   dimensions: readonly StandardDimensionScoreV1[],
 ): StandardScoreResult {
   assertStandardDimensions(dimensions);
-  const weightedTotal = dimensions.reduce(
-    (total, dimension) => total + dimension.weight * dimension.score,
-    0,
+  const weightedTotal = weightedScoreNumerator(
+    dimensions.map(({ score }) => score),
+    dimensions.map(({ weight }) => weight),
   );
   const compatibilityScore = Math.floor((weightedTotal + 50) / 100);
   const fitBand = bandFromScore(compatibilityScore);

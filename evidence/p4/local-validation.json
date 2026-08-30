@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "candidateId": "MB-P4-RC-LOCAL-2026-08-29",
+  "recordedAt": "2026-08-29T09:18:40Z",
+  "environment": "ISOLATED_LOCAL",
+  "dataClass": "SYNTHETIC_ONLY",
+  "externalMutation": false,
+  "model": "Codex active model; host-reported identifier unavailable",
+  "agentRoster": [
+    {
+      "role": "Primary integration and release coordinator",
+      "agent": "/root",
+      "status": "COMPLETE"
+    },
+    {
+      "role": "Authorization, audit, artifact retrieval",
+      "agent": "p4_auth_audit",
+      "status": "COMPLETE"
+    },
+    {
+      "role": "Projection governance and TASK139",
+      "agent": "p4_governance_audit",
+      "status": "COMPLETE"
+    },
+    {
+      "role": "Reporting, migration 0007, dual-geometry PDF",
+      "agent": "p4_reporting_audit",
+      "status": "COMPLETE"
+    }
+  ],
+  "validations": [
+    {
+      "id": "P4-BUILD",
+      "command": "pnpm build",
+      "result": "PASS",
+      "summary": "All ten workspace build targets passed, including the Next.js standalone package."
+    },
+    {
+      "id": "P4-TEST",
+      "command": "pnpm test",
+      "result": "PASS",
+      "passed": 853,
+      "skipped": 2,
+      "failed": 0
+    },
+    {
+      "id": "P4-BROWSER",
+      "command": "pnpm test:browser",
+      "result": "PASS",
+      "passed": 42,
+      "failed": 0,
+      "summary": "Chrome product, administration, Consultant, Demo, Standard, qualified-live injection, responsive and accessibility paths passed."
+    },
+    {
+      "id": "P4-RUNTIME-PRIVACY",
+      "command": "node scripts/scan-slice1-runtime-artifacts.mjs",
+      "result": "PASS",
+      "regularArtifacts": 7425,
+      "symlinksNotFollowed": 2,
+      "canaries": 4,
+      "findings": 0
+    },
+    {
+      "id": "P4-GOVERNANCE",
+      "command": "pnpm governance:check",
+      "result": "PASS",
+      "registers": 12
+    },
+    {
+      "id": "P4-SLICE1-EVIDENCE",
+      "command": "pnpm slice1:evidence:check",
+      "result": "PASS",
+      "criteria": 22,
+      "exactArtifacts": 60
+    },
+    {
+      "id": "P4-SLICE2-EVIDENCE",
+      "command": "pnpm slice2:evidence:check",
+      "result": "PASS",
+      "criteria": 34,
+      "exactArtifacts": 14,
+      "frozenCandidateFiles": 110,
+      "role2": "PENDING"
+    },
+    {
+      "id": "P4-SLICE3-HISTORICAL-EVIDENCE",
+      "command": "pnpm slice3:evidence:check",
+      "result": "EXPECTED_HISTORICAL_MISMATCH",
+      "summary": "The immutable Slice 3 candidate pins an earlier governance/gates.json. The additive P4 gate update is not used to rewrite that historical candidate."
+    },
+    {
+      "id": "P4-BOUNDARY",
+      "command": "pnpm boundary:check",
+      "result": "PASS"
+    },
+    {
+      "id": "P4-REPORTING",
+      "command": "pnpm p4:reporting:qualify",
+      "result": "PASS",
+      "blockingChecks": 16,
+      "a4Sha256": "BA2FDE525BD4C17196FF557B79A9E8F2DFF6D32619FE28B020C8E3AC310FCAC5",
+      "letterSha256": "23E5DE5816D5E42EB810D124D821C95C6489DF113A4D7951CD44022138368A5B"
+    }
+  ],
+  "runtime": {
+    "product": "http://127.0.0.1:3010/",
+    "productHealth": "PASS",
+    "productReadiness": "PASS",
+    "worker": "http://127.0.0.1:3011/health",
+    "workerHealth": "PASS",
+    "dashboard": "http://127.0.0.1:5173/",
+    "dashboardHealth": "PASS",
+    "postgresql": "127.0.0.1:55432",
+    "postgresqlHealth": "PASS"
+  },
+  "disposition": "LOCAL_QUALIFIED_BLOCKED_EXTERNAL"
+}

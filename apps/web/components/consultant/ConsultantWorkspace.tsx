@@ -5,6 +5,7 @@ import {
   parseDemoProjectionV1,
   parseConsultantResultProjectionV1,
   parseConsultantResultProjectionV2,
+  parseConsultantRunHistoryV1,
   parseStandardResultProjectionV1,
 } from "@matchbase/contracts";
 import type { WorkspaceSession } from "../standard/types";
@@ -22,8 +23,6 @@ type RunItem = {
   result_available: boolean;
   outcome: string;
 };
-
-type RunHistory = { items: RunItem[] };
 
 type ViewState =
   | { state: "loading" }
@@ -44,10 +43,9 @@ export function ConsultantWorkspace({
     moveFocusAfterLoad.current = moveFocus;
     setView({ state: "loading" });
     try {
-      const response = await workspaceJson<RunHistory>(
-        "/api/v1/runs?filter=all",
-      );
-      setView({ state: "runs", items: response.body.items });
+      const response = await workspaceJson<unknown>("/api/v1/consultant/runs");
+      const history = parseConsultantRunHistoryV1(response.body);
+      setView({ state: "runs", items: [...history.items] });
     } catch {
       setView({
         state: "error",
@@ -61,8 +59,7 @@ export function ConsultantWorkspace({
   useEffect(() => {
     if (view.state === "loading" || !moveFocusAfterLoad.current) return;
     moveFocusAfterLoad.current = false;
-    const frame = requestAnimationFrame(() => headingRef.current?.focus());
-    return () => cancelAnimationFrame(frame);
+    headingRef.current?.focus();
   }, [view]);
 
   async function openResult(runId: string) {

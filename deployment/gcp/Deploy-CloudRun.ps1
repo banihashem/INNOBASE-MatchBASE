@@ -23,6 +23,11 @@ $ProjectId = $target.ProjectId
 $Region = $target.Region
 $Hostname = $target.Hostname
 $ArtifactBucket = $target.ArtifactBucket
+$CloudSqlInstanceConnectionName = [string]$target.CloudSqlInstanceConnectionName
+if ([string]::IsNullOrWhiteSpace($CloudSqlInstanceConnectionName)) { throw "Cloud SQL instance connection is not approved for '$Environment'." }
+if ($CloudSqlInstanceConnectionName -cnotmatch "^$([regex]::Escape($ProjectId)):$([regex]::Escape($Region)):[a-z][a-z0-9-]{0,97}[a-z0-9]$") { throw "Cloud SQL instance connection is outside the closed target map." }
+$WebGeminiSecretName = [string]$target.WebGeminiSecretName
+if ([string]::IsNullOrWhiteSpace($WebGeminiSecretName)) { throw "Web Gemini credential is not approved for '$Environment'." }
 Assert-ApplyConfirmation -Apply $Apply.IsPresent -ExpectedProjectId $ProjectId -ConfirmProjectId $ConfirmProjectId
 $resolvedRoutePolicyPath = (Resolve-Path -LiteralPath $RoutePolicyPath -ErrorAction Stop).Path
 $allowedPolicyRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..\config\slice3") -ErrorAction Stop).Path
@@ -31,6 +36,9 @@ $routePolicySha256 = (Get-FileHash -LiteralPath $resolvedRoutePolicyPath -Algori
 $routePolicy = Get-Content -LiteralPath $resolvedRoutePolicyPath -Raw | ConvertFrom-Json
 & node (Join-Path $PSScriptRoot "Assert-ProductionWorkerPolicy.mjs") $Environment $resolvedRoutePolicyPath $routePolicySha256
 if ($LASTEXITCODE -ne 0) { throw "Governed route policy verification failed." }
+$pricingVersions = @($routePolicy.routes | ForEach-Object { $_.costPolicy.pricingVersion } | Sort-Object -Unique)
+if ($pricingVersions.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$pricingVersions[0])) { throw "Worker routes must share one governed pricing version." }
+$pricingVersion = [string]$pricingVersions[0]
 $routeIdentity = $routePolicySha256.Substring(0, 16)
 Assert-ImmutableImageDigest -Image $WebImageDigest -ProjectId $ProjectId -Region $Region -Repository $ArtifactRepository -ExpectedImageName "$Environment-web"
 Assert-ImmutableImageDigest -Image $WorkerImageDigest -ProjectId $ProjectId -Region $Region -Repository $ArtifactRepository -ExpectedImageName "$Environment-worker-$routeIdentity"
@@ -46,13 +54,20 @@ foreach ($parts in @($webSecretParts, $workerSecretParts)) {
   $duplicate = $parts | Group-Object EnvironmentName | Where-Object Count -gt 1
   if ($duplicate) { throw "Each secret environment name must appear exactly once per runtime." }
 }
-$webRequiredSecrets = @("DATABASE_URL", "MATCHBASE_DIGEST_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "MATCHBASE_ORIGIN_ADMISSION_KEY")
+if ($webSecretParts | Where-Object EnvironmentName -CEQ "MATCHBASE_OPENROUTER_API_KEY") {
+  throw "Web MATCHBASE_OPENROUTER_API_KEY is prohibited; OpenRouter credentials are worker-only."
+}
+$webRequiredSecrets = @("DATABASE_URL", "MATCHBASE_DIGEST_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "MATCHBASE_ORIGIN_ADMISSION_KEY", "MATCHBASE_GEMINI_API_KEY")
 $workerRequiredSecrets = @("DATABASE_URL", "MATCHBASE_DIGEST_KEY", "MATCHBASE_GEMINI_API_KEY", "MATCHBASE_OPENROUTER_API_KEY")
 foreach ($required in $webRequiredSecrets) {
   if (-not ($WebSecretVersionRef | Where-Object { $_ -cmatch "^$required=" })) { throw "Web secret '$required' is required." }
 }
 foreach ($required in $workerRequiredSecrets) {
   if (-not ($WorkerSecretVersionRef | Where-Object { $_ -cmatch "^$required=" })) { throw "Worker secret '$required' is required." }
+}
+$webGeminiSecretParts = @($webSecretParts | Where-Object EnvironmentName -CEQ "MATCHBASE_GEMINI_API_KEY")
+if ($webGeminiSecretParts.Count -ne 1 -or $webGeminiSecretParts[0].SecretName -cne $WebGeminiSecretName) {
+  throw "Web MATCHBASE_GEMINI_API_KEY must bind the approved '$WebGeminiSecretName' secret."
 }
 
 $webEmail = "$WebServiceAccountName@$ProjectId.iam.gserviceaccount.com"
@@ -70,7 +85,9 @@ $webEnv = @(
   "MATCHBASE_ARTIFACT_MAXIMUM_BYTES=8388608",
   "GOOGLE_REDIRECT_URI=$origin/auth/google/callback",
   "MATCHBASE_OIDC_SIMULATOR=false",
-  "MATCHBASE_SYNTHETIC_FIXTURE=false"
+  "MATCHBASE_SYNTHETIC_FIXTURE=false",
+  "MATCHBASE_LIVE_RESEARCH_ENABLED=true",
+  "MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED=true"
 ) -join ","
 $workerEnv = @(
   "MATCHBASE_ENVIRONMENT=production",
@@ -84,6 +101,10 @@ $workerEnv = @(
   "MATCHBASE_SYNTHETIC_FIXTURE=false",
   "MATCHBASE_LIVE_RESEARCH_RUNTIME=environment",
   "MATCHBASE_LIVE_RESEARCH_ENABLED=true",
+  "MATCHBASE_LIVE_PRICING_VERSION=$pricingVersion",
+  "MATCHBASE_GEMINI_CONSERVATIVE_SEARCH_USD=1",
+  "MATCHBASE_GEMINI_CONSERVATIVE_REQUEST_USD=1",
+  "MATCHBASE_OPENROUTER_CONSERVATIVE_REQUEST_USD=1",
   "MATCHBASE_WORKER_HEALTH_PORT=3011"
 ) -join ","
 $webSecrets = $WebSecretVersionRef -join ","
@@ -94,8 +115,9 @@ $webCommand = @(
   "--project=$ProjectId", "--region=$Region", "--platform=managed",
   "--image=$WebImageDigest", "--service-account=$webEmail",
   "--port=8080", "--ingress=internal-and-cloud-load-balancing",
-  "--no-invoker-iam-check", "--min=1", "--max=$WebMaxInstances",
+  "--no-invoker-iam-check", "--min-instances=1", "--max-instances=$WebMaxInstances",
   "--concurrency=8", "--cpu=1", "--memory=1Gi", "--timeout=60s",
+  "--set-cloudsql-instances=$CloudSqlInstanceConnectionName",
   "--set-env-vars=$webEnv", "--set-secrets=$webSecrets",
   "--no-session-affinity", "--execution-environment=gen2", "--quiet"
 )
@@ -104,6 +126,7 @@ $workerCommand = @(
   "--project=$ProjectId", "--region=$Region",
   "--image=$WorkerImageDigest", "--service-account=$workerEmail",
   "--instances=$WorkerInstances", "--cpu=1", "--memory=1Gi",
+  "--set-cloudsql-instances=$CloudSqlInstanceConnectionName",
   "--set-env-vars=$workerEnv", "--set-secrets=$workerSecrets", "--quiet"
 )
 
@@ -157,6 +180,7 @@ function Assert-DeployedIdentity {
   foreach ($required in @(
     $Image,
     $ServiceAccount,
+    $CloudSqlInstanceConnectionName,
     '"name":"MATCHBASE_ENVIRONMENT","value":"production"',
     '"name":"MATCHBASE_DEPLOYMENT_ENVIRONMENT","value":"' + $Environment + '"',
     '"name":"MATCHBASE_DEPLOYMENT_ID","value":"' + $Digest + '"',
@@ -167,7 +191,18 @@ function Assert-DeployedIdentity {
     if ($State -cnotmatch [regex]::Escape($required)) { throw "$RuntimeName deployed identity does not match the closed release inputs." }
   }
 }
-Assert-DeployedIdentity -State (($webState | ConvertFrom-Json) | ConvertTo-Json -Depth 100 -Compress) -Image $WebImageDigest -ServiceAccount $webEmail -Digest $WebImageDigest.Split('@')[1] -RuntimeName "Web"
-Assert-DeployedIdentity -State (($workerState | ConvertFrom-Json) | ConvertTo-Json -Depth 100 -Compress) -Image $WorkerImageDigest -ServiceAccount $workerEmail -Digest $WorkerImageDigest.Split('@')[1] -RuntimeName "Worker"
+$webStateNormalized = (($webState | ConvertFrom-Json) | ConvertTo-Json -Depth 100 -Compress)
+$workerStateNormalized = (($workerState | ConvertFrom-Json) | ConvertTo-Json -Depth 100 -Compress)
+Assert-DeployedIdentity -State $webStateNormalized -Image $WebImageDigest -ServiceAccount $webEmail -Digest $WebImageDigest.Split('@')[1] -RuntimeName "Web"
+Assert-DeployedIdentity -State $workerStateNormalized -Image $WorkerImageDigest -ServiceAccount $workerEmail -Digest $WorkerImageDigest.Split('@')[1] -RuntimeName "Worker"
+if ($webStateNormalized -cnotmatch [regex]::Escape('"name":"MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED","value":"true"')) {
+  throw "Web deployed identity is missing the verified worker-credential marker."
+}
+if ($webStateNormalized -cmatch [regex]::Escape('"name":"MATCHBASE_OPENROUTER_API_KEY"')) {
+  throw "Web deployed identity contains a prohibited OpenRouter credential."
+}
+if ($workerStateNormalized -cmatch [regex]::Escape('"name":"MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED"')) {
+  throw "Worker deployed identity contains the web-only credential-verification marker."
+}
 $webState
 $workerState

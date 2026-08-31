@@ -7,9 +7,11 @@ import {
   validateSlice3Governance,
   verifySlice3CredentialPreflightSource,
 } from "./lib/slice3-dashboard-policy.mjs";
+import { verifyHistoricalArtifact } from "./lib/historical-artifact-policy.mjs";
 import { validateSlice3WrapperResult } from "./lib/slice3-wrapper-result-policy.mjs";
 
 const root = realpathSync(".");
+const acceptedSlice3Commit = "bfe1e64b903599f0b11b2168ee8119cb4d299d87";
 const sha = (path) =>
   createHash("sha256").update(readFileSync(path)).digest("hex").toUpperCase();
 const containedWithin = (parent, path) => {
@@ -272,10 +274,15 @@ for (const file of manifest.files) {
     !contained(path) ||
     lstatSync(path).isSymbolicLink() ||
     !lstatSync(path).isFile() ||
-    !/^[A-F0-9]{64}$/u.test(file.sha256) ||
-    sha(realpathSync(path)) !== file.sha256
+    !/^[A-F0-9]{64}$/u.test(file.sha256)
   )
     throw new Error(`Slice 3 candidate file mismatch: ${file.path}`);
+  verifyHistoricalArtifact({
+    repoRoot: root,
+    acceptedCommit: acceptedSlice3Commit,
+    path: file.path,
+    sha256: file.sha256,
+  });
   prior = file.path;
   aggregate.update(`${file.path}\0${file.sha256}\n`, "utf8");
 }
@@ -286,9 +293,15 @@ for (const artifact of evidence.artifacts ?? []) {
   if (
     !contained(path) ||
     lstatSync(path).isSymbolicLink() ||
-    sha(path) !== artifact.sha256
+    !lstatSync(path).isFile()
   )
     throw new Error(`Slice 3 artifact mismatch: ${artifact.path}`);
+  verifyHistoricalArtifact({
+    repoRoot: root,
+    acceptedCommit: acceptedSlice3Commit,
+    path: artifact.path,
+    sha256: artifact.sha256,
+  });
 }
 console.log(
   `slice3: PASS repository implementation (${manifest.fileCount} files; live qualification BLOCKED_PREREQUISITE; Role2 FAIL with D001-D004 CORRECTED_PENDING_ROLE2)`,

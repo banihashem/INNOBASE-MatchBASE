@@ -34,12 +34,14 @@ export const nodePinnedFetchTransport: PinnedFetchTransport = async (input) => {
         headers: input.headers,
         timeout: input.timeoutMs,
         rejectUnauthorized: true,
-        lookup: (_hostname, _options, callback) =>
-          callback(
-            null,
-            input.connectAddress,
-            isIP(input.connectAddress) as 4 | 6,
-          ),
+        lookup: (_hostname, options, callback) => {
+          const family = isIP(input.connectAddress) as 4 | 6;
+          if (typeof options === "object" && options.all) {
+            callback(null, [{ address: input.connectAddress, family }]);
+            return;
+          }
+          callback(null, input.connectAddress, family);
+        },
       },
       (response) => {
         if (

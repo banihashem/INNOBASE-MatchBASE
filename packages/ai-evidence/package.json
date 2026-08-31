@@ -13,6 +13,10 @@
     "./standard": {
       "types": "./dist/src/standard.d.ts",
       "import": "./dist/src/standard.js"
+    },
+    "./internal/complete-result-foundation-v2": {
+      "types": "./dist/src/complete-result/foundation-v2.d.ts",
+      "import": "./dist/src/complete-result/foundation-v2.js"
     }
   },
   "scripts": {

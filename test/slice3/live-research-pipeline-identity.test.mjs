@@ -15,24 +15,8 @@ import {
 
 const schemaWithShuffledKeys = Object.freeze({
   additionalProperties: false,
-  properties: {
-    gateEvaluationCompletedAt: { type: "string" },
-    eligibleCandidateIds: { items: { type: "string" }, type: "array" },
-    evidence: { type: "array" },
-    claims: { type: "array" },
-    candidates: { type: "array" },
-    schemaVersion: { const: "evidence-graph.v1" },
-    runId: { type: "string" },
-  },
-  required: [
-    "schemaVersion",
-    "runId",
-    "candidates",
-    "claims",
-    "evidence",
-    "eligibleCandidateIds",
-    "gateEvaluationCompletedAt",
-  ],
+  properties: LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA.properties,
+  required: LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA.required,
   type: "object",
 });
 
@@ -148,7 +132,7 @@ for (const [field, driftedValue] of [
   ["scoringConfigVersionId", "30000000-0000-4000-8000-000000000099"],
   ["scoringConfigVersion", "scoring-2026-08-25.1"],
   ["scoringConfigContentSha256", "4".repeat(64)],
-  ["extractionVersion", "untrusted-source-boundary.v2"],
+  ["extractionVersion", "untrusted-source-boundary.v1"],
 ]) {
   test(`${field} drift fails before provider call`, async () => {
     let providerCalls = 0;
@@ -213,9 +197,82 @@ test("every live transport runs inside an authoritative locked admission", async
     source,
     /JOIN model_policy_version mp[\s\S]{0,300}JOIN scoring_config_version sc/,
   );
-  assert.match(source, /FOR SHARE OF r,mp,sc,rp/);
+  assert.match(source, /FOR SHARE OF r/);
+  assert.doesNotMatch(source, /FOR SHARE OF r,mp,sc,rp/);
   assert.match(
     migration,
     new RegExp(LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA_SHA256),
+  );
+});
+
+test("a denied discovered URL does not terminate secure fetch while a later URL can be accepted", async () => {
+  const source = await readFile(
+    new URL(
+      "../../packages/application/src/live-research-execution.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const loopStart = source.indexOf("for (const url of sourceUrls)");
+  const providerStart = source.indexOf("const fencedTransport", loopStart);
+  assert.ok(loopStart >= 0 && providerStart > loopStart);
+  const fetchPhase = source.slice(loopStart, providerStart);
+  assert.match(
+    fetchPhase,
+    /if \(error instanceof SecureFetchDenied\)[\s\S]{0,900}lastSecureFetchDenial = error;\s*continue;/u,
+  );
+  assert.match(
+    fetchPhase,
+    /sanitizedEvidence\.push\([\s\S]{0,600}sourceBindings\.push/u,
+  );
+  assert.match(
+    fetchPhase,
+    /if \(sanitizedEvidence\.length === 0\)[\s\S]{0,200}lastSecureFetchDenial/u,
+  );
+  assert.match(fetchPhase, /reasonCode:[\s\S]{0,120}"secure_fetch_failed"/u);
+});
+
+test("Gemini grounding redirects receive a closed intermediary exception before destination revalidation", async () => {
+  const source = await readFile(
+    new URL(
+      "../../packages/application/src/live-research-execution.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(
+    source,
+    /hostname === "vertexaisearch\.cloud\.google\.com"[\s\S]{0,300}pathname\.startsWith\("\/grounding-api-redirect\/"\)/u,
+  );
+  assert.match(
+    source,
+    /redirectIntermediaryEvaluator:\s*isGeminiGroundingRedirectIntermediary/u,
+  );
+});
+
+test("live evidence excerpts remain bounded for the qualified output contract", async () => {
+  const executionSource = await readFile(
+    new URL(
+      "../../packages/application/src/live-research-execution.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.equal(
+    (executionSource.match(/sealed\.normalizedText\.slice\(0, 4000\)/g) ?? [])
+      .length,
+    2,
+  );
+  assert.equal(
+    (
+      executionSource.match(
+        /sealUntrustedSource\(fetched\.body, fetched\.contentType\)/g,
+      ) ?? []
+    ).length,
+    2,
+  );
+  assert.match(
+    executionSource,
+    /five distinct query angles inside this single grounded interaction/u,
   );
 });

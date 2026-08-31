@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "matchbase.slice3-staging-live-qualification-convergence-authorization/v13",
+  "authorizationId": "OWNER-SLICE3-STAGING-LIVE-QUALIFICATION-2026-08-30-V13",
+  "recordedAt": "2026-08-30T18:45:00Z",
+  "environment": "staging",
+  "syntheticOnly": true,
+  "realUserDataAuthorized": false,
+  "fixtureId": "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
+  "routeEvidence": [
+    {
+      "routePath": "gemini_direct",
+      "sessionId": "v6-6E67532C6108E5E5F7C17003",
+      "ledgerAggregateSha256": "9A1DC5C549ADCE3327887242DBF1378230CEBDE68912EB68F13E87FE884E951D",
+      "resultFile": "2-gemini_direct-result.json",
+      "resultFileSha256": "816D436F2B4D441A5B0FA554759FEBBC47FEB2AED23FC7AD8BF7DAA4EA020803",
+      "terminalDisposition": "PASS"
+    },
+    {
+      "routePath": "openrouter",
+      "sessionId": "v6-45C8ED78EF3EA2400B318F33",
+      "ledgerAggregateSha256": "207CEE3ED46973291018145D5CCC2126168C5E1556B0045828B05ACA86687F9E",
+      "resultFile": "4-openrouter-result.json",
+      "resultFileSha256": "BF759F61D615913191956EE1F45CDEA1C98DF81FB365DEA9AB5B92853B903EDC",
+      "terminalDisposition": "PASS"
+    }
+  ],
+  "accounting": {
+    "providerModelPostsConsumed": 30,
+    "maximumProviderModelPosts": 50,
+    "conservativeCostUsdConsumed": 2.1495265,
+    "maximumCostUsd": 100,
+    "convergenceExternalHttpCalls": 0,
+    "convergenceProviderModelPosts": 0,
+    "convergenceCostUsd": 0
+  },
+  "openRouterIdentityBasis": "provider_reported_router_metadata_and_response",
+  "historicalSessionsImmutable": true,
+  "productionPolicyMutationAuthorized": false,
+  "stagingPolicyGenerationAuthorized": true,
+  "cloudMutationAuthorized": false,
+  "deploymentAuthorized": false
+}

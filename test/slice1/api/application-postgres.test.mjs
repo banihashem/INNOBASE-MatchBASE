@@ -254,6 +254,37 @@ postgresTest(
         "request-idempotency-0001",
         intake,
       );
+      const liveContext = context(ids);
+      const liveApp = new MatchBaseApplication({
+        pool,
+        canonicalizer: {
+          capabilityId: "CAP-TRANSLATE",
+          canonicalize: async (input, _signal, telemetry) => {
+            const successful = telemetryAttempt({
+              providerId: "gemini_direct",
+              routeId: "RT-GEMINI-DIRECT-CANONICALIZE-V1",
+              modelId: "gemini-3.6-flash",
+              environment: "staging",
+              routeKind: "real_data",
+              dataHandlingPosture: "paid_no_training",
+              configuredMaxAttempts: 1,
+              configuredBackoffMs: 0,
+              amount: "unknown",
+              pricingBasis: "provider_usage_unpriced",
+              pricingVersion: "gemini-3.6-canonicalization.2026-08-30",
+              pricingState: "unpriced",
+            });
+            await telemetry.record(successful);
+            return injectedCanonical(input, successful);
+          },
+        },
+        privacyKey: digest("application-live-privacy-key-material"),
+      });
+      await liveApp.createRequest(
+        liveContext,
+        "canonical-live-posture-key",
+        intake,
+      );
       for (const [index, canary] of SOURCE_LANGUAGE_CANARIES.entries()) {
         await app.createRequest(
           context(ids),
@@ -351,6 +382,11 @@ postgresTest(
                   WHERE c.amount = 0 AND c.pricing_state = 'explicit_zero'
                     AND c.pricing_basis = 'synthetic_fixture'
                 )::int AS exact_zero_costs,
+                count(*) FILTER (
+                  WHERE a.provider = 'gemini_direct' AND c.amount IS NULL
+                    AND c.pricing_state = 'unpriced'
+                    AND c.pricing_basis = 'provider_usage_unpriced'
+                )::int AS live_unpriced_costs,
                 bool_and(p.request_parameters ? 'attempt_number'
                   AND p.request_parameters->>'fallback' = 'false') AS attributed
            FROM capability_attempt a
@@ -366,11 +402,14 @@ postgresTest(
       );
       assert.equal(attemptOutcomes.get("timeout")?.attempts, 1);
       assert.equal(attemptOutcomes.get("provider_error")?.attempts, 3);
-      assert.equal(attemptOutcomes.get("ok")?.attempts, 11);
+      assert.equal(attemptOutcomes.get("ok")?.attempts, 12);
       for (const row of canonicalAttemptReconciliation.rows) {
         assert.equal(row.calls, row.attempts);
         assert.equal(row.costs, row.attempts);
-        assert.equal(row.exact_zero_costs, row.attempts);
+        assert.equal(
+          row.exact_zero_costs + row.live_unpriced_costs,
+          row.attempts,
+        );
         assert.equal(row.attributed, true);
       }
       const provenanceReconciliation = await pool.query(
@@ -381,6 +420,7 @@ postgresTest(
                      OR t.provider <> a.provider
                      OR t.model_id <> a.model_id
                      OR t.route_id <> r.route_id
+                     OR t.data_handling_posture <> r.data_handling_posture
                 )::int AS mismatched
            FROM transformation_provenance t
            LEFT JOIN capability_attempt a
@@ -390,8 +430,25 @@ postgresTest(
           WHERE t.account_id = $1`,
         [ids.accountId],
       );
-      assert.equal(provenanceReconciliation.rows[0].total, 11);
+      assert.equal(provenanceReconciliation.rows[0].total, 12);
       assert.equal(provenanceReconciliation.rows[0].mismatched, 0);
+      const liveProvenance = await pool.query(
+        `SELECT t.data_handling_posture, t.provider, t.model_id, t.route_id
+           FROM canonicalization_execution_run x
+           JOIN sourcing_request s USING (canonicalization_run_id, account_id)
+           JOIN canonical_request_version v ON v.request_id = s.request_id AND v.version = 1
+           JOIN transformation_provenance t USING (canonical_request_version_id, account_id)
+          WHERE x.request_correlation_id = $1`,
+        [liveContext.correlationId],
+      );
+      assert.deepEqual(liveProvenance.rows, [
+        {
+          data_handling_posture: "paid_no_training",
+          provider: "gemini_direct",
+          model_id: "gemini-3.6-flash",
+          route_id: "RT-GEMINI-DIRECT-CANONICALIZE-V1",
+        },
+      ]);
       const requestInvariant = await pool.query(
         `SELECT x.request_correlation_id, count(s.request_id)::int AS requests
            FROM canonicalization_execution_run x

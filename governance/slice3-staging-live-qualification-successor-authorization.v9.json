@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "matchbase.slice3-staging-live-qualification-successor-authorization/v9",
+  "authorizationId": "OWNER-SLICE3-STAGING-LIVE-QUALIFICATION-2026-08-30-V9",
+  "recordedAt": "2026-08-30T17:45:00Z",
+  "environment": "staging",
+  "syntheticOnly": true,
+  "realUserDataAuthorized": false,
+  "fixtureId": "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
+  "predecessor": {
+    "sessionId": "v6-8AC279688809D6034291989E",
+    "ledgerAggregateSha256": "B45853C31F41066A36C0D44CBA1F607F864CCDE901890984B70435A8EF154F0D",
+    "terminalDisposition": "FAIL",
+    "failedRoutePaths": ["gemini_direct", "openrouter"],
+    "providerModelPostsConsumed": 2,
+    "costConsumedUsd": 0,
+    "cumulativeProviderModelPosts": 21,
+    "cumulativeConservativeCostUsd": 1.1457505
+  },
+  "credentialGate": {
+    "sessionId": "v6-6488F0D1148B973D0B912F38",
+    "ledgerAggregateSha256": "053B4287A717C2EA39AA07C347A75FF207947E37D6348379AAE8B45D7EAA5C5B",
+    "httpStatus": 200,
+    "schemaValid": true,
+    "paidCredential": true,
+    "accountCreditsObservedUsd": 10
+  },
+  "ownerCeiling": {
+    "maximumProviderCalls": 50,
+    "maximumCostUsd": 100,
+    "remainingProviderCallsBeforeV9": 29,
+    "remainingCostUsdBeforeV9": 98.8542495
+  },
+  "allocation": {
+    "maximumExternalHttpCalls": 50,
+    "maximumProviderModelPosts": 2,
+    "maximumCostUsd": 98.8542495,
+    "routeOrder": ["gemini_direct", "openrouter"],
+    "retriesWithinAllocation": 0,
+    "fallbacks": 0
+  },
+  "requestContract": {
+    "fixtureIdAuthority": "server_owned",
+    "providerOutputKeys": ["answer", "sourceSummary"],
+    "openRouterSeed": 137,
+    "openRouterMetadataShapes": [
+      "legacy_attempts_pipeline",
+      "current_summary_region_byok"
+    ],
+    "openRouterZdr": true,
+    "openRouterDataCollection": "deny",
+    "openRouterRequireParameters": true,
+    "openRouterAllowFallbacks": false,
+    "openRouterProviderOnly": ["google-vertex"],
+    "directGeminiFreshSearchPrompt": true,
+    "minimumNonemptySearchQueries": 1,
+    "groundingSupportRequired": true,
+    "rawPayloadPersistence": false
+  },
+  "accounting": {
+    "providerModelPostsBeforeV9": 21,
+    "conservativeCostUsdBeforeV9": 1.1457505,
+    "diagnosticProviderModelPostsAfterV5": 2,
+    "diagnosticConservativeCostUsdAfterV5": 0.043008,
+    "singleAllocationConservativeReserveUsd": 0.241728
+  },
+  "productionPolicyMutationAuthorized": false,
+  "cloudMutationAuthorized": false,
+  "deploymentAuthorized": false,
+  "ownerDecision": "User directed the agents to complete the funded two-route qualification and staging deployment."
+}

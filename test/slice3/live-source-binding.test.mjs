@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertLiveEvidenceSourceBindings } from "../../packages/application/dist/live-source-binding.js";
+import {
+  assertLiveEvidenceSourceBindings,
+  bindServerOwnedLiveEvidenceGraph,
+} from "../../packages/application/dist/live-source-binding.js";
 import { validateEvidenceGraph } from "../../packages/ai-evidence/dist/src/evidence/integrity.js";
 
 const source = Object.freeze({
@@ -152,7 +155,7 @@ test("rejects duplicate provider evidence IDs", () => {
   );
 });
 
-test("rejects unknown provider evidence IDs but allows unused fetched sources", () => {
+test("rejects unknown provider evidence IDs and omitted fetched sources", () => {
   assert.throws(
     () =>
       assertLiveEvidenceSourceBindings(
@@ -161,8 +164,79 @@ test("rejects unknown provider evidence IDs but allows unused fetched sources", 
       ),
     /not exactly bound to a fetched source/iu,
   );
-  assert.doesNotThrow(() =>
-    assertLiveEvidenceSourceBindings([evidence], [source, sourceTwo]),
+  assert.throws(
+    () => assertLiveEvidenceSourceBindings([evidence], [source, sourceTwo]),
+    /not exactly bound to a fetched source/iu,
+  );
+});
+
+test("materializes every server-owned source and excludes unused evidence deterministically", () => {
+  const providerGraph = {
+    ...evidenceOnlyGraph([]),
+    evidence: [
+      {
+        evidenceId: source.evidenceId,
+        verificationDisposition: "unverified",
+      },
+    ],
+  };
+  const bound = bindServerOwnedLiveEvidenceGraph(
+    { ...providerGraph, schemaVersion: "provider-invented" },
+    [source, sourceTwo],
+    {
+      runId: "RUN-LIVE-SOURCE-BINDING",
+      capturedAt: "2026-08-25T12:01:00.000Z",
+    },
+  );
+  validateEvidenceGraph(bound);
+  assert.equal(bound.schemaVersion, "evidence-graph.v1");
+  assert.equal(bound.runId, "RUN-LIVE-SOURCE-BINDING");
+  assert.equal(bound.gateEvaluationCompletedAt, "2026-08-25T12:01:00.000Z");
+  assertLiveEvidenceSourceBindings(bound.evidence, [source, sourceTwo]);
+  assert.equal(bound.evidence.length, 2);
+  assert.deepEqual(
+    bound.evidence.map((item) => [
+      item.evidenceId,
+      item.verificationDisposition,
+      item.exclusionReason,
+    ]),
+    [
+      [
+        source.evidenceId,
+        "excluded",
+        "insufficient_mandatory_constraint_support",
+      ],
+      [
+        sourceTwo.evidenceId,
+        "excluded",
+        "insufficient_mandatory_constraint_support",
+      ],
+    ],
+  );
+});
+
+test("derives accepted evidence only from claim lineage", () => {
+  const bound = bindServerOwnedLiveEvidenceGraph(
+    {
+      ...evidenceOnlyGraph([]),
+      claims: [{ evidenceIds: [sourceTwo.evidenceId] }],
+    },
+    [source, sourceTwo],
+    {
+      runId: "RUN-LIVE-SOURCE-BINDING",
+      capturedAt: "2026-08-25T12:01:00.000Z",
+    },
+  );
+  assert.deepEqual(
+    bound.evidence.map((item) => [
+      item.evidenceId,
+      item.verificationDisposition,
+      item.exclusionReason,
+    ]),
+    [
+      [source.evidenceId, "excluded", "not_used_in_candidate_rationale"],
+      [sourceTwo.evidenceId, "accepted", ""],
+    ],
   );
 });
 

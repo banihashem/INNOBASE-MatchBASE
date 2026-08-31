@@ -23,6 +23,8 @@ export const P4_GOOGLE_RISC_RECEIVER_MIGRATION_ID =
   "0008_p4_google_risc_receiver";
 export const P4_GOOGLE_RISC_RETENTION_MIGRATION_ID =
   "0009_p4_google_risc_retention";
+export const P4_LIVE_PIPELINE_EXTRACTION_V2_MIGRATION_ID =
+  "0010_p4_live_pipeline_extraction_v2";
 
 export interface MigrationDefinition {
   readonly id: string;
@@ -38,6 +40,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = Object.freeze([
   Object.freeze({ id: P4_AUDIT_ARTIFACT_FOUNDATION_MIGRATION_ID }),
   Object.freeze({ id: P4_GOOGLE_RISC_RECEIVER_MIGRATION_ID }),
   Object.freeze({ id: P4_GOOGLE_RISC_RETENTION_MIGRATION_ID }),
+  Object.freeze({ id: P4_LIVE_PIPELINE_EXTRACTION_V2_MIGRATION_ID }),
 ]);
 
 export const LATEST_MIGRATION_ID =

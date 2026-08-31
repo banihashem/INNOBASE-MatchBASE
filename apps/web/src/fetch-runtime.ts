@@ -21,11 +21,6 @@ import {
   type RequestContext,
 } from "@matchbase/application";
 import {
-  DeterministicFixtureCanonicalizer,
-  DeterministicFixtureLanguageIdentifier,
-  type CanonicalizationCapability,
-} from "@matchbase/ai-evidence";
-import {
   assertUnsafeRequest,
   createGoogleOidcAdapter,
   createGoogleRiscVerifier,
@@ -66,6 +61,7 @@ import {
 import { loadServerOwnedResearchAdmission } from "./server-owned-research-admission";
 import { readBoundedRequestBody } from "./bounded-request-body";
 import { assertProductionOriginAdmission } from "./origin-admission";
+import { createRuntimeCanonicalizer } from "./canonicalization-runtime";
 
 const HOST_SESSION_COOKIE = "__Host-matchbase_session";
 const LOCAL_SESSION_COOKIE = "matchbase_session";
@@ -190,21 +186,7 @@ function services(): Services {
   if (singleton) return singleton;
   const config = loadWebConfig();
   const pool = createPool({ connectionString: config.databaseUrl, max: 20 });
-  const canonicalizer: CanonicalizationCapability =
-    config.syntheticFixtureEnabled
-      ? new DeterministicFixtureCanonicalizer({
-          digestKey: config.digestKey,
-          digestKeyId: "runtime-v1",
-          languageIdentifier: new DeterministicFixtureLanguageIdentifier(),
-        })
-      : {
-          capabilityId: "CAP-TRANSLATE",
-          async canonicalize() {
-            throw new Error(
-              "No approved canonicalization route is configured.",
-            );
-          },
-        };
+  const canonicalizer = createRuntimeCanonicalizer(config);
   const googleProvider =
     config.googleClientId &&
     config.googleClientSecret &&
@@ -244,6 +226,7 @@ function services(): Services {
     application: new MatchBaseApplication({
       pool,
       canonicalizer,
+      canonicalizationBudgetMs: 20_000,
       privacyKey: config.digestKey,
       researchAdmission: loadServerOwnedResearchAdmission(config),
       consultantProjectionConfig:

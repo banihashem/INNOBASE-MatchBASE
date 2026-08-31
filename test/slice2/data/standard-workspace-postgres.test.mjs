@@ -225,7 +225,7 @@ postgresTest(
       await installFoundationOnly(pool);
       const foundationCatalog = await catalogSnapshot(pool);
       assert.deepEqual(await getMigrationStatus(pool), {
-        latestMigrationId: "0009_p4_google_risc_retention",
+        latestMigrationId: "0010_p4_live_pipeline_extraction_v2",
         appliedMigrationIds: ["0001_slice_1_foundation"],
         pendingMigrationIds: [
           "0002_slice_2_standard_workspace",
@@ -236,6 +236,7 @@ postgresTest(
           "0007_p4_audit_artifact_foundation",
           "0008_p4_google_risc_receiver",
           "0009_p4_google_risc_retention",
+          "0010_p4_live_pipeline_extraction_v2",
         ],
         unknownMigrationIds: [],
         ready: false,
@@ -648,6 +649,10 @@ postgresTest(
         },
       );
 
+      assert.equal(
+        await migrateDownLatest(pool),
+        "0010_p4_live_pipeline_extraction_v2",
+      );
       assert.equal(
         await migrateDownLatest(pool),
         "0009_p4_google_risc_retention",

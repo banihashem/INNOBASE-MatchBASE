@@ -4,10 +4,9 @@ import {
   type CompleteResultFoundationV2Source,
   type TrustedLiveFetchLedgerV2,
 } from "@matchbase/ai-evidence";
-// Operational authority is deliberately not part of the public ai-evidence
-// package surface. Only this repository-backed producer may mint the opaque
-// ledger consumed by the v2 validator.
-import { sealTrustedLiveFetchLedgerV2 } from "../../ai-evidence/dist/src/complete-result/foundation-v2.js";
+// Operational authority is deliberately absent from the public ai-evidence
+// barrel. The explicit internal subpath remains package-safe after deployment.
+import { sealTrustedLiveFetchLedgerV2 } from "@matchbase/ai-evidence/internal/complete-result-foundation-v2";
 import {
   STANDARD_DIMENSIONS,
   type CompleteResultEvidenceV2,
@@ -205,9 +204,9 @@ export function buildOperationalLiveCompleteResultV2(input: {
       source_kind: "reserved_url",
       exact_url: trusted.canonical_url,
       title:
-        providerEvidence?.title ??
+        providerEvidence?.title.trim() ||
         "Fetched source retained without provider use",
-      publisher: providerEvidence?.publisher ?? trusted.publisher_domain,
+      publisher: providerEvidence?.publisher.trim() || trusted.publisher_domain,
       publisher_domain: trusted.publisher_domain,
       published_or_updated: "not stated by source",
       accessed_at: trusted.retrieved_at,

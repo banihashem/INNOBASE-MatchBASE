@@ -203,6 +203,47 @@ const demoBody = {
 };
 
 describe("Consultant result route", () => {
+  it("serves owner-scoped Consultant run history on its dedicated route", async () => {
+    const listRuns = vi.fn(async () => ({
+      schema_version: "consultant-run-history.v1" as const,
+      items: [
+        {
+          run_id: "00000000-0000-4000-8000-000000000137",
+          request_id: "00000000-0000-4000-8000-000000000138",
+          state: "completed" as const,
+          updated_at: "2026-08-25T00:00:00.000Z",
+          result_available: true,
+          outcome: "matched" as const,
+        },
+      ],
+    }));
+    const response = await handleConsultantRoute({
+      method: "GET",
+      pathname: "/api/v1/consultant/runs",
+      context,
+      application: { listRuns } as never,
+    });
+    expect(response).toMatchObject({
+      status: 200,
+      body: { schema_version: "consultant-run-history.v1" },
+      headers: { "Cache-Control": "private, no-store", Vary: "Cookie" },
+    });
+    expect(listRuns).toHaveBeenCalledWith(context);
+  });
+
+  it("does not expose the Consultant history route to other tiers", async () => {
+    const listRuns = vi.fn();
+    await expect(
+      handleConsultantRoute({
+        method: "GET",
+        pathname: "/api/v1/consultant/runs",
+        context: { ...context, tier: "standard" },
+        application: { listRuns } as never,
+      }),
+    ).resolves.toBeNull();
+    expect(listRuns).not.toHaveBeenCalled();
+  });
+
   it("serves only the unified result route for Consultant", async () => {
     const getResult = vi.fn(async () => ({
       projectionTier: "consultant" as const,

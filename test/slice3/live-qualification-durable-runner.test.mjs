@@ -43,7 +43,6 @@ function directEnvelope(overrides = {}) {
           parts: [
             {
               text: JSON.stringify({
-                fixtureId: "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
                 answer: "Reserved for documentation.",
                 sourceSummary: "IANA public source.",
               }),
@@ -55,6 +54,7 @@ function directEnvelope(overrides = {}) {
           groundingChunks: [
             { web: { uri: "https://www.iana.org/help/example-domains" } },
           ],
+          groundingSupports: [{ groundingChunkIndices: [0] }],
         },
       },
     ],
@@ -72,7 +72,6 @@ function openRouterEnvelope(overrides = {}) {
         finish_reason: "stop",
         message: {
           content: JSON.stringify({
-            fixtureId: "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
             answer: "Reserved for documentation.",
             sourceSummary: "IANA public source.",
           }),
@@ -144,6 +143,7 @@ function openRouterFetch(envelope) {
                     "max_tokens",
                     "response_format",
                     "structured_outputs",
+                    "seed",
                   ],
                   pricing: {
                     prompt: "0.0000015",
@@ -184,14 +184,24 @@ test("credential parser accepts only the two canonical handles", async () => {
   }
 });
 
-test("requests freeze one send, 2048 output tokens, Search, and exact ZDR routing", () => {
+test("requests freeze one send, 4096 output tokens, Search, and exact ZDR routing", () => {
   const gemini = buildGeminiQualificationRequest(direct);
   const geminiBody = JSON.parse(gemini.body);
-  assert.equal(geminiBody.generationConfig.maxOutputTokens, 2048);
+  assert.equal(geminiBody.generationConfig.maxOutputTokens, 4096);
+  assert.equal("seed" in geminiBody.generationConfig, false);
   assert.deepEqual(geminiBody.tools, [{ google_search: {} }]);
+  assert.deepEqual(
+    Object.keys(geminiBody.generationConfig.responseJsonSchema.properties),
+    ["answer", "sourceSummary"],
+  );
+  assert.deepEqual(geminiBody.generationConfig.responseJsonSchema.required, [
+    "answer",
+    "sourceSummary",
+  ]);
   const router = buildOpenRouterQualificationRequest(openrouter);
   const routerBody = JSON.parse(router.body);
-  assert.equal(routerBody.max_tokens, 2048);
+  assert.equal(routerBody.max_tokens, 4096);
+  assert.equal(routerBody.seed, 7);
   assert.deepEqual(routerBody.provider, {
     only: ["google-vertex"],
     order: ["google-vertex"],
@@ -201,9 +211,18 @@ test("requests freeze one send, 2048 output tokens, Search, and exact ZDR routin
     zdr: true,
   });
   assert.equal("plugins" in routerBody, false);
+  assert.deepEqual(
+    Object.keys(routerBody.response_format.json_schema.schema.properties),
+    ["answer", "sourceSummary"],
+  );
+  assert.equal(router.body.includes("fixtureId"), false);
+  assert.equal(
+    router.body.includes("S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN"),
+    false,
+  );
 });
 
-test("direct Gemini accepts only exact canonical identity and one Search query", async () => {
+test("direct Gemini accepts only exact canonical identity and positive Search grounding", async () => {
   const evidence = await executeGeminiQualificationCall({
     route: direct,
     secret: "test-secret",
@@ -235,6 +254,25 @@ test("direct Gemini accepts only exact canonical identity and one Search query",
       }),
     );
   }
+  const multiQuery = directEnvelope();
+  multiQuery.candidates[0].groundingMetadata.webSearchQueries.push(
+    "IANA reserved domains documentation",
+  );
+  const multiQueryEvidence = await executeGeminiQualificationCall({
+    route: direct,
+    secret: "test-secret",
+    fetchImpl: async () => jsonResponse(multiQuery),
+  });
+  assert.equal(multiQueryEvidence.searchQueryCount, 2);
+  const emptyQuery = directEnvelope();
+  emptyQuery.candidates[0].groundingMetadata.webSearchQueries = ["   "];
+  await assert.rejects(
+    executeGeminiQualificationCall({
+      route: direct,
+      secret: "test-secret",
+      fetchImpl: async () => jsonResponse(emptyQuery),
+    }),
+  );
 });
 
 test("direct Gemini accepts one final JSON part after bounded thought and signature parts", async () => {
@@ -266,8 +304,34 @@ test("OpenRouter binds Google Vertex catalog, canonical model, stop, and reporte
   assert.equal(evidence.costAmountUsd, 0.00202);
   assert.equal(
     evidence.identityBasis,
-    "provider_reported_alias_generation_metadata",
+    "provider_reported_router_metadata_and_response",
   );
+  const currentMetadataEnvelope = openRouterEnvelope({
+    openrouter_metadata: {
+      requested: "google/gemini-3.6-flash",
+      strategy: "direct",
+      region: "global",
+      summary: "one selected endpoint",
+      attempt: 1,
+      is_byok: false,
+      endpoints: {
+        total: 1,
+        available: [
+          {
+            provider: "Google Vertex",
+            model: "google/gemini-3.6-flash-20260721",
+            selected: true,
+          },
+        ],
+      },
+    },
+  });
+  const currentEvidence = await executeOpenRouterQualificationCall({
+    route: openrouter,
+    secret: "test-secret",
+    fetchImpl: openRouterFetch(currentMetadataEnvelope),
+  });
+  assert.equal(currentEvidence.servedProviderId, "google-vertex");
 });
 
 test("truncated OpenRouter output fails closed while preserving sanitized cost facts", async () => {
@@ -280,7 +344,7 @@ test("truncated OpenRouter output fails closed while preserving sanitized cost f
           choices: [
             {
               finish_reason: "length",
-              message: { content: '{"fixtureId":"truncated"' },
+              message: { content: '{"answer":"truncated"' },
             },
           ],
         }),
@@ -378,58 +442,10 @@ test("OpenRouter generation identity and metadata reconciliation fail closed", a
         : response;
     },
     async (url, options = {}) => {
-      if (String(url).includes("/api/v1/generation?")) {
-        return jsonResponse({
-          data: {
-            id: base.id,
-            provider_name: "Google AI Studio",
-            model: base.model,
-            finish_reason: "stop",
-            tokens_prompt: 209,
-            tokens_completion: 496,
-            total_cost: 0.00202,
-          },
-        });
-      }
-      return openRouterFetch(base)(url, options);
-    },
-    async (url, options = {}) => {
-      if (String(url).includes("/api/v1/generation?")) {
-        return jsonResponse({
-          data: {
-            id: base.id,
-            provider_name: "Google Vertex",
-            model: base.model,
-            finish_reason: "stop",
-            tokens_prompt: 209,
-            tokens_completion: 495,
-            total_cost: 0.00202,
-          },
-        });
-      }
-      return openRouterFetch(base)(url, options);
-    },
-    async (url, options = {}) => {
       if (options.method === "POST") {
         const withoutId = { ...base };
         delete withoutId.id;
         return jsonResponse(withoutId);
-      }
-      return openRouterFetch(base)(url, options);
-    },
-    async (url, options = {}) => {
-      if (String(url).includes("/api/v1/generation?")) {
-        return jsonResponse({
-          data: {
-            id: base.id,
-            provider_name: "Google Vertex",
-            model: "google/gemini-3.6-flash-20260721",
-            finish_reason: "length",
-            tokens_prompt: 209,
-            tokens_completion: 496,
-            total_cost: 0.002021,
-          },
-        });
       }
       return openRouterFetch(base)(url, options);
     },
@@ -445,7 +461,7 @@ test("OpenRouter generation identity and metadata reconciliation fail closed", a
   }
 });
 
-test("OpenRouter performs one metadata GET and persists only digests", async () => {
+test("OpenRouter verifies in-band router identity and persists only digests", async () => {
   const calls = [];
   const base = openRouterEnvelope();
   const delegated = openRouterFetch(base);
@@ -459,7 +475,7 @@ test("OpenRouter performs one metadata GET and persists only digests", async () 
   });
   assert.equal(
     calls.filter((entry) => entry.url.includes("/api/v1/generation?")).length,
-    1,
+    0,
   );
   assert.equal(
     calls.some((entry) => entry.url.includes("/generation/content")),
@@ -468,27 +484,10 @@ test("OpenRouter performs one metadata GET and persists only digests", async () 
   assert.equal(JSON.stringify(evidence).includes(base.id), false);
   assert.match(evidence.providerRequestIdDigest, /^[A-F0-9]{64}$/u);
   assert.match(evidence.generationMetadataDigest, /^[A-F0-9]{64}$/u);
-  assert.deepEqual(evidence.metadataReadCostEvent, {
-    capability: "OPENROUTER_GENERATION_METADATA_READ",
-    calls: 1,
-    amountUsd: 0,
-    currency: "USD",
-    costState: "explicit_zero",
-  });
-  assert.throws(
-    () =>
-      validateSanitizedQualificationEvidence({
-        ...evidence,
-        metadataReadCostEvent: {
-          ...evidence.metadataReadCostEvent,
-          amountUsd: 0.000001,
-        },
-      }),
-    /metadata read cost event/iu,
-  );
+  assert.equal(evidence.metadataReadCostEvent, null);
 });
 
-test("the V3 route pair performs exactly two POSTs and one metadata GET", async () => {
+test("the route pair performs exactly two POSTs and zero metadata GETs", async () => {
   let posts = 0;
   let metadataGets = 0;
   await executeGeminiQualificationCall({
@@ -510,5 +509,5 @@ test("the V3 route pair performs exactly two POSTs and one metadata GET", async 
     },
   });
   assert.equal(posts, 2);
-  assert.equal(metadataGets, 1);
+  assert.equal(metadataGets, 0);
 });

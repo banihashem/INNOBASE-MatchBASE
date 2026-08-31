@@ -22,6 +22,7 @@ import type {
   ResearchRoutePolicyV1,
 } from "@matchbase/contracts";
 import {
+  appendAuditEvent,
   bindConsultantProjectionPolicyAtResultProduction,
   DEFAULT_CONSULTANT_PROJECTION_CONFIG,
   inTransaction,
@@ -51,6 +52,7 @@ import {
 } from "./live-research-pipeline-identity.js";
 import {
   assertLiveEvidenceSourceBindings,
+  bindServerOwnedLiveEvidenceGraph,
   type LiveSourceBindingRecord,
 } from "./live-source-binding.js";
 import {
@@ -109,6 +111,31 @@ const sha = (value: string | Uint8Array): Buffer =>
   createHash("sha256").update(value).digest();
 const json = (value: unknown): string => JSON.stringify(value);
 
+async function inSerializableTransaction<T>(
+  pool: ConnectionPool,
+  operation: (client: Queryable) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      return await inTransaction(pool, async (client) => {
+        await client.query("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+        return await operation(client);
+      });
+    } catch (error) {
+      if (
+        !error ||
+        typeof error !== "object" ||
+        !("code" in error) ||
+        error.code !== "40001" ||
+        attempt === 4
+      )
+        throw error;
+      await new Promise<void>((resolve) => setTimeout(resolve, attempt + 1));
+    }
+  }
+  throw new Error("Serializable transaction retry limit was exhausted.");
+}
+
 interface ReservationRow {
   execution_id: string;
   account_id: string;
@@ -158,13 +185,12 @@ interface SourceDiscoveryCheckpoint {
   readonly searchAttemptId: string;
 }
 
-function canonicalSourceUrls(value: readonly string[]): readonly string[] {
-  if (
-    value.length < 1 ||
-    value.length > 10 ||
-    new Set(value).size !== value.length
-  )
+export function canonicalSourceUrls(
+  value: readonly string[],
+): readonly string[] {
+  if (value.length < 1 || value.length > 10)
     throw new Error("Server-owned source discovery returned invalid URLs.");
+  const canonical: string[] = [];
   for (const candidate of value) {
     let url: URL;
     try {
@@ -177,11 +203,35 @@ function canonicalSourceUrls(value: readonly string[]): readonly string[] {
       url.username !== "" ||
       url.password !== "" ||
       url.hash !== "" ||
-      url.href !== candidate
+      (url.href !== candidate && url.href !== `${candidate}/`)
     )
       throw new Error("Server-owned source discovery returned invalid URLs.");
+    canonical.push(url.href);
   }
-  return Object.freeze([...value]);
+  if (new Set(canonical).size !== canonical.length)
+    throw new Error("Server-owned source discovery returned invalid URLs.");
+  return Object.freeze(canonical);
+}
+
+export function isGeminiGroundingRedirectIntermediary(
+  candidate: string,
+): boolean {
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return false;
+  }
+  return (
+    url.protocol === "https:" &&
+    url.hostname === "vertexaisearch.cloud.google.com" &&
+    url.port === "" &&
+    url.username === "" &&
+    url.password === "" &&
+    url.hash === "" &&
+    url.search === "" &&
+    url.pathname.startsWith("/grounding-api-redirect/")
+  );
 }
 
 function validateSourceDiscoveryCheckpoint(
@@ -281,25 +331,22 @@ export class GeminiServerOwnedSourceDiscovery implements ServerOwnedSourceDiscov
         onAttempt: (attempt) =>
           void attempts.push(Object.freeze({ ...attempt })),
         request: (signal) => ({
-          url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(route.requestedModelId)}:generateContent`,
+          url: "https://generativelanguage.googleapis.com/v1beta/interactions",
           method: "POST",
           headers: { "content-type": "application/json" },
           body: json({
             model: route.requestedModelId,
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  {
-                    text: `${input.canonicalEnglishRequest}\nReturn only canonical public HTTPS source URLs that materially support the request.`,
-                  },
-                ],
-              },
-            ],
-            tools: [{ google_search: {} }],
-            generationConfig: {
-              responseMimeType: "application/json",
-              responseJsonSchema: {
+            input: [
+              input.canonicalEnglishRequest,
+              "Search the current public web now using five distinct query angles inside this single grounded interaction: exact product and supplier identity; current inventory or dated availability; requested volume and export capacity; Dubai routing or UAE presence; and African-market distribution or compliance.",
+              "Prefer primary supplier pages, official registries, dated catalog or stock pages, and authoritative trade or customs sources.",
+              "Return up to ten unique canonical public HTTPS source URLs that materially support or refute any part of the request. Do not require one source to prove every constraint.",
+            ].join("\n"),
+            tools: [{ type: "google_search" }],
+            response_format: {
+              type: "text",
+              mime_type: "application/json",
+              schema: {
                 type: "object",
                 additionalProperties: false,
                 required: ["sourceUrls"],
@@ -313,7 +360,6 @@ export class GeminiServerOwnedSourceDiscovery implements ServerOwnedSourceDiscov
                   },
                 },
               },
-              maxOutputTokens: 1024,
             },
           }),
           signal,
@@ -418,6 +464,7 @@ export class PostgresLiveResearchAtomicLedger {
       pipelineIdentity: LiveResearchPipelineIdentityV1;
       authoritativeRegistryDomains?: readonly string[];
       executionEnvironment?: "local" | "test" | "staging" | "production";
+      deploymentId?: string;
       consultantProjectionConfig?: ConsultantProjectionConfigRelease;
     },
   ) {}
@@ -478,7 +525,7 @@ export class PostgresLiveResearchAtomicLedger {
          JOIN research_route_policy rp
            ON rp.research_route_policy_id=$3 AND rp.activation_state='qualified'
         WHERE r.account_id=$1 AND r.run_id=$2
-        FOR SHARE OF r,mp,sc,rp`,
+        FOR SHARE OF r`,
           [this.options.accountId, runId, this.options.policyId],
         )
       : await (async () => {
@@ -510,7 +557,7 @@ export class PostgresLiveResearchAtomicLedger {
                JOIN research_route_policy rp
                  ON rp.research_route_policy_id=$3 AND rp.activation_state='qualified'
               WHERE mp.model_policy_version_id=$1
-              FOR SHARE OF mp,sc,rp`,
+              `,
             [
               pinned.model_policy_version_id,
               pinned.scoring_config_version_id,
@@ -592,163 +639,171 @@ export class PostgresLiveResearchAtomicLedger {
     const tokenHash = sha(ownershipToken);
     const leaseMs = this.leaseMs();
     const now = this.now();
-    const state = await inTransaction(this.options.pool, async (client) => {
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
-        [`${this.options.accountId}:${runId}`],
-      );
-      const authoritativeIdentity = await this.authoritativePipelineIdentity(
-        runId,
-        client,
-      );
-      assertLiveResearchPipelineIdentityUnchanged(
-        authoritativeIdentity,
-        this.options.pipelineIdentity,
-      );
-      const existing = await client.query<ReservationRow>(
-        `SELECT r.execution_id,r.account_id,r.run_id,r.generation,r.state,r.lease_expires_at,
+    const state = await inSerializableTransaction(
+      this.options.pool,
+      async (client) => {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
+          [`${this.options.accountId}:${runId}`],
+        );
+        const authoritativeIdentity = await this.authoritativePipelineIdentity(
+          runId,
+          client,
+        );
+        assertLiveResearchPipelineIdentityUnchanged(
+          authoritativeIdentity,
+          this.options.pipelineIdentity,
+        );
+        const existing = await client.query<ReservationRow>(
+          `SELECT r.execution_id,r.account_id,r.run_id,r.generation,r.state,r.lease_expires_at,
                 r.ownership_token_sha256,r.execution_lease_slot,
                 r.execution_lease_generation,r.pipeline_identity_record,t.terminal_record
            FROM live_research_execution_reservation r
            LEFT JOIN live_research_terminal t ON t.live_research_terminal_id=r.terminal_id
           WHERE r.execution_id=$1 OR (r.account_id=$2 AND r.run_id=$3)
           FOR UPDATE OF r`,
-        [executionId, this.options.accountId, runId],
-      );
-      if (existing.rows.length > 1)
-        throw new Error(
-          "Live research execution identity belongs to another run.",
+          [executionId, this.options.accountId, runId],
         );
-      const row = existing.rows[0];
-      if (
-        row &&
-        (row.account_id !== this.options.accountId || row.run_id !== runId)
-      )
-        throw new Error(
-          "Live research execution identity belongs to another run.",
-        );
-      if (row)
-        assertLiveResearchPipelineIdentityUnchanged(
-          row.pipeline_identity_record,
-          authoritativeIdentity,
-        );
-      if (row && row.execution_id !== executionId)
-        throw new Error("Live research execution identity changed on resume.");
-      if (row?.state === "terminal") return { state: "existing" as const };
-      if (row && row.lease_expires_at > now)
-        return { state: "existing" as const };
+        if (existing.rows.length > 1)
+          throw new Error(
+            "Live research execution identity belongs to another run.",
+          );
+        const row = existing.rows[0];
+        if (
+          row &&
+          (row.account_id !== this.options.accountId || row.run_id !== runId)
+        )
+          throw new Error(
+            "Live research execution identity belongs to another run.",
+          );
+        if (row)
+          assertLiveResearchPipelineIdentityUnchanged(
+            row.pipeline_identity_record,
+            authoritativeIdentity,
+          );
+        if (row && row.execution_id !== executionId)
+          throw new Error(
+            "Live research execution identity changed on resume.",
+          );
+        if (row?.state === "terminal") return { state: "existing" as const };
+        if (row && row.lease_expires_at > now)
+          return { state: "existing" as const };
 
-      const slot = await client.query<{
-        slot_no: number;
-        generation: number;
-        run_id: string | null;
-      }>(
-        `SELECT slot_no,generation,run_id
+        const slot = await client.query<{
+          slot_no: number;
+          generation: number;
+          run_id: string | null;
+        }>(
+          `SELECT slot_no,generation,run_id
            FROM execution_lease
           WHERE run_id IS NULL OR released_at IS NOT NULL OR expires_at <= $1
           ORDER BY slot_no
           FOR UPDATE SKIP LOCKED LIMIT 1`,
-        [now],
-      );
-      const selected = slot.rows[0];
-      if (!selected) return { state: "unavailable" as const };
-      if (selected.run_id && selected.run_id !== runId) {
-        await client.query(
-          `UPDATE research_run
+          [now],
+        );
+        const selected = slot.rows[0];
+        if (!selected) return { state: "unavailable" as const };
+        if (selected.run_id && selected.run_id !== runId) {
+          await client.query(
+            `UPDATE research_run
               SET state='failed_retryable',state_reason='lease_expired',started_at=NULL
             WHERE run_id=$1 AND state IN ('researching','scoring','cancelling')`,
-          [selected.run_id],
-        );
-      }
-      const acquiredSlot = await client.query<{
-        slot_no: number;
-        generation: number;
-      }>(
-        `UPDATE execution_lease
+            [selected.run_id],
+          );
+        }
+        const acquiredSlot = await client.query<{
+          slot_no: number;
+          generation: number;
+        }>(
+          `UPDATE execution_lease
             SET run_id=$1,account_id=$2,owner_token_hash=$3,
                 generation=generation+1,acquired_at=$5,renewed_at=$5,
                 expires_at=$5::timestamptz+($4::int * interval '1 millisecond'),
                 released_at=NULL,release_reason=NULL
           WHERE slot_no=$6
           RETURNING slot_no,generation`,
-        [
-          runId,
-          this.options.accountId,
-          tokenHash,
-          leaseMs,
-          now,
-          selected.slot_no,
-        ],
-      );
-      const globalLease = acquiredSlot.rows[0];
-      if (!globalLease)
-        throw new Error("Global live research execution slot was lost.");
-      const runUpdated = await client.query(
-        `UPDATE research_run
+          [
+            runId,
+            this.options.accountId,
+            tokenHash,
+            leaseMs,
+            now,
+            selected.slot_no,
+          ],
+        );
+        const globalLease = acquiredSlot.rows[0];
+        if (!globalLease)
+          throw new Error("Global live research execution slot was lost.");
+        const runUpdated = await client.query(
+          `UPDATE research_run
             SET state='researching',started_at=coalesce(started_at,$3)
           WHERE run_id=$1 AND account_id=$2
             AND research_mode='qualified_live_research'
             AND state IN ('queued','failed_retryable','researching')`,
-        [runId, this.options.accountId, now],
-      );
-      if (runUpdated.rowCount !== 1)
-        throw new Error("Qualified live research run is not claimable.");
+          [runId, this.options.accountId, now],
+        );
+        if (runUpdated.rowCount !== 1)
+          throw new Error("Qualified live research run is not claimable.");
 
-      const reservationGeneration = row ? Number(row.generation) + 1 : 1;
-      if (!Number.isSafeInteger(reservationGeneration))
-        throw new Error("Live research reservation generation is invalid.");
-      if (row) {
-        await client.query(
-          `UPDATE live_research_execution_reservation
+        const reservationGeneration = row ? Number(row.generation) + 1 : 1;
+        if (!Number.isSafeInteger(reservationGeneration))
+          throw new Error("Live research reservation generation is invalid.");
+        if (row) {
+          await client.query(
+            `UPDATE live_research_execution_reservation
               SET ownership_token_sha256=$4,generation=$5,
                   execution_lease_slot=$6,execution_lease_generation=$7,
                   lease_expires_at=$8::timestamptz+($9::int * interval '1 millisecond'),
                   claimed_at=$8,updated_at=$8
             WHERE execution_id=$1 AND account_id=$2 AND run_id=$3`,
-          [
-            executionId,
-            this.options.accountId,
-            runId,
-            tokenHash,
-            reservationGeneration,
-            globalLease.slot_no,
-            globalLease.generation,
-            now,
-            leaseMs,
-          ],
-        );
-      } else {
-        await client.query(
-          `INSERT INTO live_research_execution_reservation
+            [
+              executionId,
+              this.options.accountId,
+              runId,
+              tokenHash,
+              reservationGeneration,
+              globalLease.slot_no,
+              globalLease.generation,
+              now,
+              leaseMs,
+            ],
+          );
+        } else {
+          await client.query(
+            `INSERT INTO live_research_execution_reservation
              (execution_id,account_id,run_id,generation,ownership_token_sha256,state,
               execution_lease_slot,execution_lease_generation,pipeline_identity_record,
               lease_expires_at,claimed_at,updated_at)
            VALUES ($1,$2,$3,$4,$5,'in_progress',$6,$7,
                    $8::jsonb,$9::timestamptz+($10::int * interval '1 millisecond'),$9,$9)`,
-          [
-            executionId,
-            this.options.accountId,
-            runId,
-            reservationGeneration,
-            tokenHash,
-            globalLease.slot_no,
-            globalLease.generation,
-            json(authoritativeIdentity),
-            now,
-            leaseMs,
-          ],
+            [
+              executionId,
+              this.options.accountId,
+              runId,
+              reservationGeneration,
+              tokenHash,
+              globalLease.slot_no,
+              globalLease.generation,
+              json(authoritativeIdentity),
+              now,
+              leaseMs,
+            ],
+          );
+        }
+        await this.recordReservationEvent(
+          client,
+          executionId,
+          runId,
+          row ? "reclaimed_after_expiry" : "claimed",
+          tokenHash,
+          reservationGeneration,
         );
-      }
-      await this.recordReservationEvent(
-        client,
-        executionId,
-        runId,
-        row ? "reclaimed_after_expiry" : "claimed",
-        tokenHash,
-        reservationGeneration,
-      );
-      return { state: "acquired" as const, generation: reservationGeneration };
-    });
+        return {
+          state: "acquired" as const,
+          generation: reservationGeneration,
+        };
+      },
+    );
     return state.state === "acquired"
       ? ({ ...state, ownershipToken } as const)
       : state.state === "unavailable"
@@ -1282,6 +1337,59 @@ export class PostgresLiveResearchAtomicLedger {
       );
       if (runUpdated.rowCount !== 1)
         throw new Error("Qualified live research run lifecycle was not owned.");
+      if (
+        record.disposition === "failed_retryable" ||
+        record.disposition === "failed"
+      ) {
+        const compensationId = randomUUID();
+        const compensated = await client.query<{
+          compensates_entry_id: string;
+        }>(
+          `INSERT INTO quota_ledger (
+             quota_entry_id,account_id,user_id,run_id,entry_kind,units,
+             charged_at,reason_code,compensates_entry_id
+           )
+           SELECT $4,q.account_id,q.user_id,q.run_id,'compensation',-1,
+                  clock_timestamp(),'live_research_terminal_failure',
+                  q.quota_entry_id
+             FROM quota_ledger q
+            WHERE q.account_id=$1 AND q.user_id=$2 AND q.run_id=$3
+              AND q.entry_kind='charge'
+              AND NOT EXISTS (
+                SELECT 1 FROM quota_ledger c
+                 WHERE c.compensates_entry_id=q.quota_entry_id
+              )
+            RETURNING compensates_entry_id`,
+          [
+            this.options.accountId,
+            this.options.userId,
+            record.runId,
+            compensationId,
+          ],
+        );
+        const chargeId = compensated.rows[0]?.compensates_entry_id;
+        if (compensated.rowCount !== 1 || !chargeId)
+          throw new Error(
+            "Terminal live research failure quota compensation was not applied.",
+          );
+        await appendAuditEvent(client, {
+          accountId: this.options.accountId,
+          actorUserId: this.options.userId,
+          eventType: "quota.compensated",
+          resourceKind: "research_run",
+          resourceId: record.runId,
+          outcome: "allow",
+          correlationId: record.executionId,
+          deploymentId: this.options.deploymentId ?? "live-research-worker",
+          detail: {
+            chargeId,
+            compensationId,
+            reasonCode: "live_research_terminal_failure",
+            terminalDisposition: record.disposition,
+            terminalReasonCode: record.reasonCode,
+          },
+        });
+      }
       const released = await client.query(
         `UPDATE execution_lease
             SET released_at=coalesce(released_at,clock_timestamp()),
@@ -1465,7 +1573,7 @@ export class PostgresLiveResearchAtomicLedger {
          FROM research_route_health_observation
         WHERE route_id=$1 AND environment=$2
         ORDER BY observed_at DESC,research_route_health_observation_id DESC
-        LIMIT 1 FOR UPDATE`,
+        LIMIT 1`,
       [attempt.routeId, attempt.environment],
     );
     const priorFailures = Number(previous.rows[0]?.consecutive_failures ?? 0);
@@ -1767,8 +1875,7 @@ export class PostgresLiveResearchAtomicLedger {
       }>(
         `SELECT weights_bp,sme_approval_ref,released_at,content_sha256
            FROM scoring_config_version
-          WHERE scoring_config_version_id=$1
-          FOR SHARE`,
+           WHERE scoring_config_version_id=$1`,
         [this.options.pipelineIdentity.scoringConfigVersionId],
       );
       const row = scoring.rows[0];
@@ -2101,6 +2208,7 @@ export class LiveResearchExecutionService {
         waitMs?: number;
         now?: () => Date;
       }>;
+      deploymentId?: string;
     },
   ) {}
 
@@ -2153,10 +2261,9 @@ export class LiveResearchExecutionService {
            ON rp.research_route_policy_id=$3 AND rp.policy_version=$4
           AND rp.activation_state='qualified'
         WHERE r.account_id=$1 AND r.run_id=$2 AND v.match_readiness <> 'not_ready'
-          AND EXISTS (SELECT 1 FROM canonical_confirmation c
-                       WHERE c.canonical_request_version_id=v.canonical_request_version_id
-                         AND c.accepted)
-        FOR SHARE OF sc`,
+           AND EXISTS (SELECT 1 FROM canonical_confirmation c
+                        WHERE c.canonical_request_version_id=v.canonical_request_version_id
+                          AND c.accepted)`,
       [
         this.options.accountId,
         input.runId,
@@ -2200,7 +2307,7 @@ export class LiveResearchExecutionService {
       pipelineIdentity.routePolicyCanonicalSha256
     )
       throw new Error("Qualified route-policy content digest does not match.");
-    authoritativeSmeWeightValidation({
+    const smeWeightValidation = authoritativeSmeWeightValidation({
       environment: validatedPolicy.environment,
       weightsBp: admitted.scoring_weights_bp,
       smeApprovalRef: admitted.scoring_sme_approval_ref,
@@ -2213,6 +2320,9 @@ export class LiveResearchExecutionService {
       policyId: this.options.policyId,
       pipelineIdentity,
       executionEnvironment: validatedPolicy.environment,
+      ...(this.options.deploymentId === undefined
+        ? {}
+        : { deploymentId: this.options.deploymentId }),
       consultantProjectionConfig:
         this.options.consultantProjectionConfig ??
         DEFAULT_CONSULTANT_PROJECTION_CONFIG,
@@ -2417,6 +2527,7 @@ export class LiveResearchExecutionService {
       const sanitizedEvidence: SanitizedResearchEvidence[] = [];
       const sourceBindings: LiveSourceBindingRecord[] = [];
       try {
+        let lastSecureFetchDenial: SecureFetchDenied | null = null;
         for (const url of sourceUrls) {
           await heartbeat.assertOwned();
           const checkpoint = await this.loadPersistedSource(
@@ -2428,8 +2539,7 @@ export class LiveResearchExecutionService {
             generation,
             input.executionId,
           );
-          if (checkpoint.disposition === "denied")
-            throw new Error("A checkpointed secure fetch was denied.");
+          if (checkpoint.disposition === "denied") continue;
           if (checkpoint.disposition === "accepted") {
             sanitizedEvidence.push(checkpoint.evidence);
             sourceBindings.push(checkpoint.binding);
@@ -2447,12 +2557,14 @@ export class LiveResearchExecutionService {
                   url,
                   resolver: this.options.resolver,
                   accessEvaluator: this.options.accessEvaluator,
+                  redirectIntermediaryEvaluator:
+                    isGeminiGroundingRedirectIntermediary,
                   transport: this.options.fetchTransport,
                   signal: operationController.signal,
                 }),
             );
           } catch (error) {
-            if (error instanceof SecureFetchDenied)
+            if (error instanceof SecureFetchDenied) {
               await this.persistFetchAttempts(
                 { ...fetchInput, sourceRequestUrl: url },
                 error.attempts,
@@ -2462,6 +2574,9 @@ export class LiveResearchExecutionService {
                 generation,
                 input.executionId,
               );
+              lastSecureFetchDenial = error;
+              continue;
+            }
             throw error;
           }
           const persistedSource = await this.persistFetchAttempts(
@@ -2473,8 +2588,8 @@ export class LiveResearchExecutionService {
             generation,
             input.executionId,
           );
-          const sealed = sealUntrustedSource(fetched.body);
-          const excerpt = sealed.normalizedText.slice(0, 600).trim();
+          const sealed = sealUntrustedSource(fetched.body, fetched.contentType);
+          const excerpt = sealed.normalizedText.slice(0, 4000).trim();
           if (!excerpt)
             throw new Error("Fetched evidence produced no safe excerpt.");
           if (!persistedSource.binding)
@@ -2490,6 +2605,11 @@ export class LiveResearchExecutionService {
           sourceBindings.push(persistedSource.binding);
           await this.options.phaseObserver?.("source_persisted", url);
         }
+        if (sanitizedEvidence.length === 0)
+          throw (
+            lastSecureFetchDenial ??
+            new Error("No discovered source passed secure fetch policy.")
+          );
       } catch (error) {
         if (error instanceof LiveResearchProcessInterrupted) throw error;
         await ledger.commitTerminal(ownershipToken, generation, {
@@ -2558,11 +2678,44 @@ export class LiveResearchExecutionService {
           },
         },
         validateOutput: (body) => {
-          const graph = this.options.validateOutput(body);
+          const graph = bindServerOwnedLiveEvidenceGraph(
+            this.options.validateOutput(body),
+            sourceBindings,
+            { runId: input.runId, capturedAt: input.capturedAt },
+          );
           validateEvidenceGraph(graph);
           if (graph.runId !== input.runId)
             throw new Error("Live evidence graph belongs to another run.");
           assertLiveEvidenceSourceBindings(graph.evidence, sourceBindings);
+          if (
+            resolveCandidateIdentities({
+              accountId: this.options.accountId,
+              runId: input.runId,
+              candidates: graph.candidates,
+            }).some(
+              (resolution) =>
+                resolution.reasonCode === "canonical_hash_collision",
+            )
+          )
+            throw new Error("Candidate identity hash collision was rejected.");
+          buildOperationalLiveCompleteResultV2({
+            graph,
+            eligibleCandidateIds: graph.eligibleCandidateIds,
+            sourceBindings,
+            qualificationMode:
+              validatedPolicy.environment === "production"
+                ? "production"
+                : "synthetic_qualification",
+            ...(smeWeightValidation === undefined
+              ? {}
+              : { smeWeightValidation }),
+            ...(this.options.authoritativeRegistryDomains === undefined
+              ? {}
+              : {
+                  authoritativeRegistryDomains:
+                    this.options.authoritativeRegistryDomains,
+                }),
+          });
           return graph;
         },
         signal: operationController.signal,
@@ -2663,8 +2816,8 @@ export class LiveResearchExecutionService {
       }
       if (!acceptedFetchAttemptId)
         throw new Error("Secure fetch omitted a final accepted attempt.");
-      const sealed = sealUntrustedSource(fetched.body);
-      const excerpt = sealed.normalizedText.slice(0, 600).trim();
+      const sealed = sealUntrustedSource(fetched.body, fetched.contentType);
+      const excerpt = sealed.normalizedText.slice(0, 4000).trim();
       const sourceDocumentId = randomUUID();
       const evidenceItemId = randomUUID();
       await client.query(

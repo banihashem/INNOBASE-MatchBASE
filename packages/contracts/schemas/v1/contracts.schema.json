@@ -224,6 +224,68 @@
         }
       }
     },
+    "consultantRunHistory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "items"],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": ["consultant-run-history.v1"]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "run_id",
+              "request_id",
+              "state",
+              "updated_at",
+              "result_available",
+              "outcome"
+            ],
+            "properties": {
+              "run_id": {
+                "type": "string"
+              },
+              "request_id": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "running",
+                  "completed",
+                  "failed",
+                  "cancelled",
+                  "superseded"
+                ]
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "result_available": {
+                "type": "boolean"
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "matched",
+                  "no_responsible_match",
+                  "failed",
+                  "cancelled",
+                  "superseded"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "providerRegistry": {
       "type": "object",
       "additionalProperties": false,

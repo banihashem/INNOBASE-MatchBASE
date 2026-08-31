@@ -49,6 +49,8 @@ export type SourceAccessEvaluator = (
   signal: AbortSignal,
 ) => Promise<"allowed" | "disallowed" | "unavailable">;
 
+export type RedirectIntermediaryEvaluator = (url: string) => boolean;
+
 export interface PinnedFetchRequest {
   url: string;
   connectAddress: string;
@@ -396,6 +398,7 @@ export async function secureFetch(input: {
   url: string;
   resolver: DnsResolver;
   accessEvaluator: SourceAccessEvaluator;
+  redirectIntermediaryEvaluator?: RedirectIntermediaryEvaluator;
   transport: PinnedFetchTransport;
   signal: AbortSignal;
   policy?: SecureFetchPolicyV1;
@@ -539,16 +542,20 @@ export async function secureFetch(input: {
       }
       activeFetchesByHost.set(url.hostname, hostCount + 1);
       let robotsDisposition:
-        "allowed" | "disallowed" | "unavailable" | undefined;
+        "allowed" | "disallowed" | "unavailable" | "not_evaluated" | undefined;
       let response: PinnedFetchResponse | undefined;
       let body: Uint8Array | undefined;
+      const isRedirectIntermediary =
+        input.redirectIntermediaryEvaluator?.(url.href) === true;
       try {
-        robotsDisposition = await within(
-          input.accessEvaluator(url.href, controller.signal),
-          totalDeadlineAt,
-          "total_timeout",
-        );
-        if (robotsDisposition !== "allowed") {
+        robotsDisposition = isRedirectIntermediary
+          ? "not_evaluated"
+          : await within(
+              input.accessEvaluator(url.href, controller.signal),
+              totalDeadlineAt,
+              "total_timeout",
+            );
+        if (!isRedirectIntermediary && robotsDisposition !== "allowed") {
           const reason =
             robotsDisposition === "disallowed"
               ? "robots_disallowed"
@@ -636,6 +643,30 @@ export async function secureFetch(input: {
       }
       if (!response || !body || !robotsDisposition)
         throw new SecureFetchDenied("transport_failure", attempts);
+      if (
+        isRedirectIntermediary &&
+        ![301, 302, 303, 307, 308].includes(response.status)
+      ) {
+        attempts.push(
+          record({
+            canonicalUrl: url.href,
+            hostname: url.hostname,
+            resolvedAddresses: addresses,
+            connectedAddress,
+            redirectHop: hop,
+            decision: "denied",
+            reason: "redirect_intermediary_non_redirect",
+            status: response.status,
+            compressedBytes: response.compressedBytes,
+            decompressedBytes: body.byteLength,
+            robotsDisposition,
+          }),
+        );
+        throw new SecureFetchDenied(
+          "redirect_intermediary_non_redirect",
+          attempts,
+        );
+      }
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         if (
           response.compressedBytes > policy.maxCompressedBytes ||
@@ -743,14 +774,58 @@ export interface SealedUntrustedSource {
   activeContentDisabled: true;
 }
 
-export function sealUntrustedSource(body: Uint8Array): SealedUntrustedSource {
+function decodeHtmlEntity(entity: string): string {
+  const named: Readonly<Record<string, string>> = Object.freeze({
+    "&amp;": "&",
+    "&apos;": "'",
+    "&gt;": ">",
+    "&lt;": "<",
+    "&nbsp;": " ",
+    "&quot;": '"',
+  });
+  const known = named[entity.toLowerCase()];
+  if (known !== undefined) return known;
+  const hexadecimal = /^&#x([a-f0-9]+);$/iu.exec(entity);
+  const decimal = /^&#([0-9]+);$/u.exec(entity);
+  const value = hexadecimal
+    ? Number.parseInt(hexadecimal[1]!, 16)
+    : decimal
+      ? Number.parseInt(decimal[1]!, 10)
+      : Number.NaN;
+  return Number.isSafeInteger(value) && value > 0 && value <= 0x10ffff
+    ? String.fromCodePoint(value)
+    : " ";
+}
+
+function visibleHtmlText(value: string): string {
+  return value
+    .replace(/<!--[\s\S]*?-->/gu, " ")
+    .replace(
+      /<(?:script|style|template|noscript|svg|canvas)\b[^>]*>[\s\S]*?<\/(?:script|style|template|noscript|svg|canvas)\s*>/giu,
+      " ",
+    )
+    .replace(/<[^>]{0,4096}>/gu, " ")
+    .replace(
+      /&(?:amp|apos|gt|lt|nbsp|quot);|&#(?:[0-9]+|x[a-f0-9]+);/giu,
+      (entity) => decodeHtmlEntity(entity),
+    );
+}
+
+export function sealUntrustedSource(
+  body: Uint8Array,
+  contentType = "text/plain",
+): SealedUntrustedSource {
   const decoded = new TextDecoder("utf-8", { fatal: true }).decode(body);
-  const normalizedText = [
-    ...decoded
-      .normalize("NFKC")
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/giu, " ")
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/giu, " "),
-  ]
+  const inactive = decoded
+    .normalize("NFKC")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/giu, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/giu, " ");
+  const claimText = /^(?:text\/html|application\/xhtml\+xml)(?:;|$)/iu.test(
+    contentType,
+  )
+    ? visibleHtmlText(inactive)
+    : inactive;
+  const normalizedText = [...claimText]
     .map((character) => {
       const code = character.codePointAt(0) ?? 0;
       return code <= 0x08 ||

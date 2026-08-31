@@ -174,6 +174,26 @@ test("operational producer seals live provenance and retains unused fetches", ()
   );
 });
 
+test("server-derived source identity fills empty provider display claims without minting verification", () => {
+  const input = fixture();
+  input.graph.evidence[0].title = "";
+  input.graph.evidence[0].publisher = "";
+  const result = buildOperationalLiveCompleteResultV2({
+    graph: input.graph,
+    eligibleCandidateIds: [input.candidateId],
+    sourceBindings: input.sourceBindings,
+    qualificationMode: "synthetic_qualification",
+  });
+  const used = result.foundation.evidence.find(
+    (item) => item.evidence_id === input.graph.evidence[0].evidenceId,
+  );
+  assert.equal(used.publisher, "used.example.org");
+  assert.equal(used.verification_status, "claimed");
+  assert.deepEqual(used.external_verification_basis, {
+    kind: "not_externally_verified",
+  });
+});
+
 test("operational producer rejects provider verification forgery", () => {
   const input = fixture();
   input.graph.candidates[0].verificationStatus = "externally_verified";

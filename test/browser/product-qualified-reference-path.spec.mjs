@@ -69,7 +69,6 @@ test("injected qualified-live API, worker, and UI remain truthful and accessible
     `${JSON.stringify(LIVE_WORKER_FIXTURE_POLICY)}\n`,
     "utf8",
   );
-  const credential = () => randomBytes(24).toString("base64url");
   const server = spawn(
     process.execPath,
     [nextCliPath, "dev", "-H", "127.0.0.1", "-p", "3012"],
@@ -87,9 +86,8 @@ test("injected qualified-live API, worker, and UI remain truthful and accessible
         MATCHBASE_DEPLOYMENT_ID: `qualified-ui-${Date.now()}`,
         MATCHBASE_DIGEST_KEY: randomBytes(32).toString("base64url"),
         MATCHBASE_LIVE_RESEARCH_ENABLED: "true",
+        MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED: "true",
         MATCHBASE_TEST_LIVE_POLICY_PATH: policyPath,
-        MATCHBASE_GEMINI_API_KEY: credential(),
-        MATCHBASE_OPENROUTER_API_KEY: credential(),
       },
     },
   );

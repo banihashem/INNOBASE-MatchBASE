@@ -189,7 +189,7 @@ function validateRequests(routes) {
     JSON.stringify(directBody.tools) !==
       JSON.stringify([{ google_search: {} }]) ||
     !directBody.contents?.[0]?.parts?.[0]?.text?.includes(
-      "invoke Google Search exactly once",
+      "Use Google Search before answering",
     ) ||
     JSON.stringify(routerBody.provider) !==
       JSON.stringify({
@@ -550,7 +550,7 @@ export async function executeSuccessor({
       externalHttpCalls: counters.externalHttpCalls,
       providerModelPosts: counters.providerModelPosts,
       billableCalls: counters.providerModelPosts,
-      openRouterMetadataGets: 1,
+      openRouterMetadataGets: 0,
       retriesWithinAllocation: 0,
       fallbacks: 0,
       cumulativeProviderModelPosts:

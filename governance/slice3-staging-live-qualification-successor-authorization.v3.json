@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "matchbase.slice3-staging-live-qualification-successor-authorization/v3",
+  "authorizationId": "OWNER-SLICE3-STAGING-LIVE-QUALIFICATION-2026-08-30-V3",
+  "recordedAt": "2026-08-30T16:24:00Z",
+  "environment": "staging",
+  "syntheticOnly": true,
+  "realUserDataAuthorized": false,
+  "fixtureId": "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
+  "predecessor": {
+    "sessionId": "v6-4FA7336D74F38010CBEE9D66",
+    "ledgerAggregateSha256": "667F420151D3737063973C8E8C4A61E46981463A43553660CD92B6537EF8027F",
+    "terminalDisposition": "FAIL",
+    "failedRoutePaths": ["gemini_direct", "openrouter"],
+    "providerModelPostsConsumed": 2,
+    "costConsumedUsd": 0.0219995,
+    "cumulativeProviderModelPosts": 3,
+    "cumulativeCostUsd": 0.0334865
+  },
+  "credentialGate": {
+    "sessionId": "v6-6488F0D1148B973D0B912F38",
+    "ledgerAggregateSha256": "053B4287A717C2EA39AA07C347A75FF207947E37D6348379AAE8B45D7EAA5C5B",
+    "httpStatus": 200,
+    "schemaValid": true,
+    "paidCredential": true,
+    "failureClass": "QUOTA_UNPROVEN",
+    "accountCreditsObservedUsd": 10,
+    "proceedToBoundedModelCapabilityProof": true
+  },
+  "ownerCeiling": {
+    "maximumProviderCalls": 50,
+    "maximumCostUsd": 100,
+    "remainingProviderCallsBeforeV3": 47,
+    "remainingCostUsdBeforeV3": 99.9665135
+  },
+  "allocation": {
+    "maximumExternalHttpCalls": 50,
+    "maximumProviderModelPosts": 2,
+    "maximumCostUsd": 99.9665135,
+    "routeOrder": ["gemini_direct", "openrouter"],
+    "retriesWithinAllocation": 0,
+    "fallbacks": 0
+  },
+  "openRouterRequestPolicy": {
+    "zdr": true,
+    "dataCollection": "deny",
+    "requireParameters": true,
+    "allowFallbacks": false,
+    "providerOnly": ["google-vertex"],
+    "providerOrder": ["google-vertex"]
+  },
+  "directGeminiRequestPolicy": {
+    "providerNativeSearchRequired": true,
+    "searchQueriesRequired": 1,
+    "answerFromMemoryProhibited": true
+  },
+  "productionPolicyMutationAuthorized": false,
+  "cloudMutationAuthorized": false,
+  "deploymentAuthorized": false,
+  "ownerDecision": "User directed the agents to verify the funded OpenRouter account, complete qualification, and finish staging deployment."
+}

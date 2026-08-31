@@ -28,6 +28,7 @@ const session = {
 
 const runId = "00000000-0000-4000-8000-000000000137";
 const history = {
+  schema_version: "consultant-run-history.v1",
   items: [
     {
       run_id: runId,
@@ -77,7 +78,9 @@ test("ProductRouter resolves Consultant into the visible Consultant workspace", 
       async (input: RequestInfo | URL) =>
         new Response(
           JSON.stringify(
-            String(input).includes("/api/v1/me") ? session : { items: [] },
+            String(input).includes("/api/v1/me")
+              ? session
+              : { schema_version: "consultant-run-history.v1", items: [] },
           ),
           { status: 200, headers: { "Content-Type": "application/json" } },
         ),
@@ -206,10 +209,16 @@ test("exposes empty and retryable error states", async () => {
     .fn()
     .mockResolvedValueOnce(new Response("{}", { status: 503 }))
     .mockResolvedValueOnce(
-      new Response(JSON.stringify({ items: [] }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({
+          schema_version: "consultant-run-history.v1",
+          items: [],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
     );
   vi.stubGlobal("fetch", fetchMock);
   render(<ConsultantWorkspace initialSession={session} />);
@@ -219,6 +228,28 @@ test("exposes empty and retryable error states", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   await waitFor(() =>
     expect(screen.getByRole("status")).toHaveTextContent("No sourcing runs"),
+  );
+});
+
+test("loads the dedicated Consultant history route and rejects widened history", async () => {
+  const fetchMock = vi.fn(
+    async () =>
+      new Response(
+        JSON.stringify({
+          ...history,
+          hidden_projection_depth: "consultant",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  render(<ConsultantWorkspace initialSession={session} />);
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "The run history could not be loaded.",
+  );
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/v1/consultant/runs",
+    expect.anything(),
   );
 });
 

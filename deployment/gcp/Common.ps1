@@ -8,6 +8,8 @@ $script:Targets = @{
     ProjectId = "innobase-matchbase-stg"
     Hostname = "matchbase-staging.innobase.app"
     ArtifactBucket = "innobase-matchbase-stg-artifacts"
+    CloudSqlInstanceConnectionName = "innobase-matchbase-stg:me-central1:matchbase-stg-pg18"
+    WebGeminiSecretName = "matchbase-gemini-api-key"
     Region = $script:RequiredRegion
   }
   production = [pscustomobject]@{
@@ -15,6 +17,8 @@ $script:Targets = @{
     ProjectId = "innobase-matchbase"
     Hostname = "matchbase.innobase.app"
     ArtifactBucket = "innobase-matchbase-artifacts"
+    CloudSqlInstanceConnectionName = $null
+    WebGeminiSecretName = $null
     Region = $script:RequiredRegion
   }
 }
@@ -63,7 +67,8 @@ function Invoke-Gcloud {
     [Parameter(Mandatory)][string[]]$Arguments,
     [switch]$AllowNotFound
   )
-  $output = & gcloud @Arguments 2>&1
+  $effectiveArguments = if ($Arguments -match '^--verbosity=') { $Arguments } else { @($Arguments + '--verbosity=error') }
+  $output = & gcloud @effectiveArguments 2>&1
   $exitCode = $LASTEXITCODE
   if ($exitCode -ne 0) {
     if ($AllowNotFound) { return $null }
@@ -74,7 +79,8 @@ function Invoke-Gcloud {
 
 function Test-GcloudResource {
   param([Parameter(Mandatory)][string[]]$Arguments)
-  $null = & gcloud @Arguments 2>$null
+  $effectiveArguments = if ($Arguments -match '^--verbosity=') { $Arguments } else { @($Arguments + '--verbosity=error') }
+  $null = & gcloud @effectiveArguments 2>$null
   return $LASTEXITCODE -eq 0
 }
 
@@ -107,8 +113,8 @@ function Get-GcloudRoleSet {
 
 function Assert-ExactRoleSet {
   param(
-    [Parameter(Mandatory)][string[]]$Actual,
-    [Parameter(Mandatory)][string[]]$Expected,
+    [Parameter(Mandatory)][AllowNull()][AllowEmptyCollection()][string[]]$Actual,
+    [Parameter(Mandatory)][AllowNull()][AllowEmptyCollection()][string[]]$Expected,
     [Parameter(Mandatory)][string]$Scope
   )
   $actualSorted = @($Actual | Sort-Object -Unique)
@@ -166,7 +172,15 @@ function Assert-ExactBucketRoles {
     [Parameter(Mandatory)][string]$Bucket,
     [Parameter(Mandatory)][string[]]$ExpectedRoles
   )
-  $roles = Get-GcloudRoleSet -Arguments @("storage", "buckets", "get-iam-policy", "gs://$Bucket", "--flatten=bindings[].members", "--filter=bindings.members:serviceAccount:$Email", "--format=value(bindings.role)")
+  $policyText = Invoke-Gcloud -Arguments @("storage", "buckets", "get-iam-policy", "gs://$Bucket", "--format=json")
+  $policy = $policyText | ConvertFrom-Json
+  $member = "serviceAccount:$Email"
+  $roles = @(
+    $policy.bindings |
+      Where-Object { @($_.members) -ccontains $member } |
+      ForEach-Object { [string]$_.role } |
+      Sort-Object -Unique
+  )
   Assert-ExactRoleSet -Actual $roles -Expected $ExpectedRoles -Scope "bucket $Bucket member $Email"
 }
 

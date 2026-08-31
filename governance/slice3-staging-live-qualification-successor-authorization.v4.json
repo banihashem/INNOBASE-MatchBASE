@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "matchbase.slice3-staging-live-qualification-successor-authorization/v4",
+  "authorizationId": "OWNER-SLICE3-STAGING-LIVE-QUALIFICATION-2026-08-30-V4",
+  "recordedAt": "2026-08-30T16:31:00Z",
+  "environment": "staging",
+  "syntheticOnly": true,
+  "realUserDataAuthorized": false,
+  "fixtureId": "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
+  "predecessor": {
+    "sessionId": "v6-6E2E91B1E51DAA84C42A19F3",
+    "ledgerAggregateSha256": "81940679BE1782C3953ADA1F598AC82B6C39F5D81F26AFFC0ADF0026BE2A48E4",
+    "terminalDisposition": "FAIL",
+    "failedRoutePaths": ["gemini_direct", "openrouter"],
+    "providerModelPostsConsumed": 2,
+    "costConsumedUsd": 0.02348,
+    "cumulativeProviderModelPosts": 5,
+    "cumulativeCostUsd": 0.0569665
+  },
+  "credentialGate": {
+    "sessionId": "v6-6488F0D1148B973D0B912F38",
+    "ledgerAggregateSha256": "053B4287A717C2EA39AA07C347A75FF207947E37D6348379AAE8B45D7EAA5C5B",
+    "httpStatus": 200,
+    "schemaValid": true,
+    "paidCredential": true,
+    "failureClass": "QUOTA_UNPROVEN",
+    "accountCreditsObservedUsd": 10,
+    "proceedToBoundedModelCapabilityProof": true
+  },
+  "ownerCeiling": {
+    "maximumProviderCalls": 50,
+    "maximumCostUsd": 100,
+    "remainingProviderCallsBeforeV4": 41,
+    "remainingCostUsdBeforeV4": 99.8290175
+  },
+  "allocation": {
+    "maximumExternalHttpCalls": 50,
+    "maximumProviderModelPosts": 2,
+    "maximumCostUsd": 99.8290175,
+    "routeOrder": ["gemini_direct", "openrouter"],
+    "retriesWithinAllocation": 0,
+    "fallbacks": 0
+  },
+  "openRouterRequestPolicy": {
+    "zdr": true,
+    "dataCollection": "deny",
+    "requireParameters": true,
+    "allowFallbacks": false,
+    "providerOnly": ["google-vertex"],
+    "providerOrder": ["google-vertex"]
+  },
+  "directGeminiRequestPolicy": {
+    "providerNativeSearchRequired": true,
+    "searchQueriesRequired": 1,
+    "answerFromMemoryProhibited": true
+  },
+  "outputSchemaRemediation": {
+    "fixtureDiscriminator": "type_plus_single_value_enum",
+    "rawPayloadPersistence": false,
+    "diagnosticModelPostsConsumed": 4,
+    "diagnosticConservativeCostUsd": 0.114016,
+    "cumulativeProviderModelPostsBeforeV4": 9,
+    "cumulativeConservativeCostUsdBeforeV4": 0.1709825
+  },
+  "productionPolicyMutationAuthorized": false,
+  "cloudMutationAuthorized": false,
+  "deploymentAuthorized": false,
+  "ownerDecision": "User directed the agents to complete the funded two-route qualification and staging deployment."
+}

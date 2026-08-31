@@ -1,0 +1,402 @@
+{
+  "schemaVersion": "matchbase.p4-staging-deployment-progress/v2",
+  "recordedAt": "2026-08-30T17:49:20Z",
+  "validationUpdatedAt": "2026-08-31T08:33:36Z",
+  "recordType": "ADDITIVE_PROGRESS",
+  "supersedesHistoricalFacts": false,
+  "historicalRecord": "evidence/p4/staging-gate-b-cloud-state.v1.json",
+  "environment": "staging",
+  "projectId": "innobase-matchbase-stg",
+  "dataClass": "SYNTHETIC_ONLY",
+  "qualification": {
+    "disposition": "PASS",
+    "directGemini": "PASS",
+    "explicitOpenRouter": "PASS",
+    "zeroCallConvergence": "PASS",
+    "providerModelPosts": {
+      "used": 30,
+      "cap": 50,
+      "accountingState": "LAST_FULLY_RECONCILED_HISTORICAL_TOTAL",
+      "subsequentRuntimeCallsRecordedPerRun": true
+    },
+    "costUsd": {
+      "used": 2.1495265,
+      "cap": 100
+    },
+    "routePolicyPath": "config/slice3/research-route-policy.staging.v1.json",
+    "routePolicySha256": "28b77b649f0d689b27979a236d102172f973a793a913b61ede740cce8f9ca9f7",
+    "productionPolicyMutated": false
+  },
+  "runtime": {
+    "region": "me-central1",
+    "web": {
+      "service": "matchbase-staging-web",
+      "revision": "matchbase-staging-web-00012-725",
+      "ready": true,
+      "image": "me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-web@sha256:810bc6b8801ab8c0221590633a514cb771f16d483f32455436bda7e1e975d7b8",
+      "ingress": "internal-and-cloud-load-balancing",
+      "minInstances": 1,
+      "maxInstances": 3,
+      "cloudSqlInstance": "innobase-matchbase-stg:me-central1:matchbase-stg-pg18",
+      "originAdmissionSecretVersion": 2,
+      "disabledOriginAdmissionSecretVersions": [1],
+      "googleClientIdSecretVersion": 3,
+      "googleClientSecretVersion": 3,
+      "disabledGoogleOAuthSecretVersions": [1, 2]
+    },
+    "worker": {
+      "pool": "matchbase-staging-worker",
+      "revision": "matchbase-staging-worker-00027-f65",
+      "ready": true,
+      "image": "me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-worker-28b77b649f0d689b@sha256:80290d0cabdb65b1cb0ba2f80c7d645e47d385c70fdead020e45fa4fe6027c95",
+      "cloudSqlInstance": "innobase-matchbase-stg:me-central1:matchbase-stg-pg18",
+      "startupProbe": "PASS",
+      "diagnosticJobState": "READY_DATABASE_ONLY_NO_PROVIDER_CREDENTIAL"
+    }
+  },
+  "edge": {
+    "staticIpv4": "8.232.62.253",
+    "serverlessNeg": "matchbase-staging-neg",
+    "backendService": "matchbase-staging-backend",
+    "urlMap": "matchbase-staging-map",
+    "managedCertificate": {
+      "name": "matchbase-staging-cert-v2",
+      "state": "ACTIVE"
+    },
+    "managedCertificateRetry": {
+      "name": "matchbase-staging-cert-v2",
+      "state": "ACTIVE",
+      "attachedAlone": true,
+      "supersededCertificateDeleted": true
+    },
+    "httpsTargetProxy": "matchbase-staging-https",
+    "globalForwardingRule": "matchbase-staging-https-rule",
+    "cloudArmorPolicy": "matchbase-staging-edge",
+    "cloudArmorCloudflareIpv4AllowRuleCount": 15,
+    "cloudArmorDefaultAction": "deny-403",
+    "publicHostname": "matchbase-staging.innobase.app",
+    "publicDnsState": "CLOUDFLARE_PROXIED",
+    "publicA": ["104.21.16.61", "172.67.166.169"],
+    "cloudflareDnsRecordPresent": true,
+    "cloudflareProxyMode": "PROXIED",
+    "cloudflareSslMode": "FULL_STRICT",
+    "cloudflareMutationPerformed": true,
+    "originAdmissionRule": {
+      "name": "MatchBASE staging origin admission",
+      "filterExpression": "(http.host eq \"matchbase-staging.innobase.app\")",
+      "headerName": "MB-Origin-Admission",
+      "secretValueEntered": true,
+      "secretVersion": 2,
+      "deployed": true,
+      "state": "ACTIVE",
+      "valueMatchVerifiedWithoutDisclosure": true,
+      "exposedPriorVersionDisabled": 1
+    },
+    "browserControl": {
+      "diagnostics": "PASS",
+      "controlledTabActions": "PASS_VIA_FRESH_CONTROLLED_TAB",
+      "status": "PASS"
+    }
+  },
+  "continuity": {
+    "googleOAuth": {
+      "source": "evidence/p4/staging-gate-b-cloud-state.v1.json",
+      "platformConfiguration": "CONFIGURED",
+      "audience": "EXTERNAL_STAGING",
+      "supportEmailConfigured": true,
+      "webClient": "CONFIGURED",
+      "authorizedJavascriptOrigin": "https://matchbase-staging.innobase.app",
+      "authorizedRedirectUri": "https://matchbase-staging.innobase.app/auth/google/callback",
+      "credentialValuesRecorded": false,
+      "activeSecretVersion": 3,
+      "disabledMalformedSecretVersions": [1, 2],
+      "browserHandoff": "AUTHORIZED_SIGN_IN_COMPLETED",
+      "invalidClient": false
+    },
+    "stagingMigrations": {
+      "source": "evidence/p4/staging-gate-b-cloud-state.v1.json",
+      "migrationCount": 9,
+      "latestMigration": "0009_p4_google_risc_retention",
+      "newMigrationClaimedByThisRecord": false,
+      "migratorVerification": "UP_UNCHANGED",
+      "backupVerified": true,
+      "pointInTimeRecoveryEnabled": true,
+      "temporaryJobDeleted": true,
+      "temporarySecretGrantRemoved": true
+    }
+  },
+  "validation": {
+    "qualifiedLiveEndToEnd": {
+      "result": "PASS",
+      "runId": "2d7cf615-e8e2-4b18-83fa-d3ad2352971b",
+      "state": "complete",
+      "stateReason": "completed",
+      "researchMode": "qualified_live_research",
+      "canonicalization": "PASS",
+      "searchAttempts": 1,
+      "searchResultCount": 4,
+      "retainedSourceDocuments": 1,
+      "retainedSourceDomain": "www.lenntech.com",
+      "boundedExcerptCharacters": 240,
+      "providerAttempts": 2,
+      "servedProvider": "google",
+      "servedModel": "gemini-3.6-flash",
+      "terminalDisposition": "complete",
+      "resultSchemaVersion": "complete-result-foundation.v2",
+      "candidateCount": 0,
+      "claimCount": 0,
+      "evidenceCount": 1,
+      "eligibleCandidateCount": 0,
+      "uiOutcome": "NO_RESPONSIBLE_MATCH",
+      "syntheticOnly": true
+    },
+    "pistachioOwnerRetestIncident": {
+      "result": "ROOT_CAUSE_FIXED_STAGING_RETEST_READY",
+      "runId": "f59fa616-33c8-46cb-9ea5-d87c6a2db969",
+      "terminalState": "complete",
+      "outcome": "no_responsible_match",
+      "searchAttempts": 1,
+      "sourceDocumentsFetched": 4,
+      "providerAttemptsCompleted": 2,
+      "candidateCountBeforeRemediation": 0,
+      "eligibleCandidateCountBeforeRemediation": 0,
+      "rootCause": "HTML_DOCUMENT_CHROME_DISPLACED_VISIBLE_CLAIM_TEXT_INSIDE_240_CHARACTER_EXCERPT",
+      "extractionVersion": "untrusted-source-boundary.v2",
+      "boundedExcerptCharacters": 4000,
+      "sourceDiscoveryAngles": 5,
+      "maximumSourceUrls": 10,
+      "partialCandidateRetention": "INTERNAL_COMPLETE_RESULT_ONLY_WITH_FAILED_CONSTRAINT_IDS",
+      "demoProjectionChangedToExposeIneligibleCandidates": false,
+      "hardConstraintsRelaxed": false,
+      "historicalRunsRewritten": false,
+      "comparisonPdfPagesRenderedAndVisuallyInspected": 12,
+      "comparisonPdfEligibleSuppliers": 0,
+      "activeRunsBeforeDeployment": 0,
+      "deployedWebRevision": "matchbase-staging-web-00012-725",
+      "deployedWorkerRevision": "matchbase-staging-worker-00027-f65"
+    },
+    "openRouterOpenAiByokCheck": {
+      "result": "REJECTED_BEFORE_MODEL_SERVICE_ZDR_PRESERVED",
+      "requestedModel": "openai/gpt-5-mini",
+      "providerOnly": "openai",
+      "zdr": true,
+      "dataCollection": "deny",
+      "requireParameters": true,
+      "allowFallbacks": false,
+      "store": false,
+      "httpStatus": 404,
+      "servedModel": false,
+      "generatedTokens": 0,
+      "costUsd": 0,
+      "reason": "NO_ENDPOINT_MATCHED_ZERO_DATA_RETENTION"
+    },
+    "ownerAdminEntitlement": {
+      "result": "PASS",
+      "environment": "staging",
+      "identityResolution": "SOLE_ACTIVE_NON_SIMULATOR_GOOGLE_SESSION",
+      "oauthEmailPersisted": false,
+      "otherUsersMutated": 0,
+      "before": {
+        "tier": "demo",
+        "adminSubRoles": [],
+        "rollingQuotaUsed": 3,
+        "rollingQuotaLimit": 3
+      },
+      "independentSuperAdminGrantorVerified": true,
+      "selfElevationUsed": false,
+      "after": {
+        "tier": "admin",
+        "adminSubRoles": ["super_admin"]
+      },
+      "auditEvents": [
+        {
+          "auditId": "0981b186-6358-4992-981b-0c1468d1b288",
+          "eventType": "entitlement.granted",
+          "entitlementKind": "tier",
+          "entitlementValue": "admin",
+          "outcome": "allow"
+        },
+        {
+          "auditId": "dd9521ba-4204-454d-af73-efb56dcce826",
+          "eventType": "entitlement.granted",
+          "entitlementKind": "admin_sub_role",
+          "entitlementValue": "super_admin",
+          "outcome": "allow"
+        }
+      ],
+      "historicalQuotaRewritten": false,
+      "adminProductWorkflowEnabled": false,
+      "providerCalls": 0,
+      "costUsd": 0,
+      "productionMutated": false
+    },
+    "migration0010LivePipelineExtractionV2": {
+      "result": "ISOLATED_LOCAL_PASS_STAGING_NOT_APPLIED",
+      "purpose": "ADMIT_VISIBLE_TEXT_EXTRACTION_V2_WITHOUT_REWRITING_V1_IDENTITIES",
+      "upPath": "packages/data/migrations/0010_p4_live_pipeline_extraction_v2.up.sql",
+      "upSha256": "e28109ffae30d62ad460a56403a007de43dab771914a0bd5ecd1e1bf7721a1d9",
+      "downPath": "packages/data/migrations/0010_p4_live_pipeline_extraction_v2.down.sql",
+      "downSha256": "d5b367fba2db8d66edd6c5263395c3e0aaf97a92acd3d7e1d5646bb2b3e893b4",
+      "historicalMigration0005Rewritten": false,
+      "historicalIdentityRowsRewritten": false,
+      "postgresTests": { "passed": 29, "failed": 0, "skipped": 0 },
+      "browserRegression": { "passed": 42, "failed": 0 },
+      "stagingApplied": false,
+      "productionApplied": false
+    },
+    "remediation": {
+      "canonicalizationBackend": "PASS",
+      "databaseLeastPrivilege": "PASS",
+      "interactionsSearchLineage": "PASS",
+      "node24PinnedDns": "PASS",
+      "deniedSourceContinuation": "PASS",
+      "groundingRedirectDestinationRevalidation": "PASS",
+      "minimalThinkingOutputBudget": "PASS",
+      "mandatoryEvidenceFailClosed": "PASS",
+      "serverOwnedEvidenceIdentity": "PASS",
+      "emptyDisplayClaimSourceIdentityFallback": "PASS",
+      "historicalRunsRewritten": false,
+      "quotaCompensationMode": "APPEND_ONLY_EXACT_PRECONDITION",
+      "quotaIncidentReference": "74be012b-8bba-4319-ab45-ad787f10526f",
+      "quotaUsedBeforeRemediation": 3,
+      "quotaUsedAfterRemediation": 1,
+      "quotaRemainingAfterRemediation": 2,
+      "platformFailureCompensationsApplied": 2,
+      "userCancelledChargePreserved": true,
+      "terminalFailureAutomaticCompensation": "PASS_ATOMIC_WITH_AUDIT",
+      "invalidResultLeaseRelease": "PASS",
+      "serializableAdmissionRetry": "PASS_BOUNDED_FIVE_ATTEMPTS",
+      "stagingWorkerRevision": "matchbase-staging-worker-00026-nqc",
+      "stagingWorkerImageDigest": "sha256:14f9a50aa0781b3eaaaa07956e90dac4ab04f0a704999446b7e5a9170da55fff",
+      "temporaryQuotaJobDeleted": true
+    },
+    "focusedRuntimeTransport": {
+      "result": "PASS",
+      "passed": 7,
+      "failed": 0
+    },
+    "latestFullSuite": {
+      "result": "PASS",
+      "passed": 355,
+      "failed": 0,
+      "skipped": 4,
+      "exitCode": 0,
+      "classification": "CURRENT_CLEAN_WITH_CONTROLLED_SKIPS"
+    },
+    "latestPackageMatrix": {
+      "result": "PASS",
+      "aiEvidence": { "passed": 114, "failed": 0, "skipped": 0 },
+      "security": { "passed": 54, "failed": 0, "skipped": 1 },
+      "web": { "passed": 126, "failed": 0, "skipped": 16 },
+      "applicationBuild": "PASS",
+      "gcpScaffold": { "passed": 8, "failed": 0 },
+      "focusedPipelineIdentity": { "passed": 20, "failed": 0 },
+      "focusedProviderAndPipeline": { "passed": 26, "failed": 0 },
+      "focusedWebComponent": { "passed": 12, "failed": 0 },
+      "liveCompleteResultV2": { "passed": 5, "failed": 0 },
+      "gitDiffCheck": "PASS"
+    },
+    "localBrowserSuite": {
+      "result": "PASS",
+      "passed": 42,
+      "failed": 0,
+      "durationMinutes": 3
+    },
+    "runtimePrivacyScan": {
+      "result": "PASS",
+      "regularArtifacts": 7545,
+      "symlinksNotFollowed": 2,
+      "canaries": 4,
+      "findings": 0
+    },
+    "localReviewRuntime": {
+      "webUrl": "http://127.0.0.1:3010/",
+      "webHttpStatus": 200,
+      "workerHealthUrl": "http://127.0.0.1:3011/health",
+      "workerStatus": "ready"
+    },
+    "externalHttpsSmoke": {
+      "result": "PASS",
+      "rootStatus": 200,
+      "healthStatus": 200,
+      "healthBody": { "status": "ok" },
+      "server": "cloudflare"
+    },
+    "externalBrowser": {
+      "result": "PASS",
+      "landingSemantics": "PASS",
+      "googleOAuthAccountChooser": "PASS",
+      "authorizedGoogleSignIn": "PASS",
+      "syntheticInputOutputAcceptance": "PASS",
+      "ownerRetestReady": false,
+      "blockedBy": "STAGING_MIGRATION_0010_NOT_APPLIED"
+    }
+  },
+  "git": {
+    "baselineHead": "2b489b2f0a9416dfc149248233f9b7c1877be57c",
+    "targetRef": "origin/main",
+    "publicationAuthorizationReceived": true,
+    "publicationScope": "REVIEWED_MATCHBASE_P4_REMEDIATION_ONLY",
+    "publicationCommitIdentity": "RESOLVED_BY_CONTAINING_GIT_COMMIT",
+    "currentDeploymentChangesCommitted": true,
+    "currentDeploymentChangesPushed": true
+  },
+  "relationships": [
+    {
+      "role": "historical_predecessor",
+      "path": "evidence/p4/staging-gate-b-cloud-state.v1.json",
+      "mutation": "NONE"
+    },
+    {
+      "role": "qualified_route_policy",
+      "path": "config/slice3/research-route-policy.staging.v1.json",
+      "sha256": "28b77b649f0d689b27979a236d102172f973a793a913b61ede740cce8f9ca9f7"
+    },
+    {
+      "role": "qualification_manifest",
+      "path": "evidence/slice3/staging-live-qualification-manifest.v1.json",
+      "sha256": "90569ff6516c424c501edc417657f0e5e9e5ce7d8ad50993d85d8f68537ce640"
+    },
+    {
+      "role": "qualification_evidence",
+      "path": "evidence/slice3/staging-live-qualification.v1.json",
+      "sha256": "f54ab3a9f129bc46b16f1e2aeb03719a9552a133f74111799a1c2d0042da2a24"
+    },
+    {
+      "role": "qualified_sample_pdf",
+      "path": "C:\\INNOBASE\\MatchBASE\\04_Product_Artifacts\\pdf\\matchbase-staging-qualified-live-sample.pdf",
+      "sha256": "e13b417f0070e984539daf672627a2558519e607fcd3904b71bcd22144664961"
+    },
+    {
+      "role": "pending_staging_migration_up",
+      "path": "packages/data/migrations/0010_p4_live_pipeline_extraction_v2.up.sql",
+      "sha256": "e28109ffae30d62ad460a56403a007de43dab771914a0bd5ecd1e1bf7721a1d9"
+    },
+    {
+      "role": "verified_rollback_down",
+      "path": "packages/data/migrations/0010_p4_live_pipeline_extraction_v2.down.sql",
+      "sha256": "d5b367fba2db8d66edd6c5263395c3e0aaf97a92acd3d7e1d5646bb2b3e893b4"
+    },
+    {
+      "role": "human_readable_progress",
+      "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P4_GATE_B_STAGING_DEPLOYMENT_PROGRESS_2026-08-30.md",
+      "binding": "INDEXED_BY_CURRENT_DASHBOARD_SNAPSHOT"
+    },
+    {
+      "role": "execution_history",
+      "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\PRODUCT_MANAGEMENT_LOOP_LOG.md",
+      "binding": "APPEND_ONLY_INDEXED_BY_CURRENT_DASHBOARD_SNAPSHOT"
+    }
+  ],
+  "boundaries": {
+    "stagingMutation": true,
+    "productionMutation": false,
+    "realUserDataUsed": false,
+    "credentialValuesRecorded": false
+  },
+  "disposition": "SOURCE_PUBLICATION_READY_STAGING_MIGRATION_0010_PENDING",
+  "remainingGates": [
+    "STAGING_MIGRATION_0010_AUTHORIZATION_APPLY_AND_ROLLBACK_VERIFICATION",
+    "OWNER_SYNTHETIC_INPUT_OUTPUT_RETEST"
+  ]
+}

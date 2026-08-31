@@ -100,6 +100,39 @@ const delayMs = Math.max(
   ),
 );
 
+function workerCycleFailureCategory(error: unknown): string {
+  if (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "42501"
+  )
+    return "database_permission_denied";
+  if (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "40001"
+  )
+    return "database_serialization_retry";
+  return "worker_cycle_failed";
+}
+
+function stagingWorkerFailureDetail(error: unknown): string | undefined {
+  if (
+    process.env.MATCHBASE_DEPLOYMENT_ENVIRONMENT !== "staging" ||
+    !(error instanceof Error)
+  )
+    return undefined;
+  return error.message
+    .replace(/https:\/\/\S+/gu, "[url]")
+    .replace(/[A-Za-z0-9_-]{24,}/gu, "[token]")
+    .replace(/[^\x20-\x7e]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, 240);
+}
+
 async function work(): Promise<void> {
   if (stopping) return;
   try {
@@ -160,7 +193,15 @@ async function work(): Promise<void> {
           );
       }),
     );
-  } catch {
+  } catch (error) {
+    const detail = stagingWorkerFailureDetail(error);
+    console.error(
+      JSON.stringify({
+        event: "matchbase.worker.cycle_failed",
+        category: workerCycleFailureCategory(error),
+        ...(detail ? { detail } : {}),
+      }),
+    );
     readiness.markUnready("database_operation_failed");
   } finally {
     if (!stopping) nextCycle = setTimeout(runCycle, 50);

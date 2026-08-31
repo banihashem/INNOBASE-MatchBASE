@@ -8,6 +8,7 @@ import {
   resolveActiveResearchRoute,
 } from "../research-route-policy.js";
 import {
+  qualifiedResearchOutputInstruction,
   serializeSanitizedEvidence,
   validateQualifiedResearchRequest,
   type QualifiedResearchRequest,
@@ -149,7 +150,14 @@ class QualifiedGeminiDirectAdapter {
             {
               role: "user",
               parts: [
-                { text: requestInput.canonicalEnglishRequest },
+                {
+                  text: qualifiedResearchOutputInstruction({
+                    runId: execution.runId,
+                    capturedAt: execution.capturedAt,
+                    canonicalEnglishRequest:
+                      requestInput.canonicalEnglishRequest,
+                  }),
+                },
                 ...(requestInput.sanitizedEvidence.length > 0
                   ? [
                       {
@@ -162,11 +170,11 @@ class QualifiedGeminiDirectAdapter {
               ],
             },
           ],
-          tools: [{ google_search: {} }],
           generationConfig: {
             responseMimeType: "application/json",
             responseJsonSchema: requestInput.outputSchema,
             maxOutputTokens: route.parameterPolicy.maxOutputTokens,
+            thinkingConfig: { thinkingLevel: "minimal" },
           },
         }),
         signal: attemptSignal,

@@ -60,6 +60,8 @@ $routePolicyPath = 'config/slice3/research-route-policy.staging.v1.json'
 $routePolicySha256 = (Get-FileHash -LiteralPath $routePolicyPath -Algorithm SHA256).Hash.ToLowerInvariant()
 docker build --pull --target web-runtime `
   --build-arg DEPLOYMENT_ENVIRONMENT=staging `
+  --build-arg ROUTE_POLICY_PATH=$routePolicyPath `
+  --build-arg ROUTE_POLICY_SHA256=$routePolicySha256 `
   --tag staging-web .
 docker build --pull --target worker-runtime `
   --build-arg DEPLOYMENT_ENVIRONMENT=staging `
@@ -73,7 +75,14 @@ to its immutable digest before running `Deploy-CloudRun.ps1`.
 The repository image names are closed: `<environment>-web` and
 `<environment>-worker-<first-16-route-policy-sha256>`. The deploy script rejects
 digests published under any other name, and binds the complete digest and route
-policy SHA-256 into each revision.
+policy SHA-256 into each revision. Both images contain the exact qualified policy
+bytes and verify their policy hash, environment, activation state, qualified route
+set, and version before starting. The staging web secret set must bind
+`MATCHBASE_GEMINI_API_KEY` to a numeric version of the closed target-map secret
+`matchbase-gemini-api-key` for direct canonicalization. OpenRouter credentials
+remain worker-only. After exact worker secret-access validation, deployment sets
+the non-secret web marker `MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED=true`;
+the web process never infers worker readiness from provider-key presence.
 
 ## Execution order
 

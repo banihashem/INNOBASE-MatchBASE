@@ -8,6 +8,7 @@ import {
   resolveActiveResearchRoute,
 } from "../research-route-policy.js";
 import {
+  qualifiedResearchOutputInstruction,
   serializeSanitizedEvidence,
   validateQualifiedResearchRequest,
   type QualifiedResearchRequest,
@@ -263,7 +264,14 @@ class QualifiedOpenRouterAdapter {
           model: route.requestedModelId,
           provider,
           messages: [
-            { role: "user", content: requestInput.canonicalEnglishRequest },
+            {
+              role: "user",
+              content: qualifiedResearchOutputInstruction({
+                runId: execution.runId,
+                capturedAt: execution.capturedAt,
+                canonicalEnglishRequest: requestInput.canonicalEnglishRequest,
+              }),
+            },
             {
               role: "user",
               content: serializeSanitizedEvidence(

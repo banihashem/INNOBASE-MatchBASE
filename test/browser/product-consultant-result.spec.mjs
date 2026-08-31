@@ -77,8 +77,9 @@ test("Consultant result is keyboard operable, complete, and responsive", async (
   await page.route(`**/api/v1/runs/${runId}/result`, (route) =>
     json(route, result),
   );
-  await page.route("**/api/v1/runs?filter=all", (route) =>
+  await page.route("**/api/v1/consultant/runs", (route) =>
     json(route, {
+      schema_version: "consultant-run-history.v1",
       items: [
         {
           run_id: runId,

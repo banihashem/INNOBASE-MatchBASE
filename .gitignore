@@ -19,6 +19,11 @@ Thumbs.db
 data/generated/
 apps/dashboard/public/current-snapshot.json
 
+# Local execution residue and explicitly non-public publication controls.
+/tmp/
+/-
+/scripts/lib/slice3-s4-windows-durable-publication-contract.mjs
+
 # MatchBASE governed source and management trees must never be copied here.
 00_Authoritative_Sources/
 01_Product_Management/

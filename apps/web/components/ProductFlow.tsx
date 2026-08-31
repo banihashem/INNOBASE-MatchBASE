@@ -1053,6 +1053,13 @@ export function ProductFlow({
                   : `${result.candidates.length} ${result.candidates.length === 1 ? "candidate" : "candidates"} met all mandatory constraints. Fewer than three met them, so fewer than three are shown.`}
               </div>
             ) : null}
+            {result.outcome === "no_responsible_match" ? (
+              <p className="lede">
+                Qualified research completed. This is a responsible no-match
+                result, not a processing failure. Demo does not disclose
+                suppliers that failed a mandatory constraint.
+              </p>
+            ) : null}
             <ol className="candidate-grid">
               {result.candidates.map((candidate) => (
                 <li key={`${candidate.display_name}-${candidate.country_code}`}>

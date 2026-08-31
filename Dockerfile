@@ -40,7 +40,7 @@ ARG ROUTE_POLICY_SHA256
 RUN node deployment/gcp/Assert-ProductionWorkerPolicy.mjs "$DEPLOYMENT_ENVIRONMENT" "$ROUTE_POLICY_PATH" "$ROUTE_POLICY_SHA256" \
     && mkdir -p /worker-config \
     && cp "$ROUTE_POLICY_PATH" /worker-config/research-route-policy.v1.json \
-    && pnpm --filter @matchbase/application --prod deploy --legacy /worker
+    && pnpm --config.inject-workspace-packages=true --filter @matchbase/application --prod deploy /worker
 
 FROM ${NODE_IMAGE} AS web-runtime
 ARG DEPLOYMENT_ENVIRONMENT
@@ -54,6 +54,7 @@ WORKDIR /app
 RUN groupadd --gid 10001 matchbase \
     && useradd --uid 10001 --gid matchbase --shell /usr/sbin/nologin --no-create-home matchbase
 COPY --from=builder --chown=10001:10001 /workspace/apps/web/.next/standalone/apps/web/ ./
+COPY --from=worker-packager --chown=10001:10001 /worker-config/research-route-policy.v1.json ./config/slice3/research-route-policy.v1.json
 COPY --chmod=0555 deployment/gcp/runtime-entrypoint.sh /app/runtime-entrypoint.sh
 ENV MATCHBASE_RUNTIME_KIND=web
 USER 10001:10001
@@ -69,6 +70,7 @@ RUN groupadd --gid 10001 matchbase \
 COPY --from=worker-packager --chown=10001:10001 /worker/ ./
 COPY --from=worker-packager --chown=10001:10001 /worker-config/research-route-policy.v1.json ./config/slice3/research-route-policy.v1.json
 COPY --chmod=0555 deployment/gcp/runtime-entrypoint.sh /app/runtime-entrypoint.sh
+RUN node --input-type=module -e "await Promise.all([import('./dist/index.js'),import('@matchbase/ai-evidence'),import('@matchbase/contracts'),import('@matchbase/data'),import('@matchbase/security')])"
 ENV MATCHBASE_RUNTIME_KIND=worker
 USER 10001:10001
 ENTRYPOINT ["/app/runtime-entrypoint.sh"]

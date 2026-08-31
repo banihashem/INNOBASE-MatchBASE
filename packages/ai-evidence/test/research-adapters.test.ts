@@ -37,7 +37,7 @@ const request = (
   outputSchema: { type: "object", additionalProperties: false },
 });
 
-test("Gemini adapter requires native search and snapshots exact served identity", async () => {
+test("Gemini adapter generates only from fetched evidence and snapshots exact served identity", async () => {
   const transport = new RecordingFakeTransport({
     status: 200,
     body: { candidates: [] },
@@ -74,22 +74,29 @@ test("Gemini adapter requires native search and snapshots exact served identity"
   const body = JSON.parse(capturedRequest.body) as {
     model: string;
     contents: Array<{ role: string; parts: Array<{ text: string }> }>;
-    tools: unknown[];
+    tools?: unknown[];
     generationConfig: Record<string, unknown>;
   };
   assert.equal(body.model, "gemini-2.5-flash");
-  assert.deepEqual(body.contents, [
-    {
-      role: "user",
-      parts: [
-        {
-          text: "Identify qualified industrial suppliers for the canonical requirements.",
-        },
-      ],
-    },
-  ]);
-  assert.deepEqual(body.tools, [{ google_search: {} }]);
+  assert.equal(body.contents[0]?.role, "user");
+  assert.match(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /Set runId exactly to RUN-S3-ADAPTER-001\./u,
+  );
+  assert.match(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /Canonical request: Identify qualified industrial suppliers for the canonical requirements\./u,
+  );
+  assert.match(body.contents[0]?.parts[0]?.text ?? "", /failedConstraintIds/u);
+  assert.match(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /must remain in candidates/u,
+  );
+  assert.equal(body.tools, undefined);
   assert.equal(body.generationConfig.responseMimeType, "application/json");
+  assert.deepEqual(body.generationConfig.thinkingConfig, {
+    thinkingLevel: "minimal",
+  });
   for (const field of ["temperature", "topP", "topK"]) {
     assert.equal(field in body.generationConfig, false);
   }
@@ -170,9 +177,13 @@ test("OpenRouter adapter serializes one explicit provider and disables broker fa
   assert.equal(body.top_k, undefined);
   assert.equal(body.plugins, undefined);
   assert.equal(body.messages[0]?.role, "user");
-  assert.equal(
+  assert.match(
     body.messages[0]?.content,
-    "Identify qualified industrial suppliers for the canonical requirements.",
+    /Set runId exactly to RUN-S3-ADAPTER-001\./u,
+  );
+  assert.match(
+    body.messages[0]?.content,
+    /Canonical request: Identify qualified industrial suppliers for the canonical requirements\./u,
   );
   assert.deepEqual(JSON.parse(body.messages[1]?.content ?? "null"), {
     kind: "untrusted_sanitized_evidence",

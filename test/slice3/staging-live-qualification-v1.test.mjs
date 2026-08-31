@@ -38,7 +38,6 @@ function directEnvelope() {
           parts: [
             {
               text: JSON.stringify({
-                fixtureId: "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
                 answer: "Reserved for documentation.",
                 sourceSummary: "IANA public source.",
               }),
@@ -50,6 +49,7 @@ function directEnvelope() {
           groundingChunks: [
             { web: { uri: "https://www.iana.org/help/example-domains" } },
           ],
+          groundingSupports: [{ groundingChunkIndices: [0] }],
         },
       },
     ],
@@ -66,7 +66,6 @@ function openRouterEnvelope() {
         finish_reason: "stop",
         message: {
           content: JSON.stringify({
-            fixtureId: "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
             answer: "Reserved for documentation.",
             sourceSummary: "IANA public source.",
           }),
@@ -127,6 +126,8 @@ function qualifiedFetch(calls) {
     if (target.startsWith("https://generativelanguage.googleapis.com/")) {
       assert.equal(options.method, "POST");
       assert.equal(options.headers["x-goog-api-key"], "direct-test-secret");
+      const body = JSON.parse(options.body);
+      assert.equal(body.generationConfig.maxOutputTokens, 4096);
       return jsonResponse(directEnvelope());
     }
     if (target.endsWith("/endpoints/zdr")) {
@@ -150,6 +151,7 @@ function qualifiedFetch(calls) {
                 "max_tokens",
                 "response_format",
                 "structured_outputs",
+                "seed",
               ],
               pricing: {
                 prompt: "0.0000015",
@@ -161,30 +163,15 @@ function qualifiedFetch(calls) {
         },
       });
     }
-    if (target.includes("/api/v1/generation?")) {
-      assert.equal(
-        options.headers.Authorization,
-        "Bearer openrouter-test-secret",
-      );
-      return jsonResponse({
-        data: {
-          id: router.id,
-          provider_name: "Google Vertex",
-          model: router.model,
-          finish_reason: "stop",
-          tokens_prompt: 209,
-          tokens_completion: 496,
-          total_cost: 0.00202,
-        },
-      });
-    }
     assert.equal(target, "https://openrouter.ai/api/v1/chat/completions");
     assert.equal(options.method, "POST");
     assert.equal(
       options.headers.Authorization,
       "Bearer openrouter-test-secret",
     );
+    assert.equal(options.headers["X-OpenRouter-Metadata"], "enabled");
     const body = JSON.parse(options.body);
+    assert.equal(body.max_tokens, 4096);
     assert.deepEqual(body.provider, {
       zdr: true,
       data_collection: "deny",
@@ -223,15 +210,20 @@ test("success executes exactly two model posts and emits verified staging-only a
       fetchImpl: qualifiedFetch(calls),
       now: () => new Date("2026-08-30T13:30:00.000Z"),
     });
-    assert.equal(result.disposition, "PASS");
+    assert.equal(result.disposition, "PASS", JSON.stringify(result));
     assert.equal(result.providerModelPosts, 2);
     assert.equal(result.billableCalls, 2);
-    assert.equal(result.externalHttpCalls, 5);
+    assert.equal(result.externalHttpCalls, 4);
     assert.equal(result.costUsd, 0.016155);
     assert.equal(result.stagingPolicyGenerated, true);
     assert.equal(result.productionPolicyMutated, false);
     assert.equal(result.cloudMutations, 0);
     assert.equal(calls.filter((call) => call.method === "POST").length, 2);
+    assert.equal(calls.filter((call) => call.method === "GET").length, 2);
+    assert.equal(
+      calls.some((call) => call.target.includes("/api/v1/generation")),
+      false,
+    );
     const policy = JSON.parse(await readFile(paths.policyPath, "utf8"));
     assert.equal(policy.environment, "staging");
     assert.equal(policy.liveActivation, "enabled");

@@ -206,8 +206,8 @@ function validateFrozenRequests(routes) {
   if (
     JSON.stringify(directBody.tools) !==
       JSON.stringify([{ google_search: {} }]) ||
-    directBody.generationConfig?.maxOutputTokens !== 2048 ||
-    routerBody.max_tokens !== 2048 ||
+    directBody.generationConfig?.maxOutputTokens !== 4096 ||
+    routerBody.max_tokens !== 4096 ||
     JSON.stringify(routerBody.provider) !==
       JSON.stringify({
         zdr: true,

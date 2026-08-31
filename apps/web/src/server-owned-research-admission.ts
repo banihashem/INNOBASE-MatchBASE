@@ -1,18 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import {
-  createServerOwnedResearchAdmission,
-  LIVE_RESEARCH_CREDENTIAL_HANDLES,
-  providerCredentialHandlePresent,
-} from "@matchbase/application";
+import { createServerOwnedResearchAdmission } from "@matchbase/application";
 import type { WebConfig } from "./config";
 
 const DEFAULT_POLICY_PATH = "config/slice3/research-route-policy.v1.json";
 
-export function loadServerOwnedResearchAdmission(
-  config: WebConfig,
-  environment: Readonly<Record<string, string | undefined>> = process.env,
-) {
+export function loadServerOwnedResearchAdmission(config: WebConfig) {
   const policyPath = config.testLivePolicyPath
     ? config.testLivePolicyPath
     : [
@@ -24,17 +17,11 @@ export function loadServerOwnedResearchAdmission(
   const policy = JSON.parse(readFileSync(policyPath, "utf8")) as unknown;
   return createServerOwnedResearchAdmission({
     activationAuthorized: config.liveResearchEnabled === true,
-    environment: config.environment,
+    environment: config.deploymentEnvironment ?? config.environment,
     policy,
     verifiedCredentialHandles: {
-      gemini_direct: providerCredentialHandlePresent(
-        environment,
-        LIVE_RESEARCH_CREDENTIAL_HANDLES.geminiDirect,
-      ),
-      openrouter: providerCredentialHandlePresent(
-        environment,
-        LIVE_RESEARCH_CREDENTIAL_HANDLES.openrouter,
-      ),
+      gemini_direct: config.liveResearchCredentialsVerified === true,
+      openrouter: config.liveResearchCredentialsVerified === true,
     },
     // Standard projections remain synthetic until a distinct live disclosure
     // contract exists. This allowlist is server-owned and never request-derived.

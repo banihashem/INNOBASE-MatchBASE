@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "matchbase.slice3-staging-live-qualification-successor-authorization/v12",
+  "authorizationId": "OWNER-SLICE3-STAGING-LIVE-QUALIFICATION-2026-08-30-V12",
+  "recordedAt": "2026-08-30T18:30:00Z",
+  "environment": "staging",
+  "syntheticOnly": true,
+  "realUserDataAuthorized": false,
+  "fixtureId": "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
+  "predecessor": {
+    "sessionId": "v6-6E67532C6108E5E5F7C17003",
+    "ledgerAggregateSha256": "9A1DC5C549ADCE3327887242DBF1378230CEBDE68912EB68F13E87FE884E951D",
+    "terminalDisposition": "FAIL",
+    "failedRoutePaths": ["openrouter"],
+    "providerModelPostsConsumed": 2,
+    "costConsumedUsd": 0.04559875,
+    "cumulativeProviderModelPosts": 28,
+    "cumulativeConservativeCostUsd": 1.9077985
+  },
+  "credentialGate": {
+    "sessionId": "v6-6488F0D1148B973D0B912F38",
+    "ledgerAggregateSha256": "053B4287A717C2EA39AA07C347A75FF207947E37D6348379AAE8B45D7EAA5C5B",
+    "httpStatus": 200,
+    "schemaValid": true,
+    "paidCredential": true,
+    "accountCreditsObservedUsd": 10
+  },
+  "ownerCeiling": {
+    "maximumProviderCalls": 50,
+    "maximumCostUsd": 100,
+    "remainingProviderCallsBeforeV12": 22,
+    "remainingCostUsdBeforeV12": 98.0922015
+  },
+  "allocation": {
+    "maximumExternalHttpCalls": 50,
+    "maximumProviderModelPosts": 2,
+    "maximumCostUsd": 98.0922015,
+    "routeOrder": ["gemini_direct", "openrouter"],
+    "retriesWithinAllocation": 0,
+    "fallbacks": 0
+  },
+  "requestContract": {
+    "fixtureIdAuthority": "server_owned",
+    "providerOutputKeys": ["answer", "sourceSummary"],
+    "openRouterSeed": 7,
+    "openRouterGenerationMetadataMaximumGets": 0,
+    "openRouterIdentityBasis": "provider_reported_router_metadata_and_response",
+    "directGeminiSeeded": false,
+    "openRouterMetadataShapes": [
+      "legacy_attempts_pipeline",
+      "current_summary_region_byok"
+    ],
+    "openRouterZdr": true,
+    "openRouterDataCollection": "deny",
+    "openRouterRequireParameters": true,
+    "openRouterAllowFallbacks": false,
+    "openRouterProviderOnly": ["google-vertex"],
+    "directGeminiFreshSearchPrompt": true,
+    "minimumNonemptySearchQueries": 1,
+    "groundingSupportRequired": true,
+    "rawPayloadPersistence": false
+  },
+  "accounting": {
+    "providerModelPostsBeforeV12": 28,
+    "conservativeCostUsdBeforeV12": 1.9077985,
+    "diagnosticProviderModelPostsAfterV5": 3,
+    "diagnosticConservativeCostUsdAfterV5": 0.079872,
+    "singleAllocationConservativeReserveUsd": 0.241728
+  },
+  "productionPolicyMutationAuthorized": false,
+  "cloudMutationAuthorized": false,
+  "deploymentAuthorized": false,
+  "ownerDecision": "User directed the agents to complete the funded two-route qualification and staging deployment."
+}

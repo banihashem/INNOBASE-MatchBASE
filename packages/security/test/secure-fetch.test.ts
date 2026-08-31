@@ -165,6 +165,21 @@ describe("Slice 3 secure fetch boundary", () => {
     ]);
   });
 
+  it("extracts bounded claim text from visible HTML instead of document chrome", () => {
+    const source = sealUntrustedSource(
+      new TextEncoder().encode(
+        "<!doctype html><html><head><title>Ahmad Aghaei supplier</title><script>discard()</script></head><body><nav>Catalog</nav><main><h1>Current pistachio offer</h1><p>Export supplier with Dubai delivery capability &amp; dated availability.</p></main></body></html>",
+      ),
+      "text/html; charset=utf-8",
+    );
+    expect(source.normalizedText).toContain("Ahmad Aghaei supplier");
+    expect(source.normalizedText).toContain(
+      "Export supplier with Dubai delivery capability & dated availability.",
+    );
+    expect(source.normalizedText).not.toContain("<!doctype");
+    expect(source.normalizedText).not.toContain("discard");
+  });
+
   it("enforces the deadline even when the injected transport ignores abort", async () => {
     const started = Date.now();
     await expect(
@@ -485,6 +500,54 @@ describe("Slice 3 secure fetch boundary", () => {
       });
     },
   );
+
+  it("bypasses robots only for an approved redirect intermediary and re-evaluates the destination", async () => {
+    const accessChecks: string[] = [];
+    const result = await secureFetch({
+      url: "https://redirect.example.org/token",
+      resolver: async () => ["93.184.216.34"],
+      redirectIntermediaryEvaluator: (url) =>
+        url === "https://redirect.example.org/token",
+      accessEvaluator: async (url) => {
+        accessChecks.push(url);
+        return "allowed";
+      },
+      transport: async ({ url }) =>
+        url === "https://redirect.example.org/token"
+          ? {
+              status: 302,
+              headers: { location: "https://publisher.example.org/source" },
+              body: new Uint8Array(),
+              compressedBytes: 0,
+            }
+          : ok(),
+      signal: new AbortController().signal,
+    });
+
+    expect(accessChecks).toEqual(["https://publisher.example.org/source"]);
+    expect(result.publisherDomain).toBe("publisher.example.org");
+    expect(result.attempts[0]).toMatchObject({
+      reason: "redirect_revalidate",
+      robotsDisposition: "not_evaluated",
+    });
+    expect(result.attempts[1]).toMatchObject({
+      decision: "accepted",
+      robotsDisposition: "allowed",
+    });
+  });
+
+  it("rejects an approved redirect intermediary that returns content", async () => {
+    await expect(
+      secureFetch({
+        url: "https://redirect.example.org/token",
+        resolver: async () => ["93.184.216.34"],
+        redirectIntermediaryEvaluator: () => true,
+        accessEvaluator: async () => "disallowed",
+        transport: async () => ok(),
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ reason: "redirect_intermediary_non_redirect" });
+  });
 
   it("rejects open policy fields and enforces process concurrency", async () => {
     await expect(

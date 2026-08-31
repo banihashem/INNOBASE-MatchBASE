@@ -17,7 +17,9 @@ export interface WebConfig {
   oidcSimulatorEnabled: boolean;
   syntheticFixtureEnabled: boolean;
   liveResearchEnabled?: boolean;
+  liveResearchCredentialsVerified?: boolean;
   testLivePolicyPath?: string;
+  geminiApiKey?: string;
   googleClientId?: string;
   googleClientSecret?: string;
   googleAuthorizationEndpoint?: string;
@@ -46,6 +48,12 @@ const PRODUCTION_TARGETS = Object.freeze({
 
 function enabled(value: string | undefined): boolean {
   return value === "1" || value === "true";
+}
+
+function closedBoolean(name: string, value: string | undefined): boolean {
+  if (value === undefined || value === "false") return false;
+  if (value === "true") return true;
+  throw new Error(`${name} must be exactly true or false.`);
 }
 
 function assertProductionIdentityEndpoints(
@@ -102,6 +110,10 @@ export function loadWebConfig(
   const liveResearchEnabled = enabled(
     environment.MATCHBASE_LIVE_RESEARCH_ENABLED,
   );
+  const liveResearchCredentialsVerified = closedBoolean(
+    "MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED",
+    environment.MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED,
+  );
   const testLivePolicyPath = environment.MATCHBASE_TEST_LIVE_POLICY_PATH;
   if (testLivePolicyPath && runtime !== "test") {
     throw new Error("Test live policy override is prohibited outside test.");
@@ -131,6 +143,14 @@ export function loadWebConfig(
   if (runtime === "production") assertProductionIdentityEndpoints(environment);
   if (runtime === "production" && !environment.MATCHBASE_ARTIFACT_GCS_BUCKET) {
     throw new Error("Production artifact GCS configuration is incomplete.");
+  }
+  if (runtime === "production" && !environment.MATCHBASE_GEMINI_API_KEY) {
+    throw new Error(
+      "Production Gemini canonicalization configuration is incomplete.",
+    );
+  }
+  if (runtime === "production" && environment.MATCHBASE_OPENROUTER_API_KEY) {
+    throw new Error("OpenRouter API keys are prohibited in the web runtime.");
   }
   const originAdmissionKeyText = environment.MATCHBASE_ORIGIN_ADMISSION_KEY;
   if (
@@ -182,7 +202,11 @@ export function loadWebConfig(
     oidcSimulatorEnabled,
     syntheticFixtureEnabled,
     liveResearchEnabled,
+    liveResearchCredentialsVerified,
     ...(testLivePolicyPath ? { testLivePolicyPath } : {}),
+    ...(environment.MATCHBASE_GEMINI_API_KEY
+      ? { geminiApiKey: environment.MATCHBASE_GEMINI_API_KEY }
+      : {}),
     ...(environment.GOOGLE_CLIENT_ID
       ? { googleClientId: environment.GOOGLE_CLIENT_ID }
       : {}),

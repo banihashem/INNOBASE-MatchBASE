@@ -4,7 +4,9 @@ import { createHash } from "node:crypto";
 export const LIVE_RESEARCH_PIPELINE_IDENTITY_VERSION =
   "live-research-pipeline-identity.v1" as const;
 export const LIVE_RESEARCH_EXTRACTION_VERSION =
-  "untrusted-source-boundary.v1" as const;
+  "untrusted-source-boundary.v2" as const;
+export type LiveResearchExtractionVersion =
+  "untrusted-source-boundary.v1" | typeof LIVE_RESEARCH_EXTRACTION_VERSION;
 
 export interface LiveResearchPipelineIdentityV1 {
   readonly schemaVersion: typeof LIVE_RESEARCH_PIPELINE_IDENTITY_VERSION;
@@ -19,7 +21,7 @@ export interface LiveResearchPipelineIdentityV1 {
   readonly scoringConfigVersionId: string;
   readonly scoringConfigVersion: string;
   readonly scoringConfigContentSha256: string;
-  readonly extractionVersion: typeof LIVE_RESEARCH_EXTRACTION_VERSION;
+  readonly extractionVersion: LiveResearchExtractionVersion;
 }
 
 export type LiveResearchPipelineIdentityField = Exclude<
@@ -67,6 +69,197 @@ function deepFreeze<T>(value: T): Readonly<T> {
   return value;
 }
 
+export const LIVE_RESEARCH_SUCCESSOR_OUTPUT_SCHEMA = deepFreeze({
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "runId",
+    "candidates",
+    "claims",
+    "evidence",
+    "eligibleCandidateIds",
+    "gateEvaluationCompletedAt",
+  ],
+  properties: {
+    schemaVersion: { const: EVIDENCE_GRAPH_SCHEMA_VERSION },
+    runId: { type: "string", format: "uuid" },
+    candidates: {
+      type: "array",
+      minItems: 1,
+      maxItems: 10,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "candidateId",
+          "displayName",
+          "countryCode",
+          "rationaleShort",
+          "rationaleClaimIds",
+          "compatibilityScore",
+          "fitBand",
+          "bandCeiling",
+          "displayedBand",
+          "dimensionScores",
+          "citations",
+          "verificationStatus",
+          "mandatoryConstraintsSatisfied",
+          "failedConstraintIds",
+          "deterministicRankKey",
+        ],
+        properties: {
+          candidateId: { type: "string", format: "uuid" },
+          displayName: { type: "string" },
+          countryCode: { type: "string" },
+          rationaleShort: { type: "string" },
+          rationaleClaimIds: {
+            type: "array",
+            items: { type: "string", format: "uuid" },
+          },
+          compatibilityScore: { type: "number", minimum: 0, maximum: 100 },
+          fitBand: { type: "string" },
+          bandCeiling: { type: "string" },
+          displayedBand: { type: "string" },
+          dimensionScores: {
+            type: "object",
+            additionalProperties: false,
+            required: [
+              "category_product_fit",
+              "compliance_certification_fit",
+              "volume_capacity_fit",
+              "price_tier_fit",
+              "positioning_brand_fit",
+              "geographic_reach_fit",
+            ],
+            properties: {
+              category_product_fit: {
+                type: "integer",
+                minimum: 0,
+                maximum: 100,
+              },
+              compliance_certification_fit: {
+                type: "integer",
+                minimum: 0,
+                maximum: 100,
+              },
+              volume_capacity_fit: {
+                type: "integer",
+                minimum: 0,
+                maximum: 100,
+              },
+              price_tier_fit: {
+                type: "integer",
+                minimum: 0,
+                maximum: 100,
+              },
+              positioning_brand_fit: {
+                type: "integer",
+                minimum: 0,
+                maximum: 100,
+              },
+              geographic_reach_fit: {
+                type: "integer",
+                minimum: 0,
+                maximum: 100,
+              },
+            },
+          },
+          citations: {
+            type: "array",
+            items: { type: "string", format: "uuid" },
+          },
+          verificationStatus: {
+            enum: ["claimed", "inferred", "stale", "conflicting", "unknown"],
+          },
+          mandatoryConstraintsSatisfied: { type: "boolean" },
+          failedConstraintIds: {
+            type: "array",
+            items: { type: "string" },
+          },
+          deterministicRankKey: { type: "string" },
+        },
+      },
+    },
+    claims: {
+      type: "array",
+      minItems: 1,
+      maxItems: 30,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "claimId",
+          "candidateId",
+          "text",
+          "decisionBearing",
+          "verificationStatus",
+          "evidenceConfidence",
+          "evidenceIds",
+        ],
+        properties: {
+          claimId: { type: "string", format: "uuid" },
+          candidateId: { type: "string", format: "uuid" },
+          text: { type: "string" },
+          decisionBearing: { type: "boolean" },
+          verificationStatus: {
+            enum: ["claimed", "inferred", "stale", "conflicting", "unknown"],
+          },
+          evidenceConfidence: { enum: ["high", "medium", "low"] },
+          evidenceIds: {
+            type: "array",
+            items: { type: "string", format: "uuid" },
+          },
+        },
+      },
+    },
+    evidence: {
+      type: "array",
+      minItems: 1,
+      maxItems: 10,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "evidenceId",
+          "sourceKind",
+          "url",
+          "title",
+          "publisher",
+          "publisherDomain",
+          "retrievedAt",
+          "contentSha256",
+          "extract",
+          "verificationDisposition",
+          "exclusionReason",
+        ],
+        properties: {
+          evidenceId: { type: "string", format: "uuid" },
+          sourceKind: { const: "external_url" },
+          url: { type: "string" },
+          title: { type: "string" },
+          publisher: { type: "string" },
+          publisherDomain: { type: "string" },
+          retrievedAt: { type: "string" },
+          contentSha256: { type: "string" },
+          extract: { type: "string" },
+          verificationDisposition: { enum: ["accepted", "excluded"] },
+          exclusionReason: { type: "string" },
+        },
+      },
+    },
+    eligibleCandidateIds: {
+      type: "array",
+      uniqueItems: true,
+      items: { type: "string", format: "uuid" },
+    },
+    gateEvaluationCompletedAt: { type: "string" },
+  },
+} as const);
+
+// The deployed 0005 identity constraint pins this exact legacy schema digest.
+// The stricter successor remains inactive until a separately governed migration
+// admits its digest without rewriting historical reservations.
 export const LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA = deepFreeze({
   type: "object",
   additionalProperties: false,
@@ -223,7 +416,10 @@ export function parseLiveResearchPipelineIdentity(
     typeof record.scoringConfigVersionId !== "string" ||
     typeof record.scoringConfigVersion !== "string" ||
     typeof record.scoringConfigContentSha256 !== "string" ||
-    record.extractionVersion !== LIVE_RESEARCH_EXTRACTION_VERSION
+    ![
+      "untrusted-source-boundary.v1",
+      LIVE_RESEARCH_EXTRACTION_VERSION,
+    ].includes(String(record.extractionVersion))
   )
     throw new Error("Live research pipeline identity is invalid.");
   return deepFreeze({
@@ -266,7 +462,8 @@ export function parseLiveResearchPipelineIdentity(
       record.scoringConfigContentSha256,
       "Live research scoring-config digest",
     ),
-    extractionVersion: record.extractionVersion,
+    extractionVersion:
+      record.extractionVersion as LiveResearchExtractionVersion,
   });
 }
 

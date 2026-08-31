@@ -16,7 +16,6 @@ const routerEnvelope = {
       finish_reason: "stop",
       message: {
         content: JSON.stringify({
-          fixtureId: "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
           answer: "Reserved for documentation.",
           sourceSummary: "IANA public source.",
         }),
@@ -67,7 +66,6 @@ function directEnvelope({ grounded = true } = {}) {
           parts: [
             {
               text: JSON.stringify({
-                fixtureId: "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
                 answer: "Reserved for documentation.",
                 sourceSummary: "IANA public source.",
               }),
@@ -84,6 +82,7 @@ function directEnvelope({ grounded = true } = {}) {
                   },
                 },
               ],
+              groundingSupports: [{ groundingChunkIndices: [0] }],
             }
           : { webSearchQueries: [] },
       },
@@ -115,7 +114,7 @@ function qualifiedFetch(calls, { grounded = true } = {}) {
     calls.push({ target, method: options.method ?? "GET" });
     if (target.startsWith("https://generativelanguage.googleapis.com/")) {
       const prompt = JSON.parse(options.body).contents[0].parts[0].text;
-      assert.match(prompt, /invoke Google Search exactly once/u);
+      assert.match(prompt, /Use Google Search before answering/u);
       return json(directEnvelope({ grounded }));
     }
     if (target.endsWith("/endpoints/zdr")) {
@@ -139,6 +138,7 @@ function qualifiedFetch(calls, { grounded = true } = {}) {
                 "max_tokens",
                 "response_format",
                 "structured_outputs",
+                "seed",
               ],
               pricing: {
                 prompt: "0.0000015",
@@ -197,7 +197,7 @@ test("successor uses exactly one call per route and creates staging-only policy 
     });
     assert.equal(result.disposition, "PASS");
     assert.equal(result.providerModelPosts, 2);
-    assert.equal(result.externalHttpCalls, 5);
+    assert.equal(result.externalHttpCalls, 4);
     assert.equal(result.cumulativeProviderModelPosts, 3);
     assert.ok(result.cumulativeCostUsd < 100);
     assert.equal(calls.filter((call) => call.method === "POST").length, 2);
@@ -221,7 +221,7 @@ test("successor still exercises the explicit OpenRouter route when direct ground
     });
     assert.equal(result.disposition, "FAIL");
     assert.equal(result.providerModelPosts, 2);
-    assert.equal(result.externalHttpCalls, 5);
+    assert.equal(result.externalHttpCalls, 4);
     assert.deepEqual(result.failures, [
       {
         routePath: "gemini_direct",

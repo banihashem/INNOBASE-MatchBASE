@@ -9,6 +9,7 @@ import {
   parseConsultantResultProjectionV1,
   parseConsultantResultProjectionV2,
   parseStandardResultProjectionV1,
+  type ConsultantRunHistoryV1,
 } from "@matchbase/contracts";
 
 const UUID_PATTERN =
@@ -16,7 +17,7 @@ const UUID_PATTERN =
 
 export interface ConsultantRouteResult {
   readonly status: 200;
-  readonly body: ConsultantResultRead["body"];
+  readonly body: ConsultantResultRead["body"] | ConsultantRunHistoryV1;
   readonly headers: Readonly<Record<string, string>>;
 }
 
@@ -24,9 +25,19 @@ export async function handleConsultantRoute(input: {
   readonly method: string;
   readonly pathname: string;
   readonly context: RequestContext;
-  readonly application: Pick<ConsultantResultApplication, "getResult">;
+  readonly application: Pick<
+    ConsultantResultApplication,
+    "getResult" | "listRuns"
+  >;
 }): Promise<ConsultantRouteResult | null> {
   if (input.context.tier !== "consultant") return null;
+  if (input.method === "GET" && input.pathname === "/api/v1/consultant/runs") {
+    return {
+      status: 200,
+      body: await input.application.listRuns(input.context),
+      headers: { "Cache-Control": "private, no-store", Vary: "Cookie" },
+    };
+  }
   const match = /^\/api\/v1\/runs\/([^/]+)\/result$/u.exec(input.pathname);
   if (input.method !== "GET" || !match) return null;
   const runId = match[1];

@@ -299,6 +299,7 @@ export class MatchBaseApplication {
         canonical,
         parentVersionId: null,
         canonicalizationRunId,
+        telemetry: emittedTelemetry,
       });
       const response = this.canonicalResponse(
         requestId,
@@ -1676,6 +1677,7 @@ export class MatchBaseApplication {
       canonical: CanonicalRequestV1;
       parentVersionId: string | null;
       canonicalizationRunId?: string;
+      telemetry?: readonly CapabilityInvocationTelemetry[];
       createRequest?: boolean;
     },
   ): Promise<void> {
@@ -1771,14 +1773,30 @@ export class MatchBaseApplication {
         input.canonical.originalTextDigest.keyId,
       ],
     );
+    const successfulTelemetry = new Map(
+      (input.telemetry ?? [])
+        .filter((event) => event.outcome === "ok")
+        .map((event) => [event.attemptId, event]),
+    );
     for (const provenance of input.canonical.provenance) {
+      const attempt = successfulTelemetry.get(provenance.attemptId);
+      if (
+        !attempt ||
+        attempt.capabilityId !== provenance.capabilityId ||
+        attempt.providerId !== provenance.providerId ||
+        attempt.routeId !== provenance.routeId ||
+        attempt.modelId !== provenance.modelId
+      )
+        throw new Error(
+          "Transformation provenance lacks matching successful telemetry.",
+        );
       await client.query(
         `INSERT INTO transformation_provenance
            (transformation_provenance_id, canonical_request_version_id, account_id,
             capability_attempt_id, stage,
             capability, provider, model_id, route_id, config_version, data_handling_posture,
             output_sha256, transformed_at)
-         VALUES ($1,$2,$3,$4,'canonicalisation',$5,$6,$7,$8,$9,'synthetic_fixture',$10,$11)`,
+         VALUES ($1,$2,$3,$4,'canonicalisation',$5,$6,$7,$8,$9,$10,$11,$12)`,
         [
           randomUUID(),
           input.canonicalVersionId,
@@ -1789,6 +1807,7 @@ export class MatchBaseApplication {
           provenance.modelId,
           provenance.routeId,
           provenance.configVersion,
+          attempt.dataHandlingPosture,
           sha256(input.canonical.canonicalText),
           provenance.completedAt,
         ],

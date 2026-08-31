@@ -1798,6 +1798,44 @@ export function generateContractSchemas(): JsonSchema {
           contradictionIds: strings,
         },
       ),
+      consultantRunHistory: closedObject(["schema_version", "items"], {
+        schema_version: string(["consultant-run-history.v1"]),
+        items: {
+          type: "array",
+          items: closedObject(
+            [
+              "run_id",
+              "request_id",
+              "state",
+              "updated_at",
+              "result_available",
+              "outcome",
+            ],
+            {
+              run_id: string(),
+              request_id: string(),
+              state: string([
+                "queued",
+                "running",
+                "completed",
+                "failed",
+                "cancelled",
+                "superseded",
+              ]),
+              updated_at: string(),
+              result_available: boolean,
+              outcome: string([
+                "pending",
+                "matched",
+                "no_responsible_match",
+                "failed",
+                "cancelled",
+                "superseded",
+              ]),
+            },
+          ),
+        },
+      }),
       providerRegistry: closedObject(
         [
           "schemaVersion",

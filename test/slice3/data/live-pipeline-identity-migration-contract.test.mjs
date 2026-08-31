@@ -49,3 +49,39 @@ test("TASK137 live pipeline identity migration is bounded and reversible", async
   );
   assert.match(down, /DROP COLUMN IF EXISTS content_sha256/);
 });
+
+test("P4 visible-text extraction identity is an additive reversible migration", async () => {
+  const [up, down, registry, original] = await Promise.all([
+    readFile(
+      file("migrations/0010_p4_live_pipeline_extraction_v2.up.sql"),
+      "utf8",
+    ),
+    readFile(
+      file("migrations/0010_p4_live_pipeline_extraction_v2.down.sql"),
+      "utf8",
+    ),
+    readFile(file("src/migrations.ts"), "utf8"),
+    readFile(
+      file("migrations/0005_task_137_live_pipeline_identity.up.sql"),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(
+    registry,
+    /0009_p4_google_risc_retention[\s\S]*0010_p4_live_pipeline_extraction_v2/,
+  );
+  assert.match(up, /DROP CONSTRAINT live_research_pipeline_identity_closed/);
+  assert.match(up, /untrusted-source-boundary\.v1/);
+  assert.match(up, /untrusted-source-boundary\.v2/);
+  assert.match(
+    up,
+    /VALIDATE CONSTRAINT live_research_pipeline_identity_closed/,
+  );
+  assert.match(down, /untrusted-source-boundary\.v1/);
+  assert.doesNotMatch(down, /untrusted-source-boundary\.v2/);
+  assert.match(down, /NOT VALID/);
+  assert.match(original, /untrusted-source-boundary\.v1/);
+  assert.doesNotMatch(original, /untrusted-source-boundary\.v2/);
+  assert.doesNotMatch(`${up}\n${down}`, /DELETE|UPDATE\s+live_research/iu);
+});

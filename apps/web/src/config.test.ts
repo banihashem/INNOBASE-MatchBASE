@@ -63,6 +63,7 @@ describe("production identity configuration", () => {
         MATCHBASE_ARTIFACT_GCS_BUCKET: "innobase-matchbase-stg-artifacts",
         MATCHBASE_ORIGIN_ADMISSION_KEY:
           "synthetic-origin-admission-key-material-32-bytes",
+        MATCHBASE_GEMINI_API_KEY: "gemini-canonicalization-test-key",
       }),
     ).toMatchObject({
       environment: "production",
@@ -86,6 +87,43 @@ describe("production identity configuration", () => {
     ).toThrow(/artifact GCS configuration is incomplete/iu);
   });
 
+  it("requires direct Gemini and refuses OpenRouter in the production web runtime", () => {
+    expect(() =>
+      loadWebConfig({
+        ...base,
+        MATCHBASE_ENVIRONMENT: "production",
+        MATCHBASE_DEPLOYMENT_ENVIRONMENT: "staging",
+        MATCHBASE_DEPLOYMENT_ID: `sha256:${"a".repeat(64)}`,
+        MATCHBASE_ORIGIN: "https://matchbase-staging.innobase.app",
+        GOOGLE_CLIENT_ID: "client-id-fixture",
+        GOOGLE_CLIENT_SECRET: "client-secret-fixture",
+        GOOGLE_REDIRECT_URI:
+          "https://matchbase-staging.innobase.app/auth/google/callback",
+        MATCHBASE_ARTIFACT_GCS_BUCKET: "innobase-matchbase-stg-artifacts",
+        MATCHBASE_ORIGIN_ADMISSION_KEY:
+          "synthetic-origin-admission-key-material-32-bytes",
+      }),
+    ).toThrow(/Gemini canonicalization configuration is incomplete/iu);
+    expect(() =>
+      loadWebConfig({
+        ...base,
+        MATCHBASE_ENVIRONMENT: "production",
+        MATCHBASE_DEPLOYMENT_ENVIRONMENT: "staging",
+        MATCHBASE_DEPLOYMENT_ID: `sha256:${"a".repeat(64)}`,
+        MATCHBASE_ORIGIN: "https://matchbase-staging.innobase.app",
+        GOOGLE_CLIENT_ID: "client-id-fixture",
+        GOOGLE_CLIENT_SECRET: "client-secret-fixture",
+        GOOGLE_REDIRECT_URI:
+          "https://matchbase-staging.innobase.app/auth/google/callback",
+        MATCHBASE_ARTIFACT_GCS_BUCKET: "innobase-matchbase-stg-artifacts",
+        MATCHBASE_ORIGIN_ADMISSION_KEY:
+          "synthetic-origin-admission-key-material-32-bytes",
+        MATCHBASE_GEMINI_API_KEY: "gemini-canonicalization-test-key",
+        MATCHBASE_OPENROUTER_API_KEY: "prohibited-provider-key",
+      }),
+    ).toThrow(/OpenRouter API keys are prohibited in the web runtime/iu);
+  });
+
   it("binds production identity to the exact HTTPS origin and Google endpoints", () => {
     const production = {
       ...base,
@@ -100,6 +138,7 @@ describe("production identity configuration", () => {
       MATCHBASE_ARTIFACT_GCS_BUCKET: "innobase-matchbase-stg-artifacts",
       MATCHBASE_ORIGIN_ADMISSION_KEY:
         "synthetic-origin-admission-key-material-32-bytes",
+      MATCHBASE_GEMINI_API_KEY: "gemini-canonicalization-test-key",
     };
     expect(() =>
       loadWebConfig({
@@ -135,6 +174,38 @@ describe("production identity configuration", () => {
       }),
     ).toThrow(/closed target map/iu);
   });
+});
+
+describe("live research credential-verification marker", () => {
+  it("defaults false and accepts only exact closed boolean values", () => {
+    expect(loadWebConfig({ ...base }).liveResearchCredentialsVerified).toBe(
+      false,
+    );
+    expect(
+      loadWebConfig({
+        ...base,
+        MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED: "true",
+      }).liveResearchCredentialsVerified,
+    ).toBe(true);
+    expect(
+      loadWebConfig({
+        ...base,
+        MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED: "false",
+      }).liveResearchCredentialsVerified,
+    ).toBe(false);
+  });
+
+  it.each(["1", "TRUE", "yes", "", " true "])(
+    "rejects non-canonical marker value %j",
+    (value) => {
+      expect(() =>
+        loadWebConfig({
+          ...base,
+          MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED: value,
+        }),
+      ).toThrow(/must be exactly true or false/iu);
+    },
+  );
 });
 
 describe("Consultant result soft cap", () => {

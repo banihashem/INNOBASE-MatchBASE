@@ -13,6 +13,7 @@ import {
 import type {
   ConsultantLandscapeV1,
   ConsultantExcludedEvidenceV2,
+  ConsultantRunHistoryV1,
   ConsultantResultProjectionV1,
   ConsultantResultProjectionV2,
   ConsultantSourceFactV2,
@@ -778,6 +779,95 @@ async function projectionVersionId(
 
 export class ConsultantResultApplication {
   constructor(private readonly pool: ConnectionPool) {}
+
+  async listRuns(context: RequestContext): Promise<ConsultantRunHistoryV1> {
+    await assertConsultantWorkspaceAuthorized(
+      this.pool,
+      context,
+      "run.history",
+    );
+    return inTransaction(this.pool, async (client) => {
+      const selected = await client.query<{
+        run_id: string;
+        request_id: string;
+        state: string;
+        queued_at: Date;
+        started_at: Date | null;
+        completed_at: Date | null;
+        result_document_available: boolean;
+      }>(
+        `SELECT rr.run_id,v.request_id,rr.state,rr.queued_at,rr.started_at,rr.completed_at,
+                (rs.complete_result_document IS NOT NULL) AS result_document_available
+           FROM research_run rr
+           JOIN canonical_request_version v
+             ON v.account_id=rr.account_id
+            AND v.canonical_request_version_id=rr.canonical_request_version_id
+           LEFT JOIN run_result rs
+             ON rs.account_id=rr.account_id AND rs.run_id=rr.run_id
+          WHERE rr.account_id=$1 AND rr.requested_by_user_id=$2
+          ORDER BY rr.queued_at DESC,rr.run_id DESC`,
+        [context.accountId, context.userId],
+      );
+      const items: ConsultantRunHistoryV1["items"] = selected.rows.map(
+        (row) => {
+          const completed = ["complete", "no_responsible_match"].includes(
+            row.state,
+          );
+          const resultAvailable = completed && row.result_document_available;
+          const state: ConsultantRunHistoryV1["items"][number]["state"] =
+            completed
+              ? "completed"
+              : ["failed", "cancelled", "superseded"].includes(row.state)
+                ? (row.state as "failed" | "cancelled" | "superseded")
+                : row.state === "queued"
+                  ? "queued"
+                  : "running";
+          const outcome: ConsultantRunHistoryV1["items"][number]["outcome"] =
+            state === "completed"
+              ? row.state === "no_responsible_match"
+                ? "no_responsible_match"
+                : "matched"
+              : state === "failed" ||
+                  state === "cancelled" ||
+                  state === "superseded"
+                ? state
+                : "pending";
+          return {
+            run_id: row.run_id,
+            request_id: row.request_id,
+            state,
+            updated_at: (
+              row.completed_at ??
+              row.started_at ??
+              row.queued_at
+            ).toISOString(),
+            result_available: resultAvailable,
+            outcome,
+          };
+        },
+      );
+      await appendAuditEvent(client, {
+        accountId: context.accountId,
+        actorUserId: context.userId,
+        actorTier: context.tier,
+        eventType: "consultant.run_history.projected",
+        resourceKind: "run_history",
+        resourceId: context.userId,
+        outcome: "allow",
+        correlationId: context.correlationId,
+        deploymentId: context.deploymentId,
+        detail: {
+          itemCount: items.length,
+          ownerScoped: true,
+          disclosureCommittedBeforeResponse: true,
+        },
+      });
+      return {
+        schema_version: "consultant-run-history.v1",
+        items,
+      };
+    });
+  }
 
   async getResult(
     context: RequestContext,

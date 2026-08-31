@@ -394,7 +394,10 @@ postgresTest(
           );
           const body = JSON.parse(request.body);
           for (const field of ["temperature", "topP", "topK"])
-            assert.equal(field in body.generationConfig, false);
+            assert.equal(field in body, false);
+          assert.equal(request.url.endsWith("/v1beta/interactions"), true);
+          assert.deepEqual(body.tools, [{ type: "google_search" }]);
+          assert.equal(body.response_format.mime_type, "application/json");
           return {
             status: 200,
             body: {
@@ -980,6 +983,138 @@ postgresTest(
         /confirmed version-pinned live research admission is unavailable/iu,
       );
       assert.equal(providerCalls, 1);
+
+      const discoveryForUrls = (sourceUrls) =>
+        new GeminiServerOwnedSourceDiscovery({
+          async send() {
+            return {
+              status: 200,
+              body: { sourceUrls },
+              servedIdentity: {
+                providerId: "google",
+                modelId: "gemini-2.5-flash",
+              },
+              accounting: {
+                state: "estimated",
+                quantity: 1,
+                unit: "search",
+                amount: 0.0005,
+                currency: "USD",
+                pricingVersion: "slice3-search-pricing.v1",
+                measurement: "estimated",
+              },
+            };
+          },
+        });
+
+      const laterAcceptedRunId = await seedRun(
+        "first secure fetch denied and later source accepted",
+      );
+      providerRunId = laterAcceptedRunId;
+      const fetchCallsBeforeLaterAccepted = fetchCalls;
+      const providerCallsBeforeLaterAccepted = providerCalls;
+      const laterAccepted = await new LiveResearchExecutionService({
+        ...serviceOptions,
+        sourceDiscovery: discoveryForUrls([
+          "https://denied.example.org/source",
+          "https://evidence.example.org/accepted",
+        ]),
+        accessEvaluator: async (url) =>
+          url.includes("denied.example.org") ? "unavailable" : "allowed",
+      }).execute({
+        ...execution,
+        executionId: "EXEC-FIRST-FETCH-DENIED-LATER-ACCEPTED",
+        runId: laterAcceptedRunId,
+      });
+      assert.equal(laterAccepted.disposition, "complete");
+      assert.notEqual(laterAccepted.reasonCode, "secure_fetch_failed");
+      assert.equal(fetchCalls, fetchCallsBeforeLaterAccepted + 1);
+      assert.equal(providerCalls, providerCallsBeforeLaterAccepted + 1);
+      const laterAcceptedFetchLedger = await pool.query(
+        `SELECT source_request_url,decision,reason_code,robots_disposition
+           FROM fetch_attempt WHERE run_id=$1 ORDER BY source_request_url`,
+        [laterAcceptedRunId],
+      );
+      assert.deepEqual(laterAcceptedFetchLedger.rows, [
+        {
+          source_request_url: "https://denied.example.org/source",
+          decision: "denied",
+          reason_code: "robots_unavailable",
+          robots_disposition: "unavailable",
+        },
+        {
+          source_request_url: "https://evidence.example.org/accepted",
+          decision: "accepted",
+          reason_code: "fetched",
+          robots_disposition: "allowed",
+        },
+      ]);
+      const laterAcceptedPersistence = await pool.query(
+        `SELECT
+           (SELECT count(*)::int FROM source_document WHERE run_id=$1) source_documents,
+           (SELECT disposition FROM live_research_terminal WHERE run_id=$1) disposition,
+           (SELECT reason_code FROM live_research_terminal WHERE run_id=$1) reason_code`,
+        [laterAcceptedRunId],
+      );
+      assert.equal(laterAcceptedPersistence.rows[0].source_documents, 1);
+      assert.equal(laterAcceptedPersistence.rows[0].disposition, "complete");
+      assert.notEqual(
+        laterAcceptedPersistence.rows[0].reason_code,
+        "secure_fetch_failed",
+      );
+
+      const allDeniedRunId = await seedRun("all secure fetches denied");
+      const providerCallsBeforeAllDenied = providerCalls;
+      await assert.rejects(
+        new LiveResearchExecutionService({
+          ...serviceOptions,
+          sourceDiscovery: discoveryForUrls([
+            "https://denied-one.example.org/source",
+            "https://denied-two.example.org/source",
+          ]),
+          accessEvaluator: async () => "unavailable",
+        }).execute({
+          ...execution,
+          executionId: "EXEC-ALL-FETCHES-DENIED",
+          runId: allDeniedRunId,
+        }),
+        /robots_unavailable/iu,
+      );
+      assert.equal(providerCalls, providerCallsBeforeAllDenied);
+      const allDeniedPersistence = await pool.query(
+        `SELECT t.disposition,t.reason_code,
+                count(f.fetch_attempt_id)::int fetch_attempts,
+                count(*) FILTER (
+                  WHERE f.decision='denied'
+                    AND f.reason_code='robots_unavailable'
+                )::int denied_attempts
+           FROM live_research_terminal t
+           LEFT JOIN fetch_attempt f ON f.run_id=t.run_id AND f.account_id=t.account_id
+          WHERE t.run_id=$1
+          GROUP BY t.disposition,t.reason_code`,
+        [allDeniedRunId],
+      );
+      assert.deepEqual(allDeniedPersistence.rows[0], {
+        disposition: "failed",
+        reason_code: "secure_fetch_failed",
+        fetch_attempts: 2,
+        denied_attempts: 2,
+      });
+      assert.equal(
+        (
+          await pool.query(
+            `SELECT count(*)::int count
+               FROM quota_ledger c
+               JOIN quota_ledger q ON q.quota_entry_id=c.compensates_entry_id
+              WHERE c.run_id=$1 AND c.entry_kind='compensation'
+                AND c.reason_code='live_research_terminal_failure'
+                AND q.entry_kind='charge'`,
+            [allDeniedRunId],
+          )
+        ).rows[0].count,
+        1,
+      );
+      providerRunId = runId;
 
       const collisionRunId = await seedRun("identity hash collision");
       const collisionCandidates = [randomUUID(), randomUUID()];
@@ -1840,6 +1975,28 @@ postgresTest(
         pricing_state: "unknown",
         amount: null,
       });
+      const discoveryFailureQuota = await pool.query(
+        `SELECT q.entry_kind,q.units,q.reason_code,
+                q.compensates_entry_id IS NOT NULL compensates_charge
+           FROM quota_ledger q
+          WHERE q.run_id=$1
+          ORDER BY q.charged_at,q.quota_entry_id`,
+        [discoveryFailureRunId],
+      );
+      assert.deepEqual(discoveryFailureQuota.rows, [
+        {
+          entry_kind: "charge",
+          units: 1,
+          reason_code: "run.accepted",
+          compensates_charge: false,
+        },
+        {
+          entry_kind: "compensation",
+          units: -1,
+          reason_code: "live_research_terminal_failure",
+          compensates_charge: true,
+        },
+      ]);
       for (let index = 0; index < 2; index += 1) {
         const additionalFailureRunId = await seedRun(
           `circuit failure ${index + 2}`,

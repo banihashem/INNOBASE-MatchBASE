@@ -41,22 +41,7 @@ function completion(overrides = {}) {
   };
 }
 
-function metadata(overrides = {}) {
-  return {
-    data: {
-      id: "generation-runtime-id",
-      provider_name: "Google Vertex",
-      model: "google/gemini-3.6-flash",
-      finish_reason: "stop",
-      tokens_prompt: 12,
-      tokens_completion: 8,
-      total_cost: 0.000078,
-      ...overrides,
-    },
-  };
-}
-
-test("production OpenRouter transport reconciles one metadata GET without fallback", async () => {
+test("production OpenRouter transport reconciles in-band POST metadata without fallback", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, options = {}) => {
@@ -65,11 +50,9 @@ test("production OpenRouter transport reconciles one metadata GET without fallba
       method: options.method,
       headers: options.headers,
     });
-    return options.method === "POST"
-      ? jsonResponse(completion(), {
-          "x-generation-id": "generation-runtime-id",
-        })
-      : jsonResponse(metadata());
+    return jsonResponse(completion(), {
+      "x-generation-id": "generation-runtime-id",
+    });
   };
   try {
     const transport = new EnvironmentProviderTransport(
@@ -87,14 +70,11 @@ test("production OpenRouter transport reconciles one metadata GET without fallba
       signal: new AbortController().signal,
     });
     assert.equal(calls.filter((entry) => entry.method === "POST").length, 1);
-    assert.equal(calls.filter((entry) => entry.method === "GET").length, 1);
+    assert.equal(calls.filter((entry) => entry.method === "GET").length, 0);
     const post = calls.find((entry) => entry.method === "POST");
-    const metadataGet = calls.find((entry) => entry.method === "GET");
     assert.equal(post.headers["X-OpenRouter-Metadata"], "enabled");
-    assert.equal(metadataGet.headers.Authorization, "Bearer test-secret");
-    assert.match(metadataGet.url, /\/api\/v1\/generation\?id=/u);
     assert.equal(
-      calls.some((entry) => entry.url.includes("/generation/content")),
+      calls.some((entry) => entry.url.includes("/generation")),
       false,
     );
     assert.deepEqual(result.servedIdentity, {
@@ -112,7 +92,7 @@ test("production OpenRouter transport reconciles one metadata GET without fallba
   }
 });
 
-test("production OpenRouter transport rejects unknown routing topology before metadata GET", async () => {
+test("production OpenRouter transport rejects unknown routing topology without a secondary GET", async () => {
   const originalFetch = globalThis.fetch;
   let calls = 0;
   globalThis.fetch = async () => {
@@ -152,16 +132,30 @@ test("production OpenRouter transport rejects unknown routing topology before me
   }
 });
 
-test("production OpenRouter transport rejects metadata identity drift without retry", async () => {
+test("production OpenRouter transport rejects in-band metadata identity drift without retry", async () => {
   const originalFetch = globalThis.fetch;
   let calls = 0;
-  globalThis.fetch = async (_url, options = {}) => {
+  globalThis.fetch = async () => {
     calls += 1;
-    return options.method === "POST"
-      ? jsonResponse(completion(), {
-          "x-generation-id": "generation-runtime-id",
-        })
-      : jsonResponse(metadata({ provider_name: "Google AI Studio" }));
+    const base = completion();
+    return jsonResponse(
+      completion({
+        openrouter_metadata: {
+          ...base.openrouter_metadata,
+          endpoints: {
+            total: 1,
+            available: [
+              {
+                provider: "Google AI Studio",
+                model: "google/gemini-3.6-flash",
+                selected: true,
+              },
+            ],
+          },
+        },
+      }),
+      { "x-generation-id": "generation-runtime-id" },
+    );
   };
   try {
     const transport = new EnvironmentProviderTransport(
@@ -179,15 +173,15 @@ test("production OpenRouter transport rejects metadata identity drift without re
         body: "{}",
         signal: new AbortController().signal,
       }),
-      /did not reconcile/iu,
+      /routing metadata is invalid/iu,
     );
-    assert.equal(calls, 2);
+    assert.equal(calls, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test("production OpenRouter transport rejects generation ID drift before metadata GET", async () => {
+test("production OpenRouter transport rejects generation ID drift without a secondary GET", async () => {
   const originalFetch = globalThis.fetch;
   let calls = 0;
   globalThis.fetch = async () => {

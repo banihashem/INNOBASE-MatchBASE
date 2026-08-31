@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "matchbase.slice3-staging-live-qualification-manifest/v3",
+  "authorizationId": "OWNER-SLICE3-STAGING-LIVE-QUALIFICATION-2026-08-30-V13",
+  "sessionId": "v6-CONVERGENCE-48E39AA2E1642E97",
+  "evidencePath": "evidence/slice3/staging-live-qualification.v1.json",
+  "evidenceSha256": "A5521CEA415BDE3D0406685D7BFD0BBBD4D227F2C709EF0EC487DE9ECECDAD74",
+  "stagingPolicyPath": "config/slice3/research-route-policy.staging.v1.json",
+  "stagingPolicySha256": "28B77B649F0D689B27979A236D102172F973A793A913B61EDE740CCE8F9CA9F7",
+  "sourceBinding": {
+    "authorizationSha256": "0C692AF190A46F19D8E4CA732D8E371F98507BFAAB2BB14C872EB4DE0FCBF0FD",
+    "productionPolicySha256": "46FCAF0C2D2B66F8BAB8526C48E448A24B2E9F65B065AAA99135CA6AF048DB23",
+    "routeBindings": [
+      {
+        "routePath": "gemini_direct",
+        "sessionId": "v6-6E67532C6108E5E5F7C17003",
+        "ledgerAggregateSha256": "9A1DC5C549ADCE3327887242DBF1378230CEBDE68912EB68F13E87FE884E951D",
+        "resultFile": "2-gemini_direct-result.json",
+        "resultFileSha256": "816D436F2B4D441A5B0FA554759FEBBC47FEB2AED23FC7AD8BF7DAA4EA020803"
+      },
+      {
+        "routePath": "openrouter",
+        "sessionId": "v6-45C8ED78EF3EA2400B318F33",
+        "ledgerAggregateSha256": "207CEE3ED46973291018145D5CCC2126168C5E1556B0045828B05ACA86687F9E",
+        "resultFile": "4-openrouter-result.json",
+        "resultFileSha256": "BF759F61D615913191956EE1F45CDEA1C98DF81FB365DEA9AB5B92853B903EDC"
+      }
+    ]
+  },
+  "ledger": {
+    "files": [
+      {
+        "name": "00-authorization.json",
+        "sha256": "4A602CFF46FCBD386F4F83EF3CBBA4A8F96E1F1A94D8EEA4871A6870D6172771",
+        "bytes": 1115
+      },
+      {
+        "name": "01-terminal-summary.json",
+        "sha256": "82C20BA35F1FA449C9C2C064AAF85FB0AF09077DE51B6322B557F9A10DBD62DD",
+        "bytes": 588
+      }
+    ],
+    "aggregateSha256": "0FD2B62C8BBF8633F40C72F3EF76AEE628DB20BAF96C7ED4BF5886C19912B296"
+  },
+  "completedAt": "2026-08-30T17:01:58.179Z"
+}

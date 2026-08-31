@@ -104,7 +104,7 @@ export function createPostgresLiveResearchCircuit(options: {
              FROM research_route_health_observation
             WHERE route_id=$1 AND environment=$2 AND observed_at <= $3
             ORDER BY observed_at DESC,research_route_health_observation_id DESC
-            LIMIT 1 FOR UPDATE`,
+            LIMIT 1`,
           [routeId, options.environment, at],
         );
         const latest = result.rows[0];
@@ -209,10 +209,117 @@ export async function readBoundedProviderJson(
   return value as Record<string, unknown>;
 }
 
+function structuredGeminiInteractionBody(
+  envelope: Record<string, unknown>,
+): unknown {
+  if (
+    !hasOnlyKeys(
+      envelope,
+      new Set([
+        "created",
+        "id",
+        "model",
+        "object",
+        "service_tier",
+        "status",
+        "steps",
+        "updated",
+        "usage",
+      ]),
+    ) ||
+    envelope.object !== "interaction" ||
+    envelope.status !== "completed" ||
+    !Array.isArray(envelope.steps) ||
+    envelope.steps.length < 3 ||
+    envelope.steps.length > 32
+  )
+    throw new Error("Gemini interaction envelope is invalid.");
+  const calls = new Set<string>();
+  const results = new Set<string>();
+  const outputTexts: string[] = [];
+  for (const value of envelope.steps) {
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      throw new Error("Gemini interaction step is invalid.");
+    const step = value as Record<string, unknown>;
+    if (step.type === "google_search_call") {
+      if (
+        !hasOnlyKeys(
+          step,
+          new Set(["arguments", "id", "search_type", "signature", "type"]),
+        ) ||
+        typeof step.id !== "string" ||
+        !step.id ||
+        calls.has(step.id)
+      )
+        throw new Error("Gemini search-call step is invalid.");
+      calls.add(step.id);
+      continue;
+    }
+    if (step.type === "google_search_result") {
+      if (
+        !hasOnlyKeys(
+          step,
+          new Set(["call_id", "is_error", "result", "signature", "type"]),
+        ) ||
+        typeof step.call_id !== "string" ||
+        !step.call_id ||
+        step.is_error !== false ||
+        results.has(step.call_id)
+      )
+        throw new Error("Gemini search-result step is invalid.");
+      results.add(step.call_id);
+      continue;
+    }
+    if (step.type === "thought") {
+      if (!hasOnlyKeys(step, new Set(["signature", "type"])))
+        throw new Error("Gemini thought step is invalid.");
+      continue;
+    }
+    if (step.type === "model_output") {
+      if (
+        !hasOnlyKeys(step, new Set(["content", "type"])) ||
+        !Array.isArray(step.content) ||
+        step.content.length !== 1
+      )
+        throw new Error("Gemini model-output step is invalid.");
+      const block = step.content[0];
+      if (
+        !block ||
+        typeof block !== "object" ||
+        Array.isArray(block) ||
+        !hasOnlyKeys(
+          block as Record<string, unknown>,
+          new Set(["annotations", "text", "type"]),
+        ) ||
+        (block as Record<string, unknown>).type !== "text" ||
+        typeof (block as Record<string, unknown>).text !== "string"
+      )
+        throw new Error("Gemini model-output content is invalid.");
+      outputTexts.push(String((block as Record<string, unknown>).text));
+      continue;
+    }
+    throw new Error("Gemini interaction step type is invalid.");
+  }
+  if (
+    calls.size < 1 ||
+    calls.size > 10 ||
+    calls.size !== results.size ||
+    [...calls].some((id) => !results.has(id)) ||
+    outputTexts.length !== 1 ||
+    outputTexts[0]!.length < 2 ||
+    outputTexts[0]!.length > 2 * 1024 * 1024
+  )
+    throw new Error("Gemini interaction search lineage is invalid.");
+  return JSON.parse(outputTexts[0]!);
+}
+
 function structuredBody(
   provider: "gemini_direct" | "openrouter",
   envelope: Record<string, unknown>,
+  pathname: string,
 ): unknown {
+  if (provider === "gemini_direct" && pathname === "/v1beta/interactions")
+    return structuredGeminiInteractionBody(envelope);
   const text =
     provider === "gemini_direct"
       ? (
@@ -241,6 +348,97 @@ function hasOnlyKeys(
   return Object.keys(value).every((key) => allowed.has(key));
 }
 
+const OPENROUTER_ROUTER_MODELS = new Set([
+  "google/gemini-3.6-flash",
+  "google/gemini-3.6-flash-20260721",
+]);
+
+function auditedOpenRouterRoute(
+  value: unknown,
+): Readonly<{ provider: "Google Vertex" | "Google"; model: string }> {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("OpenRouter routing metadata is invalid.");
+  const routing = value as Record<string, unknown>;
+  if (
+    !hasOnlyKeys(
+      routing,
+      new Set([
+        "requested",
+        "strategy",
+        "attempt",
+        "endpoints",
+        "attempts",
+        "pipeline",
+        "region",
+        "summary",
+        "is_byok",
+        "params",
+      ]),
+    ) ||
+    routing.requested !== "google/gemini-3.6-flash" ||
+    routing.strategy !== "direct" ||
+    routing.attempt !== 1 ||
+    ("is_byok" in routing && routing.is_byok !== false) ||
+    (routing.pipeline !== undefined &&
+      (!Array.isArray(routing.pipeline) || routing.pipeline.length !== 0))
+  )
+    throw new Error("OpenRouter routing metadata is invalid.");
+  const endpoints = routing.endpoints;
+  if (!endpoints || typeof endpoints !== "object" || Array.isArray(endpoints))
+    throw new Error("OpenRouter routing metadata is invalid.");
+  const endpointRecord = endpoints as Record<string, unknown>;
+  if (!hasOnlyKeys(endpointRecord, new Set(["total", "available"])))
+    throw new Error("OpenRouter routing metadata is invalid.");
+  const available = endpointRecord.available;
+  if (
+    !Array.isArray(available) ||
+    available.length === 0 ||
+    available.length > 64 ||
+    !Number.isSafeInteger(endpointRecord.total) ||
+    Number(endpointRecord.total) < available.length ||
+    Number(endpointRecord.total) > 64
+  )
+    throw new Error("OpenRouter routing metadata is invalid.");
+  const candidates = available.map((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry))
+      throw new Error("OpenRouter routing metadata is invalid.");
+    const candidate = entry as Record<string, unknown>;
+    if (
+      !hasOnlyKeys(candidate, new Set(["provider", "model", "selected"])) ||
+      !["Google Vertex", "Google"].includes(String(candidate.provider)) ||
+      !OPENROUTER_ROUTER_MODELS.has(String(candidate.model)) ||
+      typeof candidate.selected !== "boolean"
+    )
+      throw new Error("OpenRouter routing metadata is invalid.");
+    return candidate as {
+      provider: "Google Vertex" | "Google";
+      model: string;
+      selected: boolean;
+    };
+  });
+  const selected = candidates.filter((candidate) => candidate.selected);
+  const attempts = routing.attempts ?? [];
+  if (!Array.isArray(attempts) || attempts.length > 1 || selected.length !== 1)
+    throw new Error("OpenRouter routing metadata is invalid.");
+  if (attempts.length === 1) {
+    const attempt = attempts[0];
+    if (!attempt || typeof attempt !== "object" || Array.isArray(attempt))
+      throw new Error("OpenRouter routing metadata is invalid.");
+    const record = attempt as Record<string, unknown>;
+    if (
+      !hasOnlyKeys(record, new Set(["provider", "model", "status"])) ||
+      record.provider !== "Google Vertex" ||
+      !OPENROUTER_ROUTER_MODELS.has(String(record.model)) ||
+      record.status !== 200
+    )
+      throw new Error("OpenRouter routing metadata is invalid.");
+  }
+  return Object.freeze({
+    provider: selected[0]!.provider,
+    model: selected[0]!.model,
+  });
+}
+
 export class EnvironmentProviderTransport implements ProviderTransport {
   constructor(
     private readonly provider: "gemini_direct" | "openrouter",
@@ -265,6 +463,14 @@ export class EnvironmentProviderTransport implements ProviderTransport {
       url.hash
     )
       throw new Error("Provider request escaped its qualified endpoint.");
+    if (
+      (this.provider === "gemini_direct" &&
+        url.pathname !== "/v1beta/interactions" &&
+        !/^\/v1beta\/models\/[^/]+:generateContent$/u.test(url.pathname)) ||
+      (this.provider === "openrouter" &&
+        url.pathname !== "/api/v1/chat/completions")
+    )
+      throw new Error("Provider request escaped its qualified endpoint.");
     const response = await fetch(url, {
       method: "POST",
       redirect: "error",
@@ -283,75 +489,9 @@ export class EnvironmentProviderTransport implements ProviderTransport {
     const envelope = await readBoundedProviderJson(response);
     let openRouterMetadata: Record<string, unknown> | null = null;
     if (this.provider === "openrouter" && response.ok) {
-      const routing = envelope.openrouter_metadata as
-        Record<string, unknown> | undefined;
-      const endpoints = routing?.endpoints as
-        Record<string, unknown> | undefined;
-      const available = endpoints?.available;
-      const selected = Array.isArray(available)
-        ? available.filter(
-            (entry) =>
-              entry &&
-              typeof entry === "object" &&
-              !Array.isArray(entry) &&
-              (entry as Record<string, unknown>).selected === true,
-          )
-        : [];
-      const attempts = routing?.attempts ?? [];
-      if (
-        !routing ||
-        !hasOnlyKeys(
-          routing,
-          new Set([
-            "requested",
-            "strategy",
-            "attempt",
-            "endpoints",
-            "attempts",
-            "pipeline",
-          ]),
-        ) ||
-        !endpoints ||
-        !hasOnlyKeys(endpoints, new Set(["total", "available"])) ||
-        routing?.requested !== "google/gemini-3.6-flash" ||
-        routing.strategy !== "direct" ||
-        routing.attempt !== 1 ||
-        !Array.isArray(available) ||
-        endpoints?.total !== available.length ||
-        selected.length !== 1 ||
-        available.some(
-          (entry) =>
-            !entry ||
-            typeof entry !== "object" ||
-            Array.isArray(entry) ||
-            !hasOnlyKeys(
-              entry as Record<string, unknown>,
-              new Set(["provider", "model", "selected"]),
-            ) ||
-            (entry as Record<string, unknown>).provider !== "Google Vertex" ||
-            (entry as Record<string, unknown>).model !==
-              "google/gemini-3.6-flash" ||
-            typeof (entry as Record<string, unknown>).selected !== "boolean",
-        ) ||
-        !Array.isArray(attempts) ||
-        attempts.length > 1 ||
-        (routing.pipeline !== undefined &&
-          (!Array.isArray(routing.pipeline) || routing.pipeline.length !== 0))
-      )
-        throw new Error("OpenRouter routing metadata is invalid.");
-      if (attempts.length === 1) {
-        const attempt = attempts[0] as Record<string, unknown>;
-        if (
-          !attempt ||
-          typeof attempt !== "object" ||
-          Array.isArray(attempt) ||
-          !hasOnlyKeys(attempt, new Set(["provider", "model", "status"])) ||
-          attempt.provider !== "Google Vertex" ||
-          attempt.model !== "google/gemini-3.6-flash" ||
-          attempt.status !== 200
-        )
-          throw new Error("OpenRouter routing attempt is invalid.");
-      }
+      const selectedRoute = auditedOpenRouterRoute(
+        envelope.openrouter_metadata,
+      );
       const bodyId = typeof envelope.id === "string" ? envelope.id : null;
       const headerId = response.headers.get("x-generation-id");
       if (!bodyId && !headerId)
@@ -359,62 +499,61 @@ export class EnvironmentProviderTransport implements ProviderTransport {
       if (bodyId && headerId && bodyId !== headerId)
         throw new Error("OpenRouter generation identities differ.");
       const generationId = bodyId ?? headerId;
-      const metadataResponse = await fetch(
-        `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(generationId as string)}`,
-        {
-          method: "GET",
-          redirect: "error",
-          signal: request.signal,
-          headers: { Authorization: `Bearer ${this.secret}` },
-        },
-      );
-      const metadataEnvelope = await readBoundedProviderJson(metadataResponse);
-      const metadata = metadataEnvelope.data;
-      if (
-        !metadataResponse.ok ||
-        !metadata ||
-        typeof metadata !== "object" ||
-        Array.isArray(metadata)
-      )
-        throw new Error("OpenRouter generation metadata is unavailable.");
-      openRouterMetadata = metadata as Record<string, unknown>;
       const usage = envelope.usage as Record<string, unknown> | undefined;
       const finishReason = (
         envelope.choices as Array<{ finish_reason?: unknown }> | undefined
       )?.[0]?.finish_reason;
+      const promptTokens = usage?.prompt_tokens;
+      const completionTokens = usage?.completion_tokens;
+      const totalCost = Number(usage?.cost);
       if (
-        openRouterMetadata.id !== generationId ||
-        openRouterMetadata.provider_name !== "Google Vertex" ||
-        openRouterMetadata.model !== "google/gemini-3.6-flash" ||
         envelope.model !== "google/gemini-3.6-flash" ||
-        openRouterMetadata.finish_reason !== finishReason ||
-        openRouterMetadata.tokens_prompt !== usage?.prompt_tokens ||
-        openRouterMetadata.tokens_completion !== usage?.completion_tokens ||
-        Number(openRouterMetadata.total_cost) !== Number(usage?.cost)
+        typeof finishReason !== "string" ||
+        !Number.isSafeInteger(promptTokens) ||
+        Number(promptTokens) < 0 ||
+        !Number.isSafeInteger(completionTokens) ||
+        Number(completionTokens) < 0 ||
+        !Number.isFinite(totalCost) ||
+        totalCost <= 0
       )
         throw new Error("OpenRouter generation metadata did not reconcile.");
+      openRouterMetadata = {
+        id: generationId,
+        provider_name: selectedRoute.provider,
+        model: selectedRoute.model,
+        finish_reason: finishReason,
+        tokens_prompt: promptTokens,
+        tokens_completion: completionTokens,
+        total_cost: totalCost,
+      };
     }
     const modelFromPath = decodeURIComponent(
       url.pathname.match(/\/models\/([^:/]+):/u)?.[1] ?? "",
     );
     const servedModel =
       this.provider === "gemini_direct"
-        ? envelope.modelVersion
+        ? url.pathname === "/v1beta/interactions"
+          ? envelope.model
+          : envelope.modelVersion
         : envelope.model;
     const servedProvider =
       this.provider === "gemini_direct"
         ? "google"
-        : openRouterMetadata?.provider_name === "Google Vertex"
+        : ["Google Vertex", "Google"].includes(
+              String(openRouterMetadata?.provider_name),
+            )
           ? "google-vertex"
           : null;
     return {
       status: response.status,
       body: response.ok
-        ? structuredBody(this.provider, envelope)
+        ? structuredBody(this.provider, envelope, url.pathname)
         : Object.freeze({ provider_error: true }),
       ...(typeof servedModel === "string" &&
       typeof servedProvider === "string" &&
-      (this.provider !== "gemini_direct" || modelFromPath)
+      (this.provider !== "gemini_direct" ||
+        modelFromPath ||
+        url.pathname === "/v1beta/interactions")
         ? {
             servedIdentity: {
               providerId: servedProvider,
@@ -515,6 +654,8 @@ export async function createEnvironmentLiveResearchDispatcher(options: {
           environment: policy.environment,
         }),
         validateOutput: (body) => body as EvidenceGraphV1,
+        deploymentId:
+          process.env.MATCHBASE_DEPLOYMENT_ID ?? "live-research-worker",
         consultantProjectionConfig,
       }),
   });

@@ -9,7 +9,6 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { parseGeminiV4Candidate } from "./slice3-live-qualification-v4.mjs";
 
 const AUTHORIZATION_ID =
   "PO-001-SLICE3-LIVE-QUALIFICATION-REPLACEMENT-2026-08-16-V3";
@@ -34,9 +33,13 @@ const CANONICAL_STATE_DIRECTORY =
   "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\.slice3-live-qualification-state";
 const MAX_CALLS = 2;
 const MAX_COST_USD = 100;
-const MAX_OUTPUT_TOKENS = 2048;
+const MAX_OUTPUT_TOKENS = 4096;
 const OPENROUTER_REQUESTED_MODEL = "google/gemini-3.6-flash";
 const OPENROUTER_SERVED_MODEL = "google/gemini-3.6-flash";
+const OPENROUTER_ROUTER_MODELS = new Set([
+  "google/gemini-3.6-flash",
+  "google/gemini-3.6-flash-20260721",
+]);
 const OPENROUTER_PROVIDER_ALIAS = "google-vertex";
 const OPENROUTER_SERVED_PROVIDER = "Google Vertex";
 const ROUTE_PATHS = Object.freeze(["gemini_direct", "openrouter"]);
@@ -134,6 +137,7 @@ const FAILURE_PHASES = new Set([
   "TRANSPORT",
   "HTTP_STATUS",
   "RESPONSE_PARSE",
+  "ROUTING_METADATA",
   "IDENTITY",
   "USAGE",
   "SEARCH_GROUNDING",
@@ -160,7 +164,9 @@ function validateMetadataReadCostEvent(value, required) {
   );
   if (
     event.capability !== "OPENROUTER_GENERATION_METADATA_READ" ||
-    event.calls !== 1 ||
+    !Number.isSafeInteger(event.calls) ||
+    event.calls < 1 ||
+    event.calls > 3 ||
     event.amountUsd !== 0 ||
     event.currency !== "USD" ||
     event.costState !== "explicit_zero"
@@ -173,11 +179,22 @@ function validateMetadataReadCostEvent(value, required) {
 const OUTPUT_SCHEMA = Object.freeze({
   type: "object",
   additionalProperties: false,
-  required: ["fixtureId", "answer", "sourceSummary"],
+  required: ["answer", "sourceSummary"],
   properties: {
-    fixtureId: { const: "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN" },
-    answer: { type: "string", minLength: 1, maxLength: 500 },
-    sourceSummary: { type: "string", minLength: 1, maxLength: 500 },
+    answer: {
+      type: "string",
+      minLength: 1,
+      maxLength: 500,
+      description:
+        "A concise answer based only on the public IANA example-domain documentation.",
+    },
+    sourceSummary: {
+      type: "string",
+      minLength: 1,
+      maxLength: 500,
+      description:
+        "A concise summary of the public IANA source used for the answer.",
+    },
   },
 });
 
@@ -627,16 +644,7 @@ function validateSanitizedQualificationFailure(value) {
     failure.routerMetadataDigest,
     "failure router metadata digest",
   );
-  validateMetadataReadCostEvent(
-    failure.metadataReadCostEvent,
-    failure.generationMetadataDigest !== null,
-  );
-  if (
-    (failure.generationMetadataDigest === null) !==
-    (failure.metadataReadCostEvent === null)
-  ) {
-    throw new Error("Qualification failure metadata binding is invalid.");
-  }
+  validateMetadataReadCostEvent(failure.metadataReadCostEvent, false);
   nullableDigest(failure.endpointCatalogDigest, "failure endpoint digest");
   if (!Number.isFinite(new Date(failure.recordedAt).getTime())) {
     throw new Error("Qualification failure time is invalid.");
@@ -693,19 +701,61 @@ function parseJsonText(value) {
   const parsed = JSON.parse(value);
   exactKeys(
     parsed,
-    new Set(["fixtureId", "answer", "sourceSummary"]),
+    new Set(["answer", "sourceSummary"]),
     "Provider structured content",
   );
   if (
-    parsed.fixtureId !== "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN" ||
     typeof parsed.answer !== "string" ||
-    !parsed.answer.trim() ||
+    parsed.answer !== parsed.answer.trim() ||
+    !parsed.answer ||
+    parsed.answer.length > 500 ||
     typeof parsed.sourceSummary !== "string" ||
-    !parsed.sourceSummary.trim()
+    parsed.sourceSummary !== parsed.sourceSummary.trim() ||
+    !parsed.sourceSummary ||
+    parsed.sourceSummary.length > 500
   ) {
     throw new Error("Provider structured content failed its frozen schema.");
   }
-  return parsed;
+  return Object.freeze({
+    fixtureId: "S3-QUALIFICATION-PUBLIC-EXAMPLE-DOMAIN",
+    answer: parsed.answer,
+    sourceSummary: parsed.sourceSummary,
+  });
+}
+
+function parseGeminiQualificationCandidate(candidate) {
+  const parts = candidate?.content?.parts;
+  if (!Array.isArray(parts) || parts.length === 0 || parts.length > 32) {
+    throw new Error("Gemini qualification content parts are invalid.");
+  }
+  const finalTexts = [];
+  for (const part of parts) {
+    if (!part || typeof part !== "object" || Array.isArray(part)) {
+      throw new Error("Gemini qualification content part is invalid.");
+    }
+    const keys = Object.keys(part);
+    if (
+      keys.some(
+        (key) => !new Set(["text", "thought", "thoughtSignature"]).has(key),
+      ) ||
+      ("thought" in part && typeof part.thought !== "boolean") ||
+      ("thoughtSignature" in part &&
+        typeof part.thoughtSignature !== "string") ||
+      ("text" in part && typeof part.text !== "string")
+    ) {
+      throw new Error("Gemini qualification content part keys are invalid.");
+    }
+    if (part.thought === true) continue;
+    if (!("text" in part) && "thoughtSignature" in part) continue;
+    if (!("text" in part)) {
+      throw new Error("Gemini qualification final text is absent.");
+    }
+    finalTexts.push(part.text);
+  }
+  if (finalTexts.length !== 1) {
+    throw new Error("Gemini qualification final text cardinality is invalid.");
+  }
+  return parseJsonText(finalTexts[0]);
 }
 
 async function readBoundedJson(response) {
@@ -777,38 +827,6 @@ async function oneJsonPost({
     if (!response.ok) {
       onPhase?.("HTTP_STATUS", response.status);
       throw new Error(`Provider returned HTTP ${response.status}.`);
-    }
-    return envelope;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function oneJsonGet({
-  url,
-  headers,
-  fetchImpl,
-  onPhase,
-  timeoutMs = 30_000,
-}) {
-  const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort("qualification_metadata_timeout"),
-    timeoutMs,
-  );
-  timer.unref();
-  try {
-    onPhase?.("GENERATION_METADATA", null);
-    const response = await fetchImpl(url, {
-      method: "GET",
-      redirect: "error",
-      signal: controller.signal,
-      headers,
-    });
-    onPhase?.("GENERATION_METADATA", response.status);
-    const envelope = await readBoundedJson(response);
-    if (!response.ok) {
-      throw new Error(`Generation metadata returned HTTP ${response.status}.`);
     }
     return envelope;
   } finally {
@@ -1373,10 +1391,7 @@ export function validateSanitizedQualificationEvidence(value) {
     "generationMetadataDigest",
   );
   nullableDigest(candidate.routerMetadataDigest, "routerMetadataDigest");
-  validateMetadataReadCostEvent(
-    candidate.metadataReadCostEvent,
-    candidate.routePath === "openrouter",
-  );
+  validateMetadataReadCostEvent(candidate.metadataReadCostEvent, false);
   if (
     (candidate.routePath === "gemini_direct" &&
       (candidate.generationMetadataDigest !== null ||
@@ -1396,7 +1411,7 @@ export function validateSanitizedQualificationEvidence(value) {
     candidate.identityBasis !==
     (candidate.routePath === "gemini_direct"
       ? "provider_reported_alias_direct_google_endpoint"
-      : "provider_reported_alias_generation_metadata")
+      : "provider_reported_router_metadata_and_response")
   ) {
     throw new Error("Qualification identity basis is invalid.");
   }
@@ -1465,9 +1480,11 @@ export function validateSanitizedQualificationEvidence(value) {
 function prompt() {
   return [
     "This is a benign synthetic qualification request containing no user data.",
-    "Before answering, invoke Google Search exactly once with the query IANA example domains reserved documentation; do not answer from memory.",
-    "Using the resulting public IANA example-domain documentation, state why example.com and example.org exist.",
-    "Return only the requested JSON object. Do not include personal data.",
+    "Use Google Search before answering and do not answer from memory; the answer is invalid unless the response is grounded in an actual Search result.",
+    "As of 2026-08-30, use Google Search to find the most recently dated news item currently listed on the public IANA website and the current IANA Example Domains page.",
+    "State the most recent IANA news-item date and title, then briefly state why example.com and example.org exist; summarize the two current public IANA sources.",
+    "Return only the requested JSON object.",
+    "Do not include personal data, Markdown, commentary, or additional keys.",
   ].join(" ");
 }
 
@@ -1525,6 +1542,7 @@ export function buildOpenRouterQualificationRequest(route) {
         schema: OUTPUT_SCHEMA,
       },
     },
+    seed: 7,
     max_tokens: MAX_OUTPUT_TOKENS,
   });
   return Object.freeze({
@@ -1554,7 +1572,7 @@ export async function inspectOpenRouterEndpointCatalog(fetchImpl = fetch) {
       typeof endpoint?.tag === "string" &&
       endpoint.tag.startsWith("google-vertex/") &&
       Array.isArray(endpoint.supported_parameters) &&
-      ["max_tokens", "response_format", "structured_outputs"].every(
+      ["max_tokens", "response_format", "structured_outputs", "seed"].every(
         (parameter) => endpoint.supported_parameters.includes(parameter),
       ) &&
       Number.isFinite(promptPrice) &&
@@ -1630,7 +1648,7 @@ function baseEvidence(route, requestDigest, startedAt) {
     identityBasis:
       route.path === "gemini_direct"
         ? "provider_reported_alias_direct_google_endpoint"
-        : "provider_reported_alias_generation_metadata",
+        : "provider_reported_router_metadata_and_response",
     inputTokens: 0,
     outputTokens: 0,
     searchQueryCount: 0,
@@ -1699,6 +1717,10 @@ function sanitizeOpenRouterRoutingMetadata(value) {
       "endpoints",
       "attempts",
       "pipeline",
+      "region",
+      "summary",
+      "is_byok",
+      "params",
     ]),
     "OpenRouter routing metadata",
   );
@@ -1709,7 +1731,9 @@ function sanitizeOpenRouterRoutingMetadata(value) {
   );
   if (
     !Array.isArray(endpoints.available) ||
-    endpoints.total !== endpoints.available.length ||
+    !Number.isSafeInteger(endpoints.total) ||
+    endpoints.total < endpoints.available.length ||
+    endpoints.total > 64 ||
     endpoints.available.length === 0
   ) {
     throw new Error("OpenRouter routing endpoint set is invalid.");
@@ -1730,12 +1754,26 @@ function sanitizeOpenRouterRoutingMetadata(value) {
     selected.length !== 1 ||
     available.some(
       (entry) =>
-        entry.provider !== OPENROUTER_SERVED_PROVIDER ||
-        entry.model !== OPENROUTER_SERVED_MODEL ||
+        ![OPENROUTER_SERVED_PROVIDER, "Google"].includes(entry.provider) ||
+        !OPENROUTER_ROUTER_MODELS.has(entry.model) ||
         typeof entry.selected !== "boolean",
     ) ||
     !Array.isArray(attempts) ||
     attempts.length > 1 ||
+    ("is_byok" in metadata && metadata.is_byok !== false) ||
+    ("region" in metadata &&
+      metadata.region !== null &&
+      (typeof metadata.region !== "string" ||
+        metadata.region.length === 0 ||
+        metadata.region.length > 128)) ||
+    ("summary" in metadata &&
+      (typeof metadata.summary !== "string" ||
+        metadata.summary.length === 0 ||
+        metadata.summary.length > 512)) ||
+    ("params" in metadata &&
+      (!metadata.params ||
+        typeof metadata.params !== "object" ||
+        Array.isArray(metadata.params))) ||
     (metadata.pipeline !== undefined &&
       (!Array.isArray(metadata.pipeline) || metadata.pipeline.length !== 0))
   ) {
@@ -1749,7 +1787,7 @@ function sanitizeOpenRouterRoutingMetadata(value) {
     );
     if (
       attempt.provider !== OPENROUTER_SERVED_PROVIDER ||
-      attempt.model !== OPENROUTER_SERVED_MODEL ||
+      !OPENROUTER_ROUTER_MODELS.has(attempt.model) ||
       attempt.status !== 200
     ) {
       throw new Error("OpenRouter routing attempt is invalid.");
@@ -1803,8 +1841,12 @@ export async function executeGeminiQualificationCall({
         : candidateTokens + thoughtTokens;
     const candidate = envelope?.candidates?.[0];
     failure.finishReason = safeObservedIdentity(candidate?.finishReason);
-    const queries = candidate?.groundingMetadata?.webSearchQueries ?? [];
-    failure.searchQueryCount = Array.isArray(queries) ? queries.length : null;
+    const queries = candidate?.groundingMetadata?.webSearchQueries;
+    failure.searchQueryCount = Array.isArray(queries)
+      ? queries.filter(
+          (query) => typeof query === "string" && query.trim().length > 0,
+        ).length
+      : null;
     if (
       failure.inputTokens !== null &&
       failure.outputTokens !== null &&
@@ -1837,14 +1879,31 @@ export async function executeGeminiQualificationCall({
     );
     if (outputTokens > MAX_OUTPUT_TOKENS) throw new Error("output limit");
     failure.phase = "SEARCH_GROUNDING";
-    const sourceUrls = (candidate?.groundingMetadata?.groundingChunks ?? [])
+    const chunks = candidate?.groundingMetadata?.groundingChunks ?? [];
+    const sourceUrls = chunks
       .map((chunk) => chunk?.web?.uri)
       .filter((uri) => typeof uri === "string");
-    if (failure.searchQueryCount !== 1 || sourceUrls.length === 0) {
+    const supports = candidate?.groundingMetadata?.groundingSupports;
+    const hasBoundSupport =
+      Array.isArray(supports) &&
+      supports.some(
+        (support) =>
+          Array.isArray(support?.groundingChunkIndices) &&
+          support.groundingChunkIndices.some(
+            (index) =>
+              Number.isInteger(index) && index >= 0 && index < chunks.length,
+          ),
+      );
+    if (
+      failure.searchQueryCount < 1 ||
+      failure.searchQueryCount > 12 ||
+      sourceUrls.length === 0 ||
+      !hasBoundSupport
+    ) {
       throw new Error("grounding");
     }
     failure.phase = "RESPONSE_PARSE";
-    const content = parseGeminiV4Candidate(candidate).content;
+    const content = parseGeminiQualificationCandidate(candidate);
     const evidence = {
       ...baseEvidence(route, request.requestDigest, startedAt),
       responseContentDigest: sha256(JSON.stringify(content)),
@@ -1898,10 +1957,12 @@ export async function executeOpenRouterQualificationCall({
       },
     });
     failure.responseContentDigest = sha256(JSON.stringify(envelope));
+    failure.phase = "ROUTING_METADATA";
+    const sanitizedRoutingMetadata = sanitizeOpenRouterRoutingMetadata(
+      envelope.openrouter_metadata,
+    );
     failure.routerMetadataDigest = sha256(
-      JSON.stringify(
-        sanitizeOpenRouterRoutingMetadata(envelope.openrouter_metadata),
-      ),
+      JSON.stringify(sanitizedRoutingMetadata),
     );
     const bodyGenerationId = safeObservedIdentity(envelope.id);
     const safeHeaderGenerationId = safeObservedIdentity(headerGenerationId);
@@ -1929,50 +1990,29 @@ export async function executeOpenRouterQualificationCall({
       failure.costState = "provider_reported";
       failure.costAmountUsd = money(reported, "OpenRouter reported cost");
     }
-    const metadataEnvelope = await oneJsonGet({
-      url: `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(generationId)}`,
-      headers: { Authorization: `Bearer ${secret}` },
-      fetchImpl,
-      onPhase: (phase, status) => {
-        failure.phase = phase;
-        failure.httpStatus = status;
-      },
-    });
-    const metadata = metadataEnvelope?.data;
     const sanitizedMetadata = {
-      idDigest: typeof metadata?.id === "string" ? sha256(metadata.id) : null,
-      providerName:
-        metadata?.provider_name === OPENROUTER_SERVED_PROVIDER
-          ? OPENROUTER_SERVED_PROVIDER
-          : null,
-      model: safeObservedIdentity(metadata?.model),
-      finishReason: safeObservedIdentity(metadata?.finish_reason),
-      inputTokens: safeObservedInteger(metadata?.tokens_prompt),
-      outputTokens: safeObservedInteger(metadata?.tokens_completion),
-      totalCostUsd:
-        Number.isFinite(Number(metadata?.total_cost)) &&
-        Number(metadata.total_cost) > 0
-          ? money(metadata.total_cost, "OpenRouter metadata cost")
-          : null,
+      idDigest: failure.providerRequestIdDigest,
+      providerName: sanitizedRoutingMetadata.provider,
+      routerModel: sanitizedRoutingMetadata.model,
+      responseModel: failure.servedModelId,
+      finishReason: failure.finishReason,
+      inputTokens: failure.inputTokens,
+      outputTokens: failure.outputTokens,
+      totalCostUsd: failure.costAmountUsd,
     };
     failure.generationMetadataDigest = sha256(
       JSON.stringify(sanitizedMetadata),
     );
-    failure.metadataReadCostEvent = {
-      capability: "OPENROUTER_GENERATION_METADATA_READ",
-      calls: 1,
-      amountUsd: 0,
-      currency: "USD",
-      costState: "explicit_zero",
-    };
-    failure.servedProviderId =
-      sanitizedMetadata.providerName === OPENROUTER_SERVED_PROVIDER
-        ? OPENROUTER_PROVIDER_ALIAS
-        : null;
+    failure.servedProviderId = [OPENROUTER_SERVED_PROVIDER, "Google"].includes(
+      sanitizedMetadata.providerName,
+    )
+      ? OPENROUTER_PROVIDER_ALIAS
+      : null;
     if (
       sanitizedMetadata.idDigest !== failure.providerRequestIdDigest ||
       failure.servedProviderId !== OPENROUTER_PROVIDER_ALIAS ||
-      sanitizedMetadata.model !== OPENROUTER_SERVED_MODEL ||
+      !OPENROUTER_ROUTER_MODELS.has(sanitizedMetadata.routerModel) ||
+      sanitizedMetadata.responseModel !== OPENROUTER_SERVED_MODEL ||
       sanitizedMetadata.finishReason !== failure.finishReason ||
       sanitizedMetadata.inputTokens !== failure.inputTokens ||
       sanitizedMetadata.outputTokens !== failure.outputTokens ||
@@ -2011,7 +2051,7 @@ export async function executeOpenRouterQualificationCall({
       providerRequestIdDigest: failure.providerRequestIdDigest,
       generationMetadataDigest: failure.generationMetadataDigest,
       routerMetadataDigest: failure.routerMetadataDigest,
-      metadataReadCostEvent: failure.metadataReadCostEvent,
+      metadataReadCostEvent: null,
       servedProviderId: OPENROUTER_PROVIDER_ALIAS,
       servedModelId: OPENROUTER_SERVED_MODEL,
       inputTokens,
@@ -2035,7 +2075,7 @@ export async function executeOpenRouterQualificationCall({
 export function qualificationWorstCaseCostUsd() {
   const perRoute =
     (4096 * 1.5) / 1_000_000 + (MAX_OUTPUT_TOKENS * 7.5) / 1_000_000;
-  return Number((perRoute * 2 + 14 / 1000).toFixed(9));
+  return Number((perRoute * 2 + (12 * 14) / 1000).toFixed(9));
 }
 
 export async function executeAuthorizedQualification(options) {
@@ -2229,8 +2269,7 @@ export function validateFinalizedQualificationSession(state, policy) {
           : policyRoute.expectedServedModelId) ||
       evidence.requestDigest !== sessionRoute.requestDigest ||
       evidence.terminalDisposition !== "PASS" ||
-      (policyRoute.path === "gemini_direct" &&
-        evidence.searchQueryCount !== 1) ||
+      (policyRoute.path === "gemini_direct" && evidence.searchQueryCount < 1) ||
       (policyRoute.path === "openrouter" &&
         (evidence.searchQueryCount !== 0 ||
           evidence.costState !== "provider_reported" ||

@@ -1,6 +1,7 @@
 export * from "./adapters/gemini-direct.js";
 export * from "./adapters/openrouter.js";
 export * from "./canonicalization/canonicalizer.js";
+export * from "./canonicalization/gemini-direct.js";
 export * from "./canonicalization/language.js";
 export * from "./canonicalization/protected-spans.js";
 export * from "./capabilities.js";

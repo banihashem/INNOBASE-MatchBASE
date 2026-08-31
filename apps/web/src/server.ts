@@ -1,10 +1,5 @@
 import { createServer } from "node:http";
 import {
-  DeterministicFixtureCanonicalizer,
-  DeterministicFixtureLanguageIdentifier,
-  type CanonicalizationCapability,
-} from "@matchbase/ai-evidence";
-import {
   ConsultantResultApplication,
   MatchBaseApplication,
   StandardWorkspaceApplication,
@@ -16,6 +11,7 @@ import {
 import { loadWebConfig } from "./config";
 import { createWebRuntime } from "./runtime";
 import { loadServerOwnedResearchAdmission } from "./server-owned-research-admission";
+import { createRuntimeCanonicalizer } from "./canonicalization-runtime";
 
 const config = loadWebConfig();
 if (config.environment === "production") {
@@ -24,21 +20,11 @@ if (config.environment === "production") {
   );
 }
 const pool = createPool({ connectionString: config.databaseUrl, max: 20 });
-const canonicalizer: CanonicalizationCapability = config.syntheticFixtureEnabled
-  ? new DeterministicFixtureCanonicalizer({
-      digestKey: config.digestKey,
-      digestKeyId: "runtime-v1",
-      languageIdentifier: new DeterministicFixtureLanguageIdentifier(),
-    })
-  : {
-      capabilityId: "CAP-TRANSLATE",
-      async canonicalize() {
-        throw new Error("No approved canonicalization route is configured.");
-      },
-    };
+const canonicalizer = createRuntimeCanonicalizer(config);
 const application = new MatchBaseApplication({
   pool,
   canonicalizer,
+  canonicalizationBudgetMs: 20_000,
   privacyKey: config.digestKey,
   researchAdmission: loadServerOwnedResearchAdmission(config),
   consultantProjectionConfig:

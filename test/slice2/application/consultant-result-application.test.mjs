@@ -58,6 +58,7 @@ function repository({
   projectionVersionDrift = false,
   resultRow = row,
   boundConfig = projectionConfig,
+  historyRows = [],
 } = {}) {
   const calls = [];
   const query = async (text, values = []) => {
@@ -71,6 +72,11 @@ function repository({
         rows: visible ? [{ state: "complete" }] : [],
         rowCount: visible ? 1 : 0,
       };
+    if (
+      text.includes("FROM research_run rr") &&
+      text.includes("result_document_available")
+    )
+      return { rows: historyRows, rowCount: historyRows.length };
     if (text.includes("SELECT rr.tier_at_submission"))
       return { rows: [resultRow], rowCount: 1 };
     if (text.includes("FROM consultant_result_projection_policy"))
@@ -129,6 +135,49 @@ function repository({
     }),
   };
 }
+
+test("lists only owner-bound Consultant runs and audits before response", async () => {
+  const requestId = "00000000-0000-4000-8000-000000000138";
+  const fixture = repository({
+    historyRows: [
+      {
+        run_id: runId,
+        request_id: requestId,
+        state: "complete",
+        queued_at: new Date("2026-08-24T23:00:00.000Z"),
+        started_at: new Date("2026-08-24T23:01:00.000Z"),
+        completed_at: new Date("2026-08-25T00:00:00.000Z"),
+        result_document_available: true,
+      },
+    ],
+  });
+  const history = await fixture.application.listRuns(context);
+  assert.deepEqual(history, {
+    schema_version: "consultant-run-history.v1",
+    items: [
+      {
+        run_id: runId,
+        request_id: requestId,
+        state: "completed",
+        updated_at: "2026-08-25T00:00:00.000Z",
+        result_available: true,
+        outcome: "matched",
+      },
+    ],
+  });
+  const historyRead = fixture.calls.find((call) =>
+    call.text.includes("result_document_available"),
+  );
+  assert.deepEqual(historyRead.values, [context.accountId, context.userId]);
+  assert.ok(
+    fixture.calls.some(
+      (call) =>
+        call.text.includes("INSERT INTO audit_event") &&
+        call.values[5] === "consultant.run_history.projected",
+    ),
+  );
+  assert.equal(fixture.calls.at(-1).text, "COMMIT");
+});
 
 test("persists the projection decision and serving audit in one transaction", async () => {
   const fixture = repository();

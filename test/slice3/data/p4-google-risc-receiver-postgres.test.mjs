@@ -215,6 +215,10 @@ postgresTest(
 
       assert.equal(
         await migrateDownLatest(isolated),
+        "0010_p4_live_pipeline_extraction_v2",
+      );
+      assert.equal(
+        await migrateDownLatest(isolated),
         "0009_p4_google_risc_retention",
       );
       assert.equal(

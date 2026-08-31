@@ -8,6 +8,29 @@ import {
 export const CONSULTANT_RESULT_PROJECTION_SCHEMA_VERSION =
   "consultant-result-projection.v1" as const;
 export const CONSULTANT_RESULT_PROJECTION_VERSION = 5 as const;
+export const CONSULTANT_RUN_HISTORY_SCHEMA_VERSION =
+  "consultant-run-history.v1" as const;
+
+export interface ConsultantRunHistoryItemV1 {
+  readonly run_id: string;
+  readonly request_id: string;
+  readonly state:
+    "queued" | "running" | "completed" | "failed" | "cancelled" | "superseded";
+  readonly updated_at: string;
+  readonly result_available: boolean;
+  readonly outcome:
+    | "pending"
+    | "matched"
+    | "no_responsible_match"
+    | "failed"
+    | "cancelled"
+    | "superseded";
+}
+
+export interface ConsultantRunHistoryV1 {
+  readonly schema_version: typeof CONSULTANT_RUN_HISTORY_SCHEMA_VERSION;
+  readonly items: readonly ConsultantRunHistoryItemV1[];
+}
 
 export interface ConsultantLandscapeV1 {
   readonly eligible_count: number;
@@ -638,6 +661,87 @@ export function parseConsultantResultProjectionV1(
     throw new Error("Consultant source readiness is invalid.");
   nonemptyString(readiness.notice, "Consultant source readiness notice");
   return deepFreeze(structuredClone(value) as ConsultantResultProjectionV1);
+}
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+export function parseConsultantRunHistoryV1(
+  value: unknown,
+): ConsultantRunHistoryV1 {
+  const history = record(value, "Consultant run history");
+  exactKeys(
+    history,
+    ["schema_version", "items"],
+    ["schema_version", "items"],
+    "Consultant run history",
+  );
+  if (history.schema_version !== CONSULTANT_RUN_HISTORY_SCHEMA_VERSION)
+    throw new Error("Consultant run history version is invalid.");
+  array(history.items, "Consultant run history items").forEach((value) => {
+    const item = record(value, "Consultant run history item");
+    exactKeys(
+      item,
+      [
+        "run_id",
+        "request_id",
+        "state",
+        "updated_at",
+        "result_available",
+        "outcome",
+      ],
+      [
+        "run_id",
+        "request_id",
+        "state",
+        "updated_at",
+        "result_available",
+        "outcome",
+      ],
+      "Consultant run history item",
+    );
+    string(item.run_id, "Consultant history run id");
+    string(item.request_id, "Consultant history request id");
+    if (!UUID_PATTERN.test(item.run_id) || !UUID_PATTERN.test(item.request_id))
+      throw new Error("Consultant run history identity is invalid.");
+    member(
+      item.state,
+      ["queued", "running", "completed", "failed", "cancelled", "superseded"],
+      "Consultant history state",
+    );
+    member(
+      item.outcome,
+      [
+        "pending",
+        "matched",
+        "no_responsible_match",
+        "failed",
+        "cancelled",
+        "superseded",
+      ],
+      "Consultant history outcome",
+    );
+    string(item.updated_at, "Consultant history update time");
+    if (!Number.isFinite(Date.parse(item.updated_at)))
+      throw new Error("Consultant run history update time is invalid.");
+    boolean(item.result_available, "Consultant history result availability");
+    const terminal = [
+      "completed",
+      "failed",
+      "cancelled",
+      "superseded",
+    ].includes(String(item.state));
+    if (
+      (item.result_available && item.state !== "completed") ||
+      (!terminal && item.outcome !== "pending") ||
+      (item.state === "completed" &&
+        !["matched", "no_responsible_match"].includes(String(item.outcome))) ||
+      (["failed", "cancelled", "superseded"].includes(String(item.state)) &&
+        item.outcome !== item.state)
+    )
+      throw new Error("Consultant run history state is inconsistent.");
+  });
+  return deepFreeze(structuredClone(value) as ConsultantRunHistoryV1);
 }
 
 function deepFreeze<T>(value: T): T {

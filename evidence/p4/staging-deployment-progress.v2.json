@@ -1,7 +1,7 @@
 {
   "schemaVersion": "matchbase.p4-staging-deployment-progress/v2",
   "recordedAt": "2026-08-30T17:49:20Z",
-  "validationUpdatedAt": "2026-08-31T08:33:36Z",
+  "validationUpdatedAt": "2026-08-31T17:56:00Z",
   "recordType": "ADDITIVE_PROGRESS",
   "supersedesHistoricalFacts": false,
   "historicalRecord": "evidence/p4/staging-gate-b-cloud-state.v1.json",
@@ -31,9 +31,9 @@
     "region": "me-central1",
     "web": {
       "service": "matchbase-staging-web",
-      "revision": "matchbase-staging-web-00012-725",
+      "revision": "matchbase-staging-web-00015-wsd",
       "ready": true,
-      "image": "me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-web@sha256:810bc6b8801ab8c0221590633a514cb771f16d483f32455436bda7e1e975d7b8",
+      "image": "me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-web@sha256:8ab11920a43d4d8822740323e9a158f25b04c1ae1c6544a7aea76c9ebfa47dfa",
       "ingress": "internal-and-cloud-load-balancing",
       "minInstances": 1,
       "maxInstances": 3,
@@ -46,9 +46,9 @@
     },
     "worker": {
       "pool": "matchbase-staging-worker",
-      "revision": "matchbase-staging-worker-00027-f65",
+      "revision": "matchbase-staging-worker-00029-df6",
       "ready": true,
-      "image": "me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-worker-28b77b649f0d689b@sha256:80290d0cabdb65b1cb0ba2f80c7d645e47d385c70fdead020e45fa4fe6027c95",
+      "image": "me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-worker-28b77b649f0d689b@sha256:ee6bb29902b8ff407ac6349a8e270d1d97ba6315b2f29211c1023b02ac7aa1e7",
       "cloudSqlInstance": "innobase-matchbase-stg:me-central1:matchbase-stg-pg18",
       "startupProbe": "PASS",
       "diagnosticJobState": "READY_DATABASE_ONLY_NO_PROVIDER_CREDENTIAL"
@@ -115,11 +115,12 @@
     },
     "stagingMigrations": {
       "source": "evidence/p4/staging-gate-b-cloud-state.v1.json",
-      "migrationCount": 9,
-      "latestMigration": "0009_p4_google_risc_retention",
-      "newMigrationClaimedByThisRecord": false,
-      "migratorVerification": "UP_UNCHANGED",
+      "migrationCount": 10,
+      "latestMigration": "0010_p4_live_pipeline_extraction_v2",
+      "newMigrationClaimedByThisRecord": true,
+      "migratorVerification": "UP_ROLLBACK_REAPPLY_READY",
       "backupVerified": true,
+      "preMigrationBackupId": "1788196941411",
       "pointInTimeRecoveryEnabled": true,
       "temporaryJobDeleted": true,
       "temporarySecretGrantRemoved": true
@@ -231,7 +232,7 @@
       "productionMutated": false
     },
     "migration0010LivePipelineExtractionV2": {
-      "result": "ISOLATED_LOCAL_PASS_STAGING_NOT_APPLIED",
+      "result": "ISOLATED_LOCAL_AND_STAGING_ROLLBACK_REAPPLY_PASS",
       "purpose": "ADMIT_VISIBLE_TEXT_EXTRACTION_V2_WITHOUT_REWRITING_V1_IDENTITIES",
       "upPath": "packages/data/migrations/0010_p4_live_pipeline_extraction_v2.up.sql",
       "upSha256": "e28109ffae30d62ad460a56403a007de43dab771914a0bd5ecd1e1bf7721a1d9",
@@ -241,7 +242,15 @@
       "historicalIdentityRowsRewritten": false,
       "postgresTests": { "passed": 29, "failed": 0, "skipped": 0 },
       "browserRegression": { "passed": 42, "failed": 0 },
-      "stagingApplied": false,
+      "stagingApplied": true,
+      "activeRunsBeforeApply": 0,
+      "stagingFinalMigrationCount": 10,
+      "stagingFinalReady": true,
+      "rollbackPreservedHistoricalV2WithoutRewrite": true,
+      "stagingIdentityCounts": {
+        "untrusted-source-boundary.v1": 17,
+        "untrusted-source-boundary.v2": 1
+      },
       "productionApplied": false
     },
     "remediation": {
@@ -277,9 +286,9 @@
     },
     "latestFullSuite": {
       "result": "PASS",
-      "passed": 355,
+      "passed": 363,
       "failed": 0,
-      "skipped": 4,
+      "skipped": 1,
       "exitCode": 0,
       "classification": "CURRENT_CLEAN_WITH_CONTROLLED_SKIPS"
     },
@@ -287,7 +296,7 @@
       "result": "PASS",
       "aiEvidence": { "passed": 114, "failed": 0, "skipped": 0 },
       "security": { "passed": 54, "failed": 0, "skipped": 1 },
-      "web": { "passed": 126, "failed": 0, "skipped": 16 },
+      "web": { "passed": 143, "failed": 0, "skipped": 0 },
       "applicationBuild": "PASS",
       "gcpScaffold": { "passed": 8, "failed": 0 },
       "focusedPipelineIdentity": { "passed": 20, "failed": 0 },
@@ -328,16 +337,32 @@
       "googleOAuthAccountChooser": "PASS",
       "authorizedGoogleSignIn": "PASS",
       "syntheticInputOutputAcceptance": "PASS",
-      "ownerRetestReady": false,
-      "blockedBy": "STAGING_MIGRATION_0010_NOT_APPLIED"
+      "ownerRetestReady": true,
+      "blockedBy": null
+    },
+    "workspaceRedesignDeployment": {
+      "result": "PASS",
+      "sourceCommits": ["1f91c37", "5e90042", "2feea81"],
+      "webRevision": "matchbase-staging-web-00015-wsd",
+      "workerRevision": "matchbase-staging-worker-00029-df6",
+      "publicResearchDisclosure": "SERVER_OWNED_QUALIFIED_LIVE",
+      "adminWorkspace": "OPERATIONAL_ONLY_SUPER_ADMIN_VERIFIED",
+      "publicRootHttpStatus": 200,
+      "healthHttpStatus": 200,
+      "applicationConsoleErrors": 0,
+      "horizontalOverflowFindings": 0,
+      "unitTests": { "passed": 128, "failed": 0, "skipped": 16 },
+      "browserTests": { "passed": 42, "failed": 0 },
+      "postgresTests": { "passed": 29, "failed": 0 },
+      "productionMutated": false
     }
   },
   "git": {
-    "baselineHead": "2b489b2f0a9416dfc149248233f9b7c1877be57c",
+    "baselineHead": "00652a195822cb1623e864f38be0348691bbc50b",
     "targetRef": "origin/main",
     "publicationAuthorizationReceived": true,
     "publicationScope": "REVIEWED_MATCHBASE_P4_REMEDIATION_ONLY",
-    "publicationCommitIdentity": "RESOLVED_BY_CONTAINING_GIT_COMMIT",
+    "publicationCommitIdentity": "2feea817671681fabf918066d3c329c137d0ce36",
     "currentDeploymentChangesCommitted": true,
     "currentDeploymentChangesPushed": true
   },
@@ -368,7 +393,7 @@
       "sha256": "e13b417f0070e984539daf672627a2558519e607fcd3904b71bcd22144664961"
     },
     {
-      "role": "pending_staging_migration_up",
+      "role": "applied_staging_migration_up",
       "path": "packages/data/migrations/0010_p4_live_pipeline_extraction_v2.up.sql",
       "sha256": "e28109ffae30d62ad460a56403a007de43dab771914a0bd5ecd1e1bf7721a1d9"
     },
@@ -394,9 +419,6 @@
     "realUserDataUsed": false,
     "credentialValuesRecorded": false
   },
-  "disposition": "SOURCE_PUBLICATION_READY_STAGING_MIGRATION_0010_PENDING",
-  "remainingGates": [
-    "STAGING_MIGRATION_0010_AUTHORIZATION_APPLY_AND_ROLLBACK_VERIFICATION",
-    "OWNER_SYNTHETIC_INPUT_OUTPUT_RETEST"
-  ]
+  "disposition": "STAGING_DEPLOYED_VALIDATED_OWNER_RETEST_READY",
+  "remainingGates": ["OWNER_SYNTHETIC_INPUT_OUTPUT_RETEST"]
 }

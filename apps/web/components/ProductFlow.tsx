@@ -1262,7 +1262,11 @@ export function ProductFlow({
         ) : null}
       </main>
       <footer>
-        <span>Local reference environment</span>
+        <span>
+          {qualifiedLive
+            ? "Staging qualified-live environment"
+            : "Local reference environment"}
+        </span>
         <span>
           {qualifiedLive
             ? "Demo disclosure · Qualified live evidence path"

@@ -82,6 +82,10 @@ test("renders the server-assigned qualified-live mode without provider topology"
     ),
   ).toBeVisible();
   expect(screen.queryByText(SYNTHETIC_NOTICE)).not.toBeInTheDocument();
+  expect(screen.getByText("Staging qualified-live environment")).toBeVisible();
+  expect(
+    screen.queryByText("Local reference environment"),
+  ).not.toBeInTheDocument();
   expect(container.textContent).not.toMatch(
     /gemini|openrouter|provider|model/iu,
   );

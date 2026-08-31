@@ -87,6 +87,35 @@ test("renders the server-assigned qualified-live mode without provider topology"
   );
 });
 
+test("renders the server-owned qualified-live boundary before authentication", () => {
+  render(
+    <ProductFlow
+      initialSession={null}
+      signedOutResearchMode={{
+        id: "qualified_live_research",
+        label: "Qualified live research",
+        live_qualified: true,
+      }}
+    />,
+  );
+  expect(
+    screen.getByText(
+      "Qualified live research is enabled — each run remains evidence-bound",
+    ),
+  ).toBeVisible();
+  expect(
+    screen.getByText(
+      "Google authentication is active. Research mode is assigned by server policy after sign-in.",
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText(SYNTHETIC_NOTICE)).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(
+      /external evidence is fetched and verified for this run/iu,
+    ),
+  ).not.toBeInTheDocument();
+});
+
 test("reports all three-part validation failures and focuses the first invalid field", async () => {
   render(<ProductFlow initialSession={session} />);
   fireEvent.click(

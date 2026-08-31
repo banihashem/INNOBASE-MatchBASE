@@ -14,6 +14,8 @@ import type { DemoProjectionV1 } from "@matchbase/contracts";
 const SYNTHETIC_NOTICE = "Synthetic evaluation data — not a sourcing result";
 const QUALIFIED_LIVE_NOTICE =
   "Qualified live research — external evidence is fetched and verified for this run";
+const QUALIFIED_LIVE_AVAILABLE_NOTICE =
+  "Qualified live research is enabled — each run remains evidence-bound";
 const NEED_REQUIRED = "Describe the product or capability you need.";
 const CONSTRAINTS_REQUIRED = "State at least one mandatory constraint.";
 const CONTEXT_REQUIRED =
@@ -182,7 +184,12 @@ function formatUtc(value: string | null): string {
 export function ProductFlow({
   initialSession,
   authPath = "/auth/google/start",
-}: Readonly<{ initialSession?: Session | null; authPath?: string }>) {
+  signedOutResearchMode,
+}: Readonly<{
+  initialSession?: Session | null;
+  authPath?: string;
+  signedOutResearchMode?: Session["research_mode"] | undefined;
+}>) {
   const [screen, setScreen] = useState<Screen>(
     initialSession === undefined
       ? "loading"
@@ -220,9 +227,17 @@ export function ProductFlow({
   const suppressFailureFocus = useRef(false);
   const pollGeneration = useRef(0);
   const needId = useId();
-  const qualifiedLive = session?.research_mode.live_qualified === true;
+  const effectiveResearchMode = session?.research_mode ??
+    signedOutResearchMode ?? {
+      id: "synthetic_reference",
+      label: "Synthetic reference",
+      live_qualified: false,
+    };
+  const qualifiedLive = effectiveResearchMode.live_qualified === true;
   const researchNotice = qualifiedLive
-    ? QUALIFIED_LIVE_NOTICE
+    ? session
+      ? QUALIFIED_LIVE_NOTICE
+      : QUALIFIED_LIVE_AVAILABLE_NOTICE
     : SYNTHETIC_NOTICE;
   const constraintsId = useId();
   const contextId = useId();
@@ -556,7 +571,7 @@ export function ProductFlow({
         aria-label="Research mode notice"
       >
         <span aria-hidden="true">◆</span>{" "}
-        <strong>{session?.research_mode.label ?? "Synthetic reference"}</strong>
+        <strong>{effectiveResearchMode.label}</strong>
         <span aria-hidden="true"> · </span>
         {researchNotice}
       </aside>
@@ -659,7 +674,7 @@ export function ProductFlow({
               </div>
               <p className="environment-disclosure">
                 {qualifiedLive
-                  ? "Test identity only. Research mode is assigned by server policy."
+                  ? "Google authentication is active. Research mode is assigned by server policy after sign-in."
                   : "Local/test simulator. This is not live Google authentication or live supplier research."}
               </p>
             </section>

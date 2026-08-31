@@ -233,6 +233,13 @@ next-route-announcer {
   color: var(--slate-300);
 }
 
+.standard-quota > *,
+.standard-quota time {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .standard-section {
   min-width: 0;
 }

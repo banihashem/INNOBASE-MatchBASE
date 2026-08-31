@@ -16,7 +16,17 @@ type Resolution =
   | { state: "unavailable"; tier: string }
   | { state: "error" };
 
-export function ProductRouter({ authPath }: { authPath: string }) {
+export function ProductRouter({
+  authPath,
+  signedOutResearchMode,
+}: {
+  authPath: string;
+  signedOutResearchMode?: {
+    id: "synthetic_reference" | "qualified_live_research";
+    label: "Synthetic reference" | "Qualified live research";
+    live_qualified: boolean;
+  };
+}) {
   const [resolution, setResolution] = useState<Resolution>({
     state: "loading",
   });
@@ -98,5 +108,10 @@ export function ProductRouter({ authPath }: { authPath: string }) {
       </>
     );
   }
-  return <ProductFlow authPath={authPath} />;
+  return (
+    <ProductFlow
+      authPath={authPath}
+      signedOutResearchMode={signedOutResearchMode}
+    />
+  );
 }

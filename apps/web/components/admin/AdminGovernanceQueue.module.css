@@ -71,7 +71,7 @@
   min-height: 2.75rem;
   padding: 0.65rem 0.75rem;
   color: var(--ink);
-  background: white;
+  background: var(--slate-800);
   border: 2px solid var(--line);
   border-radius: 0;
 }
@@ -94,7 +94,7 @@
   cursor: pointer;
 }
 .secondary {
-  color: var(--forest);
+  color: var(--forest-2);
   background: transparent;
 }
 .button:disabled {
@@ -161,26 +161,26 @@
   line-height: 1.25;
 }
 .reviewBadge {
-  color: #674d00;
-  background: #fff1b8;
+  color: #fde68a;
+  background: #422006;
 }
 .escalatedBadge {
-  color: #25425d;
-  background: #d9edff;
+  color: #bae6fd;
+  background: #082f49;
 }
 .restrictedBadge {
-  color: #8b2117;
-  background: #ffe3df;
+  color: #fecaca;
+  background: #450a0a;
 }
 .failedBadge {
-  color: #611649;
-  background: #ffe0f4;
+  color: #fbcfe8;
+  background: #500724;
 }
 .runLink {
   display: inline-block;
   min-height: 2.75rem;
   padding: 0.65rem 0.75rem;
-  color: var(--forest);
+  color: var(--forest-2);
   font-weight: 800;
 }
 .pagination {

@@ -303,7 +303,7 @@ for (const scenario of [
     await page.goto("/");
     await expect(page.getByText(syntheticNotice)).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "Define an industrial sourcing need",
+      "Define sourcing needs with evidence-shaped discipline",
     );
     if (scenario.name === "mobile zero-match") {
       await page.evaluate(() => {

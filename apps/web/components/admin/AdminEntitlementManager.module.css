@@ -123,7 +123,7 @@
   min-height: 2.75rem;
   padding: 0.65rem 0.75rem;
   color: var(--ink);
-  background: white;
+  background: var(--slate-800);
   border: 2px solid var(--line);
   border-radius: 0;
 }
@@ -186,7 +186,7 @@
 }
 
 .button:hover {
-  background: var(--forest-2);
+  background: var(--indigo-600);
 }
 
 .button:disabled {
@@ -195,7 +195,7 @@
 }
 
 .secondary {
-  color: var(--forest);
+  color: var(--forest-2);
   background: transparent;
 }
 
@@ -229,7 +229,7 @@
   margin: 1.5rem 0 0.75rem;
   padding: 1rem;
   border-left: 0.4rem solid var(--danger);
-  background: #fff5f3;
+  background: rgba(127, 29, 29, 0.28);
   line-height: 1.6;
 }
 

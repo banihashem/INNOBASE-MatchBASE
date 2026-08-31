@@ -435,9 +435,16 @@ postgresTest(
       const liveProvenance = await pool.query(
         `SELECT t.data_handling_posture, t.provider, t.model_id, t.route_id
            FROM canonicalization_execution_run x
-           JOIN sourcing_request s USING (canonicalization_run_id, account_id)
-           JOIN canonical_request_version v ON v.request_id = s.request_id AND v.version = 1
-           JOIN transformation_provenance t USING (canonical_request_version_id, account_id)
+           JOIN sourcing_request s
+             ON s.canonicalization_run_id = x.canonicalization_run_id
+            AND s.account_id = x.account_id
+           JOIN canonical_request_version v
+             ON v.request_id = s.request_id
+            AND v.account_id = s.account_id
+            AND v.version = 1
+           JOIN transformation_provenance t
+             ON t.canonical_request_version_id = v.canonical_request_version_id
+            AND t.account_id = v.account_id
           WHERE x.request_correlation_id = $1`,
         [liveContext.correlationId],
       );

@@ -13,6 +13,7 @@ import {
   P4_AUDIT_ARTIFACT_FOUNDATION_MIGRATION_ID,
   P4_GOOGLE_RISC_RECEIVER_MIGRATION_ID,
   P4_GOOGLE_RISC_RETENTION_MIGRATION_ID,
+  P4_LIVE_PIPELINE_EXTRACTION_V2_MIGRATION_ID,
   SECURITY_ALERT_MIGRATION_ID,
   STANDARD_WORKSPACE_MIGRATION_ID,
   admitRunWithinQuota,
@@ -345,6 +346,10 @@ postgresTest(
     try {
       await migrateDown(pool).catch(() => false);
       await migrateUp(pool);
+      assert.equal(
+        await migrateDownLatest(pool),
+        P4_LIVE_PIPELINE_EXTRACTION_V2_MIGRATION_ID,
+      );
       assert.equal(
         await migrateDownLatest(pool),
         P4_GOOGLE_RISC_RETENTION_MIGRATION_ID,

@@ -621,37 +621,180 @@ export function ProductFlow({
         ) : null}
 
         {screen === "signed-out" ? (
-          <section className="landing" aria-labelledby="landing-title">
-            <div>
-              <p className="eyebrow">Authenticated Demo reference path</p>
+          <div className="landing-shell">
+            <div className="landing-bg" aria-hidden="true">
+              <div className="landing-orb landing-orb-1" />
+              <div className="landing-orb landing-orb-2" />
+              <div className="landing-orb landing-orb-3" />
+              <div className="landing-grid-bg" />
+            </div>
+
+            <section className="landing-hero" aria-labelledby="landing-title">
+              <p className="landing-hero-badge">
+                <span aria-hidden="true">◆</span> Authenticated sourcing
+                workflow
+              </p>
               <h1 id="landing-title" ref={mainHeading} tabIndex={-1}>
-                Define an industrial sourcing need with evidence-shaped
-                discipline.
+                Define sourcing needs with{" "}
+                <span className="landing-gradient-text">
+                  evidence-shaped discipline
+                </span>
               </h1>
-              <p className="lede">
+              <p className="landing-hero-subtitle">
                 Structure a multilingual request, confirm its English canonical
                 form, and inspect up to three eligible{" "}
-                {qualifiedLive ? "source-verified" : "synthetic"} candidates.
+                {qualifiedLive ? "evidence-supported" : "synthetic"} candidates.
+                Evaluation remains bounded by the confirmed request and the
+                evidence available to the run.
               </p>
-              <a className="primary-action" href={authPath}>
-                Continue with Google
-              </a>
+              <div className="landing-hero-ctas">
+                <a className="landing-cta-primary" href={authPath}>
+                  Continue with Google
+                </a>
+                <span className="landing-cta-secondary">
+                  {qualifiedLive
+                    ? "Live evidence path"
+                    : "Synthetic reference mode"}
+                </span>
+              </div>
               <p className="environment-disclosure">
                 {qualifiedLive
                   ? "Test identity only. Research mode is assigned by server policy."
                   : "Local/test simulator. This is not live Google authentication or live supplier research."}
               </p>
-            </div>
-            <aside className="principles" aria-label="Demo boundaries">
-              <h2>What this path proves</h2>
-              <ul>
-                <li>Original-language text stays transient.</li>
-                <li>You confirm the English canonical request.</li>
-                <li>Mandatory constraints are applied before ranking.</li>
-                <li>Demo disclosure is limited server-side.</li>
-              </ul>
-            </aside>
-          </section>
+            </section>
+
+            <section
+              className="landing-features"
+              aria-labelledby="landing-features-title"
+            >
+              <h2 className="sr-only" id="landing-features-title">
+                Governed workflow boundaries
+              </h2>
+              <article className="landing-feature-card">
+                <span
+                  className="landing-feature-icon icon-indigo"
+                  aria-hidden="true"
+                >
+                  ◈
+                </span>
+                <h3>Canonical Translation</h3>
+                <p>
+                  Original-language text stays transient. You confirm the
+                  English canonical request before any evaluation begins.
+                </p>
+              </article>
+              <article className="landing-feature-card">
+                <span
+                  className="landing-feature-icon icon-teal"
+                  aria-hidden="true"
+                >
+                  ◈
+                </span>
+                <h3>Constraint-First Ranking</h3>
+                <p>
+                  Mandatory constraints are applied before ranking. No candidate
+                  reaches results without satisfying your requirements.
+                </p>
+              </article>
+              <article className="landing-feature-card">
+                <span
+                  className="landing-feature-icon icon-amber"
+                  aria-hidden="true"
+                >
+                  ◈
+                </span>
+                <h3>Governed Disclosure</h3>
+                <p>
+                  Demo disclosure is limited server-side. Result depth is locked
+                  to the tier recorded when each run was submitted.
+                </p>
+              </article>
+              <article className="landing-feature-card">
+                <span
+                  className="landing-feature-icon icon-emerald"
+                  aria-hidden="true"
+                >
+                  ◈
+                </span>
+                <h3>Evidence Traceability</h3>
+                <p>
+                  Evidence used in the result is linked through the governed
+                  contract. Missing support remains visible as a limitation.
+                </p>
+              </article>
+            </section>
+
+            <section
+              className="landing-steps"
+              aria-labelledby="landing-steps-title"
+            >
+              <header className="landing-steps-title">
+                <h2 id="landing-steps-title">Three-step evaluation process</h2>
+                <p>
+                  From intake to result, each transition is explicit and
+                  governed by the server-owned contract.
+                </p>
+              </header>
+              <div className="landing-steps-grid">
+                <article className="landing-step-card">
+                  <span className="landing-step-number" aria-hidden="true">
+                    01
+                  </span>
+                  <h3>Intake</h3>
+                  <span className="landing-step-subtitle">
+                    Structured Request
+                  </span>
+                  <p>
+                    Describe the product need, mandatory constraints, and
+                    contextual preferences in your own language.
+                  </p>
+                </article>
+                <article className="landing-step-card">
+                  <span className="landing-step-number" aria-hidden="true">
+                    02
+                  </span>
+                  <h3>Confirm</h3>
+                  <span className="landing-step-subtitle">
+                    Canonical Review
+                  </span>
+                  <p>
+                    Review the English canonical form, inspect field-level
+                    extraction, and approve before research begins.
+                  </p>
+                </article>
+                <article className="landing-step-card">
+                  <span className="landing-step-number" aria-hidden="true">
+                    03
+                  </span>
+                  <h3>Research</h3>
+                  <span className="landing-step-subtitle">
+                    Evidence Evaluation
+                  </span>
+                  <p>
+                    Receive evaluated candidates with constraint compliance,
+                    available evidence, constraint outcomes, and governed
+                    disclosure.
+                  </p>
+                </article>
+              </div>
+            </section>
+
+            <section
+              className="landing-cta-section"
+              aria-labelledby="landing-cta-title"
+            >
+              <h2 id="landing-cta-title">Start with a governed request</h2>
+              <p>
+                Authenticate to access the Demo workspace. Your request will be
+                structured, confirmed, and evaluated within the disclosed
+                research mode.
+              </p>
+              <a className="landing-cta-primary" href={authPath}>
+                Get started
+              </a>
+            </section>
+          </div>
         ) : null}
 
         {screen === "intake" && session ? (

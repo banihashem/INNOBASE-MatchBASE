@@ -108,3 +108,8 @@ Migration `0011_admin_system_scope_and_run_tier_immutability` was applied only t
 the authorized Staging database after backup verification. Its down migration
 and rollback were verified before the final reapply. Production was not
 mutated.
+
+The reviewed implementation, migration, policy, tests, and this guide were
+published to `origin/main` in feature commit
+`6166195c0fb1d53496c183571aea806217708dc1` before the additive documentation
+closure. Credential files and temporary diagnostic files were excluded.

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import type { StructuredStandardRequestV1 } from "./types";
+import type { StandardStructuredRequest } from "./types";
 import type {
   StandardRequestVersionSummaryV1,
   StandardValueState,
@@ -17,7 +17,7 @@ export function CanonicalReview({
   versionHistory = [],
 }: {
   session: WorkspaceSession;
-  request: StructuredStandardRequestV1;
+  request: StandardStructuredRequest;
   onRun: (runId: string) => void;
   onBack: () => void;
   versionHistory?: StandardRequestVersionSummaryV1[];
@@ -108,7 +108,7 @@ export function CanonicalReview({
     try {
       let canonical = draft;
       if (changed) {
-        const version = await workspaceJson<StructuredStandardRequestV1>(
+        const version = await workspaceJson<StandardStructuredRequest>(
           `/api/v1/requests/${encodeURIComponent(request.request_id)}/versions`,
           {
             method: "POST",

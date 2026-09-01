@@ -22,6 +22,7 @@
     "@matchbase/ai-evidence": "workspace:*",
     "@matchbase/contracts": "workspace:*",
     "@matchbase/data": "workspace:*",
+    "@matchbase/reporting": "workspace:*",
     "@matchbase/security": "workspace:*"
   },
   "devDependencies": {

@@ -3,6 +3,9 @@ import test from "node:test";
 import { generateContractSchemas } from "../src/schema.js";
 import { contractSha256Hex } from "../src/sha256.js";
 import {
+  CONSULTANT_AGRICULTURAL_DOMAIN_PACK_ID,
+  CONSULTANT_AGRICULTURAL_LIMITATION_NOTICES,
+  CONSULTANT_AGRICULTURAL_RFQ_QUESTIONS,
   CONSULTANT_DOMAIN_PACK_ID,
   CONSULTANT_DUE_DILIGENCE_CHECKS,
   CONSULTANT_RESULT_PROJECTION_V2_SCHEMA_VERSION,
@@ -11,6 +14,7 @@ import {
   CONSULTANT_SOURCE_POLICY_CONTENT_SHA256,
   CONSULTANT_SOURCE_POLICY_VERSION,
   CONSULTANT_SYNTHETIC_RFQ_QUESTIONS,
+  CONSULTANT_SYNTHETIC_LIMITATION_NOTICES,
   parseConsultantResultProjectionV2,
 } from "../src/v2/consultant-projection.js";
 
@@ -188,17 +192,104 @@ function validProjection(): Record<string, unknown> {
       production_release: "blocked",
       restricted_party_clearance: "not_claimed",
       due_diligence_completeness: "not_executed",
-      notices: [
-        "Synthetic only.",
-        "No human Consultant authorship.",
-        "No production SME validation.",
-        "No legal or compliance clearance.",
-        "Due diligence was not executed.",
-      ],
+      notices: [...CONSULTANT_SYNTHETIC_LIMITATION_NOTICES],
     },
     projection_version: CONSULTANT_RESULT_PROJECTION_V2_VERSION,
   };
 }
+
+test("Consultant projection admits the governed agricultural pack identity", () => {
+  const projection = validProjection();
+  (projection.source_policy as Record<string, unknown>).domain_pack_id =
+    CONSULTANT_AGRICULTURAL_DOMAIN_PACK_ID;
+  (projection.source_policy as Record<string, unknown>).mode =
+    "agent_researched_agricultural_qualification";
+  (projection.agent_authorship as Record<string, unknown>).mode =
+    "agent_researched_agricultural_qualification";
+  (projection.rfq_execution_snapshot as Record<string, unknown>).state =
+    "governed_agricultural_planning_only";
+  const agriculturalWaveId = contractSha256Hex(
+    [
+      RUN_ID,
+      CONSULTANT_SOURCE_POLICY_CONTENT_SHA256,
+      CONFIG_SHA256,
+      CONSULTANT_AGRICULTURAL_DOMAIN_PACK_ID,
+      "RFQ_WAVE_INITIAL",
+      "1",
+      "",
+    ].join("|"),
+  );
+  (
+    projection.rfq_execution_snapshot as Record<string, unknown>
+  ).wave_instance_id = agriculturalWaveId;
+  projection.rfq_questions = CONSULTANT_AGRICULTURAL_RFQ_QUESTIONS.map(
+    ([questionId, requiredResponse], index) => ({
+      order: index + 1,
+      question_id: questionId,
+      required_response: requiredResponse,
+      response_state: "not_collected",
+    }),
+  );
+  const audit = (projection.rfq_execution_snapshot as Record<string, unknown>)
+    .audit_identity as Record<string, unknown>;
+  audit.event_type = "AGRICULTURAL_WAVE_SNAPSHOT_PROJECTED";
+  audit.event_id = contractSha256Hex(
+    `${agriculturalWaveId}|${BOUND_AT}|AGRICULTURAL_WAVE_SNAPSHOT_PROJECTED`,
+  );
+  const limitations = projection.full_limitations as Record<string, unknown>;
+  limitations.qualification_scope = "governed_agricultural_qualification";
+  limitations.notices = [...CONSULTANT_AGRICULTURAL_LIMITATION_NOTICES];
+  assert.equal(
+    parseConsultantResultProjectionV2(projection).source_policy.domain_pack_id,
+    CONSULTANT_AGRICULTURAL_DOMAIN_PACK_ID,
+  );
+  assert.equal(
+    (projection.rfq_questions as Array<Record<string, unknown>>).some(
+      (question) =>
+        /industrial|component|machined|alloy/iu.test(
+          String(question.required_response),
+        ),
+    ),
+    false,
+  );
+});
+
+test("Consultant parser rejects every cross-product semantic tuple mutation", () => {
+  const mutations: Array<(value: Record<string, unknown>) => void> = [
+    (value) => {
+      (value.source_policy as Record<string, unknown>).mode =
+        "agent_researched_agricultural_qualification";
+    },
+    (value) => {
+      value.rfq_questions = CONSULTANT_AGRICULTURAL_RFQ_QUESTIONS.map(
+        ([questionId, requiredResponse], index) => ({
+          order: index + 1,
+          question_id: questionId,
+          required_response: requiredResponse,
+          response_state: "not_collected",
+        }),
+      );
+    },
+    (value) => {
+      (value.rfq_execution_snapshot as Record<string, unknown>).state =
+        "governed_agricultural_planning_only";
+    },
+    (value) => {
+      const snapshot = value.rfq_execution_snapshot as Record<string, unknown>;
+      (snapshot.audit_identity as Record<string, unknown>).event_type =
+        "AGRICULTURAL_WAVE_SNAPSHOT_PROJECTED";
+    },
+    (value) => {
+      (value.full_limitations as Record<string, unknown>).qualification_scope =
+        "governed_agricultural_qualification";
+    },
+  ];
+  for (const mutate of mutations) {
+    const projection = validProjection();
+    mutate(projection);
+    assert.throws(() => parseConsultantResultProjectionV2(projection));
+  }
+});
 
 test("publishes Consultant v2 as an additive closed contract", () => {
   assert.equal(

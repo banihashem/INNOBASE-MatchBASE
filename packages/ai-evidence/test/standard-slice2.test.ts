@@ -11,6 +11,7 @@ import {
   canonicalizeStandardStructuredText,
 } from "../src/canonicalization/standard-structured.js";
 import {
+  FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK,
   requireSyntheticDomainPackActivation,
   resolveSyntheticDomainPack,
   STANDARD_DOMAIN_INVARIANT_CORE,
@@ -266,6 +267,118 @@ test("domain-pack activation is server-owned, confirmed, signed, and source-free
       }),
     /invalid or expired/iu,
   );
+});
+
+test("pistachio procurement deterministically selects the governed agricultural pack", () => {
+  const context = {
+    accountId: "ACC-AGRI",
+    userId: "USR-AGRI",
+    now: NOW,
+    activationTtlSeconds: 300,
+    hmacSecret: "test-secret",
+  };
+  const result = resolveSyntheticDomainPack(
+    {
+      sourceText:
+        "Procurement request for three containers of high-quality Iranian Ahmad Aghaei pistachios. The shipment must be routed via Dubai for distribution in the African market. The supplier should have at least one container currently available in stock.",
+    },
+    context,
+  );
+  assert.equal(result.activation_state, "confirmed");
+  if (result.activation_state !== "confirmed") assert.fail("not confirmed");
+  assert.equal(result.schema_version, "domain-pack-resolution.v2");
+  if (result.schema_version !== "domain-pack-resolution.v2")
+    assert.fail("not agricultural v2");
+  assert.equal(
+    result.category_id,
+    FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK.category_id,
+  );
+  assert.equal(
+    result.content_sha256,
+    FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK.content_sha256,
+  );
+  assert.equal(
+    result.resolver_version,
+    "governed-agricultural-category-resolver.v2",
+  );
+  const pack = requireSyntheticDomainPackActivation(
+    result.activation_token,
+    context,
+  );
+  assert.deepEqual(pack, FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK);
+  assert.equal(
+    pack.domain_fields.some((field) => field.field_id === "component_material"),
+    false,
+  );
+  assert.equal(
+    pack.domain_fields.some((field) =>
+      /industrial|component|alloy/iu.test(
+        `${field.field_id} ${field.label} ${field.description}`,
+      ),
+    ),
+    false,
+  );
+  assert.deepEqual(
+    new Set(pack.domain_fields.map((field) => field.field_id)),
+    new Set([
+      "commodity_variety",
+      "commodity_grade",
+      "commodity_origin",
+      "container_quantity",
+      "routing_via",
+      "distribution_destination",
+      "current_stock",
+      "food_certifications",
+      "export_readiness",
+      "logistics_requirements",
+    ]),
+  );
+});
+
+test("ambiguous agricultural intake requires explicit confirmation", () => {
+  const context = {
+    accountId: "ACC-AGRI",
+    userId: "USR-AGRI",
+    now: NOW,
+    activationTtlSeconds: 300,
+    hmacSecret: "test-secret",
+  };
+  const result = resolveSyntheticDomainPack(
+    { sourceText: "pistachio" },
+    context,
+  );
+  assert.equal(result.activation_state, "confirmation_required");
+  assert.equal(result.category_id, "food_agricultural_commodities");
+  assert.equal("activation_token" in result, false);
+});
+
+test("logistics words have zero domain identity weight and conflicts fail closed", () => {
+  const context = {
+    accountId: "ACC-RESOLVE",
+    userId: "USR-RESOLVE",
+    now: NOW,
+    activationTtlSeconds: 300,
+    hmacSecret: "test-secret",
+  };
+  for (const sourceText of [
+    "three containers via Dubai with current stock and export documents",
+    "route through Dubai to Africa with certification and logistics",
+  ]) {
+    const result = resolveSyntheticDomainPack({ sourceText }, context);
+    assert.equal(result.activation_state, "unresolved");
+  }
+  const industrial = resolveSyntheticDomainPack(
+    { sourceText: "industrial alloy component shipped via Dubai" },
+    context,
+  );
+  assert.equal(industrial.activation_state, "confirmed");
+  if (industrial.activation_state === "confirmed")
+    assert.equal(industrial.category_id, SYNTHETIC_DOMAIN_PACK.category_id);
+  const conflict = resolveSyntheticDomainPack(
+    { sourceText: "industrial alloy component for Ahmad Aghaei pistachios" },
+    context,
+  );
+  assert.equal(conflict.activation_state, "unresolved");
 });
 
 test("scores the normative 78 fixture and applies the critical ceiling", () => {

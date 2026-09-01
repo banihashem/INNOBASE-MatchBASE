@@ -1,6 +1,59 @@
 # syntax=docker/dockerfile:1.12
 
 ARG NODE_IMAGE=node:24.14.0-bookworm-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8
+ARG VERAPDF_IMAGE=verapdf/cli:v1.30.1@sha256:20202b4bcc2410a25db1f637c7b461a2e0dda1d97dd8a6df658286b30d56c842
+ARG DEBIAN_SNAPSHOT=20260831T000000Z
+
+FROM ${VERAPDF_IMAGE} AS verapdf-toolchain
+
+FROM ${NODE_IMAGE} AS pdf-python-toolchain
+ARG DEBIAN_SNAPSHOT
+COPY --from=verapdf-toolchain /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN printf 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/%s bookworm main\ndeb [check-valid-until=no] https://snapshot.debian.org/archive/debian/%s bookworm-updates main\ndeb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/%s bookworm-security main\n' "$DEBIAN_SNAPSHOT" "$DEBIAN_SNAPSHOT" "$DEBIAN_SNAPSHOT" > /etc/apt/sources.list \
+    && rm -f /etc/apt/sources.list.d/debian.sources
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      python3=3.11.2-1+b1 python3-venv=3.11.2-1+b1 \
+    && python3 -m venv /opt/matchbase/pdf-venv \
+    && rm -rf /var/lib/apt/lists/*
+COPY packages/reporting/pdf-toolchain/requirements.lock /tmp/requirements.lock
+RUN /opt/matchbase/pdf-venv/bin/pip install --disable-pip-version-check --no-cache-dir --require-hashes -r /tmp/requirements.lock \
+    && rm /tmp/requirements.lock
+
+FROM ${NODE_IMAGE} AS pdf-runtime
+ARG DEBIAN_SNAPSHOT
+COPY --from=verapdf-toolchain /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN printf 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/%s bookworm main\ndeb [check-valid-until=no] https://snapshot.debian.org/archive/debian/%s bookworm-updates main\ndeb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/%s bookworm-security main\n' "$DEBIAN_SNAPSHOT" "$DEBIAN_SNAPSHOT" "$DEBIAN_SNAPSHOT" > /etc/apt/sources.list \
+    && rm -f /etc/apt/sources.list.d/debian.sources
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      python3=3.11.2-1+b1 \
+      libpango-1.0-0=1.50.12+ds-1 \
+      libpangoft2-1.0-0=1.50.12+ds-1 \
+      libharfbuzz-subset0=6.0.0+dfsg-3 \
+      fontconfig=2.14.1-4 \
+      libjpeg62-turbo=1:2.1.5-2 \
+      libopenjp2-7=2.5.0-2+deb12u3 \
+      fonts-dejavu-core=2.37-6 \
+      openjdk-17-jre-headless=17.0.20.1+1-1~deb12u1 \
+      poppler-utils=22.12.0-2+deb12u3 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=pdf-python-toolchain --chown=0:0 /opt/matchbase/pdf-venv /opt/matchbase/pdf-venv
+COPY --from=verapdf-toolchain --chown=0:0 /opt/verapdf /opt/verapdf
+COPY --chown=0:0 packages/reporting/pdf-toolchain/report.css packages/reporting/pdf-toolchain/a4.css packages/reporting/pdf-toolchain/letter.css packages/reporting/pdf-toolchain/fonts.conf packages/reporting/pdf-toolchain/template-attestation.json packages/reporting/pdf-toolchain/template-qualification-evidence.json /opt/matchbase/report-assets/
+RUN mkdir -p /opt/matchbase/fonts \
+    && cp /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf /opt/matchbase/fonts/DejaVuSans.ttf \
+    && echo 'abdc775b21b1bc470d50c97e790d276f2054b7504e56e5bd3e64f48d68582322  /opt/matchbase/fonts/DejaVuSans.ttf' | sha256sum -c - \
+    && XDG_CACHE_HOME=/tmp FONTCONFIG_FILE=/opt/matchbase/report-assets/fonts.conf fc-cache -f
+RUN mkdir -p /tmp/fontconfig && chmod 1777 /tmp/fontconfig
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV FONTCONFIG_FILE=/opt/matchbase/report-assets/fonts.conf
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV TZ=UTC
+ENV MATCHBASE_PDF_TOOLCHAIN_STATUS=conditional
+RUN /opt/matchbase/pdf-venv/bin/weasyprint --version | grep -Fx 'WeasyPrint version 69.0' \
+    && /opt/verapdf/verapdf --version 2>&1 | grep -Fx 'veraPDF 1.30.1'
 
 FROM ${NODE_IMAGE} AS toolchain
 ENV PNPM_HOME=/pnpm
@@ -52,7 +105,10 @@ ENV HOSTNAME=0.0.0.0
 ENV PORT=8080
 WORKDIR /app
 RUN groupadd --gid 10001 matchbase \
-    && useradd --uid 10001 --gid matchbase --shell /usr/sbin/nologin --no-create-home matchbase
+    && useradd --uid 10001 --gid matchbase --shell /usr/sbin/nologin --no-create-home matchbase \
+    && mkdir -p /work \
+    && chown 10001:10001 /work \
+    && chmod 0700 /work
 COPY --from=builder --chown=10001:10001 /workspace/apps/web/.next/standalone/apps/web/ ./
 COPY --from=worker-packager --chown=10001:10001 /worker-config/research-route-policy.v1.json ./config/slice3/research-route-policy.v1.json
 COPY --chmod=0555 deployment/gcp/runtime-entrypoint.sh /app/runtime-entrypoint.sh
@@ -62,7 +118,7 @@ EXPOSE 8080
 ENTRYPOINT ["/app/runtime-entrypoint.sh"]
 CMD ["node", "server.js"]
 
-FROM ${NODE_IMAGE} AS worker-runtime
+FROM pdf-runtime AS worker-runtime
 ENV NODE_ENV=production
 WORKDIR /app
 RUN groupadd --gid 10001 matchbase \
@@ -72,6 +128,8 @@ COPY --from=worker-packager --chown=10001:10001 /worker-config/research-route-po
 COPY --chmod=0555 deployment/gcp/runtime-entrypoint.sh /app/runtime-entrypoint.sh
 RUN node --input-type=module -e "await Promise.all([import('./dist/index.js'),import('@matchbase/ai-evidence'),import('@matchbase/contracts'),import('@matchbase/data'),import('@matchbase/security')])"
 ENV MATCHBASE_RUNTIME_KIND=worker
+ENV MATCHBASE_WEASYPRINT=/opt/matchbase/pdf-venv/bin/weasyprint
+ENV MATCHBASE_VERAPDF=/opt/verapdf/verapdf
 USER 10001:10001
 ENTRYPOINT ["/app/runtime-entrypoint.sh"]
 CMD ["node", "dist/combined-worker.js"]

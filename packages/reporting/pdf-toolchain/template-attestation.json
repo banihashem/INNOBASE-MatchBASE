@@ -1,0 +1,9 @@
+{
+  "schema_version": "matchbase-template-qualification.v1",
+  "template_sha256": "473c4a1383b3ae99965a62eed29defa195cd1236a521581efa9c7f31b8afac9f",
+  "font_sha256": "abdc775b21b1bc470d50c97e790d276f2054b7504e56e5bd3e64f48d68582322",
+  "toolchain_sha256": "af3810688779ce540e91eb42fc17304267c6384026d9eadc9d9e230957a083c0",
+  "qualified_checks": ["contrast_ratio"],
+  "evidence_sha256": "092fc9cfeb771e467728d7347b672ca66c669d58c9ea1b221a53aa1f4069c2f9",
+  "attestation_sha256": "6585ad8d7f8788480cdab833ba9a703dbc683e6dd86d25aeb809da7e508c1d98"
+}

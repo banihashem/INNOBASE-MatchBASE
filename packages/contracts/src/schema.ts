@@ -17,12 +17,14 @@ import {
 } from "./v1/consultant-projection.js";
 import {
   CONSULTANT_DOMAIN_PACK_ID,
+  CONSULTANT_AGRICULTURAL_DOMAIN_PACK_ID,
   CONSULTANT_DUE_DILIGENCE_CHECKS,
   CONSULTANT_RESULT_PROJECTION_V2_SCHEMA_VERSION,
   CONSULTANT_RESULT_PROJECTION_V2_VERSION,
   CONSULTANT_SOURCE_POLICY_ID,
   CONSULTANT_SOURCE_POLICY_CONTENT_SHA256,
   CONSULTANT_SOURCE_POLICY_VERSION,
+  CONSULTANT_AGRICULTURAL_RFQ_QUESTIONS,
   CONSULTANT_SYNTHETIC_RFQ_QUESTIONS,
 } from "./v2/consultant-projection.js";
 
@@ -1394,7 +1396,10 @@ export function generateContractSchemas(): JsonSchema {
       "audit_identity",
     ],
     {
-      state: string(["synthetic_planning_only"]),
+      state: string([
+        "synthetic_planning_only",
+        "governed_agricultural_planning_only",
+      ]),
       contact_state: string(["not_contacted"]),
       response_state: string(["not_collected"]),
       qualified_response_count: { type: "integer", enum: [0] },
@@ -1430,6 +1435,7 @@ export function generateContractSchemas(): JsonSchema {
       },
       stop_state: string([
         "awaiting_synthetic_checkpoint",
+        "awaiting_governed_agricultural_checkpoint",
         "exhausted_displayed_queue",
       ]),
       next_reserve_promotion: closedObject(
@@ -1457,7 +1463,10 @@ export function generateContractSchemas(): JsonSchema {
           "config_content_sha256",
         ],
         {
-          event_type: string(["SYNTHETIC_WAVE_SNAPSHOT_PROJECTED"]),
+          event_type: string([
+            "SYNTHETIC_WAVE_SNAPSHOT_PROJECTED",
+            "AGRICULTURAL_WAVE_SNAPSHOT_PROJECTED",
+          ]),
           event_id: { type: "string", pattern: "^[a-f0-9]{64}$" },
           actor_type: string(["agent"]),
           actor_id: string([
@@ -2019,6 +2028,44 @@ export function generateContractSchemas(): JsonSchema {
           synthetic: { type: "boolean", enum: [true] },
         },
       ),
+      domainPackV2: closedObject(
+        [
+          "schema_version",
+          "discriminator",
+          "registry_version",
+          "pack_version",
+          "category_id",
+          "category_label",
+          "macro_parameters",
+          "core_fields",
+          "domain_fields",
+          "synthetic",
+          "content_sha256",
+        ],
+        {
+          schema_version: string(["domain-pack.v2"]),
+          discriminator: string(["food_agricultural_commodity"]),
+          registry_version: string(),
+          pack_version: string(),
+          category_id: string(),
+          category_label: string(),
+          macro_parameters: {
+            type: "array",
+            prefixItems: [
+              string(["product_specification"]),
+              string(["supplier_producer_profile"]),
+              string(["trade_structure_commercial_execution"]),
+            ],
+            items: false,
+            minItems: 3,
+            maxItems: 3,
+          },
+          core_fields: { type: "array", items: domainField },
+          domain_fields: { type: "array", items: domainField },
+          synthetic: { type: "boolean", enum: [false] },
+          content_sha256: { type: "string", pattern: "^[a-f0-9]{64}$" },
+        },
+      ),
       domainPackResolution: {
         type: "object",
         additionalProperties: false,
@@ -2061,6 +2108,63 @@ export function generateContractSchemas(): JsonSchema {
               anyOf: [
                 { required: ["category_id"] },
                 { required: ["pack_version"] },
+                { required: ["activation_token"] },
+              ],
+            },
+          },
+        ],
+      },
+      domainPackResolutionV2: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "schema_version",
+          "discriminator",
+          "resolver_version",
+          "confidence",
+          "activation_state",
+          "synthetic",
+        ],
+        properties: {
+          schema_version: string(["domain-pack-resolution.v2"]),
+          discriminator: string(["food_agricultural_commodity"]),
+          resolver_version: string(),
+          category_id: string(),
+          confidence: { type: "number", minimum: 0, maximum: 1 },
+          activation_state: string([
+            "confirmed",
+            "confirmation_required",
+            "unresolved",
+          ]),
+          activation_token: string(),
+          pack_version: string(),
+          content_sha256: { type: "string", pattern: "^[a-f0-9]{64}$" },
+          synthetic: { type: "boolean", enum: [false] },
+        },
+        oneOf: [
+          {
+            required: [
+              "category_id",
+              "pack_version",
+              "content_sha256",
+              "activation_token",
+            ],
+            properties: { activation_state: { const: "confirmed" } },
+          },
+          {
+            required: ["category_id", "pack_version", "content_sha256"],
+            properties: {
+              activation_state: { const: "confirmation_required" },
+            },
+            not: { required: ["activation_token"] },
+          },
+          {
+            properties: { activation_state: { const: "unresolved" } },
+            not: {
+              anyOf: [
+                { required: ["category_id"] },
+                { required: ["pack_version"] },
+                { required: ["content_sha256"] },
                 { required: ["activation_token"] },
               ],
             },
@@ -2141,6 +2245,65 @@ export function generateContractSchemas(): JsonSchema {
               registry_version: string(),
               pack_version: string(),
               category_id: string(),
+            },
+          ),
+          fields: { type: "array", items: canonicalStandardFieldValue },
+          hard_constraints: { type: "array", items: standardHardConstraint },
+          exclusions: { type: "array", items: standardExclusion },
+          conditional_requirements: {
+            type: "array",
+            items: canonicalConditional,
+          },
+          contradictions: { type: "array", items: standardContradiction },
+          readiness: string(["ready", "partially_ready", "not_ready"]),
+          created_at: string(),
+        },
+      ),
+      structuredStandardRequestV2: closedObject(
+        [
+          "schema_version",
+          "request_id",
+          "canonical_version_id",
+          "version",
+          "source_language",
+          "canonical_language",
+          "domain_pack",
+          "fields",
+          "hard_constraints",
+          "exclusions",
+          "conditional_requirements",
+          "contradictions",
+          "readiness",
+          "created_at",
+        ],
+        {
+          schema_version: string(["structured-standard-request.v2"]),
+          request_id: string(),
+          canonical_version_id: string(),
+          version: { type: "integer", minimum: 1 },
+          source_language: string(),
+          canonical_language: string(["en"]),
+          domain_pack: closedObject(
+            [
+              "schema_version",
+              "registry_version",
+              "pack_version",
+              "category_id",
+              "pack_schema_version",
+              "content_sha256",
+              "resolver_version",
+            ],
+            {
+              schema_version: string(["domain-pack-binding.v2"]),
+              registry_version: string(),
+              pack_version: string(),
+              category_id: string(),
+              pack_schema_version: string(["domain-pack.v2"]),
+              content_sha256: {
+                type: "string",
+                pattern: "^[a-f0-9]{64}$",
+              },
+              resolver_version: string(),
             },
           ),
           fields: { type: "array", items: canonicalStandardFieldValue },
@@ -2370,8 +2533,14 @@ export function generateContractSchemas(): JsonSchema {
                 enum: [CONSULTANT_SOURCE_POLICY_VERSION],
               },
               content_sha256: string([CONSULTANT_SOURCE_POLICY_CONTENT_SHA256]),
-              domain_pack_id: string([CONSULTANT_DOMAIN_PACK_ID]),
-              mode: string(["agent_researched_synthetic_qualification"]),
+              domain_pack_id: string([
+                CONSULTANT_DOMAIN_PACK_ID,
+                CONSULTANT_AGRICULTURAL_DOMAIN_PACK_ID,
+              ]),
+              mode: string([
+                "agent_researched_synthetic_qualification",
+                "agent_researched_agricultural_qualification",
+              ]),
               production_state: string([
                 "blocked_pending_attributable_sme_validation",
               ]),
@@ -2389,33 +2558,41 @@ export function generateContractSchemas(): JsonSchema {
               prepared_by: string([
                 "matchbase_agent_research_and_implementation_team",
               ]),
-              mode: string(["agent_researched_synthetic_qualification"]),
+              mode: string([
+                "agent_researched_synthetic_qualification",
+                "agent_researched_agricultural_qualification",
+              ]),
               human_consultant_authorship: string(["not_claimed"]),
               production_sme_validation: string(["not_claimed"]),
             },
           ),
           rfq_questions: {
-            type: "array",
-            prefixItems: CONSULTANT_SYNTHETIC_RFQ_QUESTIONS.map(
-              ([questionId, requiredResponse], index) =>
-                closedObject(
-                  [
-                    "order",
-                    "question_id",
-                    "required_response",
-                    "response_state",
-                  ],
-                  {
-                    order: { type: "integer", enum: [index + 1] },
-                    question_id: string([questionId]),
-                    required_response: string([requiredResponse]),
-                    response_state: string(["not_collected"]),
-                  },
-                ),
-            ),
-            items: false,
-            minItems: CONSULTANT_SYNTHETIC_RFQ_QUESTIONS.length,
-            maxItems: CONSULTANT_SYNTHETIC_RFQ_QUESTIONS.length,
+            oneOf: [
+              CONSULTANT_SYNTHETIC_RFQ_QUESTIONS,
+              CONSULTANT_AGRICULTURAL_RFQ_QUESTIONS,
+            ].map((questions) => ({
+              type: "array",
+              prefixItems: questions.map(
+                ([questionId, requiredResponse], index) =>
+                  closedObject(
+                    [
+                      "order",
+                      "question_id",
+                      "required_response",
+                      "response_state",
+                    ],
+                    {
+                      order: { type: "integer", enum: [index + 1] },
+                      question_id: string([questionId]),
+                      required_response: string([requiredResponse]),
+                      response_state: string(["not_collected"]),
+                    },
+                  ),
+              ),
+              items: false,
+              minItems: questions.length,
+              maxItems: questions.length,
+            })),
           },
           wave_recommendations: {
             type: "array",
@@ -2426,6 +2603,7 @@ export function generateContractSchemas(): JsonSchema {
                   wave_id: string(["RFQ_WAVE_INITIAL"]),
                   action: string([
                     "prepare_synthetic_rfq",
+                    "prepare_governed_agricultural_rfq",
                     "no_eligible_candidates",
                   ]),
                   selection_rule: string([
@@ -2498,7 +2676,10 @@ export function generateContractSchemas(): JsonSchema {
               "notices",
             ],
             {
-              qualification_scope: string(["synthetic_only"]),
+              qualification_scope: string([
+                "synthetic_only",
+                "governed_agricultural_qualification",
+              ]),
               human_consultant_authorship: string(["not_claimed"]),
               production_sme_validation: string(["not_claimed"]),
               production_release: string(["blocked"]),
@@ -2551,6 +2732,39 @@ export function generateContractSchemas(): JsonSchema {
         {
           schema_version: string(["standard-request-detail.v1"]),
           canonical: { $ref: "#/schemas/structuredStandardRequest" },
+          version_history: {
+            type: "array",
+            items: closedObject(
+              ["canonical_version_id", "version", "readiness", "created_at"],
+              {
+                canonical_version_id: string(),
+                version: { type: "integer", minimum: 1 },
+                readiness: string(["ready", "partially_ready", "not_ready"]),
+                created_at: string(),
+              },
+            ),
+          },
+          links: closedObject(["request", "versions", "runs"], {
+            request: string(),
+            versions: string(),
+            runs: string(),
+          }),
+          synthetic_warning: string(),
+          projection_version: { type: "integer", enum: [4] },
+        },
+      ),
+      standardRequestDetailV2: closedObject(
+        [
+          "schema_version",
+          "canonical",
+          "version_history",
+          "links",
+          "synthetic_warning",
+          "projection_version",
+        ],
+        {
+          schema_version: string(["standard-request-detail.v2"]),
+          canonical: { $ref: "#/schemas/structuredStandardRequestV2" },
           version_history: {
             type: "array",
             items: closedObject(

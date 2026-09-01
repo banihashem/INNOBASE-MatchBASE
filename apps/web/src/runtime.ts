@@ -15,6 +15,7 @@ import {
   ArtifactDownloadApplication,
   API_MINOR_VERSION,
   ConsultantResultApplication,
+  type ConsultantPdfArtifactApplication,
   MatchBaseApplication,
   StandardWorkspaceApplication,
   UserProfileApplication,
@@ -88,6 +89,7 @@ interface RuntimeOptions {
   artifactDownloadApplication?: ArtifactDownloadApplication;
   artifactObjectReader?: ArtifactObjectReader;
   consultantResultApplication?: ConsultantResultApplication;
+  consultantPdfArtifactApplication?: ConsultantPdfArtifactApplication;
   userProfileApplication?: UserProfileApplication;
   googleProvider?: GoogleOidcProvider;
 }
@@ -1036,6 +1038,10 @@ export function createWebRuntime(
         pathname: path,
         context: session.requestContext,
         application: consultantResultApplication,
+        idempotencyKey,
+        ...(options.consultantPdfArtifactApplication
+          ? { artifactApplication: options.consultantPdfArtifactApplication }
+          : {}),
       });
       if (consultant) {
         json(response, consultant.status, consultant.body, {

@@ -13,9 +13,9 @@ import { UserProfile } from "../profile/UserProfile";
 import {
   userFacingSessionName,
   type StandardResultProjectionV1,
-  type StandardRequestDetailV1,
+  type StandardRequestDetail,
   type StandardScreen,
-  type StructuredStandardRequestV1,
+  type StandardStructuredRequest,
   type WorkspaceSession,
 } from "./types";
 
@@ -30,8 +30,9 @@ export function StandardWorkspace({
   const adminProductMode = initialSession.tier === "admin";
   const qualifiedLive = session.research_mode.live_qualified;
   const [screen, setScreen] = useState<StandardScreen>("requests");
-  const [canonical, setCanonical] =
-    useState<StructuredStandardRequestV1 | null>(null);
+  const [canonical, setCanonical] = useState<StandardStructuredRequest | null>(
+    null,
+  );
   const [runId, setRunId] = useState<string | null>(null);
   const [result, setResult] = useState<StandardResultProjectionV1 | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
@@ -58,7 +59,7 @@ export function StandardWorkspace({
   async function reopenRequest(requestId: string) {
     setWorkspaceError(null);
     try {
-      const response = await workspaceJson<StandardRequestDetailV1>(
+      const response = await workspaceJson<StandardRequestDetail>(
         `/api/v1/requests/${encodeURIComponent(requestId)}`,
       );
       setCanonical(response.body.canonical);

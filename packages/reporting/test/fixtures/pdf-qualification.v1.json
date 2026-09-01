@@ -1,0 +1,35 @@
+{
+  "schema_version": "matchbase-pdf-qualification-fixtures.v1",
+  "fixtures": [
+    {
+      "id": "ranked",
+      "title": "Ranked supplier result",
+      "heading": "Ranked candidates",
+      "paragraph": "Three synthetic candidates are presented in score order with citations and explicit decision status."
+    },
+    {
+      "id": "scarcity",
+      "title": "Scarcity result",
+      "heading": "Scarcity disclosure",
+      "paragraph": "Only two synthetic eligible candidates survived. The result discloses scarcity and does not imply that more candidates were verified."
+    },
+    {
+      "id": "zero-match",
+      "title": "Zero-match result",
+      "heading": "No eligible candidate",
+      "paragraph": "No candidate met every mandatory constraint. Exclusions and safe relaxation options are retained."
+    },
+    {
+      "id": "contradiction",
+      "title": "Contradiction result",
+      "heading": "Governing contradiction",
+      "paragraph": "A hard-constraint contradiction was detected and is explicitly declared before any sourcing recommendation."
+    },
+    {
+      "id": "malicious-long-content",
+      "title": "Bounded adversarial content",
+      "heading": "Escaped and bounded input",
+      "paragraph": "The literal input is escaped: <script>alert('blocked')</script>. This synthetic paragraph is repeated to exercise pagination without remote assets, absolute positioning, clipping, transforms, floats, or negative margins."
+    }
+  ]
+}

@@ -318,7 +318,7 @@ The repository-root `Dockerfile` pins Node 24.14.0 by OCI index digest, pins pnp
 runtime, and runs as UID/GID 10001. Build from the repository root:
 
 ```powershell
-$routePolicyPath = 'config/slice3/research-route-policy.staging.v1.json'
+$routePolicyPath = 'config/slice3/research-route-policy.staging.v3.json'
 $routePolicySha256 = (Get-FileHash -LiteralPath $routePolicyPath -Algorithm SHA256).Hash.ToLowerInvariant()
 docker build --pull --target web-runtime `
   --build-arg DEPLOYMENT_ENVIRONMENT=staging `

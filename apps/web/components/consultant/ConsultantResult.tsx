@@ -83,6 +83,9 @@ export function ConsultantResultView({
     consultant.schema_version === "consultant-result-projection.v2"
       ? consultant
       : null;
+  const agricultural =
+    expanded?.source_policy.domain_pack_id ===
+    "MATCHBASE-FOOD-AGRICULTURAL-COMMODITIES-V1";
   return (
     <StandardResult
       result={consultant}
@@ -148,9 +151,11 @@ export function ConsultantResultView({
             <>
               <div className="error-summary" role="status">
                 <strong>Production release remains blocked.</strong> This is
-                agent-researched synthetic qualification content. Human
-                Consultant authorship and production SME validation are not
-                claimed.
+                {agricultural
+                  ? " agent-researched agricultural qualification content. "
+                  : " agent-researched synthetic qualification content. "}
+                Human Consultant authorship and production SME validation are
+                not claimed.
               </div>
               <section aria-labelledby="consultant-source-policy-heading">
                 <h2 id="consultant-source-policy-heading">Source policy</h2>
@@ -171,7 +176,9 @@ export function ConsultantResultView({
               </section>
               <section aria-labelledby="consultant-wave-heading">
                 <h2 id="consultant-wave-heading">
-                  Synthetic RFQ wave recommendation
+                  {agricultural
+                    ? "Agricultural RFQ wave recommendation"
+                    : "Synthetic RFQ wave recommendation"}
                 </h2>
                 <p>Wave 1 action: {expanded.wave_recommendations[0].action}</p>
                 <ol>
@@ -203,7 +210,9 @@ export function ConsultantResultView({
               </section>
               <section aria-labelledby="consultant-rfq-state-heading">
                 <h2 id="consultant-rfq-state-heading">
-                  Synthetic RFQ execution snapshot
+                  {agricultural
+                    ? "Agricultural RFQ execution snapshot"
+                    : "Synthetic RFQ execution snapshot"}
                 </h2>
                 <p>
                   Planning only: no supplier was contacted and no response was
@@ -269,7 +278,8 @@ export function ConsultantResultView({
               </details>
               <details>
                 <summary>
-                  Synthetic RFQ question set ({expanded.rfq_questions.length})
+                  {agricultural ? "Agricultural" : "Synthetic"} RFQ question set
+                  ({expanded.rfq_questions.length})
                 </summary>
                 <ol>
                   {expanded.rfq_questions.map((question) => (
@@ -362,7 +372,10 @@ export function ConsultantResultView({
                     ))}
                   </ul>
                 ) : (
-                  <p>No evidence was excluded in this synthetic result.</p>
+                  <p>
+                    No evidence was excluded in this{" "}
+                    {agricultural ? "agricultural" : "synthetic"} result.
+                  </p>
                 )}
               </details>
               <section aria-labelledby="consultant-limitations-heading">

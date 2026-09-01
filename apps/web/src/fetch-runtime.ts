@@ -14,6 +14,8 @@ import {
   ArtifactDownloadApplication,
   ApplicationFault,
   ConsultantResultApplication,
+  ConsultantPdfArtifactApplication,
+  createEnvironmentConsultantPdfIdentity,
   MatchBaseApplication,
   StandardWorkspaceApplication,
   UserProfileApplication,
@@ -89,6 +91,7 @@ interface Services {
   adminUnprojectedApplication: AdminUnprojectedApplication;
   artifactDownloadApplication: ArtifactDownloadApplication;
   consultantResultApplication: ConsultantResultApplication;
+  consultantPdfArtifactApplication?: ConsultantPdfArtifactApplication;
   userProfileApplication: UserProfileApplication;
   googleProvider?: ReturnType<typeof createGoogleOidcAdapter>;
   googleRiscVerifier?: ReturnType<typeof createGoogleRiscVerifier>;
@@ -193,6 +196,9 @@ function services(): Services {
   const config = loadWebConfig();
   const pool = createPool({ connectionString: config.databaseUrl, max: 20 });
   const canonicalizer = createRuntimeCanonicalizer(config);
+  const consultantPdfPipeline = createEnvironmentConsultantPdfIdentity(
+    process.env,
+  );
   const googleProvider =
     config.googleClientId &&
     config.googleClientSecret &&
@@ -261,6 +267,12 @@ function services(): Services {
       artifactObjectReader,
     ),
     consultantResultApplication: new ConsultantResultApplication(pool),
+    ...(consultantPdfPipeline
+      ? {
+          consultantPdfArtifactApplication:
+            new ConsultantPdfArtifactApplication(pool, consultantPdfPipeline),
+        }
+      : {}),
     userProfileApplication: new UserProfileApplication(pool),
     ...(googleProvider ? { googleProvider } : {}),
     ...(googleRiscVerifier ? { googleRiscVerifier } : {}),
@@ -1336,6 +1348,10 @@ export async function handleRoute(request: Request): Promise<Response> {
       pathname: path,
       context: session.requestContext,
       application: current.consultantResultApplication,
+      idempotencyKey,
+      ...(current.consultantPdfArtifactApplication
+        ? { artifactApplication: current.consultantPdfArtifactApplication }
+        : {}),
     });
     if (consultant) {
       return json(

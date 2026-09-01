@@ -1427,6 +1427,201 @@
         }
       }
     },
+    "domainPackV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "discriminator",
+        "registry_version",
+        "pack_version",
+        "category_id",
+        "category_label",
+        "macro_parameters",
+        "core_fields",
+        "domain_fields",
+        "synthetic",
+        "content_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": ["domain-pack.v2"]
+        },
+        "discriminator": {
+          "type": "string",
+          "enum": ["food_agricultural_commodity"]
+        },
+        "registry_version": {
+          "type": "string"
+        },
+        "pack_version": {
+          "type": "string"
+        },
+        "category_id": {
+          "type": "string"
+        },
+        "category_label": {
+          "type": "string"
+        },
+        "macro_parameters": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "enum": ["product_specification"]
+            },
+            {
+              "type": "string",
+              "enum": ["supplier_producer_profile"]
+            },
+            {
+              "type": "string",
+              "enum": ["trade_structure_commercial_execution"]
+            }
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "core_fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "field_id",
+              "macro_parameter",
+              "label",
+              "description",
+              "kind",
+              "requirement",
+              "allowed_units",
+              "allowed_values"
+            ],
+            "properties": {
+              "field_id": {
+                "type": "string"
+              },
+              "macro_parameter": {
+                "type": "string",
+                "enum": [
+                  "product_specification",
+                  "supplier_producer_profile",
+                  "trade_structure_commercial_execution"
+                ]
+              },
+              "label": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "integer",
+                  "decimal",
+                  "boolean",
+                  "single_select",
+                  "multi_select",
+                  "quantity"
+                ]
+              },
+              "requirement": {
+                "type": "string",
+                "enum": ["required", "conditional", "optional"]
+              },
+              "allowed_units": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "allowed_values": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "domain_fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "field_id",
+              "macro_parameter",
+              "label",
+              "description",
+              "kind",
+              "requirement",
+              "allowed_units",
+              "allowed_values"
+            ],
+            "properties": {
+              "field_id": {
+                "type": "string"
+              },
+              "macro_parameter": {
+                "type": "string",
+                "enum": [
+                  "product_specification",
+                  "supplier_producer_profile",
+                  "trade_structure_commercial_execution"
+                ]
+              },
+              "label": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "integer",
+                  "decimal",
+                  "boolean",
+                  "single_select",
+                  "multi_select",
+                  "quantity"
+                ]
+              },
+              "requirement": {
+                "type": "string",
+                "enum": ["required", "conditional", "optional"]
+              },
+              "allowed_units": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "allowed_values": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "synthetic": {
+          "type": "boolean",
+          "enum": [false]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
     "domainPackResolution": {
       "type": "object",
       "additionalProperties": false,
@@ -1501,6 +1696,106 @@
               },
               {
                 "required": ["pack_version"]
+              },
+              {
+                "required": ["activation_token"]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "domainPackResolutionV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "discriminator",
+        "resolver_version",
+        "confidence",
+        "activation_state",
+        "synthetic"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": ["domain-pack-resolution.v2"]
+        },
+        "discriminator": {
+          "type": "string",
+          "enum": ["food_agricultural_commodity"]
+        },
+        "resolver_version": {
+          "type": "string"
+        },
+        "category_id": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "activation_state": {
+          "type": "string",
+          "enum": ["confirmed", "confirmation_required", "unresolved"]
+        },
+        "activation_token": {
+          "type": "string"
+        },
+        "pack_version": {
+          "type": "string"
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "synthetic": {
+          "type": "boolean",
+          "enum": [false]
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "category_id",
+            "pack_version",
+            "content_sha256",
+            "activation_token"
+          ],
+          "properties": {
+            "activation_state": {
+              "const": "confirmed"
+            }
+          }
+        },
+        {
+          "required": ["category_id", "pack_version", "content_sha256"],
+          "properties": {
+            "activation_state": {
+              "const": "confirmation_required"
+            }
+          },
+          "not": {
+            "required": ["activation_token"]
+          }
+        },
+        {
+          "properties": {
+            "activation_state": {
+              "const": "unresolved"
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": ["category_id"]
+              },
+              {
+                "required": ["pack_version"]
+              },
+              {
+                "required": ["content_sha256"]
               },
               {
                 "required": ["activation_token"]
@@ -1983,6 +2278,597 @@
               "type": "string"
             },
             "category_id": {
+              "type": "string"
+            }
+          }
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "field_id",
+              "macro_parameter",
+              "typed_value",
+              "translated",
+              "confidence"
+            ],
+            "properties": {
+              "field_id": {
+                "type": "string"
+              },
+              "macro_parameter": {
+                "type": "string",
+                "enum": [
+                  "product_specification",
+                  "supplier_producer_profile",
+                  "trade_structure_commercial_execution"
+                ]
+              },
+              "typed_value": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["value_state"],
+                "properties": {
+                  "value_state": {
+                    "type": "string",
+                    "enum": [
+                      "provided",
+                      "explicitly_unknown",
+                      "empty",
+                      "not_applicable",
+                      "not_asked"
+                    ]
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "raw_expression": {
+                    "type": "string"
+                  }
+                },
+                "oneOf": [
+                  {
+                    "required": ["value_state", "value"],
+                    "properties": {
+                      "value_state": {
+                        "const": "provided"
+                      }
+                    }
+                  },
+                  {
+                    "required": ["value_state"],
+                    "properties": {
+                      "value_state": {
+                        "const": "explicitly_unknown"
+                      }
+                    },
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": ["value"]
+                        },
+                        {
+                          "required": ["unit"]
+                        },
+                        {
+                          "required": ["raw_expression"]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "required": ["value_state"],
+                    "properties": {
+                      "value_state": {
+                        "const": "empty"
+                      }
+                    },
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": ["value"]
+                        },
+                        {
+                          "required": ["unit"]
+                        },
+                        {
+                          "required": ["raw_expression"]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "required": ["value_state"],
+                    "properties": {
+                      "value_state": {
+                        "const": "not_applicable"
+                      }
+                    },
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": ["value"]
+                        },
+                        {
+                          "required": ["unit"]
+                        },
+                        {
+                          "required": ["raw_expression"]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "required": ["value_state"],
+                    "properties": {
+                      "value_state": {
+                        "const": "not_asked"
+                      }
+                    },
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": ["value"]
+                        },
+                        {
+                          "required": ["unit"]
+                        },
+                        {
+                          "required": ["raw_expression"]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              "translated": {
+                "type": "boolean"
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        },
+        "hard_constraints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "constraint_id",
+              "field_id",
+              "operator",
+              "target",
+              "relaxability"
+            ],
+            "properties": {
+              "constraint_id": {
+                "type": "string"
+              },
+              "field_id": {
+                "type": "string"
+              },
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "equals",
+                  "not_equals",
+                  "minimum",
+                  "maximum",
+                  "includes",
+                  "excludes"
+                ]
+              },
+              "target": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["value_state"],
+                "properties": {
+                  "value_state": {
+                    "type": "string",
+                    "enum": [
+                      "provided",
+                      "explicitly_unknown",
+                      "empty",
+                      "not_applicable",
+                      "not_asked"
+                    ]
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "raw_expression": {
+                    "type": "string"
+                  }
+                },
+                "oneOf": [
+                  {
+                    "required": ["value_state", "value"],
+                    "properties": {
+                      "value_state": {
+                        "const": "provided"
+                      }
+                    }
+                  },
+                  {
+                    "required": ["value_state"],
+                    "properties": {
+                      "value_state": {
+                        "const": "explicitly_unknown"
+                      }
+                    },
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": ["value"]
+                        },
+                        {
+                          "required": ["unit"]
+                        },
+                        {
+                          "required": ["raw_expression"]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "required": ["value_state"],
+                    "properties": {
+                      "value_state": {
+                        "const": "empty"
+                      }
+                    },
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": ["value"]
+                        },
+                        {
+                          "required": ["unit"]
+                        },
+                        {
+                          "required": ["raw_expression"]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "required": ["value_state"],
+                    "properties": {
+                      "value_state": {
+                        "const": "not_applicable"
+                      }
+                    },
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": ["value"]
+                        },
+                        {
+                          "required": ["unit"]
+                        },
+                        {
+                          "required": ["raw_expression"]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "required": ["value_state"],
+                    "properties": {
+                      "value_state": {
+                        "const": "not_asked"
+                      }
+                    },
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": ["value"]
+                        },
+                        {
+                          "required": ["unit"]
+                        },
+                        {
+                          "required": ["raw_expression"]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              "relaxability": {
+                "type": "string",
+                "enum": ["relaxable", "non_relaxable"]
+              },
+              "tolerance": {
+                "type": "string"
+              },
+              "direction": {
+                "type": "string",
+                "enum": ["higher_is_acceptable", "lower_is_acceptable", "exact"]
+              }
+            },
+            "oneOf": [
+              {
+                "required": ["tolerance", "direction"],
+                "properties": {
+                  "relaxability": {
+                    "const": "relaxable"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "relaxability": {
+                    "const": "non_relaxable"
+                  }
+                },
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": ["tolerance"]
+                    },
+                    {
+                      "required": ["direction"]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "exclusions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["exclusion_id", "field_id", "canonical_english_value"],
+            "properties": {
+              "exclusion_id": {
+                "type": "string"
+              },
+              "field_id": {
+                "type": "string"
+              },
+              "canonical_english_value": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "conditional_requirements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "requirement_id",
+              "canonical_english_condition",
+              "canonical_english_result",
+              "requirement_level",
+              "source_validation"
+            ],
+            "properties": {
+              "requirement_id": {
+                "type": "string"
+              },
+              "canonical_english_condition": {
+                "type": "string"
+              },
+              "canonical_english_result": {
+                "type": "string"
+              },
+              "requirement_level": {
+                "type": "string",
+                "enum": ["mandatory", "preferred"]
+              },
+              "source_validation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "algorithm",
+                  "key_id",
+                  "source_digest",
+                  "source_start_byte",
+                  "source_end_byte",
+                  "byte_length"
+                ],
+                "properties": {
+                  "algorithm": {
+                    "type": "string",
+                    "enum": ["HMAC-SHA-256"]
+                  },
+                  "key_id": {
+                    "type": "string"
+                  },
+                  "source_digest": {
+                    "type": "string"
+                  },
+                  "source_start_byte": {
+                    "type": "integer"
+                  },
+                  "source_end_byte": {
+                    "type": "integer"
+                  },
+                  "byte_length": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "contradictions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "contradiction_id",
+              "contradiction_class",
+              "alternatives",
+              "resolution_state"
+            ],
+            "properties": {
+              "contradiction_id": {
+                "type": "string"
+              },
+              "contradiction_class": {
+                "type": "string",
+                "enum": ["hard_constraint", "conditional", "field_value"]
+              },
+              "alternatives": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "alternative_id",
+                    "canonical_english_value",
+                    "field_ids"
+                  ],
+                  "properties": {
+                    "alternative_id": {
+                      "type": "string"
+                    },
+                    "canonical_english_value": {
+                      "type": "string"
+                    },
+                    "field_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "resolution_state": {
+                "type": "string",
+                "enum": ["unresolved", "resolved_by_owner"]
+              },
+              "selected_alternative_id": {
+                "type": "string"
+              }
+            },
+            "oneOf": [
+              {
+                "properties": {
+                  "resolution_state": {
+                    "const": "unresolved"
+                  }
+                },
+                "not": {
+                  "required": ["selected_alternative_id"]
+                }
+              },
+              {
+                "required": ["selected_alternative_id"],
+                "properties": {
+                  "resolution_state": {
+                    "const": "resolved_by_owner"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "readiness": {
+          "type": "string",
+          "enum": ["ready", "partially_ready", "not_ready"]
+        },
+        "created_at": {
+          "type": "string"
+        }
+      }
+    },
+    "structuredStandardRequestV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request_id",
+        "canonical_version_id",
+        "version",
+        "source_language",
+        "canonical_language",
+        "domain_pack",
+        "fields",
+        "hard_constraints",
+        "exclusions",
+        "conditional_requirements",
+        "contradictions",
+        "readiness",
+        "created_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": ["structured-standard-request.v2"]
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "canonical_version_id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_language": {
+          "type": "string"
+        },
+        "canonical_language": {
+          "type": "string",
+          "enum": ["en"]
+        },
+        "domain_pack": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version",
+            "registry_version",
+            "pack_version",
+            "category_id",
+            "pack_schema_version",
+            "content_sha256",
+            "resolver_version"
+          ],
+          "properties": {
+            "schema_version": {
+              "type": "string",
+              "enum": ["domain-pack-binding.v2"]
+            },
+            "registry_version": {
+              "type": "string"
+            },
+            "pack_version": {
+              "type": "string"
+            },
+            "category_id": {
+              "type": "string"
+            },
+            "pack_schema_version": {
+              "type": "string",
+              "enum": ["domain-pack.v2"]
+            },
+            "content_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "resolver_version": {
               "type": "string"
             }
           }
@@ -9362,11 +10248,17 @@
             },
             "domain_pack_id": {
               "type": "string",
-              "enum": ["OD-TIER-056-MACHINED-ALLOY-DOMAIN-PACK-V1"]
+              "enum": [
+                "OD-TIER-056-MACHINED-ALLOY-DOMAIN-PACK-V1",
+                "MATCHBASE-FOOD-AGRICULTURAL-COMMODITIES-V1"
+              ]
             },
             "mode": {
               "type": "string",
-              "enum": ["agent_researched_synthetic_qualification"]
+              "enum": [
+                "agent_researched_synthetic_qualification",
+                "agent_researched_agricultural_qualification"
+              ]
             },
             "production_state": {
               "type": "string",
@@ -9430,7 +10322,10 @@
             },
             "mode": {
               "type": "string",
-              "enum": ["agent_researched_synthetic_qualification"]
+              "enum": [
+                "agent_researched_synthetic_qualification",
+                "agent_researched_agricultural_qualification"
+              ]
             },
             "human_consultant_authorship": {
               "type": "string",
@@ -9443,612 +10338,1224 @@
           }
         },
         "rfq_questions": {
-          "type": "array",
-          "prefixItems": [
+          "oneOf": [
             {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [1]
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [1]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-LEGAL-IDENTITY"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Legal name, trading names, legal form, registration number, jurisdiction, registered address, operating address, and official website."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
                 },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-LEGAL-IDENTITY"]
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [2]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-AUTHORIZED-SIGNATORY"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Representative name, title, business email, authority basis, signature, and signature date."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
                 },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Legal name, trading names, legal form, registration number, jurisdiction, registered address, operating address, and official website."
-                  ]
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [3]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-OWNERSHIP-CONTROL"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Direct and indirect owners, controllers, parent entities, and beneficial owners to the extent lawfully available."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
                 },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [4]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-PRODUCT-CONFORMITY"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Item-by-item confirmation against the required specification, drawing, material, standard, and functional guarantee."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [5]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-DEVIATIONS"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Complete list of reservations, substitutions, exceptions, and unsupported requirements; NONE is required when no deviation exists."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [6]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-CERTIFICATIONS"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Certificate or approval name, issuer, identifier, scope, issue date, expiry date, and verification URL or bounded document reference."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [7]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-FACILITIES-SUBCONTRACTORS"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Manufacturing sites, country of origin, critical subcontractors, and the responsibility assigned to each party."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [8]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-CAPACITY-COMMITMENTS"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Current available capacity, total capacity, existing commitments, surge capacity, and capacity measurement period."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [9]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-MOQ-LEAD-DELIVERY"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "MOQ, production lead time, delivery schedule, phased quantities, final destination, and proposed Incoterm."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [10]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-QUALITY-TEST-INSPECTION"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Quality controls, required tests, test frequency, inspection location, method, agency, and acceptance records."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [11]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-WARRANTY-RECALL"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Warranty scope and period, defect handling, traceability, recall process, and corrective-action process."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [12]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-COMMERCIALS"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Unit price, total price, currency, taxes, freight, Incoterm, payment terms, and lifecycle or recurring costs where applicable."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [13]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-VALIDITY-SECURITY"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Quote-validity date and performance security when required by the sourcing configuration."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [14]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-CONFLICT-OF-INTEREST"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Actual, potential, or perceived conflicts; NONE is required when none are disclosed."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [15]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-SANCTIONS-DECLARATION"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Supplier declaration covering the entity, owners, controllers, directors, subcontractors, and manufacturers."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [16]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-DEBARMENT-DECLARATION"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Current or historical suspension, exclusion, debarment, and conditional non-debarment."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [17]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-COMMISSIONS-FEES"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Recipient, address, reason, and amount for commissions, gratuities, or fees; NONE is required when none exist."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [18]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-ANTI-CORRUPTION"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Controls preventing fraud, bribery, collusion, coercion, obstruction, and unauthorized facilitation payments."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [19]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-RBC-DUE-DILIGENCE"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Human-rights, labor, environmental, bribery, consumer, grievance, tracking, and remediation controls in the supply chain."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [20]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-EVIDENCE-INDEX"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Evidence ID, question ID, source type, issuer, date, URL or document reference, and confidentiality classification."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
                 }
-              }
+              ],
+              "items": false,
+              "minItems": 20,
+              "maxItems": 20
             },
             {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [2]
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [1]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-LEGAL-IDENTITY"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Legal entity, exporter identity, registration, operating address, and official website."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
                 },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-AUTHORIZED-SIGNATORY"]
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [2]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-AUTHORIZED-SIGNATORY"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Authorized representative, business contact, authority basis, signature, and signature date."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
                 },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Representative name, title, business email, authority basis, signature, and signature date."
-                  ]
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [3]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-OWNERSHIP-CONTROL"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Direct and indirect ownership and control information lawfully available for diligence."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
                 },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [4]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-PRODUCT-CONFORMITY"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Requested pistachio variety, Iranian origin, grade, size, crop year, moisture, defect limits, and lot traceability."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [5]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-DEVIATIONS"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Every product, origin, route, stock, packing, or delivery deviation; NONE when no deviation exists."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [6]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-CERTIFICATIONS"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Food-safety, phytosanitary, certificate-of-origin, laboratory, and market-access evidence with issuer, scope, dates, and identifiers."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [7]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-FACILITIES-SUBCONTRACTORS"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Processing, sorting, packing, storage, and export facilities plus each intermediary and subcontractor."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [8]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-CAPACITY-COMMITMENTS"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Dated current stock in containers and tonnes, reserved commitments, replenishment date, and evidence for at least one available container."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [9]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-MOQ-LEAD-DELIVERY"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Three-container availability, container type and net weight, Dubai routing, African destination, loading window, Incoterm, and delivery schedule."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [10]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-QUALITY-TEST-INSPECTION"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Sampling plan, aflatoxin and residue testing, inspection method, laboratory identity, acceptance limits, and records."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [11]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-WARRANTY-RECALL"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Batch traceability, contamination response, rejection, recall, replacement, and corrective-action process."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [12]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-COMMERCIALS"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Price basis, currency, packing, freight to and via Dubai, taxes, insurance, payment terms, and validity."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [13]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-VALIDITY-SECURITY"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Offer validity, stock-hold expiry, performance security, and documentary conditions."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [14]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-CONFLICT-OF-INTEREST"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Actual, potential, or perceived conflicts; NONE when none are disclosed."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [15]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-SANCTIONS-DECLARATION"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Sanctions declaration for entity, owners, controllers, directors, processors, freight parties, and exporters."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [16]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-DEBARMENT-DECLARATION"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Current or historical suspension, exclusion, debarment, import restriction, or licence restriction."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [17]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-COMMISSIONS-FEES"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Recipient, address, reason, and amount for commissions, gratuities, or fees; NONE when none exist."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [18]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-ANTI-CORRUPTION"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Controls preventing fraud, bribery, collusion, coercion, obstruction, and facilitation payments."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [19]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-RBC-DUE-DILIGENCE"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Human-rights, labor, environmental, water, pesticide, grievance, tracking, and remediation controls in the supply chain."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "order",
+                    "question_id",
+                    "required_response",
+                    "response_state"
+                  ],
+                  "properties": {
+                    "order": {
+                      "type": "integer",
+                      "enum": [20]
+                    },
+                    "question_id": {
+                      "type": "string",
+                      "enum": ["RFQ-EVIDENCE-INDEX"]
+                    },
+                    "required_response": {
+                      "type": "string",
+                      "enum": [
+                        "Evidence ID, question ID, issuer, evidence date, retrieval URL or document reference, lot relevance, and confidentiality classification."
+                      ]
+                    },
+                    "response_state": {
+                      "type": "string",
+                      "enum": ["not_collected"]
+                    }
+                  }
                 }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
               ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [3]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-OWNERSHIP-CONTROL"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Direct and indirect owners, controllers, parent entities, and beneficial owners to the extent lawfully available."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [4]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-PRODUCT-CONFORMITY"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Item-by-item confirmation against the required specification, drawing, material, standard, and functional guarantee."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [5]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-DEVIATIONS"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Complete list of reservations, substitutions, exceptions, and unsupported requirements; NONE is required when no deviation exists."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [6]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-CERTIFICATIONS"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Certificate or approval name, issuer, identifier, scope, issue date, expiry date, and verification URL or bounded document reference."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [7]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-FACILITIES-SUBCONTRACTORS"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Manufacturing sites, country of origin, critical subcontractors, and the responsibility assigned to each party."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [8]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-CAPACITY-COMMITMENTS"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Current available capacity, total capacity, existing commitments, surge capacity, and capacity measurement period."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [9]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-MOQ-LEAD-DELIVERY"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "MOQ, production lead time, delivery schedule, phased quantities, final destination, and proposed Incoterm."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [10]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-QUALITY-TEST-INSPECTION"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Quality controls, required tests, test frequency, inspection location, method, agency, and acceptance records."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [11]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-WARRANTY-RECALL"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Warranty scope and period, defect handling, traceability, recall process, and corrective-action process."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [12]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-COMMERCIALS"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Unit price, total price, currency, taxes, freight, Incoterm, payment terms, and lifecycle or recurring costs where applicable."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [13]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-VALIDITY-SECURITY"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Quote-validity date and performance security when required by the sourcing configuration."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [14]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-CONFLICT-OF-INTEREST"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Actual, potential, or perceived conflicts; NONE is required when none are disclosed."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [15]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-SANCTIONS-DECLARATION"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Supplier declaration covering the entity, owners, controllers, directors, subcontractors, and manufacturers."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [16]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-DEBARMENT-DECLARATION"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Current or historical suspension, exclusion, debarment, and conditional non-debarment."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [17]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-COMMISSIONS-FEES"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Recipient, address, reason, and amount for commissions, gratuities, or fees; NONE is required when none exist."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [18]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-ANTI-CORRUPTION"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Controls preventing fraud, bribery, collusion, coercion, obstruction, and unauthorized facilitation payments."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [19]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-RBC-DUE-DILIGENCE"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Human-rights, labor, environmental, bribery, consumer, grievance, tracking, and remediation controls in the supply chain."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "order",
-                "question_id",
-                "required_response",
-                "response_state"
-              ],
-              "properties": {
-                "order": {
-                  "type": "integer",
-                  "enum": [20]
-                },
-                "question_id": {
-                  "type": "string",
-                  "enum": ["RFQ-EVIDENCE-INDEX"]
-                },
-                "required_response": {
-                  "type": "string",
-                  "enum": [
-                    "Evidence ID, question ID, source type, issuer, date, URL or document reference, and confidentiality classification."
-                  ]
-                },
-                "response_state": {
-                  "type": "string",
-                  "enum": ["not_collected"]
-                }
-              }
+              "items": false,
+              "minItems": 20,
+              "maxItems": 20
             }
-          ],
-          "items": false,
-          "minItems": 20,
-          "maxItems": 20
+          ]
         },
         "wave_recommendations": {
           "type": "array",
@@ -10064,7 +11571,11 @@
                 },
                 "action": {
                   "type": "string",
-                  "enum": ["prepare_synthetic_rfq", "no_eligible_candidates"]
+                  "enum": [
+                    "prepare_synthetic_rfq",
+                    "prepare_governed_agricultural_rfq",
+                    "no_eligible_candidates"
+                  ]
                 },
                 "selection_rule": {
                   "type": "string",
@@ -10202,7 +11713,10 @@
           "properties": {
             "state": {
               "type": "string",
-              "enum": ["synthetic_planning_only"]
+              "enum": [
+                "synthetic_planning_only",
+                "governed_agricultural_planning_only"
+              ]
             },
             "contact_state": {
               "type": "string",
@@ -10366,6 +11880,7 @@
               "type": "string",
               "enum": [
                 "awaiting_synthetic_checkpoint",
+                "awaiting_governed_agricultural_checkpoint",
                 "exhausted_displayed_queue"
               ]
             },
@@ -10469,7 +11984,10 @@
               "properties": {
                 "event_type": {
                   "type": "string",
-                  "enum": ["SYNTHETIC_WAVE_SNAPSHOT_PROJECTED"]
+                  "enum": [
+                    "SYNTHETIC_WAVE_SNAPSHOT_PROJECTED",
+                    "AGRICULTURAL_WAVE_SNAPSHOT_PROJECTED"
+                  ]
                 },
                 "event_id": {
                   "type": "string",
@@ -11164,7 +12682,7 @@
           "properties": {
             "qualification_scope": {
               "type": "string",
-              "enum": ["synthetic_only"]
+              "enum": ["synthetic_only", "governed_agricultural_qualification"]
             },
             "human_consultant_authorship": {
               "type": "string",
@@ -11498,6 +13016,79 @@
         },
         "canonical": {
           "$ref": "#/schemas/structuredStandardRequest"
+        },
+        "version_history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "canonical_version_id",
+              "version",
+              "readiness",
+              "created_at"
+            ],
+            "properties": {
+              "canonical_version_id": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "readiness": {
+                "type": "string",
+                "enum": ["ready", "partially_ready", "not_ready"]
+              },
+              "created_at": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "links": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["request", "versions", "runs"],
+          "properties": {
+            "request": {
+              "type": "string"
+            },
+            "versions": {
+              "type": "string"
+            },
+            "runs": {
+              "type": "string"
+            }
+          }
+        },
+        "synthetic_warning": {
+          "type": "string"
+        },
+        "projection_version": {
+          "type": "integer",
+          "enum": [4]
+        }
+      }
+    },
+    "standardRequestDetailV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "canonical",
+        "version_history",
+        "links",
+        "synthetic_warning",
+        "projection_version"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": ["standard-request-detail.v2"]
+        },
+        "canonical": {
+          "$ref": "#/schemas/structuredStandardRequestV2"
         },
         "version_history": {
           "type": "array",

@@ -8,7 +8,9 @@ import test from "node:test";
 import { StandardWorkspaceApplication } from "../../../packages/application/dist/index.js";
 import {
   ADMIN_SYSTEM_SCOPE_AND_RUN_TIER_IMMUTABILITY_MIGRATION_ID,
+  CONSULTANT_PDF_RENDER_LEDGER_MIGRATION_ID,
   CONSULTANT_PROJECTION_MIGRATION_ID,
+  DOMAIN_PACK_V2_AND_LEGACY_ANNOTATION_MIGRATION_ID,
   LIVE_RESEARCH_MIGRATION_ID,
   LIVE_PIPELINE_IDENTITY_MIGRATION_ID,
   P4_AUDIT_ARTIFACT_FOUNDATION_MIGRATION_ID,
@@ -347,6 +349,14 @@ postgresTest(
     try {
       await migrateDown(pool).catch(() => false);
       await migrateUp(pool);
+      assert.equal(
+        await migrateDownLatest(pool),
+        DOMAIN_PACK_V2_AND_LEGACY_ANNOTATION_MIGRATION_ID,
+      );
+      assert.equal(
+        await migrateDownLatest(pool),
+        CONSULTANT_PDF_RENDER_LEDGER_MIGRATION_ID,
+      );
       assert.equal(
         await migrateDownLatest(pool),
         ADMIN_SYSTEM_SCOPE_AND_RUN_TIER_IMMUTABILITY_MIGRATION_ID,

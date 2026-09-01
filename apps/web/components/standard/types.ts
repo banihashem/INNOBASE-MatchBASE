@@ -1,12 +1,16 @@
 import type {
   DomainPackResolutionV1,
+  DomainPackResolutionV2,
   DomainPackV1,
+  DomainPackV2,
   StandardRequestHistoryV1,
   StandardRequestDetailV1,
+  StandardRequestDetailV2,
   StandardResultProjectionV1,
   StandardRunHistoryV1,
   StandardRunProjectionV1,
   StructuredStandardRequestV1,
+  StructuredStandardRequestV2,
 } from "@matchbase/contracts";
 
 export type WorkspaceSession = {
@@ -31,6 +35,14 @@ export type WorkspaceSession = {
   csrf_token: string;
   environment: "local" | "test";
 };
+
+export type StandardDomainPack = DomainPackV1 | DomainPackV2;
+export type StandardDomainPackResolution =
+  DomainPackResolutionV1 | DomainPackResolutionV2;
+export type StandardStructuredRequest =
+  StructuredStandardRequestV1 | StructuredStandardRequestV2;
+export type StandardRequestDetail =
+  StandardRequestDetailV1 | StandardRequestDetailV2;
 
 export function userFacingSessionName(session: {
   display_name: string;

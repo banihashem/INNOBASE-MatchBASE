@@ -14,3 +14,4 @@ export * from "./database.js";
 export * from "./leases.js";
 export * from "./migrations.js";
 export * from "./quota.js";
+export * from "./request-governed-annotation.js";

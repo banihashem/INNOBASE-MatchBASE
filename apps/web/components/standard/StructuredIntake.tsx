@@ -6,9 +6,9 @@ import type {
 } from "@matchbase/contracts";
 import { idempotencyKey, workspaceJson } from "./api";
 import type {
-  DomainPackResolutionV1,
-  DomainPackV1,
-  StructuredStandardRequestV1,
+  StandardDomainPackResolution,
+  StandardDomainPack,
+  StandardStructuredRequest,
   WorkspaceSession,
 } from "./types";
 
@@ -50,17 +50,16 @@ export function StructuredIntake({
   onCancel,
 }: {
   session: WorkspaceSession;
-  onCanonical: (request: StructuredStandardRequestV1) => void;
+  onCanonical: (request: StandardStructuredRequest) => void;
   onCancel: () => void;
 }) {
   const [sourceText, setSourceText] = useState("");
   const [sourceLanguage, setSourceLanguage] = useState<
     "en" | "fa" | "ar" | "es"
   >("en");
-  const [resolution, setResolution] = useState<DomainPackResolutionV1 | null>(
-    null,
-  );
-  const [pack, setPack] = useState<DomainPackV1 | null>(null);
+  const [resolution, setResolution] =
+    useState<StandardDomainPackResolution | null>(null);
+  const [pack, setPack] = useState<StandardDomainPack | null>(null);
   const [drafts, setDrafts] = useState<Record<string, DraftField>>({});
   const [conditionals, setConditionals] = useState<ConditionalDraft[]>([]);
   const [exclusions, setExclusions] = useState<string[]>([]);
@@ -112,7 +111,7 @@ export function StructuredIntake({
     setBusy(true);
     setError(null);
     try {
-      const { body } = await workspaceJson<DomainPackResolutionV1>(
+      const { body } = await workspaceJson<StandardDomainPackResolution>(
         "/api/v1/domain-packs/resolution",
         {
           method: "POST",
@@ -128,7 +127,7 @@ export function StructuredIntake({
       );
       setResolution(body);
       if (body.activation_state === "confirmed") {
-        const response = await workspaceJson<DomainPackV1>(
+        const response = await workspaceJson<StandardDomainPack>(
           `/api/v1/domain-packs/${encodeURIComponent(body.category_id)}`,
           { headers: { "MB-Domain-Pack-Activation": body.activation_token } },
         );
@@ -379,7 +378,7 @@ export function StructuredIntake({
     setBusy(true);
     setError(null);
     try {
-      const { body } = await workspaceJson<StructuredStandardRequestV1>(
+      const { body } = await workspaceJson<StandardStructuredRequest>(
         "/api/v1/requests",
         {
           method: "POST",

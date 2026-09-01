@@ -160,6 +160,9 @@ importers:
       "@matchbase/data":
         specifier: workspace:*
         version: link:../data
+      "@matchbase/reporting":
+        specifier: workspace:*
+        version: link:../reporting
       "@matchbase/security":
         specifier: workspace:*
         version: link:../security
@@ -172,19 +175,6 @@ importers:
         version: 7.0.2
 
   packages/artifact-indexer:
-    devDependencies:
-      "@types/node":
-        specifier: 24.13.3
-        version: 24.13.3
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-
-  packages/reporting:
-    dependencies:
-      "@matchbase/contracts":
-        specifier: workspace:*
-        version: link:../contracts
     devDependencies:
       "@types/node":
         specifier: 24.13.3
@@ -230,6 +220,19 @@ importers:
       "@types/pg":
         specifier: 8.20.0
         version: 8.20.0
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
+  packages/reporting:
+    dependencies:
+      "@matchbase/contracts":
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      "@types/node":
+        specifier: 24.13.3
+        version: 24.13.3
       typescript:
         specifier: 7.0.2
         version: 7.0.2

@@ -206,6 +206,7 @@ export function qualifiedResearchOutputInstruction(input: {
     "Return a candidate when the supplied evidence establishes a distinct supplier identity and materially supports at least one requested product, capacity, geography, or compliance aspect; every returned candidate must have non-empty rationale claims and citations backed by referenced sourceIds.",
     "A candidate that lacks evidence for any mandatory constraint must remain in candidates with mandatoryConstraintsSatisfied false, a non-empty deterministic failedConstraintIds array, and must not appear in eligibleCandidateIds.",
     "Only candidates supported for every mandatory constraint may set mandatoryConstraintsSatisfied true and appear in eligibleCandidateIds. Never relax, infer, or fabricate a mandatory constraint.",
+    "When current stock or inventory availability is mandatory, an eligible candidate must have a decision-bearing stock claim linked to source evidence carrying the server-supplied retrieval timestamp; otherwise keep that candidate ineligible.",
     "If no supplied document establishes any distinct relevant supplier identity, return candidates as [], claims as [], evidence as [], and eligibleCandidateIds as [].",
     "Keep rationale concise, deterministic, and limited to structured outcomes supported by the supplied evidence.",
     `Canonical request: ${input.canonicalEnglishRequest}`,

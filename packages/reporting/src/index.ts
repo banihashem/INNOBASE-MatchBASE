@@ -3,3 +3,5 @@ export * from "./artifact-foundation.js";
 export * from "./compose.js";
 export * from "./model.js";
 export * from "./p4-qualification.js";
+export * from "./pdf-toolchain.js";
+export * from "./runtime-adapter.js";

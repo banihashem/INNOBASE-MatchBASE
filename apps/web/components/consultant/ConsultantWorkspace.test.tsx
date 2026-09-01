@@ -10,6 +10,7 @@ import {
   buildStandardSyntheticHardConstraints,
 } from "@matchbase/ai-evidence/standard";
 import { ConsultantWorkspace } from "./ConsultantWorkspace";
+import { ConsultantResultView } from "./ConsultantResult";
 import { ProductRouter } from "../ProductRouter";
 
 const session = {
@@ -68,8 +69,53 @@ const resultV2 = buildConsultantResultProjectionV2({
     effectiveReleaseAt: new Date("2026-08-24T00:00:00.000Z"),
   },
 });
+const agriculturalResultV2 = buildConsultantResultProjectionV2({
+  completeResult: buildStandardSyntheticEvidenceGraph(
+    "00000000-0000-4000-8000-000000000140",
+    "many",
+    constraints,
+  ),
+  projectionAsOf: new Date("2026-09-01T00:00:00.000Z"),
+  hardConstraints: constraints,
+  softCap: 3,
+  domainPackId: "MATCHBASE-FOOD-AGRICULTURAL-COMMODITIES-V1",
+  configurationRelease: {
+    configId: "00000000-0000-4000-8000-000000000620",
+    configVersion: "consultant-soft-cap.test.v1",
+    contentSha256: "a".repeat(64),
+    boundAt: new Date("2026-09-01T00:00:00.000Z"),
+    effectiveReleaseAt: new Date("2026-08-24T00:00:00.000Z"),
+  },
+});
 
 afterEach(() => vi.unstubAllGlobals());
+
+test("renders governed agricultural semantics without synthetic RFQ or industrial wording", () => {
+  render(
+    <ConsultantResultView
+      result={agriculturalResultV2}
+      onBack={() => undefined}
+    />,
+  );
+  expect(
+    screen.getByRole("heading", {
+      name: "Agricultural RFQ wave recommendation",
+    }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("heading", {
+      name: "Agricultural RFQ execution snapshot",
+    }),
+  ).toBeVisible();
+  expect(screen.getByText(/Requested pistachio variety/iu)).toBeInTheDocument();
+  expect(screen.getByText(/Agricultural RFQ question set/iu)).toBeVisible();
+  expect(
+    screen.queryByRole("heading", { name: /Synthetic RFQ/iu }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/machined|alloy component/iu),
+  ).not.toBeInTheDocument();
+});
 
 test("ProductRouter resolves Consultant into the visible Consultant workspace", async () => {
   vi.stubGlobal(
@@ -132,6 +178,72 @@ test("renders owned runs, distinct counts, below-cap disclosure and source limit
   expect(screen.getAllByText("Evidence confidence")).toHaveLength(2);
   expect(screen.getAllByText("Positive drivers")).toHaveLength(2);
   expect((await axe.run(container)).violations).toEqual([]);
+});
+
+test("renders the exact released run-bound PDF action from additive response headers", async () => {
+  const href =
+    "/api/v1/artifacts/00000000-0000-4000-8000-000000000778/download";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const isResult = String(input).endsWith("/result");
+      return new Response(JSON.stringify(isResult ? result : history), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...(isResult
+            ? {
+                "MB-Artifact-Run-Id": runId,
+                "MB-Artifact-Version-Id":
+                  "00000000-0000-4000-8000-000000000777",
+                "MB-Artifact-Version": "3",
+                "MB-Artifact-Download": href,
+              }
+            : {}),
+        },
+      });
+    }),
+  );
+  render(<ConsultantWorkspace initialSession={session} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Open result" }));
+  const link = await screen.findByRole("link", {
+    name: `Download PDF report for run ${runId}, artifact version 3`,
+  });
+  expect(link).toHaveAttribute("href", href);
+});
+
+test("requests a PDF with CSRF and idempotency while preserving a visible result on failure", async () => {
+  const request = vi.fn(
+    async (input: RequestInfo | URL, _init?: RequestInit) => {
+      if (String(input).endsWith("/artifacts"))
+        return new Response(JSON.stringify({ detail: "unavailable" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        });
+      return new Response(
+        JSON.stringify(String(input).endsWith("/result") ? resultV2 : history),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    },
+  );
+  vi.stubGlobal("fetch", request);
+  render(<ConsultantWorkspace initialSession={session} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Open result" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Generate PDF report" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    /research result remains available/iu,
+  );
+  const call = request.mock.calls.find(([url]) =>
+    String(url).endsWith("/artifacts"),
+  );
+  const headers = new Headers(call?.[1]?.headers);
+  expect(headers.get("X-CSRF-Token")).toBe("consultant-csrf");
+  expect(headers.get("Idempotency-Key")).toMatch(/^consultant-pdf-/u);
+  expect(
+    screen.getByRole("heading", { name: "Eligible candidate landscape" }),
+  ).toBeVisible();
 });
 
 test("renders v2 source policy, RFQ wave, eligible reserves, diligence, and fail-closed limitations", async () => {
@@ -370,6 +482,9 @@ test("parses immutable historical Demo and Standard results at the client bounda
     const view = render(<ConsultantWorkspace initialSession={session} />);
     fireEvent.click(await screen.findByRole("button", { name: "Open result" }));
     expect(await screen.findByRole("heading", { name: heading })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Generate PDF report" }),
+    ).not.toBeInTheDocument();
     view.unmount();
     vi.unstubAllGlobals();
   }

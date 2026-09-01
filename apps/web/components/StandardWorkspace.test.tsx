@@ -110,6 +110,7 @@ test("preserves the server polling cadence on a private 304", async () => {
     etag: '"run-version-2"',
     notModified: true,
     pollAfterMs: 1750,
+    artifactDownload: null,
   });
 });
 
@@ -158,6 +159,104 @@ test("associates the missing Standard source error and focuses its field", async
     "aria-describedby",
     "standard-source-hint standard-intake-error",
   );
+});
+
+test("renders the governed agricultural fields and excludes industrial component fields", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.endsWith("/resolution")
+        ? {
+            schema_version: "domain-pack-resolution.v2",
+            discriminator: "food_agricultural_commodity",
+            resolver_version: "governed-agricultural-category-resolver.v2",
+            category_id: "food_agricultural_commodities",
+            confidence: 1,
+            activation_state: "confirmed",
+            pack_version: "2026-09-01.1",
+            content_sha256: "a".repeat(64),
+            activation_token: "signed-agricultural-token",
+            synthetic: false,
+          }
+        : {
+            schema_version: "domain-pack.v2",
+            discriminator: "food_agricultural_commodity",
+            registry_version: "2026-09-01.1",
+            pack_version: "2026-09-01.1",
+            category_id: "food_agricultural_commodities",
+            category_label: "Food and Agricultural Commodities",
+            macro_parameters: [
+              "product_specification",
+              "supplier_producer_profile",
+              "trade_structure_commercial_execution",
+            ],
+            core_fields: [],
+            domain_fields: [
+              {
+                field_id: "commodity_variety",
+                macro_parameter: "product_specification",
+                label: "Variety",
+                description: "Named variety.",
+                kind: "text",
+                requirement: "required",
+                allowed_units: [],
+                allowed_values: [],
+              },
+              {
+                field_id: "current_stock",
+                macro_parameter: "supplier_producer_profile",
+                label: "Current stock",
+                description: "Dated current stock.",
+                kind: "quantity",
+                requirement: "conditional",
+                allowed_units: ["container"],
+                allowed_values: [],
+              },
+              {
+                field_id: "routing_via",
+                macro_parameter: "trade_structure_commercial_execution",
+                label: "Required route",
+                description: "Required transit route.",
+                kind: "text",
+                requirement: "conditional",
+                allowed_units: [],
+                allowed_values: [],
+              },
+            ],
+            synthetic: false,
+            content_sha256: "a".repeat(64),
+          };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }),
+  );
+  render(
+    <StructuredIntake
+      session={session}
+      onCanonical={() => undefined}
+      onCancel={() => undefined}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText("Source-language input"), {
+    target: {
+      value:
+        "Three containers of Iranian Ahmad Aghaei pistachios via Dubai to Africa with current stock.",
+    },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Resolve product category" }),
+  );
+  expect(await screen.findByLabelText(/Variety required/iu)).toBeVisible();
+  expect(
+    screen.getByLabelText(/Current stock conditional/iu),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByLabelText(/Required route conditional/iu),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/Component material/iu)).not.toBeInTheDocument();
 });
 
 test("retains transient source text when canonical request submission fails", async () => {

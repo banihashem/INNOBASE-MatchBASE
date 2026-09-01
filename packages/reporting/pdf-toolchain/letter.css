@@ -1,0 +1,39 @@
+@page {
+  size: Letter;
+  margin: 0.8in 0.68in 0.84in;
+  @top-left {
+    content: element(report-header);
+    color: #3d4049;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    border-bottom: 0.7pt solid #d7d4ca;
+    padding-bottom: 3pt;
+  }
+  @bottom-left {
+    content: element(report-footer);
+    color: #3d4049;
+    font-size: 7.5pt;
+    border-top: 0.7pt solid #d7d4ca;
+    padding-top: 3pt;
+  }
+  @bottom-right {
+    content: counter(page);
+    color: #22252c;
+    font-size: 8pt;
+    border-top: 0.7pt solid #d7d4ca;
+    padding-top: 3pt;
+  }
+}
+@page :first {
+  margin: 0.72in;
+  @top-left {
+    content: none;
+  }
+  @bottom-left {
+    content: none;
+  }
+  @bottom-right {
+    content: none;
+  }
+}

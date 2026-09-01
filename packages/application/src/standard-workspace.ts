@@ -6,6 +6,8 @@ import {
 } from "node:crypto";
 import {
   SYNTHETIC_DOMAIN_PACK,
+  FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK,
+  AGRICULTURAL_DOMAIN_PACK_RESOLVER_VERSION,
   STANDARD_SYNTHETIC_WARNING,
   buildStandardSyntheticEvidenceGraph,
   normalizeStandardSyntheticScenarioForConstraints,
@@ -30,14 +32,14 @@ import {
 import type {
   DomainPackFieldV1,
   CompleteResultFoundationV2,
-  DomainPackResolutionV1,
+  GovernedDomainPackResolution,
   DemoProjectionV1,
   EvidenceGraphV1,
   StandardFieldValueV1,
   StandardHardConstraintV1,
   StandardContradictionV1,
   StandardResultProjectionV1,
-  StandardRequestDetailV1,
+  StructuredStandardRequestV2,
   StructuredStandardRequestV1,
 } from "@matchbase/contracts";
 import { STANDARD_DISCLOSURE_PROJECTION_VERSION } from "@matchbase/contracts";
@@ -79,12 +81,15 @@ import {
 } from "./result-output-guard.js";
 
 const STANDARD_PROJECTION_VERSION = STANDARD_DISCLOSURE_PROJECTION_VERSION;
+type GovernedStructuredStandardRequest =
+  StructuredStandardRequestV1 | StructuredStandardRequestV2;
 const QUALIFIED_LIVE_NOTICE =
   "Controlled web evidence is fetched for this run; external verification requires independent corroboration or authoritative registry evidence";
 const HISTORY_LIMIT = 20;
 const PACK_FIELDS = [
   ...SYNTHETIC_DOMAIN_PACK.core_fields,
   ...SYNTHETIC_DOMAIN_PACK.domain_fields,
+  ...FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK.domain_fields,
 ] as const;
 const PACK_FIELD_BY_ID = new Map(
   PACK_FIELDS.map((field) => [field.field_id, field]),
@@ -99,6 +104,10 @@ const CANONICAL_RELEASED_FIELDS = [
   "canonical.domain_pack.registry_version",
   "canonical.domain_pack.pack_version",
   "canonical.domain_pack.category_id",
+  "canonical.domain_pack.schema_version",
+  "canonical.domain_pack.pack_schema_version",
+  "canonical.domain_pack.content_sha256",
+  "canonical.domain_pack.resolver_version",
   "canonical.fields[].field_id",
   "canonical.fields[].macro_parameter",
   "canonical.fields[].typed_value.value_state",
@@ -523,17 +532,30 @@ function contradictionSet(
   return result;
 }
 
-function structuredReadiness(
+export function evaluateStructuredReadiness(
   fields: readonly StandardFieldValueV1[],
+  constraints: readonly StandardHardConstraintV1[],
   contradictions: readonly StandardContradictionV1[],
-): StructuredStandardRequestV1["readiness"] {
+  categoryId: string,
+): GovernedStructuredStandardRequest["readiness"] {
   if (contradictions.some((item) => item.resolution_state === "unresolved"))
     return "not_ready";
   const byId = new Map(fields.map((field) => [field.field_id, field]));
-  const required = [
-    ...SYNTHETIC_DOMAIN_PACK.core_fields,
-    ...SYNTHETIC_DOMAIN_PACK.domain_fields,
-  ].filter((field) => field.requirement === "required");
+  const agricultural =
+    categoryId === FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK.category_id;
+  const pack = agricultural
+    ? FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK
+    : SYNTHETIC_DOMAIN_PACK;
+  const constraintFieldIds = new Set(
+    constraints
+      .filter((constraint) => constraint.relaxability === "non_relaxable")
+      .map((constraint) => constraint.field_id),
+  );
+  const required = [...pack.core_fields, ...pack.domain_fields].filter(
+    (field) =>
+      field.requirement === "required" ||
+      (agricultural && constraintFieldIds.has(field.field_id)),
+  );
   if (
     required.some(
       (definition) =>
@@ -548,6 +570,69 @@ function structuredReadiness(
     )
   )
     return "partially_ready";
+  if (!agricultural) return "ready";
+
+  const comparable = (value: string): string =>
+    value.normalize("NFKC").trim().toLocaleLowerCase("en");
+  for (const constraint of constraints) {
+    const field = byId.get(constraint.field_id)?.typed_value;
+    if (field?.value_state !== "provided") {
+      if (constraint.relaxability === "non_relaxable") return "not_ready";
+      continue;
+    }
+    if (constraint.target.value_state !== "provided") return "not_ready";
+    const observed = comparable(field.value);
+    const target = comparable(constraint.target.value);
+    const observedNumber = Number(observed);
+    const targetNumber = Number(target);
+    const numeric =
+      Number.isFinite(observedNumber) && Number.isFinite(targetNumber);
+    const satisfies =
+      constraint.operator === "equals"
+        ? observed === target
+        : constraint.operator === "not_equals"
+          ? observed !== target
+          : constraint.operator === "includes"
+            ? observed.includes(target)
+            : constraint.operator === "excludes"
+              ? !observed.includes(target)
+              : constraint.operator === "minimum"
+                ? numeric && observedNumber >= targetNumber
+                : numeric && observedNumber <= targetNumber;
+    if (!satisfies) return "not_ready";
+  }
+
+  if (agricultural) {
+    const provided = (fieldId: string) => {
+      const value = byId.get(fieldId)?.typed_value;
+      return value?.value_state === "provided" ? value : undefined;
+    };
+    const variety = provided("commodity_variety");
+    if (variety && /ahmad[ -]?aghaei|احمد\s*آقایی/iu.test(variety.value)) {
+      const origin = provided("commodity_origin");
+      const containers = provided("container_quantity");
+      const route = provided("routing_via");
+      const destination = provided("distribution_destination");
+      const stock = provided("current_stock");
+      if (!origin || !/iran|iranian|ایران/iu.test(origin.value))
+        return "not_ready";
+      if (
+        !containers ||
+        Number(containers.value) < 3 ||
+        !/container/iu.test(containers.unit ?? "")
+      )
+        return "not_ready";
+      if (!route || !/dubai|دبی/iu.test(route.value)) return "not_ready";
+      if (!destination || !/africa|african|آفریقا/iu.test(destination.value))
+        return "not_ready";
+      if (
+        !stock ||
+        Number(stock.value) < 1 ||
+        !/container/iu.test(stock.unit ?? "")
+      )
+        return "not_ready";
+    }
+  }
   return "ready";
 }
 
@@ -610,7 +695,7 @@ export class StandardWorkspaceApplication {
   async resolveDomainPack(
     context: RequestContext,
     input: { source_text: string; category_id?: string },
-  ): Promise<DomainPackResolutionV1> {
+  ): Promise<GovernedDomainPackResolution> {
     await assertStandardWorkspaceAuthorized(
       this.pool,
       context,
@@ -652,16 +737,16 @@ export class StandardWorkspaceApplication {
       context,
       "domain_pack.read",
     );
-    if (categoryId !== SYNTHETIC_DOMAIN_PACK.category_id)
-      throw standardNotVisible();
     if (!activationToken) throw standardNotVisible();
     try {
-      return requireSyntheticDomainPackActivation(activationToken, {
+      const pack = requireSyntheticDomainPackActivation(activationToken, {
         accountId: context.accountId,
         userId: context.userId,
         now: new Date(),
         hmacSecret: this.secret.toString("base64url"),
       });
+      if (pack.category_id !== categoryId) throw standardNotVisible();
+      return pack;
     } catch {
       throw standardNotVisible();
     }
@@ -774,6 +859,7 @@ export class StandardWorkspaceApplication {
       canonicalFields,
       canonicalConstraints,
       canonicalExclusions,
+      pack.category_id,
     );
     const conditional = input.conditional_requirements.map((item) => {
       const source = Buffer.from(input.source_text, "utf8");
@@ -874,18 +960,12 @@ export class StandardWorkspaceApplication {
         ],
       );
       const contradictions = contradictionSet(canonicalConstraints);
-      const document: StructuredStandardRequestV1 = {
-        schema_version: "structured-standard-request.v1",
+      const commonDocument = {
         request_id: requestId,
         canonical_version_id: versionId,
         version: 1,
         source_language: input.source_language,
-        canonical_language: "en",
-        domain_pack: {
-          registry_version: pack.registry_version,
-          pack_version: pack.pack_version,
-          category_id: pack.category_id,
-        },
+        canonical_language: "en" as const,
         fields: canonicalFields,
         hard_constraints: canonicalConstraints,
         exclusions: canonicalExclusions,
@@ -895,7 +975,7 @@ export class StandardWorkspaceApplication {
           canonical_english_result: item.canonicalResult,
           requirement_level: item.requirement_level,
           source_validation: {
-            algorithm: "HMAC-SHA-256",
+            algorithm: "HMAC-SHA-256" as const,
             key_id: "standard-source-v1",
             source_digest: item.digest.toString("hex"),
             source_start_byte: item.source_start_byte,
@@ -904,9 +984,59 @@ export class StandardWorkspaceApplication {
           },
         })),
         contradictions,
-        readiness: structuredReadiness(canonicalFields, contradictions),
+        readiness: evaluateStructuredReadiness(
+          canonicalFields,
+          canonicalConstraints,
+          contradictions,
+          pack.category_id,
+        ),
         created_at: new Date().toISOString(),
       };
+      const document: GovernedStructuredStandardRequest = pack.synthetic
+        ? {
+            schema_version: "structured-standard-request.v1",
+            request_id: commonDocument.request_id,
+            canonical_version_id: commonDocument.canonical_version_id,
+            version: commonDocument.version,
+            source_language: commonDocument.source_language,
+            canonical_language: commonDocument.canonical_language,
+            domain_pack: {
+              registry_version: pack.registry_version,
+              pack_version: pack.pack_version,
+              category_id: pack.category_id,
+            },
+            fields: commonDocument.fields,
+            hard_constraints: commonDocument.hard_constraints,
+            exclusions: commonDocument.exclusions,
+            conditional_requirements: commonDocument.conditional_requirements,
+            contradictions: commonDocument.contradictions,
+            readiness: commonDocument.readiness,
+            created_at: commonDocument.created_at,
+          }
+        : {
+            schema_version: "structured-standard-request.v2",
+            request_id: commonDocument.request_id,
+            canonical_version_id: commonDocument.canonical_version_id,
+            version: commonDocument.version,
+            source_language: commonDocument.source_language,
+            canonical_language: commonDocument.canonical_language,
+            domain_pack: {
+              schema_version: "domain-pack-binding.v2",
+              registry_version: pack.registry_version,
+              pack_version: pack.pack_version,
+              category_id: pack.category_id,
+              pack_schema_version: "domain-pack.v2",
+              content_sha256: pack.content_sha256,
+              resolver_version: AGRICULTURAL_DOMAIN_PACK_RESOLVER_VERSION,
+            },
+            fields: commonDocument.fields,
+            hard_constraints: commonDocument.hard_constraints,
+            exclusions: commonDocument.exclusions,
+            conditional_requirements: commonDocument.conditional_requirements,
+            contradictions: commonDocument.contradictions,
+            readiness: commonDocument.readiness,
+            created_at: commonDocument.created_at,
+          };
       await client.query(
         `INSERT INTO sourcing_request
           (request_id, account_id, created_by_user_id, canonicalization_run_id, current_version, lifecycle_state)
@@ -1126,7 +1256,7 @@ export class StandardWorkspaceApplication {
   ): Promise<Record<string, unknown>> {
     await assertStandardWorkspaceAuthorized(this.pool, context, "request.read");
     const result = await this.pool.query<{
-      canonical_document: StructuredStandardRequestV1;
+      canonical_document: GovernedStructuredStandardRequest;
       canonical_request_version_id: string;
       version: number;
       match_readiness: StructuredStandardRequestV1["readiness"];
@@ -1151,8 +1281,12 @@ export class StandardWorkspaceApplication {
         ORDER BY v.created_at DESC,v.canonical_request_version_id DESC LIMIT $4`,
       [requestId, context.accountId, context.userId, HISTORY_LIMIT],
     );
-    const body: StandardRequestDetailV1 = {
-      schema_version: "standard-request-detail.v1",
+    const body = {
+      schema_version:
+        current.canonical_document.schema_version ===
+        "structured-standard-request.v2"
+          ? "standard-request-detail.v2"
+          : "standard-request-detail.v1",
       projection_version: STANDARD_PROJECTION_VERSION,
       canonical: current.canonical_document,
       version_history: history.rows.map((row) => ({
@@ -1205,7 +1339,7 @@ export class StandardWorkspaceApplication {
       version: number;
       created_at: Date;
       match_readiness: string;
-      canonical_document: StructuredStandardRequestV1;
+      canonical_document: GovernedStructuredStandardRequest;
     }>(
       `SELECT v.canonical_request_version_id,v.version,v.created_at,v.match_readiness,v.canonical_document
          FROM canonical_request_version v JOIN sourcing_request r USING(request_id)
@@ -1283,7 +1417,7 @@ export class StandardWorkspaceApplication {
     const owner = await client.query<{
       current_version: number;
       canonical_request_version_id: string;
-      canonical_document: StructuredStandardRequestV1;
+      canonical_document: GovernedStructuredStandardRequest;
     }>(
       `SELECT r.current_version,v.canonical_request_version_id,v.canonical_document FROM sourcing_request r
           JOIN canonical_request_version v ON v.request_id=r.request_id AND v.version=r.current_version
@@ -1340,13 +1474,41 @@ export class StandardWorkspaceApplication {
         );
       }
     });
+    const priorPack =
+      prior.canonical_document.domain_pack.category_id ===
+      FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK.category_id
+        ? FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK
+        : SYNTHETIC_DOMAIN_PACK;
+    const priorPackBinding = prior.canonical_document.domain_pack;
+    if (
+      priorPackBinding.registry_version !== priorPack.registry_version ||
+      priorPackBinding.pack_version !== priorPack.pack_version ||
+      (!priorPack.synthetic &&
+        (prior.canonical_document.schema_version !==
+          "structured-standard-request.v2" ||
+          prior.canonical_document.domain_pack.schema_version !==
+            "domain-pack-binding.v2" ||
+          prior.canonical_document.domain_pack.pack_schema_version !==
+            "domain-pack.v2" ||
+          prior.canonical_document.domain_pack.content_sha256 !==
+            priorPack.content_sha256 ||
+          prior.canonical_document.domain_pack.resolver_version !==
+            AGRICULTURAL_DOMAIN_PACK_RESOLVER_VERSION))
+    )
+      throw new ApplicationFault(
+        409,
+        "domain-pack-drift",
+        "MB-409-DOMAIN-PACK",
+        "Stored domain-pack version or digest drifted.",
+      );
     this.validateStructuredInput(
       canonicalFields,
       canonicalConstraints,
       canonicalExclusions,
+      prior.canonical_document.domain_pack.category_id,
     );
     const contradictions = contradictionSet(canonicalConstraints);
-    const document: StructuredStandardRequestV1 = {
+    const document: GovernedStructuredStandardRequest = {
       ...structuredClone(prior.canonical_document),
       canonical_version_id: versionId,
       version,
@@ -1354,7 +1516,12 @@ export class StandardWorkspaceApplication {
       hard_constraints: canonicalConstraints,
       exclusions: canonicalExclusions,
       contradictions,
-      readiness: structuredReadiness(canonicalFields, contradictions),
+      readiness: evaluateStructuredReadiness(
+        canonicalFields,
+        canonicalConstraints,
+        contradictions,
+        prior.canonical_document.domain_pack.category_id,
+      ),
       created_at: new Date().toISOString(),
     };
     await this.persistVersion(
@@ -1532,7 +1699,7 @@ export class StandardWorkspaceApplication {
       const current = await client.query<{
         canonical_request_version_id: string;
         current_version: number;
-        canonical_document: StructuredStandardRequestV1;
+        canonical_document: GovernedStructuredStandardRequest;
       }>(
         `SELECT v.canonical_request_version_id,r.current_version,v.canonical_document
            FROM sourcing_request r JOIN canonical_request_version v
@@ -1652,7 +1819,12 @@ export class StandardWorkspaceApplication {
           version: targetVersion,
           hard_constraints: hardConstraints,
           contradictions,
-          readiness: structuredReadiness(targetDocument.fields, contradictions),
+          readiness: evaluateStructuredReadiness(
+            targetDocument.fields,
+            hardConstraints,
+            contradictions,
+            targetDocument.domain_pack.category_id,
+          ),
           created_at: new Date().toISOString(),
         };
         await this.persistVersion(
@@ -1778,7 +1950,7 @@ export class StandardWorkspaceApplication {
       const current = await client.query<{
         canonical_request_version_id: string;
         current_version: number;
-        canonical_document: StructuredStandardRequestV1;
+        canonical_document: GovernedStructuredStandardRequest;
       }>(
         `SELECT v.canonical_request_version_id,r.current_version,v.canonical_document FROM sourcing_request r JOIN canonical_request_version v ON v.request_id=r.request_id AND v.version=r.current_version WHERE r.request_id=$1 AND r.account_id=$2 AND r.created_by_user_id=$3 FOR UPDATE OF r`,
         [requestId, context.accountId, context.userId],
@@ -1845,7 +2017,7 @@ export class StandardWorkspaceApplication {
               }
             : item,
         );
-      const document: StructuredStandardRequestV1 = {
+      const document: GovernedStructuredStandardRequest = {
         ...structuredClone(row.canonical_document),
         canonical_version_id: versionId,
         version,
@@ -1858,9 +2030,18 @@ export class StandardWorkspaceApplication {
           )
           .concat(structuredClone(selectedConstraint)),
         contradictions,
-        readiness: structuredReadiness(
+        readiness: evaluateStructuredReadiness(
           row.canonical_document.fields,
+          row.canonical_document.hard_constraints
+            .filter(
+              (constraint) =>
+                !selectedAlternativeRecord.field_ids.includes(
+                  constraint.field_id,
+                ),
+            )
+            .concat(structuredClone(selectedConstraint)),
           contradictions,
+          row.canonical_document.domain_pack.category_id,
         ),
         created_at: new Date().toISOString(),
       };
@@ -2161,7 +2342,7 @@ export class StandardWorkspaceApplication {
         complete_result_document: unknown;
         result_sha256: Buffer;
         canonical_document:
-          StructuredStandardRequestV1 | Record<string, unknown>;
+          GovernedStructuredStandardRequest | Record<string, unknown>;
         scarcity_outcome: "scarcity" | "no_responsible_match" | null;
         unmet_constraints: unknown;
         permitted_relaxations: unknown;
@@ -2436,7 +2617,7 @@ export class StandardWorkspaceApplication {
     if (!lease) return false;
     try {
       const run = await this.pool.query<{
-        canonical_document: StructuredStandardRequestV1;
+        canonical_document: GovernedStructuredStandardRequest;
         scoring_config_version_id: string;
       }>(
         `SELECT v.canonical_document,rr.scoring_config_version_id FROM research_run rr JOIN canonical_request_version v USING(canonical_request_version_id) WHERE rr.run_id=$1 AND rr.account_id=$2 AND rr.requested_by_user_id=$3`,
@@ -3327,11 +3508,20 @@ export class StandardWorkspaceApplication {
       "created_at",
     ]);
     const canonical = value as Record<string, unknown>;
-    this.exactKeys(canonical.domain_pack, [
-      "registry_version",
-      "pack_version",
-      "category_id",
-    ]);
+    this.exactKeys(
+      canonical.domain_pack,
+      canonical.schema_version === "structured-standard-request.v2"
+        ? [
+            "schema_version",
+            "registry_version",
+            "pack_version",
+            "category_id",
+            "pack_schema_version",
+            "content_sha256",
+            "resolver_version",
+          ]
+        : ["registry_version", "pack_version", "category_id"],
+    );
     for (const field of canonical.fields as Record<string, unknown>[]) {
       this.exactKeys(field, [
         "field_id",
@@ -3514,10 +3704,36 @@ export class StandardWorkspaceApplication {
     fields: readonly StandardFieldValueV1[],
     constraints: readonly StandardHardConstraintV1[],
     exclusions: readonly { field_id: string }[],
+    categoryId: string,
   ): void {
-    this.validateFields(fields);
+    const pack =
+      categoryId === FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK.category_id
+        ? FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK
+        : categoryId === SYNTHETIC_DOMAIN_PACK.category_id
+          ? SYNTHETIC_DOMAIN_PACK
+          : undefined;
+    if (!pack)
+      throw new ApplicationFault(
+        422,
+        "domain-pack-unresolved",
+        "MB-422-DOMAIN-PACK",
+        "Canonical domain-pack identity is unsupported.",
+      );
+    const allowedIds = new Set(
+      [...pack.core_fields, ...pack.domain_fields].map(
+        (field) => field.field_id,
+      ),
+    );
+    this.validateFields(fields, categoryId);
     const constraintIds = new Set<string>();
     for (const constraint of constraints) {
+      if (!allowedIds.has(constraint.field_id))
+        throw new ApplicationFault(
+          422,
+          "schema-violation",
+          "MB-422-SCHEMA",
+          "A constraint cannot switch domain packs.",
+        );
       const definition = this.fieldDefinition(constraint.field_id);
       if (constraintIds.has(constraint.constraint_id))
         throw new ApplicationFault(
@@ -3541,6 +3757,13 @@ export class StandardWorkspaceApplication {
     }
     const exclusionIds = new Set<string>();
     for (const exclusion of exclusions) {
+      if (!allowedIds.has(exclusion.field_id))
+        throw new ApplicationFault(
+          422,
+          "schema-violation",
+          "MB-422-SCHEMA",
+          "An exclusion cannot switch domain packs.",
+        );
       this.fieldDefinition(exclusion.field_id);
       const identifier = (exclusion as { exclusion_id?: string }).exclusion_id;
       if (identifier && exclusionIds.has(identifier))
@@ -3629,12 +3852,25 @@ export class StandardWorkspaceApplication {
       );
   }
 
-  private validateFields(fields: readonly StandardFieldValueV1[]): void {
+  private validateFields(
+    fields: readonly StandardFieldValueV1[],
+    categoryId: string,
+  ): void {
+    const activePack =
+      categoryId === FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK.category_id
+        ? FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK
+        : SYNTHETIC_DOMAIN_PACK;
+    const activeFields = [
+      ...activePack.core_fields,
+      ...activePack.domain_fields,
+    ];
+    const activeIds = new Set(activeFields.map((field) => field.field_id));
     const seen = new Set<string>();
     for (const field of fields) {
       const definition = this.fieldDefinition(field.field_id);
       if (
         seen.has(field.field_id) ||
+        !activeIds.has(field.field_id) ||
         field.macro_parameter !== definition.macro_parameter
       )
         throw new ApplicationFault(
@@ -3646,7 +3882,7 @@ export class StandardWorkspaceApplication {
       seen.add(field.field_id);
       this.validateProvidedValue(field.typed_value, definition);
     }
-    if (seen.size !== PACK_FIELDS.length)
+    if (seen.size !== activeFields.length)
       throw new ApplicationFault(
         422,
         "schema-violation",
@@ -3656,47 +3892,146 @@ export class StandardWorkspaceApplication {
   }
 
   private async seedPack(client: TransactionClient): Promise<void> {
-    const packId = "10000000-0000-4000-8000-000000000001";
-    const versionId = "10000000-0000-4000-8000-000000000002";
-    await client.query(
-      `INSERT INTO domain_pack(domain_pack_id,pack_key,display_name_english) VALUES($1,'synthetic_industrial_components','Synthetic Industrial Components') ON CONFLICT DO NOTHING`,
-      [packId],
-    );
-    await client.query(
-      `INSERT INTO domain_pack_version(domain_pack_version_id,domain_pack_id,version,category_code,category_confidence_threshold,definition,content_sha256,lifecycle_state,released_at) VALUES($1,$2,1,$3,0.800,$4::jsonb,$5,'active','2026-08-15T00:00:00Z') ON CONFLICT DO NOTHING`,
-      [
-        versionId,
-        packId,
-        SYNTHETIC_DOMAIN_PACK.category_id,
-        JSON.stringify(SYNTHETIC_DOMAIN_PACK),
-        jsonHash(SYNTHETIC_DOMAIN_PACK),
-      ],
-    );
-    const all = [
-      ...SYNTHETIC_DOMAIN_PACK.core_fields,
-      ...SYNTHETIC_DOMAIN_PACK.domain_fields,
-    ];
-    for (const [index, field] of all.entries()) {
-      const valueType =
-        field.kind === "single_select"
-          ? "enum"
-          : field.kind === "multi_select"
-            ? "string_list"
-            : field.kind === "quantity"
-              ? "quantity"
-              : field.kind;
+    const releases = [
+      {
+        pack: SYNTHETIC_DOMAIN_PACK,
+        packId: "10000000-0000-4000-8000-000000000001",
+        versionId: "10000000-0000-4000-8000-000000000002",
+        version: 1,
+        releasedAt: "2026-08-15T00:00:00Z",
+      },
+      {
+        pack: FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK,
+        packId: "10000000-0000-4000-8000-000000000003",
+        versionId: "10000000-0000-4000-8000-000000000004",
+        version: 1,
+        releasedAt: "2026-09-01T00:00:00Z",
+      },
+    ] as const;
+    for (const release of releases) {
+      const expectedDigest = release.pack.synthetic
+        ? jsonHash(release.pack)
+        : Buffer.from(release.pack.content_sha256, "hex");
       await client.query(
-        `INSERT INTO domain_pack_field(domain_pack_version_id,field_key,macro_parameter,canonical_order,value_type,required,definition) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) ON CONFLICT DO NOTHING`,
+        `INSERT INTO domain_pack(domain_pack_id,pack_key,display_name_english) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`,
+        [release.packId, release.pack.category_id, release.pack.category_label],
+      );
+      const packRow = await client.query<{
+        domain_pack_id: string;
+        pack_key: string;
+        display_name_english: string;
+      }>(
+        `SELECT domain_pack_id,pack_key,display_name_english
+           FROM domain_pack WHERE domain_pack_id=$1`,
+        [release.packId],
+      );
+      const storedPack = packRow.rows[0];
+      if (
+        !storedPack ||
+        storedPack.pack_key !== release.pack.category_id ||
+        storedPack.display_name_english !== release.pack.category_label
+      )
+        throw new Error("Domain-pack registry identity drifted.");
+      await client.query(
+        `INSERT INTO domain_pack_version(domain_pack_version_id,domain_pack_id,version,category_code,category_confidence_threshold,definition,content_sha256,lifecycle_state,released_at) VALUES($1,$2,$3,$4,0.800,$5::jsonb,$6,'active',$7) ON CONFLICT DO NOTHING`,
         [
-          versionId,
-          field.field_id.toLocaleLowerCase("en").replaceAll("-", "_"),
-          field.macro_parameter,
-          index + 1,
-          valueType,
-          field.requirement === "required",
-          JSON.stringify(field),
+          release.versionId,
+          release.packId,
+          release.version,
+          release.pack.category_id,
+          JSON.stringify(release.pack),
+          expectedDigest,
+          release.releasedAt,
         ],
       );
+      const versionRow = await client.query<{
+        domain_pack_id: string;
+        version: number;
+        category_code: string;
+        category_confidence_threshold: number | string;
+        definition: unknown;
+        content_sha256: Buffer;
+        lifecycle_state: string;
+        released_at: Date;
+      }>(
+        `SELECT domain_pack_id,version,category_code,category_confidence_threshold,
+                definition,content_sha256,lifecycle_state,released_at
+           FROM domain_pack_version WHERE domain_pack_version_id=$1`,
+        [release.versionId],
+      );
+      const storedVersion = versionRow.rows[0];
+      if (
+        !storedVersion ||
+        storedVersion.domain_pack_id !== release.packId ||
+        storedVersion.version !== release.version ||
+        storedVersion.category_code !== release.pack.category_id ||
+        Number(storedVersion.category_confidence_threshold) !== 0.8 ||
+        stableJson(storedVersion.definition) !== stableJson(release.pack) ||
+        !storedVersion.content_sha256.equals(expectedDigest) ||
+        storedVersion.lifecycle_state !== "active" ||
+        storedVersion.released_at.toISOString() !==
+          new Date(release.releasedAt).toISOString()
+      )
+        throw new Error("Domain-pack release definition or digest drifted.");
+      const all = [...release.pack.core_fields, ...release.pack.domain_fields];
+      for (const [index, field] of all.entries()) {
+        const valueType =
+          field.kind === "single_select"
+            ? "enum"
+            : field.kind === "multi_select"
+              ? "string_list"
+              : field.kind === "quantity"
+                ? "quantity"
+                : field.kind;
+        await client.query(
+          `INSERT INTO domain_pack_field(domain_pack_version_id,field_key,macro_parameter,canonical_order,value_type,required,definition) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) ON CONFLICT DO NOTHING`,
+          [
+            release.versionId,
+            field.field_id.toLocaleLowerCase("en").replaceAll("-", "_"),
+            field.macro_parameter,
+            index + 1,
+            valueType,
+            field.requirement === "required",
+            JSON.stringify(field),
+          ],
+        );
+      }
+      const fieldRows = await client.query<{
+        field_key: string;
+        macro_parameter: string;
+        canonical_order: number;
+        value_type: string;
+        required: boolean;
+        definition: unknown;
+      }>(
+        `SELECT field_key,macro_parameter,canonical_order,value_type,required,definition
+           FROM domain_pack_field WHERE domain_pack_version_id=$1
+           ORDER BY canonical_order`,
+        [release.versionId],
+      );
+      if (fieldRows.rows.length !== all.length)
+        throw new Error("Domain-pack field registry cardinality drifted.");
+      fieldRows.rows.forEach((stored, index) => {
+        const expected = all[index]!;
+        const expectedValueType =
+          expected.kind === "single_select"
+            ? "enum"
+            : expected.kind === "multi_select"
+              ? "string_list"
+              : expected.kind === "quantity"
+                ? "quantity"
+                : expected.kind;
+        if (
+          stored.field_key !==
+            expected.field_id.toLocaleLowerCase("en").replaceAll("-", "_") ||
+          stored.macro_parameter !== expected.macro_parameter ||
+          stored.canonical_order !== index + 1 ||
+          stored.value_type !== expectedValueType ||
+          stored.required !== (expected.requirement === "required") ||
+          stableJson(stored.definition) !== stableJson(expected)
+        )
+          throw new Error("Domain-pack field registry drifted.");
+      });
     }
   }
 
@@ -3707,7 +4042,7 @@ export class StandardWorkspaceApplication {
     versionId: string,
     version: number,
     parent: string | null,
-    document: StructuredStandardRequestV1,
+    document: GovernedStructuredStandardRequest,
     sourceDigest?: Buffer,
     persistContradictions = true,
     fieldSourceLanguage = document.source_language,

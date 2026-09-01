@@ -17,6 +17,12 @@ export async function workspaceJson<T>(
   etag: string | null;
   notModified: boolean;
   pollAfterMs: number | null;
+  artifactDownload: {
+    run_id: string;
+    artifact_version_id: string;
+    version: number;
+    href: string;
+  } | null;
 }> {
   const response = await fetch(url, {
     ...init,
@@ -34,6 +40,7 @@ export async function workspaceJson<T>(
       etag: response.headers.get("ETag"),
       notModified: true,
       pollAfterMs: parsePollAfter(response.headers.get("MB-Poll-After-Ms")),
+      artifactDownload: null,
     };
   }
   const body = (await response.json().catch(() => ({}))) as T & {
@@ -57,7 +64,24 @@ export async function workspaceJson<T>(
     etag: response.headers.get("ETag"),
     notModified: false,
     pollAfterMs: parsePollAfter(response.headers.get("MB-Poll-After-Ms")),
+    artifactDownload: parseArtifactDownload(response.headers),
   };
+}
+
+function parseArtifactDownload(headers: Headers) {
+  const run_id = headers.get("MB-Artifact-Run-Id");
+  const artifact_version_id = headers.get("MB-Artifact-Version-Id");
+  const versionText = headers.get("MB-Artifact-Version");
+  const href = headers.get("MB-Artifact-Download");
+  if (!run_id || !artifact_version_id || !versionText || !href) return null;
+  const version = Number(versionText);
+  if (
+    !Number.isSafeInteger(version) ||
+    version < 1 ||
+    !href.startsWith("/api/v1/artifacts/")
+  )
+    return null;
+  return { run_id, artifact_version_id, version, href };
 }
 
 function parsePollAfter(value: string | null): number | null {

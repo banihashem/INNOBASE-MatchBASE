@@ -215,6 +215,14 @@ postgresTest(
 
       assert.equal(
         await migrateDownLatest(isolated),
+        "0013_domain_pack_v2_and_legacy_annotation",
+      );
+      assert.equal(
+        await migrateDownLatest(isolated),
+        "0012_consultant_pdf_render_ledger",
+      );
+      assert.equal(
+        await migrateDownLatest(isolated),
         "0011_admin_system_scope_and_run_tier_immutability",
       );
       assert.equal(

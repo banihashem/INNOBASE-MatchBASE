@@ -1,0 +1,116 @@
+{
+  "schema_version": "matchbase-consultant-visual-fixture.v1",
+  "report": {
+    "title": "Synthetic Pistachio Supplier Route Assessment",
+    "subtitle": "Three-container qualification scenario · Dubai routing · African distribution",
+    "metadata": {
+      "document_id": "MB-SYN-AGR-001",
+      "status": "Qualification fixture",
+      "prepared_at": "2026-09-01",
+      "classification": "Synthetic evaluation data"
+    },
+    "sections": [
+      {
+        "heading": "Executive summary",
+        "paragraphs": [
+          "This synthetic fixture demonstrates the Consultant report structure for a request involving three containers of Ahmad Aghaei pistachios routed through Dubai for onward distribution in African markets.",
+          "No supplier identity, inventory position, price, certification, route availability or commercial recommendation is asserted by this fixture. Those conclusions require cited evidence collected for the specific run."
+        ]
+      },
+      {
+        "heading": "Requirement profile",
+        "paragraphs": [
+          "Product scope: high-quality Iranian Ahmad Aghaei pistachios. Requested volume: three containers. Mandatory route: Dubai before distribution in the African market.",
+          "Inventory condition: an eligible supplier must have evidence of at least one container currently available. Quality grade, packaging, incoterms, destination countries and delivery window remain decision inputs that must be confirmed."
+        ],
+        "cards": [
+          {
+            "label": "Requested volume",
+            "value": "Three containers",
+            "detail": "Request parameter"
+          },
+          {
+            "label": "Mandatory route",
+            "value": "Via Dubai",
+            "detail": "Request parameter"
+          },
+          {
+            "label": "Product",
+            "value": "Ahmad Aghaei pistachios",
+            "detail": "Request parameter"
+          },
+          {
+            "label": "Current stock",
+            "value": "Evidence required",
+            "detail": "No availability asserted"
+          }
+        ]
+      },
+      {
+        "heading": "Mandatory constraints",
+        "paragraphs": [
+          "Eligibility depends on product and origin fit, the ability to support the requested volume, the Dubai routing constraint, and current-stock evidence. A candidate must not be represented as eligible when any mandatory constraint is unresolved.",
+          "Supplier statements are display claims until corroborated. A successful page fetch does not establish external verification."
+        ]
+      },
+      {
+        "heading": "Evidence and validation method",
+        "paragraphs": [
+          "Each decision-relevant claim should be linked to a retained evidence identifier, canonical URL, derived domain, retrieval timestamp, bounded excerpt and content digest when those facts exist in the run record.",
+          "Independent corroboration or authoritative registry evidence is required for external verification. Fetched but unused sources remain excluded evidence with an explicit reason."
+        ],
+        "tables": [
+          {
+            "caption": "Source-ready evidence register — synthetic structure only",
+            "columns": ["Decision field", "Required evidence", "Fixture state"],
+            "rows": [
+              [
+                "Supplier identity",
+                "Registry or corroborating source",
+                "Not asserted"
+              ],
+              [
+                "Current inventory",
+                "Timestamped stock evidence",
+                "Not asserted"
+              ],
+              [
+                "Dubai routing",
+                "Route-specific logistics evidence",
+                "Not asserted"
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        "heading": "Candidate landscape",
+        "paragraphs": [
+          "No candidate list is included because this visual fixture contains no run evidence. A live report may show only candidates that survive the mandatory-constraint evaluation and must disclose scarcity or truncation when applicable.",
+          "Candidate ranking, scoring bands and confidence statements must be derived from the governed result contract rather than inferred from presentation order."
+        ]
+      },
+      {
+        "heading": "Logistics and route review",
+        "paragraphs": [
+          "The Dubai leg should be assessed for export documentation, trans-shipment handling, food-import requirements, storage conditions and onward destination controls. This fixture does not state that any route or carrier is available.",
+          "Commercial outreach should request route-specific lead time, handling conditions, origin documentation and the evidence date for claimed stock."
+        ]
+      },
+      {
+        "heading": "RFQ wave plan",
+        "paragraphs": [
+          "Wave separation is operational: eligibility is established before commercial outreach. An initial wave should contain only candidates with evidence sufficient for the mandatory constraints.",
+          "A later wave may consider explicitly relaxed constraints only after the owner records the relaxation and its decision impact."
+        ]
+      },
+      {
+        "heading": "Limitations and next decisions",
+        "paragraphs": [
+          "This document is synthetic evaluation data and is not a sourcing result. It contains no live web evidence and cannot support supplier selection.",
+          "A decision-ready report requires a completed live run, preserved evidence lineage, constraint outcomes, declared contradictions, and an auditable result version."
+        ]
+      }
+    ]
+  }
+}

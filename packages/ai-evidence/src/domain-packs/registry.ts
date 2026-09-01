@@ -1,9 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type {
   DomainPackFieldV1,
-  DomainPackResolutionV1,
   DomainPackV1,
+  GovernedDomainPackResolution,
+  DomainPackV2,
 } from "@matchbase/contracts";
+import { domainPackV2ContentSha256 } from "@matchbase/contracts";
 
 const CORE_FIELD_ROWS = [
   [
@@ -305,18 +307,177 @@ export const SYNTHETIC_DOMAIN_PACK: DomainPackV1 = {
   synthetic: true,
 };
 
-const RESOLVER_VERSION = "synthetic-category-resolver.v1";
+const FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK_DEFINITION: Omit<
+  DomainPackV2,
+  "content_sha256"
+> = {
+  schema_version: "domain-pack.v2",
+  discriminator: "food_agricultural_commodity",
+  registry_version: "2026-09-01.1",
+  pack_version: "2026-09-01.1",
+  category_id: "food_agricultural_commodities",
+  category_label: "Food and Agricultural Commodities",
+  macro_parameters: [
+    "product_specification",
+    "supplier_producer_profile",
+    "trade_structure_commercial_execution",
+  ],
+  core_fields: STANDARD_DOMAIN_INVARIANT_CORE,
+  domain_fields: [
+    {
+      field_id: "commodity_variety",
+      macro_parameter: "product_specification",
+      label: "Variety",
+      description: "Named agricultural commodity variety or cultivar.",
+      kind: "text",
+      requirement: "required",
+      allowed_units: [],
+      allowed_values: [],
+    },
+    {
+      field_id: "commodity_grade",
+      macro_parameter: "product_specification",
+      label: "Grade and quality",
+      description:
+        "Required commercial grade, size, quality, and defect limits.",
+      kind: "text",
+      requirement: "conditional",
+      allowed_units: [],
+      allowed_values: [],
+    },
+    {
+      field_id: "commodity_origin",
+      macro_parameter: "supplier_producer_profile",
+      label: "Origin",
+      description: "Required country or production origin.",
+      kind: "multi_select",
+      requirement: "conditional",
+      allowed_units: [],
+      allowed_values: [],
+    },
+    {
+      field_id: "container_quantity",
+      macro_parameter: "trade_structure_commercial_execution",
+      label: "Container quantity",
+      description: "Number and type of shipping containers required.",
+      kind: "quantity",
+      requirement: "required",
+      allowed_units: ["container", "20_ft_container", "40_ft_container"],
+      allowed_values: [],
+    },
+    {
+      field_id: "routing_via",
+      macro_parameter: "trade_structure_commercial_execution",
+      label: "Required route",
+      description: "Required transit hub or route, including Dubai routing.",
+      kind: "text",
+      requirement: "conditional",
+      allowed_units: [],
+      allowed_values: [],
+    },
+    {
+      field_id: "distribution_destination",
+      macro_parameter: "trade_structure_commercial_execution",
+      label: "Destination market",
+      description: "Final country, region, or distribution market.",
+      kind: "text",
+      requirement: "required",
+      allowed_units: [],
+      allowed_values: [],
+    },
+    {
+      field_id: "current_stock",
+      macro_parameter: "supplier_producer_profile",
+      label: "Current stock",
+      description: "Minimum stock currently required to be available.",
+      kind: "quantity",
+      requirement: "conditional",
+      allowed_units: ["kg", "metric_tonne", "container"],
+      allowed_values: [],
+    },
+    {
+      field_id: "food_certifications",
+      macro_parameter: "supplier_producer_profile",
+      label: "Food certifications",
+      description:
+        "Food safety, phytosanitary, quality, or market-access certifications.",
+      kind: "multi_select",
+      requirement: "conditional",
+      allowed_units: [],
+      allowed_values: [
+        "HACCP",
+        "ISO_22000",
+        "BRCGS",
+        "IFS",
+        "phytosanitary_certificate",
+        "certificate_of_origin",
+      ],
+    },
+    {
+      field_id: "export_readiness",
+      macro_parameter: "supplier_producer_profile",
+      label: "Export readiness",
+      description:
+        "Required export licence, customs documents, and destination compliance.",
+      kind: "multi_select",
+      requirement: "conditional",
+      allowed_units: [],
+      allowed_values: [],
+    },
+    {
+      field_id: "logistics_requirements",
+      macro_parameter: "trade_structure_commercial_execution",
+      label: "Logistics requirements",
+      description:
+        "Packaging, storage, handling, freight, transshipment, and delivery requirements.",
+      kind: "multi_select",
+      requirement: "conditional",
+      allowed_units: [],
+      allowed_values: [],
+    },
+  ],
+  synthetic: false,
+};
+
+export const FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK_CONTENT_SHA256 =
+  domainPackV2ContentSha256(FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK_DEFINITION);
+
+export const FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK: DomainPackV2 = {
+  ...structuredClone(FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK_DEFINITION),
+  content_sha256: FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK_CONTENT_SHA256,
+};
+
+const DOMAIN_PACKS = new Map(
+  [SYNTHETIC_DOMAIN_PACK, FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK].map(
+    (pack) => [pack.category_id, pack] as const,
+  ),
+);
+
+export const SYNTHETIC_DOMAIN_PACK_RESOLVER_VERSION =
+  "synthetic-category-resolver.v1" as const;
+export const AGRICULTURAL_DOMAIN_PACK_RESOLVER_VERSION =
+  "governed-agricultural-category-resolver.v2" as const;
 const CONFIDENCE_THRESHOLD = 0.8;
-const CATEGORY_TERMS = [
-  "component",
-  "alloy",
-  "polymer",
-  "industrial",
-  "قطعه",
-  "صنعتی",
-  "مكون",
-  "صناعي",
+const INDUSTRIAL_IDENTITY_CONCEPTS = [
+  ["component", "components", "قطعه", "مكون"],
+  ["alloy", "polymer", "composite"],
+  ["industrial", "صنعتی", "صناعي"],
 ] as const;
+const AGRICULTURAL_IDENTITY_CONCEPTS = [
+  ["pistachio", "pistachios", "پسته", "فستق"],
+  ["ahmad aghaei", "ahmad-aghaei", "احمد آقایی", "احمدآقایی"],
+  ["agricultural commodity", "food commodity", "محصول کشاورزی", "سلعة زراعية"],
+  ["iranian pistachio", "iran pistachio", "پسته ایرانی", "فستق إيراني"],
+] as const;
+
+function matchedConceptCount(
+  normalized: string,
+  concepts: ReadonlyArray<readonly string[]>,
+): number {
+  return concepts.filter((aliases) =>
+    aliases.some((alias) => normalized.includes(alias)),
+  ).length;
+}
 
 interface ActivationPayload {
   account_id: string;
@@ -324,6 +485,7 @@ interface ActivationPayload {
   category_id: string;
   registry_version: string;
   pack_version: string;
+  content_sha256?: string;
   expires_at: string;
 }
 
@@ -356,63 +518,113 @@ function encodeActivationToken(
 export function resolveSyntheticDomainPack(
   input: DomainPackResolutionInput,
   context: DomainPackResolutionContext,
-): DomainPackResolutionV1 {
+): GovernedDomainPackResolution {
   if (!context.hmacSecret)
     throw new Error("Domain-pack HMAC secret is required.");
   if (input.explicitCategoryId !== undefined) {
-    if (input.explicitCategoryId !== SYNTHETIC_DOMAIN_PACK.category_id) {
+    const explicitPack = DOMAIN_PACKS.get(input.explicitCategoryId);
+    if (!explicitPack) {
       throw new Error("Unknown domain-pack category.");
     }
     const expiresAt = new Date(
       context.now.getTime() + context.activationTtlSeconds * 1000,
     ).toISOString();
     return {
-      schema_version: "domain-pack-resolution.v1",
-      resolver_version: RESOLVER_VERSION,
-      category_id: SYNTHETIC_DOMAIN_PACK.category_id,
+      schema_version: explicitPack.synthetic
+        ? "domain-pack-resolution.v1"
+        : "domain-pack-resolution.v2",
+      resolver_version: explicitPack.synthetic
+        ? SYNTHETIC_DOMAIN_PACK_RESOLVER_VERSION
+        : AGRICULTURAL_DOMAIN_PACK_RESOLVER_VERSION,
+      category_id: explicitPack.category_id,
       confidence: 1,
       activation_state: "confirmed",
       activation_token: encodeActivationToken(
         {
           account_id: context.accountId,
           user_id: context.userId,
-          category_id: SYNTHETIC_DOMAIN_PACK.category_id,
-          registry_version: SYNTHETIC_DOMAIN_PACK.registry_version,
-          pack_version: SYNTHETIC_DOMAIN_PACK.pack_version,
+          category_id: explicitPack.category_id,
+          registry_version: explicitPack.registry_version,
+          pack_version: explicitPack.pack_version,
+          ...(explicitPack.synthetic
+            ? {}
+            : { content_sha256: explicitPack.content_sha256 }),
           expires_at: expiresAt,
         },
         context.hmacSecret,
       ),
-      pack_version: SYNTHETIC_DOMAIN_PACK.pack_version,
-      synthetic: true,
-    };
+      pack_version: explicitPack.pack_version,
+      synthetic: explicitPack.synthetic,
+      ...(explicitPack.synthetic
+        ? {}
+        : {
+            discriminator: "food_agricultural_commodity" as const,
+            content_sha256: explicitPack.content_sha256,
+          }),
+    } as GovernedDomainPackResolution;
   }
 
   const normalized = input.sourceText.normalize("NFKC").toLocaleLowerCase("en");
   if (!normalized.trim()) {
     return {
       schema_version: "domain-pack-resolution.v1",
-      resolver_version: RESOLVER_VERSION,
+      resolver_version: SYNTHETIC_DOMAIN_PACK_RESOLVER_VERSION,
+      confidence: 0,
+      activation_state: "unresolved",
+      synthetic: true,
+    } as GovernedDomainPackResolution;
+  }
+  const industrialConcepts = matchedConceptCount(
+    normalized,
+    INDUSTRIAL_IDENTITY_CONCEPTS,
+  );
+  const agriculturalConcepts = matchedConceptCount(
+    normalized,
+    AGRICULTURAL_IDENTITY_CONCEPTS,
+  );
+  if (
+    (industrialConcepts > 0 && agriculturalConcepts > 0) ||
+    (industrialConcepts === 0 && agriculturalConcepts === 0)
+  ) {
+    return {
+      schema_version: "domain-pack-resolution.v1",
+      resolver_version: SYNTHETIC_DOMAIN_PACK_RESOLVER_VERSION,
       confidence: 0,
       activation_state: "unresolved",
       synthetic: true,
     };
   }
-  const matches = CATEGORY_TERMS.filter((term) => normalized.includes(term));
-  const confidence = matches.length >= 2 ? 0.92 : 0.45;
+  const selected =
+    agriculturalConcepts > 0
+      ? FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK
+      : SYNTHETIC_DOMAIN_PACK;
+  const selectedConcepts = Math.max(industrialConcepts, agriculturalConcepts);
+  const requiredConcepts =
+    selected === FOOD_AGRICULTURAL_COMMODITY_DOMAIN_PACK ? 2 : 2;
+  const confidence = selectedConcepts >= requiredConcepts ? 0.92 : 0.45;
   if (confidence < CONFIDENCE_THRESHOLD) {
     return {
-      schema_version: "domain-pack-resolution.v1",
-      resolver_version: RESOLVER_VERSION,
-      category_id: SYNTHETIC_DOMAIN_PACK.category_id,
+      schema_version: selected.synthetic
+        ? "domain-pack-resolution.v1"
+        : "domain-pack-resolution.v2",
+      resolver_version: selected.synthetic
+        ? SYNTHETIC_DOMAIN_PACK_RESOLVER_VERSION
+        : AGRICULTURAL_DOMAIN_PACK_RESOLVER_VERSION,
+      category_id: selected.category_id,
       confidence,
       activation_state: "confirmation_required",
-      pack_version: SYNTHETIC_DOMAIN_PACK.pack_version,
-      synthetic: true,
-    };
+      pack_version: selected.pack_version,
+      synthetic: selected.synthetic,
+      ...(selected.synthetic
+        ? {}
+        : {
+            discriminator: "food_agricultural_commodity" as const,
+            content_sha256: selected.content_sha256,
+          }),
+    } as GovernedDomainPackResolution;
   }
   return resolveSyntheticDomainPack(
-    { ...input, explicitCategoryId: SYNTHETIC_DOMAIN_PACK.category_id },
+    { ...input, explicitCategoryId: selected.category_id },
     context,
   );
 }
@@ -423,7 +635,7 @@ export function requireSyntheticDomainPackActivation(
     DomainPackResolutionContext,
     "accountId" | "userId" | "now" | "hmacSecret"
   >,
-): DomainPackV1 {
+): DomainPackV1 | DomainPackV2 {
   const [encoded, suppliedSignature, extra] = token.split(".");
   if (!encoded || !suppliedSignature || extra !== undefined) {
     throw new Error("Domain-pack activation token is invalid.");
@@ -441,16 +653,21 @@ export function requireSyntheticDomainPackActivation(
   const payload = JSON.parse(
     Buffer.from(encoded, "base64url").toString("utf8"),
   ) as Partial<ActivationPayload>;
+  const pack =
+    typeof payload.category_id === "string"
+      ? DOMAIN_PACKS.get(payload.category_id)
+      : undefined;
   if (
     payload.account_id !== expected.accountId ||
     payload.user_id !== expected.userId ||
-    payload.category_id !== SYNTHETIC_DOMAIN_PACK.category_id ||
-    payload.registry_version !== SYNTHETIC_DOMAIN_PACK.registry_version ||
-    payload.pack_version !== SYNTHETIC_DOMAIN_PACK.pack_version ||
+    !pack ||
+    payload.registry_version !== pack.registry_version ||
+    payload.pack_version !== pack.pack_version ||
+    (!pack.synthetic && payload.content_sha256 !== pack.content_sha256) ||
     typeof payload.expires_at !== "string" ||
     Date.parse(payload.expires_at) <= expected.now.getTime()
   ) {
     throw new Error("Domain-pack activation token is invalid or expired.");
   }
-  return structuredClone(SYNTHETIC_DOMAIN_PACK);
+  return structuredClone(pack);
 }

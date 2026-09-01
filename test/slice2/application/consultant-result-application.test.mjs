@@ -251,7 +251,15 @@ test("persists the projection decision and serving audit in one transaction", as
   );
   assert.equal(serving.values[3], "consultant");
   assert.match(serving.text, /resource_id,run_id/iu);
-  assert.equal(fixture.calls.at(-1).text, "COMMIT");
+  const commitIndex = fixture.calls.findIndex((call) => call.text === "COMMIT");
+  const servingIndex = fixture.calls.findIndex((call) =>
+    call.text.includes("INSERT INTO projection_serving"),
+  );
+  const artifactLookupIndex = fixture.calls.findIndex((call) =>
+    call.text.includes("FROM artifact a"),
+  );
+  assert.ok(servingIndex >= 0 && commitIndex > servingIndex);
+  assert.ok(artifactLookupIndex > commitIndex);
 });
 
 test("tenant/owner invisibility is a neutral 403 before result rows are read", async () => {

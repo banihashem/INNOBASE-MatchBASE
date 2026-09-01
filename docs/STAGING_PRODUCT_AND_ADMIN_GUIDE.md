@@ -108,6 +108,22 @@ no continuation remains.
 - A provider or transport failure remains a terminal failed run and must not be converted into a no-match result or shown indefinitely as pending.
 - Preserve the displayed correlation ID when reporting a failure.
 
+## Consultant PDF operational boundary
+
+The runtime contract contains a create-only GCS writer, immutable run/account
+lineage, session-bound audited download grants and an additive direct-result
+download action. Artifact generation failure does not revoke or hide the
+terminal structured result. Cross-account and unreleased versions remain
+non-visible.
+
+Release remains fail-closed. The worker does not configure the artifact
+lifecycle until the approved report-model renderer and a genuine evaluator for
+all sixteen `artifact_qa_check` gates are installed. In particular, the
+`veraPDF` gate must be produced by a real validator. The runtime must not infer
+PDF/UA conformance from `%PDF` bytes or synthesize a passing QA row. Until that
+renderer/evaluator seam is closed, profiles and direct results correctly omit
+the PDF action.
+
 ## 2026-09-01 qualified Staging acceptance evidence
 
 - Route policy: `slice3-routes.2026-09-01.staging-qualified-v3`
@@ -141,3 +157,26 @@ feature commit `6166195c0fb1d53496c183571aea806217708dc1`. The additive UX
 correction documented above is a later source publication and does not rewrite
 that commit or its evidence. Credential files and temporary diagnostic files
 remain excluded.
+
+## Consultant PDF async runtime boundary
+
+Migration `0012_consultant_pdf_render_ledger` adds the create-before-render
+ledger and one-artifact-per-run constraint. `POST
+/api/v1/runs/{run_id}/artifacts` requires the existing CSRF control plus an
+`Idempotency-Key`, commits a rendering artifact/version/job/audit, and returns
+`202`. The private job-status route is
+`GET /api/v1/runs/{run_id}/artifacts/{job_id}`. Released downloads continue
+through the audited session-bound artifact download route returned by the
+Consultant result contract.
+
+The runtime is enabled only when `MATCHBASE_CONSULTANT_PDF_RUNTIME=enabled`
+and exact template, font, toolchain and allowed-attestation digests are
+present. The attestation itself is an immutable image asset at
+`/opt/matchbase/report-assets/template-attestation.json`; it is not placed in a
+plain Cloud Run environment variable. The web process validates only immutable
+identities and queues work; it does not execute or inspect renderer binaries.
+The combined worker alone checks fixed executable and asset paths, constructs
+the DB-backed report model, renders A4 and Letter, consumes the same-invocation
+sixteen QA outcomes, performs create-only storage, and releases the artifact.
+Absent configuration remains fail-closed. Migration `0012` and this runtime
+have not yet been applied to Staging in this source state.

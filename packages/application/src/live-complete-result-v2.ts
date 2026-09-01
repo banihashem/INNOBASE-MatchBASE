@@ -24,7 +24,52 @@ import type { LiveSourceBindingRecord } from "./live-source-binding.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 
 const IDENTITY_RESOLUTION_CONSTRAINT = "identity_resolution";
+const CURRENT_STOCK_DATED_EVIDENCE_CONSTRAINT = "current_stock_dated_evidence";
 const PERSONAL_DATA_WITHHELD = "[personal data withheld]";
+
+export function requestRequiresDatedCurrentStockEvidence(
+  canonicalEnglishRequest: string,
+): boolean {
+  return (
+    /"field_id":"current_stock"/u.test(canonicalEnglishRequest) ||
+    /\b(?:current(?:ly)?\s+(?:available\s+)?(?:stock|inventory)|(?:stock|inventory)\s+(?:currently\s+)?available|available\s+in\s+stock)\b/iu.test(
+      canonicalEnglishRequest,
+    )
+  );
+}
+
+function canonicalTimestamp(value: string): boolean {
+  try {
+    return new Date(value).toISOString() === value;
+  } catch {
+    return false;
+  }
+}
+
+export function eligibleCandidateIdsWithDatedCurrentStockEvidence(input: {
+  readonly graph: EvidenceGraphV1;
+  readonly eligibleCandidateIds: readonly string[];
+  readonly sourceBindings: readonly LiveSourceBindingRecord[];
+}): readonly string[] {
+  const datedEvidence = new Set(
+    input.sourceBindings
+      .filter((binding) => canonicalTimestamp(binding.retrievedAt))
+      .map((binding) => binding.evidenceId),
+  );
+  return Object.freeze(
+    input.eligibleCandidateIds.filter((candidateId) =>
+      input.graph.claims.some(
+        (claim) =>
+          claim.candidateId === candidateId &&
+          claim.decisionBearing &&
+          /\b(?:stock|inventory|currently\s+available|available\s+in\s+stock)\b/iu.test(
+            claim.text,
+          ) &&
+          claim.evidenceIds.some((evidenceId) => datedEvidence.has(evidenceId)),
+      ),
+    ),
+  );
+}
 
 export interface SmeWeightValidationV2 {
   readonly validation_record_id: string;
@@ -181,6 +226,7 @@ export function buildOperationalLiveCompleteResultV2(input: {
   readonly authoritativeRegistryDomains?: readonly string[];
   readonly qualificationMode: "synthetic_qualification" | "production";
   readonly smeWeightValidation?: SmeWeightValidationV2;
+  readonly requireDatedCurrentStockEvidence?: boolean;
 }): {
   readonly foundation: CompleteResultFoundationV2;
   readonly trustedFetchLedger: TrustedLiveFetchLedgerV2;
@@ -200,7 +246,28 @@ export function buildOperationalLiveCompleteResultV2(input: {
   const providerEvidenceById = new Map(
     input.graph.evidence.map((evidence) => [evidence.evidenceId, evidence]),
   );
-  const eligible = new Set(input.eligibleCandidateIds);
+  const datedStockEligibleCandidateIds = input.requireDatedCurrentStockEvidence
+    ? new Set(
+        eligibleCandidateIdsWithDatedCurrentStockEvidence({
+          graph: input.graph,
+          eligibleCandidateIds: input.graph.eligibleCandidateIds,
+          sourceBindings: input.sourceBindings,
+        }),
+      )
+    : null;
+  const eligibleCandidateIds = datedStockEligibleCandidateIds
+    ? input.eligibleCandidateIds.filter((candidateId) =>
+        datedStockEligibleCandidateIds.has(candidateId),
+      )
+    : input.eligibleCandidateIds;
+  const eligible = new Set(eligibleCandidateIds);
+  const removedByStockEvidenceGate = new Set(
+    input.eligibleCandidateIds.filter(
+      (candidateId) =>
+        datedStockEligibleCandidateIds !== null &&
+        !datedStockEligibleCandidateIds.has(candidateId),
+    ),
+  );
   const candidates = input.graph.candidates.map((candidate) => {
     const confidence = evidenceConfidence(candidate.candidateId, input.graph);
     const remainsEligible = eligible.has(candidate.candidateId);
@@ -213,9 +280,11 @@ export function buildOperationalLiveCompleteResultV2(input: {
       mandatory_constraints_satisfied: remainsEligible,
       failed_constraint_ids: remainsEligible
         ? []
-        : candidate.failedConstraintIds.length > 0
-          ? candidate.failedConstraintIds.map(sanitizedProviderText)
-          : [IDENTITY_RESOLUTION_CONSTRAINT],
+        : removedByStockEvidenceGate.has(candidate.candidateId)
+          ? [CURRENT_STOCK_DATED_EVIDENCE_CONSTRAINT]
+          : candidate.failedConstraintIds.length > 0
+            ? candidate.failedConstraintIds.map(sanitizedProviderText)
+            : [IDENTITY_RESOLUTION_CONSTRAINT],
       dimensions: dimensions(candidate, confidence),
       verification_status: providerVerificationStatus(
         candidate.verificationStatus,
@@ -289,7 +358,7 @@ export function buildOperationalLiveCompleteResultV2(input: {
     claims,
     evidence,
     evidenced_values: [],
-    eligible_candidate_ids: [...input.eligibleCandidateIds],
+    eligible_candidate_ids: [...eligibleCandidateIds],
     gate_evaluations: [
       {
         gate_id: "mandatory_constraints",

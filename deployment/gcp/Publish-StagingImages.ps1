@@ -16,7 +16,7 @@ $source = "https://github.com/banihashem/INNOBASE-MatchBASE.git"
 $sourceConnection = "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github"
 $sourceRepository = "$sourceConnection/repositories/matchbase"
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..") -ErrorAction Stop).Path
-$policyRelative = "config/slice3/research-route-policy.staging.v1.json"
+$policyRelative = "config/slice3/research-route-policy.staging.v3.json"
 $policyPath = Join-Path $repoRoot $policyRelative
 $configPath = Join-Path $repoRoot "cloudbuild.staging.yaml"
 $parser = Join-Path $repoRoot "scripts/lib/staging-eu-provenance.mjs"
@@ -24,7 +24,7 @@ $buildRecordParser = Join-Path $repoRoot "scripts/lib/staging-build-record.mjs"
 $preflightParser = Join-Path $repoRoot "scripts/lib/staging-build-preflight.mjs"
 $policySha = (Get-FileHash -LiteralPath $policyPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $policyId = $policySha.Substring(0, 16)
-if ($policySha -cne "28b77b649f0d689b27979a236d102172f973a793a913b61ede740cce8f9ca9f7") { throw "Tracked qualified Staging route-policy SHA-256 changed; update the governed build contract and tests first." }
+if ($policySha -cne "b752d2d42a63aaad11f3b89f67bad64861ce767f633bee8190549df23a6f4155") { throw "Tracked qualified Staging route-policy SHA-256 changed; update the governed build contract and tests first." }
 if ((& git -C $repoRoot rev-parse HEAD).Trim() -cne $CandidateCommit) { throw "Candidate commit must equal HEAD." }
 if (-not [string]::IsNullOrWhiteSpace((& git -C $repoRoot status --porcelain=v1 --untracked-files=all | Out-String))) { throw "Image publication requires a clean tracked and untracked worktree." }
 $remote = (& git -C $repoRoot remote get-url origin).Trim()

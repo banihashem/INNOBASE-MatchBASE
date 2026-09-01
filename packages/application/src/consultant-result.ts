@@ -38,12 +38,16 @@ import {
   CONSULTANT_SOURCE_POLICY_ID,
   CONSULTANT_SOURCE_POLICY_CONTENT_SHA256,
   CONSULTANT_SOURCE_POLICY_VERSION,
+  CONSULTANT_AGRICULTURAL_RFQ_QUESTIONS,
+  CONSULTANT_AGRICULTURAL_LIMITATION_NOTICES,
   CONSULTANT_SYNTHETIC_RFQ_QUESTIONS,
+  CONSULTANT_SYNTHETIC_LIMITATION_NOTICES,
   parseConsultantResultProjectionV1,
   parseConsultantResultProjectionV2,
 } from "@matchbase/contracts";
 import {
   appendAuditEvent,
+  ensureSessionArtifactGrantForRun,
   inTransaction,
   readConsultantProjectionPolicy,
   type ConnectionPool,
@@ -102,6 +106,12 @@ export type ConsultantResultRead =
       readonly projectionTier: "consultant";
       readonly body:
         ConsultantResultProjectionV1 | ConsultantResultProjectionV2;
+      readonly artifactDownload?: {
+        readonly run_id: string;
+        readonly artifact_version_id: string;
+        readonly version: number;
+        readonly href: string;
+      } | null;
     };
 
 function statusPriority(status: StandardVerificationStatus): number {
@@ -473,6 +483,7 @@ export function buildConsultantResultProjectionV2(input: {
   readonly projectionAsOf: Date;
   readonly hardConstraints: readonly StandardHardConstraintV1[];
   readonly softCap: number;
+  readonly domainPackId?: ConsultantResultProjectionV2["source_policy"]["domain_pack_id"];
   readonly configurationRelease: {
     readonly configId: string;
     readonly configVersion: string;
@@ -569,11 +580,14 @@ export function buildConsultantResultProjectionV2(input: {
     0,
     Math.min(3, landscape.displayed_count),
   );
+  const agricultural =
+    input.domainPackId === "MATCHBASE-FOOD-AGRICULTURAL-COMMODITIES-V1";
   const waveInstanceId = hash(
     [
       graph.run_id,
       CONSULTANT_SOURCE_POLICY_CONTENT_SHA256,
       input.configurationRelease.contentSha256,
+      ...(agricultural ? ["MATCHBASE-FOOD-AGRICULTURAL-COMMODITIES-V1"] : []),
       "RFQ_WAVE_INITIAL",
       "1",
       selectedInitialCandidates
@@ -581,9 +595,15 @@ export function buildConsultantResultProjectionV2(input: {
         .join(","),
     ].join("|"),
   ).toString("hex");
+  const eventType = agricultural
+    ? ("AGRICULTURAL_WAVE_SNAPSHOT_PROJECTED" as const)
+    : ("SYNTHETIC_WAVE_SNAPSHOT_PROJECTED" as const);
   const auditEventId = hash(
-    `${waveInstanceId}|${input.configurationRelease.boundAt.toISOString()}|SYNTHETIC_WAVE_SNAPSHOT_PROJECTED`,
+    `${waveInstanceId}|${input.configurationRelease.boundAt.toISOString()}|${eventType}`,
   ).toString("hex");
+  const rfqQuestions = agricultural
+    ? CONSULTANT_AGRICULTURAL_RFQ_QUESTIONS
+    : CONSULTANT_SYNTHETIC_RFQ_QUESTIONS;
   const projection: ConsultantResultProjectionV2 = {
     ...standard,
     schema_version: CONSULTANT_RESULT_PROJECTION_V2_SCHEMA_VERSION,
@@ -593,8 +613,10 @@ export function buildConsultantResultProjectionV2(input: {
       policy_id: CONSULTANT_SOURCE_POLICY_ID,
       policy_version: CONSULTANT_SOURCE_POLICY_VERSION,
       content_sha256: CONSULTANT_SOURCE_POLICY_CONTENT_SHA256,
-      domain_pack_id: CONSULTANT_DOMAIN_PACK_ID,
-      mode: "agent_researched_synthetic_qualification",
+      domain_pack_id: input.domainPackId ?? CONSULTANT_DOMAIN_PACK_ID,
+      mode: agricultural
+        ? "agent_researched_agricultural_qualification"
+        : "agent_researched_synthetic_qualification",
       production_state: "blocked_pending_attributable_sme_validation",
     },
     configuration_release: {
@@ -608,11 +630,13 @@ export function buildConsultantResultProjectionV2(input: {
     },
     agent_authorship: {
       prepared_by: "matchbase_agent_research_and_implementation_team",
-      mode: "agent_researched_synthetic_qualification",
+      mode: agricultural
+        ? "agent_researched_agricultural_qualification"
+        : "agent_researched_synthetic_qualification",
       human_consultant_authorship: "not_claimed",
       production_sme_validation: "not_claimed",
     },
-    rfq_questions: CONSULTANT_SYNTHETIC_RFQ_QUESTIONS.map(
+    rfq_questions: rfqQuestions.map(
       ([questionId, requiredResponse], index) => ({
         order: index + 1,
         question_id: questionId,
@@ -626,14 +650,18 @@ export function buildConsultantResultProjectionV2(input: {
         action:
           displayed.length === 0
             ? "no_eligible_candidates"
-            : "prepare_synthetic_rfq",
+            : agricultural
+              ? "prepare_governed_agricultural_rfq"
+              : "prepare_synthetic_rfq",
         selection_rule: "first_min_initial_wave_size_displayed",
         candidates: selectedInitialCandidates,
       },
     ],
     eligible_ranking: eligibleRanking,
     rfq_execution_snapshot: {
-      state: "synthetic_planning_only",
+      state: agricultural
+        ? "governed_agricultural_planning_only"
+        : "synthetic_planning_only",
       contact_state: "not_contacted",
       response_state: "not_collected",
       qualified_response_count: 0,
@@ -654,7 +682,9 @@ export function buildConsultantResultProjectionV2(input: {
       stop_state:
         landscape.displayed_count === 0
           ? "exhausted_displayed_queue"
-          : "awaiting_synthetic_checkpoint",
+          : agricultural
+            ? "awaiting_governed_agricultural_checkpoint"
+            : "awaiting_synthetic_checkpoint",
       next_reserve_promotion: {
         state:
           ranked.length > landscape.displayed_count ? "available" : "exhausted",
@@ -669,7 +699,7 @@ export function buildConsultantResultProjectionV2(input: {
         promotion_mode: "one_next_ranked_eligible_only",
       },
       audit_identity: {
-        event_type: "SYNTHETIC_WAVE_SNAPSHOT_PROJECTED",
+        event_type: eventType,
         event_id: auditEventId,
         actor_type: "agent",
         actor_id: "matchbase_agent_research_and_implementation_team",
@@ -701,19 +731,17 @@ export function buildConsultantResultProjectionV2(input: {
     source_facts: sourceFacts,
     excluded_evidence: excludedEvidence,
     full_limitations: {
-      qualification_scope: "synthetic_only",
+      qualification_scope: agricultural
+        ? "governed_agricultural_qualification"
+        : "synthetic_only",
       human_consultant_authorship: "not_claimed",
       production_sme_validation: "not_claimed",
       production_release: "blocked",
       restricted_party_clearance: "not_claimed",
       due_diligence_completeness: "not_executed",
-      notices: [
-        "This result is an agent-researched synthetic qualification output, not a real supplier recommendation.",
-        "No human Consultant authorship or attributable professional approval is claimed.",
-        "The six production scoring weights and enabled domain pack do not have attributable SME validation.",
-        "No sanctions, debarment, customs, export-control, legal, or supplier-capability clearance is claimed.",
-        "The due-diligence checklist has not been executed and initial diligence would not be exhaustive.",
-      ],
+      notices: agricultural
+        ? CONSULTANT_AGRICULTURAL_LIMITATION_NOTICES
+        : CONSULTANT_SYNTHETIC_LIMITATION_NOTICES,
     },
     projection_version: CONSULTANT_RESULT_PROJECTION_V2_VERSION,
   };
@@ -1068,6 +1096,11 @@ export class ConsultantResultApplication {
             row.canonical_document as StructuredStandardRequestV1
           ).hard_constraints,
           softCap: policy.softCap,
+          domainPackId:
+            (row.canonical_document as Partial<StructuredStandardRequestV1>)
+              .domain_pack?.category_id === "food_agricultural_commodities"
+              ? "MATCHBASE-FOOD-AGRICULTURAL-COMMODITIES-V1"
+              : CONSULTANT_DOMAIN_PACK_ID,
           configurationRelease: {
             configId: policy.configId,
             configVersion: policy.configVersion,
@@ -1190,6 +1223,24 @@ export class ConsultantResultApplication {
         "MB-403-RESOURCE",
         "Resource is not visible.",
       );
-    return guarded.result;
+    if (guarded.result.projectionTier !== "consultant") return guarded.result;
+    const grant = await ensureSessionArtifactGrantForRun(this.pool, {
+      runId,
+      accountId: context.accountId,
+      subjectUserId: context.userId,
+      subjectTier: context.tier === "admin" ? "admin" : "consultant",
+    });
+    return {
+      ...guarded.result,
+      artifactDownload:
+        grant === null
+          ? null
+          : {
+              run_id: grant.runId,
+              artifact_version_id: grant.artifactVersionId,
+              version: grant.version,
+              href: `/api/v1/artifacts/${grant.grantId}/download`,
+            },
+    };
   }
 }

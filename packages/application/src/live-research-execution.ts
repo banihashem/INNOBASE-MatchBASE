@@ -59,6 +59,8 @@ import {
 import {
   STANDARD_DIMENSION_WEIGHTS_SHA256,
   buildOperationalLiveCompleteResultV2,
+  eligibleCandidateIdsWithDatedCurrentStockEvidence,
+  requestRequiresDatedCurrentStockEvidence,
   type SmeWeightValidationV2,
 } from "./live-complete-result-v2.js";
 import { standardCompleteResultDocumentSha256 } from "./standard-workspace.js";
@@ -218,7 +220,11 @@ export function liveProviderRequestFromCanonicalDocument(
       12_000,
     );
   }
-  if (document.schema_version !== "structured-standard-request.v1")
+  const structuredSchemaVersion = document.schema_version;
+  if (
+    structuredSchemaVersion !== "structured-standard-request.v1" &&
+    structuredSchemaVersion !== "structured-standard-request.v2"
+  )
     throw new Error("Canonical document schema is unsupported.");
   exactCanonicalAdmissionKeys(
     document,
@@ -248,9 +254,32 @@ export function liveProviderRequestFromCanonicalDocument(
   );
   exactCanonicalAdmissionKeys(
     domainPack,
-    ["registry_version", "pack_version", "category_id"],
+    structuredSchemaVersion === "structured-standard-request.v2"
+      ? [
+          "registry_version",
+          "pack_version",
+          "category_id",
+          "schema_version",
+          "pack_schema_version",
+          "content_sha256",
+          "resolver_version",
+        ]
+      : ["registry_version", "pack_version", "category_id"],
     "Structured domain pack",
   );
+  if (structuredSchemaVersion === "structured-standard-request.v2") {
+    if (
+      domainPack.schema_version !== "domain-pack-binding.v2" ||
+      domainPack.pack_schema_version !== "domain-pack.v2" ||
+      !/^[a-f0-9]{64}$/u.test(String(domainPack.content_sha256)) ||
+      canonicalAdmissionText(
+        domainPack.resolver_version,
+        "Structured domain pack resolver",
+        200,
+      ) !== "governed-agricultural-category-resolver.v2"
+    )
+      throw new Error("Structured domain pack v2 binding is invalid.");
+  }
   const categoryId = canonicalAdmissionText(
     domainPack.category_id,
     "Structured category",
@@ -814,6 +843,7 @@ export class PostgresLiveResearchAtomicLedger {
       waitMs?: number;
       now?: () => Date;
       pipelineIdentity: LiveResearchPipelineIdentityV1;
+      requireDatedCurrentStockEvidence?: boolean;
       authoritativeRegistryDomains?: readonly string[];
       executionEnvironment?: "local" | "test" | "staging" | "production";
       deploymentId?: string;
@@ -2288,12 +2318,19 @@ export class PostgresLiveResearchAtomicLedger {
         resolution,
       ]),
     );
-    const eligible = new Set(
-      graph.eligibleCandidateIds.filter(
-        (candidateId) =>
-          identityByCandidate.get(candidateId)?.disposition === "distinct",
-      ),
+    const identityEligibleCandidateIds = graph.eligibleCandidateIds.filter(
+      (candidateId) =>
+        identityByCandidate.get(candidateId)?.disposition === "distinct",
     );
+    const evidenceEligibleCandidateIds = this.options
+      .requireDatedCurrentStockEvidence
+      ? eligibleCandidateIdsWithDatedCurrentStockEvidence({
+          graph,
+          eligibleCandidateIds: identityEligibleCandidateIds,
+          sourceBindings,
+        })
+      : identityEligibleCandidateIds;
+    const eligible = new Set(evidenceEligibleCandidateIds);
     const persistedGraph: EvidenceGraphV1 = {
       ...graph,
       eligibleCandidateIds: graph.eligibleCandidateIds.filter((candidateId) =>
@@ -2302,12 +2339,15 @@ export class PostgresLiveResearchAtomicLedger {
     };
     const completeResult = buildOperationalLiveCompleteResultV2({
       graph,
-      eligibleCandidateIds: persistedGraph.eligibleCandidateIds,
+      eligibleCandidateIds: identityEligibleCandidateIds,
       sourceBindings,
       qualificationMode:
         this.options.executionEnvironment === "production"
           ? "production"
           : "synthetic_qualification",
+      ...(this.options.requireDatedCurrentStockEvidence
+        ? { requireDatedCurrentStockEvidence: true }
+        : {}),
       ...(persistedSmeWeightValidation === undefined
         ? {}
         : { smeWeightValidation: persistedSmeWeightValidation }),
@@ -2678,6 +2718,8 @@ export class LiveResearchExecutionService {
       consultantProjectionConfig:
         this.options.consultantProjectionConfig ??
         DEFAULT_CONSULTANT_PROJECTION_CONFIG,
+      requireDatedCurrentStockEvidence:
+        requestRequiresDatedCurrentStockEvidence(canonicalEnglishRequest),
       ...(this.options.authoritativeRegistryDomains === undefined
         ? {}
         : {
@@ -3078,6 +3120,11 @@ export class LiveResearchExecutionService {
               validatedPolicy.environment === "production"
                 ? "production"
                 : "synthetic_qualification",
+            ...(requestRequiresDatedCurrentStockEvidence(
+              canonicalEnglishRequest,
+            )
+              ? { requireDatedCurrentStockEvidence: true }
+              : {}),
             ...(smeWeightValidation === undefined
               ? {}
               : { smeWeightValidation }),

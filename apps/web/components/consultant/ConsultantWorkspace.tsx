@@ -13,7 +13,7 @@ import {
   type WorkspaceSession,
   userFacingSessionName,
 } from "../standard/types";
-import { workspaceJson } from "../standard/api";
+import { idempotencyKey, workspaceJson } from "../standard/api";
 import {
   ConsultantResultView,
   type ConsultantVisibleResult,
@@ -32,7 +32,13 @@ type ViewState =
   | { state: "loading" }
   | { state: "runs"; items: RunItem[] }
   | { state: "profile" }
-  | { state: "result"; result: ConsultantVisibleResult }
+  | {
+      state: "result";
+      result: ConsultantVisibleResult;
+      artifactDownload:
+        import("./ConsultantResult").ResultArtifactDownload | null;
+      reportStatus: "idle" | "requesting" | "queued" | "error";
+    }
   | { state: "error"; message: string };
 
 export function ConsultantWorkspace({
@@ -49,8 +55,10 @@ export function ConsultantWorkspace({
   );
   const headingRef = useRef<HTMLHeadingElement>(null);
   const moveFocusAfterLoad = useRef(false);
+  const reportPollAbort = useRef<AbortController | null>(null);
 
   const loadRuns = useCallback(async (moveFocus = false) => {
+    reportPollAbort.current?.abort();
     moveFocusAfterLoad.current = moveFocus;
     setView({ state: "loading" });
     try {
@@ -64,6 +72,7 @@ export function ConsultantWorkspace({
       });
     }
   }, []);
+  useEffect(() => () => reportPollAbort.current?.abort(), []);
 
   useEffect(() => {
     if (initialView === "runs") void loadRuns();
@@ -104,9 +113,81 @@ export function ConsultantWorkspace({
             throw new Error("Consultant result schema is unsupported.");
         }
       })();
-      setView({ state: "result", result });
+      setView({
+        state: "result",
+        result,
+        artifactDownload: response.artifactDownload,
+        reportStatus: "idle",
+      });
     } catch {
       setView({ state: "error", message: "The result could not be loaded." });
+    }
+  }
+
+  async function requestReport() {
+    if (
+      view.state !== "result" ||
+      view.artifactDownload ||
+      view.result.schema_version !== "consultant-result-projection.v2"
+    )
+      return;
+    const runId = view.result.run_id;
+    setView({ ...view, reportStatus: "requesting" });
+    try {
+      const accepted = await workspaceJson<{
+        job_id: string;
+        state: string;
+      }>(
+        `/api/v1/runs/${encodeURIComponent(runId)}/artifacts`,
+        {
+          method: "POST",
+          headers: { "Idempotency-Key": idempotencyKey("consultant-pdf") },
+        },
+        initialSession.csrf_token,
+      );
+      if (!accepted.body.job_id || accepted.body.state !== "queued")
+        throw new Error("Invalid report job acknowledgement.");
+      setView((current) =>
+        current.state === "result"
+          ? { ...current, reportStatus: "queued" }
+          : current,
+      );
+      const controller = new AbortController();
+      reportPollAbort.current?.abort();
+      reportPollAbort.current = controller;
+      let pollAfterMs = accepted.pollAfterMs ?? 1_000;
+      const deadline = Date.now() + 60_000;
+      while (Date.now() < deadline) {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(resolve, pollAfterMs);
+          controller.signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timeout);
+              reject(new DOMException("Polling aborted", "AbortError"));
+            },
+            { once: true },
+          );
+        });
+        const status = await workspaceJson<{ state: string }>(
+          `/api/v1/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(accepted.body.job_id)}`,
+          { signal: controller.signal },
+        );
+        if (status.body.state === "completed") {
+          await openResult(runId);
+          return;
+        }
+        if (status.body.state === "failed")
+          throw new Error("Report generation failed.");
+        pollAfterMs = status.pollAfterMs ?? pollAfterMs;
+      }
+      throw new Error("Report generation timed out.");
+    } catch {
+      setView((current) =>
+        current.state === "result"
+          ? { ...current, reportStatus: "error" }
+          : current,
+      );
     }
   }
 
@@ -247,11 +328,38 @@ export function ConsultantWorkspace({
           </section>
         ) : null}
         {view.state === "result" ? (
-          <ConsultantResultView
-            result={view.result}
-            headingRef={headingRef}
-            onBack={() => void loadRuns(true)}
-          />
+          <>
+            <ConsultantResultView
+              result={view.result}
+              artifactDownload={view.artifactDownload}
+              headingRef={headingRef}
+              onBack={() => void loadRuns(true)}
+            />
+            {!view.artifactDownload &&
+            view.result.schema_version === "consultant-result-projection.v2" ? (
+              <section className="standard-section" aria-label="PDF report">
+                <button
+                  className="secondary-action"
+                  disabled={
+                    view.reportStatus === "requesting" ||
+                    view.reportStatus === "queued"
+                  }
+                  onClick={() => void requestReport()}
+                >
+                  {view.reportStatus === "requesting" ||
+                  view.reportStatus === "queued"
+                    ? "Generating PDF report…"
+                    : "Generate PDF report"}
+                </button>
+                {view.reportStatus === "error" ? (
+                  <p className="error-summary" role="alert">
+                    PDF report generation is unavailable. The research result
+                    remains available.
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
+          </>
         ) : null}
       </main>
       <footer>

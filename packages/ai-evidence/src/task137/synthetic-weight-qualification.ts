@@ -7,6 +7,7 @@ import {
   CONSULTANT_SOURCE_POLICY_CONTENT_SHA256,
   CONSULTANT_SOURCE_POLICY_VERSION,
   CONSULTANT_SYNTHETIC_RFQ_QUESTIONS,
+  CONSULTANT_SYNTHETIC_LIMITATION_NOTICES,
   contractSha256Hex,
   parseConsultantResultProjectionV2,
   type ConsultantResultProjectionV2,
@@ -781,13 +782,7 @@ export function buildTask137ActualTierProjectionSafetyOutputs(
       production_release: "blocked",
       restricted_party_clearance: "not_claimed",
       due_diligence_completeness: "not_executed",
-      notices: [
-        "Synthetic qualification only.",
-        "Human Consultant authorship is not claimed.",
-        "Production SME validation is not claimed.",
-        "Restricted-party clearance is not claimed.",
-        "Due diligence has not been executed.",
-      ],
+      notices: CONSULTANT_SYNTHETIC_LIMITATION_NOTICES,
     },
     projection_version: CONSULTANT_RESULT_PROJECTION_V2_VERSION,
   });

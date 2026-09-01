@@ -21,3 +21,6 @@ export * from "./v1/user-profile-history.js";
 export * from "./v1/user-profile-history-v2.js";
 export * from "./v2/complete-result-foundation.js";
 export * from "./v2/consultant-projection.js";
+export * from "./v2/domain-pack.js";
+export * from "./v2/structured-request.js";
+export * from "./v2/standard-projection.js";

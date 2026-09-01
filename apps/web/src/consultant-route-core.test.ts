@@ -6,6 +6,7 @@ import {
   CONSULTANT_SOURCE_POLICY_ID,
   CONSULTANT_SOURCE_POLICY_VERSION,
   CONSULTANT_SYNTHETIC_RFQ_QUESTIONS,
+  CONSULTANT_SYNTHETIC_LIMITATION_NOTICES,
   contractSha256Hex,
 } from "@matchbase/contracts";
 import { handleConsultantRoute } from "./consultant-route-core";
@@ -170,13 +171,7 @@ const consultantBodyV2 = {
     production_release: "blocked" as const,
     restricted_party_clearance: "not_claimed" as const,
     due_diligence_completeness: "not_executed" as const,
-    notices: [
-      "Synthetic only.",
-      "No human Consultant authorship.",
-      "No production SME validation.",
-      "No legal or compliance clearance.",
-      "Due diligence was not executed.",
-    ] as const,
+    notices: CONSULTANT_SYNTHETIC_LIMITATION_NOTICES,
   },
   projection_version: 6 as const,
 };
@@ -283,6 +278,34 @@ describe("Consultant result route", () => {
         policy_id: "task137-rfq-wave-due-diligence.v1",
       },
       agent_authorship: { human_consultant_authorship: "not_claimed" },
+    });
+  });
+
+  it("exposes an exact run-bound released artifact through additive private headers", async () => {
+    const runId = "00000000-0000-4000-8000-000000000137";
+    const versionId = "00000000-0000-4000-8000-000000000777";
+    const getResult = vi.fn(async () => ({
+      projectionTier: "consultant" as const,
+      body: consultantBodyV2,
+      artifactDownload: {
+        run_id: runId,
+        artifact_version_id: versionId,
+        version: 3,
+        href: "/api/v1/artifacts/00000000-0000-4000-8000-000000000778/download",
+      },
+    }));
+    const response = await handleConsultantRoute({
+      method: "GET",
+      pathname: `/api/v1/runs/${runId}/result`,
+      context,
+      application: { getResult } as never,
+    });
+    expect(response?.headers).toMatchObject({
+      "MB-Artifact-Run-Id": runId,
+      "MB-Artifact-Version-Id": versionId,
+      "MB-Artifact-Version": "3",
+      "MB-Artifact-Download":
+        "/api/v1/artifacts/00000000-0000-4000-8000-000000000778/download",
     });
   });
 
@@ -404,5 +427,54 @@ describe("Consultant result route", () => {
       adminContext,
       "00000000-0000-4000-8000-000000000137",
     );
+  });
+
+  it("accepts a governed PDF request and exposes private job status", async () => {
+    const artifactApplication = {
+      request: vi.fn(async (_context, runId, _key) => ({
+        run_id: runId,
+        job_id: "00000000-0000-4000-8000-000000000238",
+        state: "queued",
+      })),
+      status: vi.fn(async (_context, runId, jobId) => ({
+        run_id: runId,
+        job_id: jobId,
+        state: "queued",
+      })),
+    };
+    const runId = "00000000-0000-4000-8000-000000000137";
+    const jobId = "00000000-0000-4000-8000-000000000238";
+    const accepted = await handleConsultantRoute({
+      method: "POST",
+      pathname: `/api/v1/runs/${runId}/artifacts`,
+      context,
+      application: {} as never,
+      idempotencyKey: "consultant-pdf-request-0001",
+      artifactApplication,
+    });
+    expect(accepted?.status).toBe(202);
+    expect(accepted?.headers["Cache-Control"]).toBe("private, no-store");
+    const status = await handleConsultantRoute({
+      method: "GET",
+      pathname: `/api/v1/runs/${runId}/artifacts/${jobId}`,
+      context,
+      application: {} as never,
+      artifactApplication,
+    });
+    expect(status?.status).toBe(200);
+    expect(artifactApplication.request).toHaveBeenCalledTimes(1);
+    expect(artifactApplication.status).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when the renderer worker application is not configured", async () => {
+    await expect(
+      handleConsultantRoute({
+        method: "POST",
+        pathname: "/api/v1/runs/00000000-0000-4000-8000-000000000137/artifacts",
+        context,
+        application: {} as never,
+        idempotencyKey: "consultant-pdf-request-0001",
+      }),
+    ).rejects.toMatchObject({ status: 503, code: "MB-503-ARTIFACT" });
   });
 });

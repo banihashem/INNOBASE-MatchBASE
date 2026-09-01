@@ -1,5 +1,7 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
+import { access } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
 import {
   DeterministicFixtureCanonicalizer,
   DeterministicFixtureLanguageIdentifier,
@@ -10,6 +12,12 @@ import {
   recoverExpiredExecutionLeases,
 } from "@matchbase/data";
 import { createEnvironmentLiveResearchDispatcher } from "./live-research-environment-runtime.js";
+import {
+  createCloudRunMetadataAccessTokenProvider,
+  createGcsImmutablePdfWriter,
+  executeNextConsultantPdfRenderJob,
+} from "./consultant-pdf-lifecycle.js";
+import { createEnvironmentConsultantPdfPipeline } from "./consultant-pdf-reporting-adapter.js";
 import type { QualifiedLiveResearchWorkerDispatcher } from "./live-research-worker.js";
 import { MatchBaseApplication } from "./service.js";
 import { StandardWorkspaceApplication } from "./standard-workspace.js";
@@ -39,6 +47,28 @@ const pool = createPool({
   idleTimeoutMillis: 30_000,
 });
 const digestKey = Buffer.from(digestKeyText, "utf8");
+const consultantPdfPipeline = await createEnvironmentConsultantPdfPipeline(
+  pool,
+  process.env,
+);
+const consultantPdfBucket = process.env.MATCHBASE_ARTIFACT_GCS_BUCKET;
+if (consultantPdfPipeline && !consultantPdfBucket)
+  throw new Error("Consultant PDF artifact bucket is not configured.");
+const consultantPdfWriter =
+  consultantPdfPipeline && consultantPdfBucket
+    ? createGcsImmutablePdfWriter({
+        bucket: consultantPdfBucket,
+        accessToken: createCloudRunMetadataAccessTokenProvider(),
+      })
+    : null;
+if (consultantPdfPipeline)
+  await Promise.all([
+    access("/opt/matchbase/pdf-venv/bin/weasyprint", fsConstants.X_OK),
+    access("/opt/verapdf/verapdf", fsConstants.X_OK),
+    access("/usr/bin/pdfinfo", fsConstants.X_OK),
+    access("/usr/bin/pdftotext", fsConstants.X_OK),
+    access("/opt/matchbase/report-assets", fsConstants.R_OK),
+  ]);
 const consultantProjectionConfig = consultantProjectionConfigFromEnvironment(
   process.env,
 );
@@ -165,6 +195,12 @@ async function work(): Promise<void> {
     );
     if (liveDispatcher)
       await liveDispatcher.dispatchNext(shutdownController.signal, 3);
+    if (consultantPdfPipeline && consultantPdfWriter)
+      await executeNextConsultantPdfRenderJob(pool, {
+        pipeline: consultantPdfPipeline,
+        writer: consultantPdfWriter,
+        deploymentId: "combined-worker-v1",
+      });
     if (!syntheticEnabled || !standardApplication || !demoApplication) return;
     if (!(await standardApplication.readiness())) {
       readiness.markUnready("schema_not_ready");

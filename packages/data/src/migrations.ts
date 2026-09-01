@@ -27,6 +27,10 @@ export const P4_LIVE_PIPELINE_EXTRACTION_V2_MIGRATION_ID =
   "0010_p4_live_pipeline_extraction_v2";
 export const ADMIN_SYSTEM_SCOPE_AND_RUN_TIER_IMMUTABILITY_MIGRATION_ID =
   "0011_admin_system_scope_and_run_tier_immutability";
+export const CONSULTANT_PDF_RENDER_LEDGER_MIGRATION_ID =
+  "0012_consultant_pdf_render_ledger";
+export const DOMAIN_PACK_V2_AND_LEGACY_ANNOTATION_MIGRATION_ID =
+  "0013_domain_pack_v2_and_legacy_annotation";
 
 export interface MigrationDefinition {
   readonly id: string;
@@ -46,6 +50,8 @@ export const MIGRATIONS: readonly MigrationDefinition[] = Object.freeze([
   Object.freeze({
     id: ADMIN_SYSTEM_SCOPE_AND_RUN_TIER_IMMUTABILITY_MIGRATION_ID,
   }),
+  Object.freeze({ id: CONSULTANT_PDF_RENDER_LEDGER_MIGRATION_ID }),
+  Object.freeze({ id: DOMAIN_PACK_V2_AND_LEGACY_ANNOTATION_MIGRATION_ID }),
 ]);
 
 export const LATEST_MIGRATION_ID =

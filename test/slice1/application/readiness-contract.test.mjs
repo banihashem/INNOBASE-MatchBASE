@@ -41,7 +41,7 @@ function applications(pool, researchAdmission) {
   ];
 }
 
-test("application readiness requires the complete ordered 0001-0011 migration registry", async () => {
+test("application readiness requires the complete ordered 0001-0013 migration registry", async () => {
   const allIds = MIGRATIONS.map(({ id }) => id);
   for (const app of applications(migrationPool(allIds)))
     assert.equal(await app.readiness(), true);

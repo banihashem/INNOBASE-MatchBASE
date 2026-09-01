@@ -16,8 +16,8 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 export interface ConsultantRouteResult {
-  readonly status: 200;
-  readonly body: ConsultantResultRead["body"] | ConsultantRunHistoryV1;
+  readonly status: 200 | 202;
+  readonly body: ConsultantResultRead["body"] | ConsultantRunHistoryV1 | object;
   readonly headers: Readonly<Record<string, string>>;
 }
 
@@ -29,6 +29,19 @@ export async function handleConsultantRoute(input: {
     ConsultantResultApplication,
     "getResult" | "listRuns"
   >;
+  readonly idempotencyKey?: string | null;
+  readonly artifactApplication?: {
+    request(
+      context: RequestContext,
+      runId: string,
+      idempotencyKey: string,
+    ): Promise<object>;
+    status(
+      context: RequestContext,
+      runId: string,
+      jobId: string,
+    ): Promise<object>;
+  };
 }): Promise<ConsultantRouteResult | null> {
   if (
     input.context.tier !== "consultant" &&
@@ -43,6 +56,76 @@ export async function handleConsultantRoute(input: {
       status: 200,
       body: await input.application.listRuns(input.context),
       headers: { "Cache-Control": "private, no-store", Vary: "Cookie" },
+    };
+  }
+  const artifactRequest = /^\/api\/v1\/runs\/([^/]+)\/artifacts$/u.exec(
+    input.pathname,
+  );
+  const artifactStatus = /^\/api\/v1\/runs\/([^/]+)\/artifacts\/([^/]+)$/u.exec(
+    input.pathname,
+  );
+  if (
+    (input.method === "POST" && artifactRequest) ||
+    (input.method === "GET" && artifactStatus)
+  ) {
+    const runId = (artifactRequest ?? artifactStatus)?.[1];
+    const jobId = artifactStatus?.[2];
+    if (
+      !runId ||
+      !UUID_PATTERN.test(runId) ||
+      (jobId && !UUID_PATTERN.test(jobId))
+    )
+      throw new ApplicationFault(
+        403,
+        "resource-not-visible",
+        "MB-403-RESOURCE",
+        "Resource is not visible.",
+      );
+    if (!input.artifactApplication)
+      throw new ApplicationFault(
+        503,
+        "artifact-pipeline-unavailable",
+        "MB-503-ARTIFACT",
+        "Report generation is temporarily unavailable.",
+      );
+    if (input.method === "POST") {
+      if (!input.idempotencyKey)
+        throw new ApplicationFault(
+          400,
+          "idempotency-key-required",
+          "MB-400-IDEMPOTENCY",
+          "A valid Idempotency-Key is required.",
+        );
+      return {
+        status: 202,
+        body: await input.artifactApplication.request(
+          input.context,
+          runId,
+          input.idempotencyKey,
+        ),
+        headers: {
+          "Cache-Control": "private, no-store",
+          Vary: "Cookie",
+          "MB-Poll-After-Ms": "1000",
+        },
+      };
+    }
+    const body = await input.artifactApplication.status(
+      input.context,
+      runId,
+      jobId!,
+    );
+    return {
+      status: 200,
+      body,
+      headers: {
+        "Cache-Control": "private, no-store",
+        Vary: "Cookie",
+        ...("state" in body &&
+        (body.state === "queued" || body.state === "claimed")
+          ? { "MB-Poll-After-Ms": "1000" }
+          : {}),
+      },
     };
   }
   const match =
@@ -83,6 +166,19 @@ export async function handleConsultantRoute(input: {
   return {
     status: 200,
     body,
-    headers: { "Cache-Control": "private, no-store", Vary: "Cookie" },
+    headers: {
+      "Cache-Control": "private, no-store",
+      Vary: "Cookie",
+      ...(projection.projectionTier === "consultant" &&
+      projection.artifactDownload
+        ? {
+            "MB-Artifact-Run-Id": projection.artifactDownload.run_id,
+            "MB-Artifact-Version-Id":
+              projection.artifactDownload.artifact_version_id,
+            "MB-Artifact-Version": String(projection.artifactDownload.version),
+            "MB-Artifact-Download": projection.artifactDownload.href,
+          }
+        : {}),
+    },
   };
 }

@@ -101,6 +101,6 @@ test("governed Staging Cloud Build binds exact Git material, images and provenan
   assert.match(publisher, /extra or missing binding/u);
   assert.match(
     publisher,
-    /28b77b649f0d689b27979a236d102172f973a793a913b61ede740cce8f9ca9f7/u,
+    /b752d2d42a63aaad11f3b89f67bad64861ce767f633bee8190549df23a6f4155/u,
   );
 });

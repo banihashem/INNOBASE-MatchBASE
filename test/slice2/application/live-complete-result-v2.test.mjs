@@ -174,6 +174,73 @@ test("operational producer seals live provenance and retains unused fetches", ()
   );
 });
 
+test("current-stock eligibility requires a decision-bearing claim with dated retrieved evidence", () => {
+  const input = fixture();
+  const withoutStock = buildOperationalLiveCompleteResultV2({
+    graph: input.graph,
+    eligibleCandidateIds: [input.candidateId],
+    sourceBindings: input.sourceBindings,
+    qualificationMode: "synthetic_qualification",
+    requireDatedCurrentStockEvidence: true,
+  }).foundation;
+  assert.deepEqual(withoutStock.eligible_candidate_ids, []);
+  assert.deepEqual(withoutStock.candidates[0].failed_constraint_ids, [
+    "current_stock_dated_evidence",
+  ]);
+
+  input.graph.claims[0].text =
+    "At least one container is currently available in stock.";
+  const withStock = buildOperationalLiveCompleteResultV2({
+    graph: input.graph,
+    eligibleCandidateIds: [input.candidateId],
+    sourceBindings: input.sourceBindings,
+    qualificationMode: "synthetic_qualification",
+    requireDatedCurrentStockEvidence: true,
+  }).foundation;
+  assert.deepEqual(withStock.eligible_candidate_ids, [input.candidateId]);
+  assert.equal(
+    withStock.evidence[0].accessed_at,
+    input.sourceBindings[0].retrievedAt,
+  );
+});
+
+test("stock gate does not relabel a candidate excluded by another server gate", () => {
+  const input = fixture();
+  input.graph.claims[0].text =
+    "At least one container is currently available in stock.";
+  const otherCandidateId = randomUUID();
+  const otherClaimId = randomUUID();
+  input.graph.candidates.push({
+    ...structuredClone(input.graph.candidates[0]),
+    candidateId: otherCandidateId,
+    rationaleClaimIds: [otherClaimId],
+    failedConstraintIds: ["server_identity_gate"],
+    deterministicRankKey: `021:${otherCandidateId}`,
+  });
+  input.graph.claims.push({
+    ...structuredClone(input.graph.claims[0]),
+    claimId: otherClaimId,
+    candidateId: otherCandidateId,
+    text: "General supplier qualification claim.",
+  });
+  input.graph.eligibleCandidateIds.push(otherCandidateId);
+
+  const foundation = buildOperationalLiveCompleteResultV2({
+    graph: input.graph,
+    eligibleCandidateIds: [input.candidateId],
+    sourceBindings: input.sourceBindings,
+    qualificationMode: "synthetic_qualification",
+    requireDatedCurrentStockEvidence: true,
+  }).foundation;
+  assert.deepEqual(foundation.eligible_candidate_ids, [input.candidateId]);
+  assert.deepEqual(
+    foundation.candidates.find(
+      (candidate) => candidate.candidate_id === otherCandidateId,
+    ).failed_constraint_ids,
+    ["server_identity_gate"],
+  );
+});
+
 test("server-derived source identity fills empty provider display claims without minting verification", () => {
   const input = fixture();
   input.graph.evidence[0].title = "";

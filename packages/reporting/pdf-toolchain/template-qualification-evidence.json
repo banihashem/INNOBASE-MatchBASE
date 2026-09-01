@@ -1,0 +1,90 @@
+{
+  "schema_version": "matchbase-template-qualification-evidence.v1",
+  "qualified_at_utc": "2026-09-01T16:51:15Z",
+  "fixture_schema_version": "matchbase-pdf-qualification-fixtures.v1",
+  "template_sha256": "473c4a1383b3ae99965a62eed29defa195cd1236a521581efa9c7f31b8afac9f",
+  "font_sha256": "abdc775b21b1bc470d50c97e790d276f2054b7504e56e5bd3e64f48d68582322",
+  "toolchain_sha256": "af3810688779ce540e91eb42fc17304267c6384026d9eadc9d9e230957a083c0",
+  "tool_versions": {
+    "weasyprint": "69.0",
+    "verapdf": "1.30.1"
+  },
+  "machine_checks": {
+    "contrast_ratio": {
+      "background": "#ffffff",
+      "minimum_ratio": 4.815440167390167,
+      "required_ratio": 4.5,
+      "outcome": "pass"
+    }
+  },
+  "determinism_evidence": {
+    "model_sha256": "87ddf2c4ab19622413374dfad31a6873ef734c6ebaa3065189ed0c5468aa04c0",
+    "render_count": 2,
+    "isolated_runtime_invocations": true,
+    "output_sha256": "9e4b6d0b4f50adc5a52364f17f8c340c2550319b1d1314a9c99f61d578667646",
+    "byte_size": 5495,
+    "byte_equal": true
+  },
+  "render_evidence": [
+    {
+      "fixture": "contradiction",
+      "geometry": "a4",
+      "sha256": "839ff54bb7f9af5821d1e3bf4c06b750f4a98cc9956f9f37dbb56cc8ec245486",
+      "byte_size": 5305
+    },
+    {
+      "fixture": "contradiction",
+      "geometry": "letter",
+      "sha256": "297d8215ad118c8c089f213602ae5b3cfc87dc961f34fb04012ef12b649d5fda",
+      "byte_size": 5269
+    },
+    {
+      "fixture": "malicious-long-content",
+      "geometry": "a4",
+      "sha256": "9ee568c1ab9f632920571fe435de088d88a89e36d179ce5c5e0308c07f3c2667",
+      "byte_size": 29427
+    },
+    {
+      "fixture": "malicious-long-content",
+      "geometry": "letter",
+      "sha256": "5e9708996eed25cdfa71cda4ec9533843919c7fd05a3dbd2805078c6b058a729",
+      "byte_size": 30193
+    },
+    {
+      "fixture": "ranked",
+      "geometry": "a4",
+      "sha256": "9df912ae591d7651de43882e9f649578e5f3d7477cc02c9dad28419ce76eb8a7",
+      "byte_size": 4916
+    },
+    {
+      "fixture": "ranked",
+      "geometry": "letter",
+      "sha256": "e66f294ea60ebf1f948ce2b2e7b5e3267599a37dc6e88fec52fdbd87ffadabe2",
+      "byte_size": 4849
+    },
+    {
+      "fixture": "scarcity",
+      "geometry": "a4",
+      "sha256": "5d74cc3e2b800935a2b18f4108ec2ec694eeadb9610c35337678ea8f868704d1",
+      "byte_size": 5392
+    },
+    {
+      "fixture": "scarcity",
+      "geometry": "letter",
+      "sha256": "bdef4438a2a76086ee68dbbdd61173cdf8260939984124fc819bc8802b6b2405",
+      "byte_size": 5362
+    },
+    {
+      "fixture": "zero-match",
+      "geometry": "a4",
+      "sha256": "3287a1d9ec65332d3f335616de964b54894a45ce4930ca4be21d2102fb81afdd",
+      "byte_size": 5164
+    },
+    {
+      "fixture": "zero-match",
+      "geometry": "letter",
+      "sha256": "2ad6fd7c397d26104d6c034810f639b4f13aac2fe22f90fb47c145ef2af98718",
+      "byte_size": 5126
+    }
+  ]
+}

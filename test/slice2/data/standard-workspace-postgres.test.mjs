@@ -225,7 +225,7 @@ postgresTest(
       await installFoundationOnly(pool);
       const foundationCatalog = await catalogSnapshot(pool);
       assert.deepEqual(await getMigrationStatus(pool), {
-        latestMigrationId: "0011_admin_system_scope_and_run_tier_immutability",
+        latestMigrationId: "0013_domain_pack_v2_and_legacy_annotation",
         appliedMigrationIds: ["0001_slice_1_foundation"],
         pendingMigrationIds: [
           "0002_slice_2_standard_workspace",
@@ -238,6 +238,8 @@ postgresTest(
           "0009_p4_google_risc_retention",
           "0010_p4_live_pipeline_extraction_v2",
           "0011_admin_system_scope_and_run_tier_immutability",
+          "0012_consultant_pdf_render_ledger",
+          "0013_domain_pack_v2_and_legacy_annotation",
         ],
         unknownMigrationIds: [],
         ready: false,
@@ -675,6 +677,14 @@ postgresTest(
         },
       );
 
+      assert.equal(
+        await migrateDownLatest(pool),
+        "0013_domain_pack_v2_and_legacy_annotation",
+      );
+      assert.equal(
+        await migrateDownLatest(pool),
+        "0012_consultant_pdf_render_ledger",
+      );
       assert.equal(
         await migrateDownLatest(pool),
         "0011_admin_system_scope_and_run_tier_immutability",

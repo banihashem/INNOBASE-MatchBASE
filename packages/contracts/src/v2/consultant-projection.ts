@@ -20,6 +20,8 @@ export const CONSULTANT_SOURCE_POLICY_CONTENT_SHA256 =
   "6779c1683ca65f2f3dd60b458a89cc5a3ee79035fc5865d5a6d86bf96e135e16" as const;
 export const CONSULTANT_DOMAIN_PACK_ID =
   "OD-TIER-056-MACHINED-ALLOY-DOMAIN-PACK-V1" as const;
+export const CONSULTANT_AGRICULTURAL_DOMAIN_PACK_ID =
+  "MATCHBASE-FOOD-AGRICULTURAL-COMMODITIES-V1" as const;
 
 export const CONSULTANT_SYNTHETIC_RFQ_QUESTIONS = [
   [
@@ -104,6 +106,105 @@ export const CONSULTANT_SYNTHETIC_RFQ_QUESTIONS = [
   ],
 ] as const;
 
+export const CONSULTANT_AGRICULTURAL_RFQ_QUESTIONS = [
+  [
+    "RFQ-LEGAL-IDENTITY",
+    "Legal entity, exporter identity, registration, operating address, and official website.",
+  ],
+  [
+    "RFQ-AUTHORIZED-SIGNATORY",
+    "Authorized representative, business contact, authority basis, signature, and signature date.",
+  ],
+  [
+    "RFQ-OWNERSHIP-CONTROL",
+    "Direct and indirect ownership and control information lawfully available for diligence.",
+  ],
+  [
+    "RFQ-PRODUCT-CONFORMITY",
+    "Requested pistachio variety, Iranian origin, grade, size, crop year, moisture, defect limits, and lot traceability.",
+  ],
+  [
+    "RFQ-DEVIATIONS",
+    "Every product, origin, route, stock, packing, or delivery deviation; NONE when no deviation exists.",
+  ],
+  [
+    "RFQ-CERTIFICATIONS",
+    "Food-safety, phytosanitary, certificate-of-origin, laboratory, and market-access evidence with issuer, scope, dates, and identifiers.",
+  ],
+  [
+    "RFQ-FACILITIES-SUBCONTRACTORS",
+    "Processing, sorting, packing, storage, and export facilities plus each intermediary and subcontractor.",
+  ],
+  [
+    "RFQ-CAPACITY-COMMITMENTS",
+    "Dated current stock in containers and tonnes, reserved commitments, replenishment date, and evidence for at least one available container.",
+  ],
+  [
+    "RFQ-MOQ-LEAD-DELIVERY",
+    "Three-container availability, container type and net weight, Dubai routing, African destination, loading window, Incoterm, and delivery schedule.",
+  ],
+  [
+    "RFQ-QUALITY-TEST-INSPECTION",
+    "Sampling plan, aflatoxin and residue testing, inspection method, laboratory identity, acceptance limits, and records.",
+  ],
+  [
+    "RFQ-WARRANTY-RECALL",
+    "Batch traceability, contamination response, rejection, recall, replacement, and corrective-action process.",
+  ],
+  [
+    "RFQ-COMMERCIALS",
+    "Price basis, currency, packing, freight to and via Dubai, taxes, insurance, payment terms, and validity.",
+  ],
+  [
+    "RFQ-VALIDITY-SECURITY",
+    "Offer validity, stock-hold expiry, performance security, and documentary conditions.",
+  ],
+  [
+    "RFQ-CONFLICT-OF-INTEREST",
+    "Actual, potential, or perceived conflicts; NONE when none are disclosed.",
+  ],
+  [
+    "RFQ-SANCTIONS-DECLARATION",
+    "Sanctions declaration for entity, owners, controllers, directors, processors, freight parties, and exporters.",
+  ],
+  [
+    "RFQ-DEBARMENT-DECLARATION",
+    "Current or historical suspension, exclusion, debarment, import restriction, or licence restriction.",
+  ],
+  [
+    "RFQ-COMMISSIONS-FEES",
+    "Recipient, address, reason, and amount for commissions, gratuities, or fees; NONE when none exist.",
+  ],
+  [
+    "RFQ-ANTI-CORRUPTION",
+    "Controls preventing fraud, bribery, collusion, coercion, obstruction, and facilitation payments.",
+  ],
+  [
+    "RFQ-RBC-DUE-DILIGENCE",
+    "Human-rights, labor, environmental, water, pesticide, grievance, tracking, and remediation controls in the supply chain.",
+  ],
+  [
+    "RFQ-EVIDENCE-INDEX",
+    "Evidence ID, question ID, issuer, evidence date, retrieval URL or document reference, lot relevance, and confidentiality classification.",
+  ],
+] as const;
+
+export const CONSULTANT_SYNTHETIC_LIMITATION_NOTICES = [
+  "This result is an agent-researched synthetic qualification output, not a real supplier recommendation.",
+  "No human Consultant authorship or attributable professional approval is claimed.",
+  "The six production scoring weights and enabled domain pack do not have attributable SME validation.",
+  "No sanctions, debarment, customs, export-control, legal, or supplier-capability clearance is claimed.",
+  "The due-diligence checklist has not been executed and initial diligence would not be exhaustive.",
+] as const;
+
+export const CONSULTANT_AGRICULTURAL_LIMITATION_NOTICES = [
+  "This result is an agent-researched agricultural qualification output based on bounded evidence, not a purchase recommendation or supplier commitment.",
+  "No human Consultant authorship or attributable professional approval is claimed.",
+  "The production scoring weights and agricultural domain pack do not have attributable SME validation.",
+  "Current stock, grade, crop condition, Dubai routing, African import suitability, sanctions, customs, export-control, and legal clearance remain unconfirmed until supplier and authoritative evidence is collected.",
+  "The agricultural due-diligence checklist has not been executed and initial diligence would not be exhaustive.",
+] as const;
+
 export const CONSULTANT_DUE_DILIGENCE_CHECKS = [
   ["DD-LEGAL-IDENTITY", "Legal identity and jurisdiction"],
   [
@@ -128,21 +229,29 @@ export interface ConsultantSourcePolicyV2 {
   readonly policy_id: typeof CONSULTANT_SOURCE_POLICY_ID;
   readonly policy_version: typeof CONSULTANT_SOURCE_POLICY_VERSION;
   readonly content_sha256: typeof CONSULTANT_SOURCE_POLICY_CONTENT_SHA256;
-  readonly domain_pack_id: typeof CONSULTANT_DOMAIN_PACK_ID;
-  readonly mode: "agent_researched_synthetic_qualification";
+  readonly domain_pack_id:
+    | typeof CONSULTANT_DOMAIN_PACK_ID
+    | typeof CONSULTANT_AGRICULTURAL_DOMAIN_PACK_ID;
+  readonly mode:
+    | "agent_researched_synthetic_qualification"
+    | "agent_researched_agricultural_qualification";
   readonly production_state: "blocked_pending_attributable_sme_validation";
 }
 
 export interface ConsultantAgentAuthorshipV2 {
   readonly prepared_by: "matchbase_agent_research_and_implementation_team";
-  readonly mode: "agent_researched_synthetic_qualification";
+  readonly mode:
+    | "agent_researched_synthetic_qualification"
+    | "agent_researched_agricultural_qualification";
   readonly human_consultant_authorship: "not_claimed";
   readonly production_sme_validation: "not_claimed";
 }
 
 export interface ConsultantRfqQuestionV2 {
   readonly order: number;
-  readonly question_id: (typeof CONSULTANT_SYNTHETIC_RFQ_QUESTIONS)[number][0];
+  readonly question_id:
+    | (typeof CONSULTANT_SYNTHETIC_RFQ_QUESTIONS)[number][0]
+    | (typeof CONSULTANT_AGRICULTURAL_RFQ_QUESTIONS)[number][0];
   readonly required_response: string;
   readonly response_state: "not_collected";
 }
@@ -158,7 +267,10 @@ export interface ConsultantRankedCandidateReferenceV2 {
 
 export interface ConsultantWaveRecommendationV2 {
   readonly wave_id: "RFQ_WAVE_INITIAL";
-  readonly action: "prepare_synthetic_rfq" | "no_eligible_candidates";
+  readonly action:
+    | "prepare_synthetic_rfq"
+    | "prepare_governed_agricultural_rfq"
+    | "no_eligible_candidates";
   readonly selection_rule: "first_min_initial_wave_size_displayed";
   readonly candidates: readonly ConsultantRankedCandidateReferenceV2[];
 }
@@ -186,7 +298,8 @@ export interface ConsultantConfigurationReleaseV2 {
 }
 
 export interface ConsultantRfqExecutionSnapshotV2 {
-  readonly state: "synthetic_planning_only";
+  readonly state:
+    "synthetic_planning_only" | "governed_agricultural_planning_only";
   readonly contact_state: "not_contacted";
   readonly response_state: "not_collected";
   readonly qualified_response_count: 0;
@@ -202,14 +315,18 @@ export interface ConsultantRfqExecutionSnapshotV2 {
   readonly selected_candidates: readonly ConsultantRankedCandidateReferenceV2[];
   readonly remaining_displayed_queue: readonly ConsultantRankedCandidateReferenceV2[];
   readonly stop_state:
-    "awaiting_synthetic_checkpoint" | "exhausted_displayed_queue";
+    | "awaiting_synthetic_checkpoint"
+    | "awaiting_governed_agricultural_checkpoint"
+    | "exhausted_displayed_queue";
   readonly next_reserve_promotion: {
     readonly state: "available" | "exhausted";
     readonly candidate: ConsultantReserveCandidateV2 | null;
     readonly promotion_mode: "one_next_ranked_eligible_only";
   };
   readonly audit_identity: {
-    readonly event_type: "SYNTHETIC_WAVE_SNAPSHOT_PROJECTED";
+    readonly event_type:
+      | "SYNTHETIC_WAVE_SNAPSHOT_PROJECTED"
+      | "AGRICULTURAL_WAVE_SNAPSHOT_PROJECTED";
     readonly event_id: string;
     readonly actor_type: "agent";
     readonly actor_id: "matchbase_agent_research_and_implementation_team";
@@ -248,7 +365,8 @@ export type ConsultantExcludedEvidenceV2 = ConsultantSourceFactV2 & {
 };
 
 export interface ConsultantFullLimitationsV2 {
-  readonly qualification_scope: "synthetic_only";
+  readonly qualification_scope:
+    "synthetic_only" | "governed_agricultural_qualification";
   readonly human_consultant_authorship: "not_claimed";
   readonly production_sme_validation: "not_claimed";
   readonly production_release: "blocked";
@@ -391,7 +509,35 @@ function assertRankedReference(
   return item;
 }
 
-function assertSourcePolicy(value: unknown): void {
+const CONSULTANT_SEMANTIC_TUPLES = {
+  synthetic: {
+    domainPackId: CONSULTANT_DOMAIN_PACK_ID,
+    mode: "agent_researched_synthetic_qualification",
+    questions: CONSULTANT_SYNTHETIC_RFQ_QUESTIONS,
+    action: "prepare_synthetic_rfq",
+    snapshotState: "synthetic_planning_only",
+    checkpoint: "awaiting_synthetic_checkpoint",
+    eventType: "SYNTHETIC_WAVE_SNAPSHOT_PROJECTED",
+    scope: "synthetic_only",
+    notices: CONSULTANT_SYNTHETIC_LIMITATION_NOTICES,
+  },
+  agricultural: {
+    domainPackId: CONSULTANT_AGRICULTURAL_DOMAIN_PACK_ID,
+    mode: "agent_researched_agricultural_qualification",
+    questions: CONSULTANT_AGRICULTURAL_RFQ_QUESTIONS,
+    action: "prepare_governed_agricultural_rfq",
+    snapshotState: "governed_agricultural_planning_only",
+    checkpoint: "awaiting_governed_agricultural_checkpoint",
+    eventType: "AGRICULTURAL_WAVE_SNAPSHOT_PROJECTED",
+    scope: "governed_agricultural_qualification",
+    notices: CONSULTANT_AGRICULTURAL_LIMITATION_NOTICES,
+  },
+} as const;
+
+type ConsultantSemanticTuple =
+  (typeof CONSULTANT_SEMANTIC_TUPLES)[keyof typeof CONSULTANT_SEMANTIC_TUPLES];
+
+function assertSourcePolicy(value: unknown): ConsultantSemanticTuple {
   const item = record(value, "Consultant source policy");
   const keys = [
     "policy_id",
@@ -417,21 +563,21 @@ function assertSourcePolicy(value: unknown): void {
     CONSULTANT_SOURCE_POLICY_CONTENT_SHA256,
     "Consultant source policy content digest",
   );
-  constant(
-    item.domain_pack_id,
-    CONSULTANT_DOMAIN_PACK_ID,
-    "Consultant domain pack id",
-  );
-  constant(
-    item.mode,
-    "agent_researched_synthetic_qualification",
-    "Consultant source policy mode",
-  );
+  const tuple =
+    item.domain_pack_id === CONSULTANT_DOMAIN_PACK_ID
+      ? CONSULTANT_SEMANTIC_TUPLES.synthetic
+      : item.domain_pack_id === CONSULTANT_AGRICULTURAL_DOMAIN_PACK_ID
+        ? CONSULTANT_SEMANTIC_TUPLES.agricultural
+        : undefined;
+  if (!tuple)
+    throw new Error("Consultant domain pack id is outside the governed set.");
+  constant(item.mode, tuple.mode, "Consultant source policy mode");
   constant(
     item.production_state,
     "blocked_pending_attributable_sme_validation",
     "Consultant source policy production state",
   );
+  return tuple;
 }
 
 function assertConfigurationRelease(value: unknown): Record<string, unknown> {
@@ -473,7 +619,10 @@ function assertConfigurationRelease(value: unknown): Record<string, unknown> {
   return item;
 }
 
-function assertAgentAuthorship(value: unknown): void {
+function assertAgentAuthorship(
+  value: unknown,
+  tuple: ConsultantSemanticTuple,
+): void {
   const item = record(value, "Consultant agent authorship");
   const keys = [
     "prepared_by",
@@ -487,11 +636,7 @@ function assertAgentAuthorship(value: unknown): void {
     "matchbase_agent_research_and_implementation_team",
     "Consultant prepared-by identity",
   );
-  constant(
-    item.mode,
-    "agent_researched_synthetic_qualification",
-    "Consultant authorship mode",
-  );
+  constant(item.mode, tuple.mode, "Consultant authorship mode");
   constant(
     item.human_consultant_authorship,
     "not_claimed",
@@ -504,9 +649,12 @@ function assertAgentAuthorship(value: unknown): void {
   );
 }
 
-function assertRfqQuestions(value: unknown): void {
+function assertRfqQuestions(
+  value: unknown,
+  tuple: ConsultantSemanticTuple,
+): void {
   const questions = array(value, "Consultant RFQ questions");
-  if (questions.length !== CONSULTANT_SYNTHETIC_RFQ_QUESTIONS.length)
+  if (questions.length !== tuple.questions.length)
     throw new Error("Consultant RFQ question set is incomplete.");
   questions.forEach((entry, index) => {
     const item = record(entry, "Consultant RFQ question");
@@ -517,7 +665,7 @@ function assertRfqQuestions(value: unknown): void {
       "response_state",
     ];
     exactKeys(item, keys, keys, "Consultant RFQ question");
-    const expected = CONSULTANT_SYNTHETIC_RFQ_QUESTIONS[index]!;
+    const expected = tuple.questions[index]!;
     constant(item.order, index + 1, "Consultant RFQ question order");
     constant(item.question_id, expected[0], "Consultant RFQ question id");
     constant(
@@ -687,7 +835,10 @@ function assertSourceFact(value: unknown): Record<string, unknown> {
   return item;
 }
 
-function assertFullLimitations(value: unknown): void {
+function assertFullLimitations(
+  value: unknown,
+  tuple: ConsultantSemanticTuple,
+): void {
   const item = record(value, "Consultant full limitations");
   const keys = [
     "qualification_scope",
@@ -701,7 +852,7 @@ function assertFullLimitations(value: unknown): void {
   exactKeys(item, keys, keys, "Consultant full limitations");
   constant(
     item.qualification_scope,
-    "synthetic_only",
+    tuple.scope,
     "Consultant qualification scope",
   );
   constant(
@@ -732,7 +883,9 @@ function assertFullLimitations(value: unknown): void {
   const notices = array(item.notices, "Consultant limitation notices");
   if (notices.length !== 5)
     throw new Error("Consultant limitation notices are incomplete.");
-  notices.forEach((notice) => nonempty(notice, "Consultant limitation notice"));
+  notices.forEach((notice, index) =>
+    constant(notice, tuple.notices[index], "Consultant limitation notice"),
+  );
 }
 
 export function parseConsultantResultProjectionV2(
@@ -786,15 +939,15 @@ export function parseConsultantResultProjectionV2(
   legacyCompatible.projection_version = CONSULTANT_RESULT_PROJECTION_VERSION;
   parseConsultantResultProjectionV1(legacyCompatible);
 
-  assertSourcePolicy(projection.source_policy);
+  const semanticTuple = assertSourcePolicy(projection.source_policy);
   const configuration = assertConfigurationRelease(
     projection.configuration_release,
   );
   const landscapeRecord = record(projection.landscape, "Consultant landscape");
   if (configuration.soft_cap !== landscapeRecord.soft_cap)
     throw new Error("Consultant configuration soft cap is inconsistent.");
-  assertAgentAuthorship(projection.agent_authorship);
-  assertRfqQuestions(projection.rfq_questions);
+  assertAgentAuthorship(projection.agent_authorship, semanticTuple);
+  assertRfqQuestions(projection.rfq_questions, semanticTuple);
   assertDueDiligence(projection.due_diligence_checklist);
   const sourceFacts = array(projection.source_facts, "Consultant source facts");
   const sourceFactIds = new Set<string>();
@@ -893,7 +1046,7 @@ export function parseConsultantResultProjectionV2(
   );
   if (JSON.stringify(excludedEvidence) !== JSON.stringify(expectedExcluded))
     throw new Error("Consultant excluded evidence projection is inconsistent.");
-  assertFullLimitations(projection.full_limitations);
+  assertFullLimitations(projection.full_limitations, semanticTuple);
 
   const landscape = projection.landscape as unknown as ConsultantLandscapeV1;
   const eligibleRanking = array(
@@ -951,7 +1104,7 @@ export function parseConsultantResultProjectionV2(
     wave.action,
     landscape.displayed_count === 0
       ? "no_eligible_candidates"
-      : "prepare_synthetic_rfq",
+      : semanticTuple.action,
     "Consultant wave action",
   );
   const waveCandidates = array(wave.candidates, "Consultant wave candidates");
@@ -1050,7 +1203,7 @@ export function parseConsultantResultProjectionV2(
   );
   constant(
     snapshot.state,
-    "synthetic_planning_only",
+    semanticTuple.snapshotState,
     "Consultant RFQ snapshot state",
   );
   constant(
@@ -1121,6 +1274,9 @@ export function parseConsultantResultProjectionV2(
       String(projection.run_id),
       CONSULTANT_SOURCE_POLICY_CONTENT_SHA256,
       String(configuration.content_sha256),
+      ...(semanticTuple.domainPackId === CONSULTANT_AGRICULTURAL_DOMAIN_PACK_ID
+        ? [CONSULTANT_AGRICULTURAL_DOMAIN_PACK_ID]
+        : []),
       "RFQ_WAVE_INITIAL",
       "1",
       selectedCandidateIds.join(","),
@@ -1132,7 +1288,7 @@ export function parseConsultantResultProjectionV2(
     snapshot.stop_state,
     landscape.displayed_count === 0
       ? "exhausted_displayed_queue"
-      : "awaiting_synthetic_checkpoint",
+      : semanticTuple.checkpoint,
     "Consultant RFQ stop state",
   );
   const promotion = record(
@@ -1181,7 +1337,7 @@ export function parseConsultantResultProjectionV2(
   exactKeys(audit, auditKeys, auditKeys, "Consultant RFQ audit identity");
   constant(
     audit.event_type,
-    "SYNTHETIC_WAVE_SNAPSHOT_PROJECTED",
+    semanticTuple.eventType,
     "Consultant RFQ audit event type",
   );
   if (!/^[a-f0-9]{64}$/u.test(String(audit.event_id)))
@@ -1219,7 +1375,7 @@ export function parseConsultantResultProjectionV2(
   if (audit.occurred_at !== configuration.bound_at)
     throw new Error("Consultant RFQ audit timestamp is inconsistent.");
   const expectedAuditEventId = contractSha256Hex(
-    `${expectedWaveInstanceId}|${String(configuration.bound_at)}|SYNTHETIC_WAVE_SNAPSHOT_PROJECTED`,
+    `${expectedWaveInstanceId}|${String(configuration.bound_at)}|${semanticTuple.eventType}`,
   );
   if (audit.event_id !== expectedAuditEventId)
     throw new Error("Consultant RFQ audit event digest is inconsistent.");

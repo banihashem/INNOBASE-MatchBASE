@@ -29,7 +29,7 @@ test("governed Staging Cloud Build binds exact Git material, images and provenan
   assert.equal(
     (
       config.match(
-        /ROUTE_POLICY_PATH=config\/slice3\/research-route-policy\.staging\.v1\.json/gu,
+        /ROUTE_POLICY_PATH=config\/slice3\/research-route-policy\.staging\.v3\.json/gu,
       ) ?? []
     ).length,
     2,

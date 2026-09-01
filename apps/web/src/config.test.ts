@@ -219,6 +219,21 @@ describe("production identity configuration", () => {
       deploymentTarget: "staging-eu",
       artifactGcsBucket: "innobase-matchbase-stg-eu-artifacts",
     });
+    expect(
+      loadWebConfig({
+        ...staging,
+        MATCHBASE_DEPLOYMENT_TARGET: "staging-eu-canary",
+        MATCHBASE_ORIGIN: "https://matchbase-staging-eu-canary.innobase.app",
+        GOOGLE_REDIRECT_URI:
+          "https://matchbase-staging-eu-canary.innobase.app/auth/google/callback",
+        MATCHBASE_ARTIFACT_GCS_BUCKET: "innobase-matchbase-stg-eu-artifacts",
+      }),
+    ).toMatchObject({
+      deploymentEnvironment: "staging",
+      deploymentTarget: "staging-eu-canary",
+      origin: "https://matchbase-staging-eu-canary.innobase.app",
+      artifactGcsBucket: "innobase-matchbase-stg-eu-artifacts",
+    });
     expect(() =>
       loadWebConfig({
         ...staging,

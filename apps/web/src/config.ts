@@ -11,7 +11,8 @@ import { isAbsolute } from "node:path";
 export interface WebConfig {
   environment: RuntimeEnvironment;
   deploymentEnvironment?: "staging" | "production";
-  deploymentTarget?: "staging" | "staging-eu" | "production";
+  deploymentTarget?:
+    "staging" | "staging-eu" | "staging-eu-canary" | "production";
   origin: string;
   deploymentId: string;
   imageDigest?: string;
@@ -46,6 +47,11 @@ const PRODUCTION_TARGETS = Object.freeze({
   "staging-eu": Object.freeze({
     deploymentEnvironment: "staging" as const,
     origin: "https://matchbase-staging.innobase.app",
+    artifactBucket: "innobase-matchbase-stg-eu-artifacts",
+  }),
+  "staging-eu-canary": Object.freeze({
+    deploymentEnvironment: "staging" as const,
+    origin: "https://matchbase-staging-eu-canary.innobase.app",
     artifactBucket: "innobase-matchbase-stg-eu-artifacts",
   }),
   production: Object.freeze({
@@ -169,7 +175,8 @@ export function loadWebConfig(
     throw new Error("Production origin admission configuration is incomplete.");
   }
   let deploymentEnvironment: "staging" | "production" | undefined;
-  let deploymentTarget: "staging" | "staging-eu" | "production" | undefined;
+  let deploymentTarget:
+    "staging" | "staging-eu" | "staging-eu-canary" | "production" | undefined;
   if (runtime === "production") {
     const targetName = environment.MATCHBASE_DEPLOYMENT_ENVIRONMENT;
     if (targetName !== "staging" && targetName !== "production") {
@@ -183,6 +190,7 @@ export function loadWebConfig(
     if (
       selectedTarget !== "staging" &&
       selectedTarget !== "staging-eu" &&
+      selectedTarget !== "staging-eu-canary" &&
       selectedTarget !== "production"
     ) {
       throw new Error("Production deployment target is invalid.");

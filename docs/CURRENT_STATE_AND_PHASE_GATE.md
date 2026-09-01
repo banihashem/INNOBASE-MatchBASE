@@ -30,9 +30,12 @@ the historical record as provenance.
 - Repository visibility is `PUBLIC`, independently observed through the GitHub
   repository API after the owner changed it on 2026-09-01. Cloud Build remains
   bound to the governed linked-repository resource and exact commit.
-- Build `2dc5254a-4048-4d19-a81b-fc3ee30f7d78` failed with
-  `FETCH_SOURCE_FAILED` and produced zero images. The private-source correction
-  is currently uncommitted and runtime-derived.
+- Build `acffc5a1-1c2f-4e70-920d-d0b558f87f08` fetched the connected-repository
+  source at commit prefix `e95e8696`, then failed `USER_BUILD_STEP` at Docker
+  step 0 because the cache mount requires BuildKit. The worker remained queued
+  and zero images were published. The BuildKit config patch is uncommitted and
+  runtime-derived. Earlier build `2dc5254a-4048-4d19-a81b-fc3ee30f7d78`
+  remains historical `FETCH_SOURCE_FAILED` evidence.
 - Staging project: `innobase-matchbase-stg`
 - Region: `me-central1`
 - Public origin: `https://matchbase-staging.innobase.app`

@@ -352,7 +352,11 @@ publisher permissions needed to submit builds and retrieve stored provenance.
 The connection must be COMPLETE, not reconciling, and bound to GitHub App
 installation `142544573`; the linked repository must retain the exact governed
 remote URI and non-empty etags. Failed raw-source build
-`2dc5254a-4048-4d19-a81b-fc3ee30f7d78` is external failure evidence only.
+Historical build `2dc5254a-4048-4d19-a81b-fc3ee30f7d78` failed source fetch.
+Build `acffc5a1-1c2f-4e70-920d-d0b558f87f08` then proved connected-repository
+fetch at revision prefix `e95e8696`, but failed `USER_BUILD_STEP` at Docker step
+0 because the cache mount requires BuildKit; its worker remained queued and it
+published zero images. The BuildKit config patch is runtime-derived/uncommitted.
 
 Plan and execute only after the candidate commit is pushed to `origin/main`:
 

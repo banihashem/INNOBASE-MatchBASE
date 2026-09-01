@@ -1,5 +1,7 @@
 steps:
   - name: gcr.io/cloud-builders/docker
+    env:
+      - DOCKER_BUILDKIT=1
     args:
       - build
       - --pull
@@ -15,6 +17,8 @@ steps:
       - me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-web:${_CANDIDATE_COMMIT}
       - .
   - name: gcr.io/cloud-builders/docker
+    env:
+      - DOCKER_BUILDKIT=1
     args:
       - build
       - --pull

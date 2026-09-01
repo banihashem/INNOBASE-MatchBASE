@@ -34,13 +34,23 @@
       "visibility": "PUBLIC",
       "githubAppScope": "SELECTED_REPOSITORIES_INCLUDES_MATCHBASE_NOT_ALL_REPOSITORIES",
       "temporarySecretManagerAdmin": "REVOKED",
-      "lastBuild": {
+      "historicalBuild": {
         "id": "2dc5254a-4048-4d19-a81b-fc3ee30f7d78",
         "status": "FAILURE",
         "failureType": "FETCH_SOURCE_FAILED",
         "imagesProduced": 0
       },
-      "currentPatch": "UNCOMMITTED_RUNTIME_DERIVED",
+      "lastBuild": {
+        "id": "acffc5a1-1c2f-4e70-920d-d0b558f87f08",
+        "sourceFetch": "SUCCEEDED_CONNECTED_REPOSITORY",
+        "sourceRevisionPrefix": "e95e8696",
+        "status": "FAILURE",
+        "failureType": "USER_BUILD_STEP",
+        "failedStep": "0_DOCKER_BUILDKIT_CACHE_MOUNT_UNSUPPORTED",
+        "workerState": "QUEUED",
+        "imagesPublished": 0
+      },
+      "currentPatch": "BUILDKIT_CONFIG_PATCH_UNCOMMITTED_RUNTIME_DERIVED",
       "nextState": "BUILD_PUBLICATION_DEPLOYMENT_AND_LIVE_ACCEPTANCE_PENDING"
     }
   },
@@ -220,7 +230,7 @@
     "slices": ["SLICE-0", "SLICE-1"]
   },
   "knownBlockers": [
-    "Cloud Build 2dc5254a-4048-4d19-a81b-fc3ee30f7d78 failed FETCH_SOURCE_FAILED with zero images; the linked-source patch is uncommitted/runtime-derived.",
+    "Cloud Build acffc5a1-1c2f-4e70-920d-d0b558f87f08 fetched connected-repository source at revision prefix e95e8696, then failed USER_BUILD_STEP at Docker step 0 because the cache mount requires BuildKit; the worker remained queued and zero images were published. The BuildKit config patch is uncommitted/runtime-derived. Prior FETCH_SOURCE_FAILED build 2dc5254a-4048-4d19-a81b-fc3ee30f7d78 remains historical.",
     "Independent Role 2 repository/remediation audit passed on exact stable bytes; cloud apply, deployment and live acceptance remain pending.",
     "The current remediation source has not been deployed; its dirty, committed and published state is derived at snapshot generation.",
     "Staging remains in me-central1 and does not satisfy the owner-authorized Europe processing and persistent-storage boundary.",

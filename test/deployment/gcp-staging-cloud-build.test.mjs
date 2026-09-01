@@ -18,6 +18,14 @@ test("governed Staging Cloud Build binds exact Git material, images and provenan
     /--target\n\s+- web-runtime[\s\S]*--target\n\s+- worker-runtime/u,
   );
   assert.equal((config.match(/--pull/gu) ?? []).length, 2);
+  const dockerSteps = config
+    .split(/^  - name: gcr\.io\/cloud-builders\/docker\s*$/gmu)
+    .slice(1);
+  assert.equal(dockerSteps.length, 2);
+  assert.match(dockerSteps[0], /DOCKER_BUILDKIT=1[\s\S]*web-runtime/u);
+  assert.match(dockerSteps[1], /DOCKER_BUILDKIT=1[\s\S]*worker-runtime/u);
+  for (const step of dockerSteps)
+    assert.equal((step.match(/DOCKER_BUILDKIT=1/gu) ?? []).length, 1);
   assert.equal(
     (
       config.match(

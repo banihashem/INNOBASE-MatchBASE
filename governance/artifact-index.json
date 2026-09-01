@@ -34,8 +34,14 @@
     },
     {
       "id": "BUILD-P5-PRIVATE-SOURCE-2DC5254A",
+      "status": "HISTORICAL_FAIL",
+      "summary": "Historical Cloud Build 2dc5254a-4048-4d19-a81b-fc3ee30f7d78 failed FETCH_SOURCE_FAILED and produced zero images; the later attempt supersedes it as current build evidence.",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"]
+    },
+    {
+      "id": "BUILD-P5-LINKED-SOURCE-ACFFC5A1",
       "status": "FAIL",
-      "summary": "Cloud Build 2dc5254a-4048-4d19-a81b-fc3ee30f7d78 failed FETCH_SOURCE_FAILED and produced zero images. The linked-source patch remains uncommitted/runtime-derived; publication, deployment and live acceptance remain pending.",
+      "summary": "Cloud Build acffc5a1-1c2f-4e70-920d-d0b558f87f08 fetched connected-repository source at revision prefix e95e8696, then failed USER_BUILD_STEP at Docker step 0 because the cache mount requires BuildKit; the worker remained queued and zero images were published. The BuildKit config patch is uncommitted/runtime-derived.",
       "evidenceRefs": ["governance/current-state-projection.v1.json"]
     }
   ],

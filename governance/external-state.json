@@ -77,11 +77,22 @@
       "project": "innobase-matchbase-stg",
       "region": "me-central1",
       "temporarySecretManagerAdmin": "REVOKED",
-      "lastPrivateSourceBuild": {
+      "historicalPrivateSourceBuild": {
         "id": "2dc5254a-4048-4d19-a81b-fc3ee30f7d78",
         "status": "FAILURE",
         "failureType": "FETCH_SOURCE_FAILED",
         "imagesProduced": 0
+      },
+      "lastPrivateSourceBuild": {
+        "id": "acffc5a1-1c2f-4e70-920d-d0b558f87f08",
+        "sourceFetch": "SUCCEEDED_CONNECTED_REPOSITORY",
+        "sourceRevisionPrefix": "e95e8696",
+        "status": "FAILURE",
+        "failureType": "USER_BUILD_STEP",
+        "failedStep": "0_DOCKER_BUILDKIT_CACHE_MOUNT_UNSUPPORTED",
+        "workerState": "QUEUED",
+        "imagesPublished": 0,
+        "buildKitConfigPatch": "UNCOMMITTED_RUNTIME_DERIVED"
       },
       "readiness": "DEGRADED_REMEDIATION_PENDING_DEPLOY",
       "production": "UNTOUCHED"

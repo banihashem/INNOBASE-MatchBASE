@@ -65,7 +65,7 @@ $captures = @(
   (Invoke-ReadOnlyCapture -Id "target-services" -Arguments @("run", "services", "list", "--project=$project", "--region=$targetRegion", "--format=json")),
   (Invoke-ReadOnlyCapture -Id "target-workers" -Arguments @("run", "worker-pools", "list", "--project=$project", "--region=$targetRegion", "--format=json")),
   (Invoke-ReadOnlyCapture -Id "target-sql-list" -Arguments @("sql", "instances", "list", "--project=$project", "--filter=region:$targetRegion", "--format=json")),
-  (Invoke-ReadOnlyCapture -Id "url-map" -Arguments @("compute", "url-maps", "describe", "matchbase-staging-url-map", "--project=$project", "--global", "--format=json"))
+  (Invoke-ReadOnlyCapture -Id "url-map" -Arguments @("compute", "url-maps", "describe", ([string]$migration.UrlMap), "--project=$project", "--global", "--format=json"))
 )
 $webProvenance = Invoke-ReadOnlyCapture -Id "candidate-web-build-provenance" -Arguments @("artifacts", "docker", "images", "describe", $WebSourceImageDigest, "--project=$project", "--show-provenance", "--format=json")
 $workerProvenance = Invoke-ReadOnlyCapture -Id "candidate-worker-build-provenance" -Arguments @("artifacts", "docker", "images", "describe", $WorkerSourceImageDigest, "--project=$project", "--show-provenance", "--format=json")

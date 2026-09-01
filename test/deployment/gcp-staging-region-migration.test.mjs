@@ -26,6 +26,9 @@ const runPowerShell = (...arguments_) =>
 
 test("the closed migration map preserves the active source and names the EU target", async () => {
   const common = await read("../../deployment/gcp/Common.ps1");
+  const evidenceProducer = await read(
+    "../../deployment/gcp/New-StagingRegionEvidence.ps1",
+  );
   assert.match(
     common,
     /StagingRegionMigration\s*=\s*\[pscustomobject\]@\{[\s\S]*ProjectId\s*=\s*"innobase-matchbase-stg"[\s\S]*SourceRegion\s*=\s*"me-central1"[\s\S]*TargetRegion\s*=\s*"europe-west2"/u,
@@ -46,6 +49,8 @@ test("the closed migration map preserves the active source and names the EU targ
     common,
     /staging\s*=\s*\[pscustomobject\]@\{[\s\S]*Region\s*=\s*\$script:RequiredRegion/u,
   );
+  assert.match(evidenceProducer, /\(\[string\]\$migration\.UrlMap\)/u);
+  assert.doesNotMatch(evidenceProducer, /matchbase-staging-url-map/u);
 });
 
 test("the migration defaults to a complete plan and makes no cloud call", () => {

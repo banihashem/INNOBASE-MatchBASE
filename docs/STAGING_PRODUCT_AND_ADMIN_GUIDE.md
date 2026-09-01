@@ -116,15 +116,12 @@ download action. Artifact generation failure does not revoke or hide the
 terminal structured result. Cross-account and unreleased versions remain
 non-visible.
 
-Release remains fail-closed. The worker does not configure the artifact
-lifecycle until the approved report-model renderer and a genuine evaluator for
-all sixteen `artifact_qa_check` gates are installed. In particular, the
-`veraPDF` gate must be produced by a real validator. The runtime must not infer
-PDF/UA conformance from `%PDF` bytes or synthesize a passing QA row. Until that
-renderer/evaluator seam is closed, profiles and direct results correctly omit
-the PDF action.
+Release remains fail-closed. Staging now installs the approved report-model
+renderer and genuine evaluators for all sixteen `artifact_qa_check` gates,
+including real `veraPDF` validation. The runtime never infers PDF/UA
+conformance from `%PDF` bytes or synthesizes a passing QA row.
 
-## 2026-09-01 qualified Staging acceptance evidence
+## 2026-09-01 qualified Staging predecessor acceptance evidence
 
 - Route policy: `slice3-routes.2026-09-01.staging-qualified-v3`
 - Route-policy SHA-256: `b752d2d42a63aaad11f3b89f67bad64861ce767f633bee8190549df23a6f4155`
@@ -148,9 +145,8 @@ the PDF action.
 - Runtime privacy scan: 7,757 regular artifacts, four canaries, zero findings.
 
 Migration `0011_admin_system_scope_and_run_tier_immutability` was applied only to
-the authorized Staging database after backup verification. Its down migration
-and rollback were verified before the final reapply. Production was not
-mutated.
+the authorized Staging database after backup verification. This section is
+historical predecessor acceptance; the successor deployment below is current.
 
 The prior P5 backend implementation, migration, and policy were published in
 feature commit `6166195c0fb1d53496c183571aea806217708dc1`. The additive UX
@@ -178,5 +174,32 @@ identities and queues work; it does not execute or inspect renderer binaries.
 The combined worker alone checks fixed executable and asset paths, constructs
 the DB-backed report model, renders A4 and Letter, consumes the same-invocation
 sixteen QA outcomes, performs create-only storage, and releases the artifact.
-Absent configuration remains fail-closed. Migration `0012` and this runtime
-have not yet been applied to Staging in this source state.
+Absent configuration remains fail-closed.
+
+## 2026-09-01 agricultural and PDF successor deployment
+
+- Source commit: `1236a78203f62ff32f7db8b7519c724aa620b8bf`, published to
+  `origin/main`.
+- Successful Cloud Build: `6d0b0a4f-ce12-452d-bf2b-441599bfb66b`.
+- Historical failed predecessor build:
+  `fe5c0b5b-2bcb-40e6-8304-76850d226336`.
+- Web revision/image: `matchbase-staging-web-00036-g4l` /
+  `sha256:088f3a29fadc0bc9caedfd7f93fd19767a3d6d434fc3a0d333d09b20029ae071`.
+- Worker revision/image: `matchbase-staging-worker-00048-f4t` /
+  `sha256:9f0422c70e09bf24f654d8c4e7af4241ef8dd5305af862b62e04e8d134da4816`.
+- Route policy/SHA-256:
+  `slice3-routes.2026-09-01.staging-qualified-v3` /
+  `b752d2d42a63aaad11f3b89f67bad64861ce767f633bee8190549df23a6f4155`.
+- PDF identities: template `473c4a1383b3ae99965a62eed29defa195cd1236a521581efa9c7f31b8afac9f`,
+  font `abdc775b21b1bc470d50c97e790d276f2054b7504e56e5bd3e64f48d68582322`,
+  toolchain `af3810688779ce540e91eb42fc17304267c6384026d9eadc9d9e230957a083c0`,
+  attestation `6585ad8d7f8788480cdab833ba9a703dbc683e6dd86d25aeb809da7e508c1d98`.
+- Backup `1788284251034` was `SUCCESSFUL` before migrations `0012` and
+  `0013`; final schema head is `0013_domain_pack_v2_and_legacy_annotation`.
+- Five pre-existing `failed_retryable` rows remain unchanged and active leases
+  are zero.
+- Public landing-page acceptance passed and displays `Qualified live research`.
+- Authenticated exact-request and PDF acceptance remains pending a fresh Google
+  sign-in because the existing browser session returned `/api/v1/me` HTTP
+  `401`.
+- Production was not mutated.

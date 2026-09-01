@@ -46,11 +46,19 @@ if (
     (state) =>
       currentState.repository.sourceTransition.allowedStates.includes(state),
   ) ||
-  currentState.staging.webRevision !== "matchbase-staging-web-00034-cn5" ||
+  currentState.repository.cloudBuildLinkedSource.lastBuild.id !==
+    "6d0b0a4f-ce12-452d-bf2b-441599bfb66b" ||
+  currentState.repository.cloudBuildLinkedSource.lastBuild.sourceRevision !==
+    "1236a78203f62ff32f7db8b7519c724aa620b8bf" ||
+  currentState.staging.webRevision !== "matchbase-staging-web-00036-g4l" ||
+  currentState.staging.workerRevision !==
+    "matchbase-staging-worker-00048-f4t" ||
   currentState.staging.schemaHead !==
-    "0011_admin_system_scope_and_run_tier_immutability" ||
+    "0013_domain_pack_v2_and_legacy_annotation" ||
   currentState.staging.productionStatus !== "UNTOUCHED" ||
-  currentState.staging.status !== "DEGRADED_REMEDIATION_PENDING_DEPLOY"
+  currentState.staging.status !==
+    "SUCCESSOR_DEPLOYED_AUTHENTICATED_LIVE_ACCEPTANCE_PENDING" ||
+  currentState.staging.pdfRuntime.status !== "ENABLED"
 ) {
   throw new Error("Current-state projection identity is invalid.");
 }

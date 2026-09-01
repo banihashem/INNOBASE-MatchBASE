@@ -2,117 +2,95 @@
 
 ## Precedence
 
-This document is an additive current-state projection. Historical planning,
-execution records, audits, failures and immutable results remain unchanged.
-When a historical register conflicts with this projection about present
-operational state, use
-`governance/current-state-projection.v1.json` for the current view and retain
-the historical record as provenance.
+This is an additive current-state projection. Historical planning, execution
+records, failed attempts, audits and immutable results remain unchanged. The
+machine-readable current view is
+`governance/current-state-projection.v1.json`.
 
-## Deployed predecessor, current source transition and Staging identity
+## Current governed identity
 
-- Source branch: `main`
-- Deployed predecessor source:
-  `1224b4c485a9f3533a15e1d50b606f7aa53c2d23`
-- Initial governed remediation candidate: commit
-  `77c58cd4c95dc8016d369080b095bed0e554cad1`, pushed to `origin/main`.
-- Current hotfix source: derived at snapshot-generation time. The
-  generator reports one of `WORKTREE_UNCOMMITTED`, `COMMITTED_UNPUBLISHED` or
-  `PUBLISHED_SOURCE`, together with HEAD, `origin/main`, dirty state and an
-  exact candidate SHA-256. No transition-sensitive state is hardcoded.
-- Cloud Build GitHub connection: `COMPLETE` at
-  `projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github`.
-- Linked repository resource:
-  `projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github/repositories/matchbase`,
-  remote `https://github.com/banihashem/INNOBASE-MatchBASE.git`.
-- GitHub App access is selected-repository scope including MatchBASE, not all
-  repositories. Temporary `roles/secretmanager.admin` access was revoked.
-- Repository visibility is `PUBLIC`, independently observed through the GitHub
-  repository API after the owner changed it on 2026-09-01. Cloud Build remains
-  bound to the governed linked-repository resource and exact commit.
-- Build `7a956868-3d02-414b-b4dc-988d7c215cdf` succeeded for exact linked-source
-  revision `fee259e18ce4a6ba73195e06f3248be0043d64a3` and published web digest
-  `sha256:aef287862e2ce0dcb0a8e960df3226afc107f3a7e12024d8c882cc1f1ea8e212`
-  and worker digest
-  `sha256:e95f35067717731badf61accd80e2c974a6a63443dc3a739fb136667c86226ba`.
-  Provenance inspection returned only `image_summary`, unknown SLSA build level,
-  and no `provenance_summary`; the governed publisher failed closed and no
-  deployment occurred. The `options.requestedVerifyOption=VERIFIED` correction
-  is uncommitted/runtime-derived. Both earlier failed builds remain historical.
-- Role 2 passed the repository deployment-admission remediation. Before any
-  mutation, `Deploy-CloudRun.ps1` requires `CandidateCommit` to equal clean
-  `HEAD` and `origin/main`, plus live source SLSA provenance for both exact
-  digests. The main-region path validates the direct image. The EU path validates
-  exact live target identity and deterministic same-name/same-digest
-  `me-central1` source provenance. Build `7a956868...` images remain
-  non-deployable. The combined VERIFIED/deploy-gate patch is
-  uncommitted/runtime-derived.
-- Build `9023f76a-e60c-41c0-b21d-d46f0d6a5817` succeeded with VERIFIED
-  provenance requested for revision `1f1a438685cb951a5bb30a17ca072aab1e1c6be6`
-  and published web digest
-  `sha256:1efa936f4fa1ea56c39c2985a1616b1e22f9f9ad8b782ada2ee589020ebb0817`
-  plus worker digest
-  `sha256:f5f40a8602c4f23dcea0e3b3e9a7e5a6153d2e2ea135cf297e1eda8ca4b0146b`.
-  SLSA level 3 appeared as one v1 and one legacy v0.1 occurrence. Parser
-  cardinality/old-schema admission failed closed; no deployment occurred. The
-  parser/build-record/retry correction is uncommitted/runtime-derived.
-- Build `b68c1bba-1e09-46ab-86f0-a493acbb7276` succeeded with VERIFIED for
-  revision `e0af82b0af8bbfa8203f3d3cb04e836964bce4dc`, publishing web digest
-  `sha256:a2a0a031997d12564975103ae0b073aadfe2b1e8fb00494afe6e0b41514ec76f`
-  and worker digest
-  `sha256:4cc8bd46d3931b1a918a2af1505f390a5f86a6c3aae56d4877f4a8399163ae7a`.
-  Dual provenance validation passed. Publisher then failed closed on PowerShell
-  StrictMode scalar `.Count` before exact build-record admission/output. No
-  deployment occurred. Explicit array-count patch/tests are
-  uncommitted/runtime-derived.
-- Staging project: `innobase-matchbase-stg`
-- Region: `me-central1`
-- Public origin: `https://matchbase-staging.innobase.app`
-- Web revision: `matchbase-staging-web-00034-cn5`, 100 percent traffic
-- Worker revision: `matchbase-staging-worker-00045-k2b`
-- Database migration head: `0011_admin_system_scope_and_run_tier_immutability`
-- Production: untouched
-- Current Staging disposition: degraded; the deployed revisions are
-  predecessors and do not contain the current remediation candidate.
-- Residency disposition: nonconforming; `me-central1` does not satisfy the
-  owner-authorized Europe processing and persistent-storage boundary.
+- Repository: public `banihashem/INNOBASE-MatchBASE`, branch `main`.
+- Published and deployed source:
+  `1236a78203f62ff32f7db8b7519c724aa620b8bf`.
+- Successful Cloud Build: `6d0b0a4f-ce12-452d-bf2b-441599bfb66b`.
+- Historical failed predecessor build:
+  `fe5c0b5b-2bcb-40e6-8304-76850d226336`.
+- Web: revision `matchbase-staging-web-00036-g4l`, image
+  `sha256:088f3a29fadc0bc9caedfd7f93fd19767a3d6d434fc3a0d333d09b20029ae071`.
+- Worker: revision `matchbase-staging-worker-00048-f4t`, image
+  `sha256:9f0422c70e09bf24f654d8c4e7af4241ef8dd5305af862b62e04e8d134da4816`.
+- Route policy: `slice3-routes.2026-09-01.staging-qualified-v3`, SHA-256
+  `b752d2d42a63aaad11f3b89f67bad64861ce767f633bee8190549df23a6f4155`.
+- Verified pre-migration backup: `1788284251034`, `SUCCESSFUL`.
+- Staging schema head: `0013_domain_pack_v2_and_legacy_annotation` after
+  migrations `0012` and `0013`.
+- Five pre-existing `failed_retryable` records remain unchanged; active leases
+  are zero.
+- Production: untouched.
 
-## Operational capabilities
+## Consultant PDF runtime
 
-The deployed predecessor established qualified-live, profile and Admin
-capabilities in its recorded acceptance. Current remediation is not bound to a
-successor deployment; those predecessor results cannot be projected as
-acceptance of the runtime-derived current source.
+The asynchronous Consultant PDF lifecycle is enabled in Staging. The web queues
+work and the worker performs governed render, sixteen-gate validation,
+create-only storage and audited release. Runtime identities are:
 
-## Phase disposition
+- template:
+  `473c4a1383b3ae99965a62eed29defa195cd1236a521581efa9c7f31b8afac9f`;
+- font:
+  `abdc775b21b1bc470d50c97e790d276f2054b7504e56e5bd3e64f48d68582322`;
+- toolchain:
+  `af3810688779ce540e91eb42fc17304267c6384026d9eadc9d9e230957a083c0`;
+- allowed attestation:
+  `6585ad8d7f8788480cdab833ba9a703dbc683e6dd86d25aeb809da7e508c1d98`.
 
-The completed P5 Staging feature loop is not equivalent to completion of
-Roadmap P5, `Evaluation and Hardening`. Roadmap P5 remains active until all of
-the following have exact evidence:
+## Preserved predecessor chain
 
-1. T-1 through T-11 are enforced as CI release blockers, including a
-   demonstrated failing gate that blocks merge.
-2. A Staging revision rollback is executed and timed.
-3. A PITR restore is executed and timed in a non-production project.
-4. The per-run spend ceiling is demonstrated to abort a run.
-5. Every launch and rollback runbook has a named owner and recorded read
-   acknowledgement.
-6. Independent Role 2 repository/remediation audit: PASS with zero Critical or
-   Major defects on the exact stable bytes. This does not satisfy the separate
-   external-state, deployment, migration or live-acceptance evidence gates.
+The current projection does not erase the deployment-admission correction
+history. Builds `7a956868-3d02-414b-b4dc-988d7c215cdf`,
+`9023f76a-e60c-41c0-b21d-d46f0d6a5817` and
+`b68c1bba-1e09-46ab-86f0-a493acbb7276` succeeded but failed closed at their
+recorded provenance/parser/build-record gates and were never deployed. Build
+`fe5c0b5b-2bcb-40e6-8304-76850d226336` is the immediate failed predecessor to
+the successful successor build. Web revision `matchbase-staging-web-00034-cn5`,
+worker revision `matchbase-staging-worker-00045-k2b`, and schema head `0011`
+remain historical deployed-predecessor evidence. Full details remain in the
+append-only product-management log and current-state convergence record.
 
-The initial governed remediation candidate was committed and pushed. No image
-build or publication, Staging/EU deployment, database migration,
-OAuth/Cloudflare apply, or live acceptance has been performed for it. The
-current hotfix remains runtime-derived and has no hardcoded future commit hash.
-Each operational transition remains a separate evidence-gated operation.
+The linked-source boundary also remains preserved: Cloud Build connection
+`projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github`
+was `COMPLETE`, the governed repository resource ended in
+`/repositories/matchbase`, the remote was the public MatchBASE GitHub
+repository, the GitHub App remained selected-repository scoped, and temporary
+Secret Manager Admin access was revoked. Build `7a956868...` published web
+`sha256:aef287862e2ce0dcb0a8e960df3226afc107f3a7e12024d8c882cc1f1ea8e212`
+and worker
+`sha256:e95f35067717731badf61accd80e2c974a6a63443dc3a739fb136667c86226ba`
+before failing closed on absent usable provenance summary. Build `9023f76a...`
+published web
+`sha256:1efa936f4fa1ea56c39c2985a1616b1e22f9f9ad8b782ada2ee589020ebb0817`
+and worker
+`sha256:f5f40a8602c4f23dcea0e3b3e9a7e5a6153d2e2ea135cf297e1eda8ca4b0146b`
+before parser cardinality/schema rejection. Build `b68c1bba...` published web
+`sha256:a2a0a031997d12564975103ae0b073aadfe2b1e8fb00494afe6e0b41514ec76f`
+and worker
+`sha256:4cc8bd46d3931b1a918a2af1505f390a5f86a6c3aae56d4877f4a8399163ae7a`
+before the StrictMode scalar-count admission failure. These identities remain
+historical and non-deployable.
 
-Roadmap P6 real-data pilot remains blocked until every Roadmap P5 exit criterion
-and every P6 precondition passes. Production release remains unauthorized.
+## Acceptance and phase disposition
 
-## Machine-readable projection
+The public landing page passed live acceptance and displays `Qualified live
+research`. The existing Chrome authentication session returned HTTP `401` from
+`/api/v1/me`; therefore authenticated exact-request, terminal result, profile,
+Admin history and downloaded PDF live acceptance are not yet claimed.
 
-The dashboard and governance consumers must use
-`governance/current-state-projection.v1.json`. Historical Slice 0 through P4
-records remain visible as historical evidence and must not override present
-Staging facts.
+The phase gate remains `BLOCKED` only for:
+
+1. fresh Google authentication and exact agricultural request-to-PDF live
+   acceptance;
+2. Europe residency convergence for processing and persistent storage;
+3. documented SME validation of production weights and separate production
+   authorization.
+
+The successor deployment, schema `0013`, public landing page and PDF runtime are
+operational. Production release remains blocked and production is untouched.

@@ -104,8 +104,9 @@
         "owner profile and concise research history",
         "Admin Consultant-depth product execution",
         "purpose-audited cross-user run oversight and result disclosure",
-        "migrations through 0011",
-        "revision 00034 browser acceptance"
+        "migrations through 0013",
+        "revision 00036 public acceptance",
+        "enabled Consultant PDF runtime"
       ],
       "exclusions": [
         "production deployment",
@@ -113,7 +114,7 @@
         "real-data pilot admission",
         "Roadmap P5 hardening completion"
       ],
-      "terminal": "STAGING_DEGRADED_REMEDIATION_PENDING_DEPLOY",
+      "terminal": "SUCCESSOR_DEPLOYED_AUTHENTICATED_LIVE_ACCEPTANCE_PENDING",
       "evidence": [
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md",
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md",

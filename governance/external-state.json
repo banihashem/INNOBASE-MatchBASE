@@ -70,8 +70,9 @@
       "cloudBuildRepositoryResource": "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github/repositories/matchbase",
       "githubAppScope": "SELECTED_REPOSITORIES_INCLUDES_MATCHBASE_NOT_ALL_REPOSITORIES",
       "deployedPredecessorSourceCommit": "1224b4c485a9f3533a15e1d50b606f7aa53c2d23",
-      "status": "CURRENT_SOURCE_STATE_RUNTIME_DERIVED",
-      "relationship": "STATIC_COMMIT_IDENTIFIES_THE_DEPLOYED_PREDECESSOR;_CURRENT_HEAD_ORIGIN_AND_WORKTREE_STATE_ARE_DERIVED_IN_THE_DASHBOARD_SNAPSHOT"
+      "deployedSuccessorSourceCommit": "1236a78203f62ff32f7db8b7519c724aa620b8bf",
+      "status": "PUBLISHED_SUCCESSOR_DEPLOYED",
+      "relationship": "HISTORICAL_PREDECESSOR_RETAINED;_PUBLISHED_SUCCESSOR_IS_CURRENT"
     },
     "gcp": {
       "project": "innobase-matchbase-stg",
@@ -104,32 +105,35 @@
         }
       ],
       "lastLinkedSourceBuild": {
-        "id": "b68c1bba-1e09-46ab-86f0-a493acbb7276",
+        "id": "6d0b0a4f-ce12-452d-bf2b-441599bfb66b",
         "sourceFetch": "SUCCEEDED_CONNECTED_REPOSITORY",
-        "sourceRevision": "e0af82b0af8bbfa8203f3d3cb04e836964bce4dc",
+        "sourceRevision": "1236a78203f62ff32f7db8b7519c724aa620b8bf",
         "requestedVerifyOption": "VERIFIED",
         "status": "SUCCESS",
         "imagesPublished": 2,
-        "webDigest": "sha256:a2a0a031997d12564975103ae0b073aadfe2b1e8fb00494afe6e0b41514ec76f",
-        "workerDigest": "sha256:4cc8bd46d3931b1a918a2af1505f390a5f86a6c3aae56d4877f4a8399163ae7a",
+        "webDigest": "sha256:088f3a29fadc0bc9caedfd7f93fd19767a3d6d434fc3a0d333d09b20029ae071",
+        "workerDigest": "sha256:9f0422c70e09bf24f654d8c4e7af4241ef8dd5305af862b62e04e8d134da4816",
         "provenance": "DUAL_PROVENANCE_VALIDATION_PASS",
-        "publisherAdmission": "FAILED_CLOSED_POWERSHELL_STRICTMODE_SCALAR_COUNT_BEFORE_BUILD_RECORD_ADMISSION_OUTPUT",
-        "arrayCountPatchTests": "UNCOMMITTED_RUNTIME_DERIVED"
+        "publisherAdmission": "PASS_EXACT_BUILD_RECORD_AND_DUAL_PROVENANCE",
+        "arrayCountPatchTests": "PUBLISHED"
       },
-      "readiness": "DEGRADED_REMEDIATION_PENDING_DEPLOY",
+      "failedImmediatePredecessorBuild": "fe5c0b5b-2bcb-40e6-8304-76850d226336",
+      "readiness": "SUCCESSOR_DEPLOYED_AUTHENTICATED_ACCEPTANCE_PENDING",
       "production": "UNTOUCHED"
     },
     "cloudflare": {
       "zone": "innobase.app",
       "origin": "https://matchbase-staging.innobase.app",
-      "readiness": "DEGRADED_REMEDIATION_PENDING_DEPLOY"
+      "readiness": "PUBLIC_ACCEPTANCE_PASS_AUTHENTICATED_ACCEPTANCE_PENDING"
     },
     "deployment": {
-      "status": "STAGING_DEGRADED_REMEDIATION_PENDING_DEPLOY",
-      "webRevision": "matchbase-staging-web-00034-cn5",
-      "workerRevision": "matchbase-staging-worker-00045-k2b",
-      "migrationHead": "0011_admin_system_scope_and_run_tier_immutability",
-      "deployedRelationship": "DEPLOYED_PREDECESSOR_CURRENT_REMEDIATION_UNDEPLOYED_SOURCE_STATE_RUNTIME_DERIVED"
+      "status": "SUCCESSOR_DEPLOYED_AUTHENTICATED_ACCEPTANCE_PENDING",
+      "webRevision": "matchbase-staging-web-00036-g4l",
+      "workerRevision": "matchbase-staging-worker-00048-f4t",
+      "migrationHead": "0013_domain_pack_v2_and_legacy_annotation",
+      "verifiedBackup": "1788284251034_SUCCESSFUL",
+      "pdfRuntime": "ENABLED_EXACT_DIGEST_BOUND",
+      "deployedRelationship": "PUBLISHED_SUCCESSOR_IS_CURRENT"
     },
     "evidenceRefs": [
       "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md",

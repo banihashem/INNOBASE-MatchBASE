@@ -9,7 +9,7 @@
     "branch": "main",
     "deployedPredecessor": {
       "sourceCommit": "1224b4c485a9f3533a15e1d50b606f7aa53c2d23",
-      "status": "DEPLOYED_PREDECESSOR"
+      "status": "HISTORICAL_DEPLOYED_PREDECESSOR"
     },
     "initialGovernedRemediationCandidate": {
       "sourceCommit": "77c58cd4c95dc8016d369080b095bed0e554cad1",
@@ -61,19 +61,24 @@
         }
       ],
       "lastBuild": {
-        "id": "b68c1bba-1e09-46ab-86f0-a493acbb7276",
+        "id": "6d0b0a4f-ce12-452d-bf2b-441599bfb66b",
         "sourceFetch": "SUCCEEDED_CONNECTED_REPOSITORY",
-        "sourceRevision": "e0af82b0af8bbfa8203f3d3cb04e836964bce4dc",
+        "sourceRevision": "1236a78203f62ff32f7db8b7519c724aa620b8bf",
         "requestedVerifyOption": "VERIFIED",
         "status": "SUCCESS",
         "imagesPublished": 2,
-        "webDigest": "sha256:a2a0a031997d12564975103ae0b073aadfe2b1e8fb00494afe6e0b41514ec76f",
-        "workerDigest": "sha256:4cc8bd46d3931b1a918a2af1505f390a5f86a6c3aae56d4877f4a8399163ae7a",
+        "webDigest": "sha256:088f3a29fadc0bc9caedfd7f93fd19767a3d6d434fc3a0d333d09b20029ae071",
+        "workerDigest": "sha256:9f0422c70e09bf24f654d8c4e7af4241ef8dd5305af862b62e04e8d134da4816",
         "provenanceObservation": "DUAL_PROVENANCE_VALIDATION_PASS",
-        "publisherAdmission": "FAILED_CLOSED_POWERSHELL_STRICTMODE_SCALAR_COUNT_BEFORE_EXACT_BUILD_RECORD_ADMISSION_OUTPUT"
+        "publisherAdmission": "PASS_EXACT_BUILD_RECORD_AND_DUAL_PROVENANCE"
       },
-      "currentPatch": "EXPLICIT_ARRAY_COUNT_PATCH_TESTS_UNCOMMITTED_RUNTIME_DERIVED",
-      "nextState": "REBUILD_GOVERNED_PUBLICATION_DEPLOYMENT_AND_LIVE_ACCEPTANCE_PENDING"
+      "failedImmediatePredecessorBuild": {
+        "id": "fe5c0b5b-2bcb-40e6-8304-76850d226336",
+        "status": "FAILURE",
+        "disposition": "HISTORICAL_RETAINED"
+      },
+      "currentPatch": "PUBLISHED_AND_DEPLOYED",
+      "nextState": "AUTHENTICATED_EXACT_REQUEST_AND_PDF_LIVE_ACCEPTANCE_PENDING"
     },
     "deploymentAdmission": {
       "role2Disposition": "PASS_REPOSITORY_REMEDIATION_ONLY",
@@ -82,26 +87,41 @@
       "mainRegion": "VALIDATE_DIRECT_IMAGE_PROVENANCE",
       "euRegion": "VALIDATE_EXACT_LIVE_TARGET_IDENTITY_AND_DETERMINISTIC_SAME_NAME_SAME_DIGEST_ME_CENTRAL1_SOURCE_PROVENANCE",
       "buildB68Images": "DUAL_PROVENANCE_VALIDATED_BUT_NOT_EXACT_BUILD_RECORD_ADMITTED_OR_DEPLOYABLE",
-      "currentPatch": "EXPLICIT_ARRAY_COUNT_PATCH_TESTS_UNCOMMITTED_RUNTIME_DERIVED",
-      "remaining": "REBUILD_GOVERNED_PUBLICATION_DEPLOYMENT_AND_LIVE_ACCEPTANCE_PENDING"
+      "currentPatch": "PUBLISHED_AND_DEPLOYED",
+      "remaining": "AUTHENTICATED_EXACT_REQUEST_AND_PDF_LIVE_ACCEPTANCE_PENDING"
     }
   },
   "staging": {
-    "status": "DEGRADED_REMEDIATION_PENDING_DEPLOY",
+    "status": "SUCCESSOR_DEPLOYED_AUTHENTICATED_LIVE_ACCEPTANCE_PENDING",
     "project": "innobase-matchbase-stg",
     "region": "me-central1",
     "publicOrigin": "https://matchbase-staging.innobase.app",
-    "webRevision": "matchbase-staging-web-00034-cn5",
-    "webImage": "sha256:3bf6be141f027a9242b8406e62aa5c1704431afacbf60e619f9fa085922f9cad",
+    "webRevision": "matchbase-staging-web-00036-g4l",
+    "webImage": "sha256:088f3a29fadc0bc9caedfd7f93fd19767a3d6d434fc3a0d333d09b20029ae071",
     "webTrafficPercent": 100,
-    "workerRevision": "matchbase-staging-worker-00045-k2b",
-    "workerImage": "sha256:ca6d1627309ce333dcbde354b17d4588135fa2993988bf24a4de39ca264c191d",
+    "workerRevision": "matchbase-staging-worker-00048-f4t",
+    "workerImage": "sha256:9f0422c70e09bf24f654d8c4e7af4241ef8dd5305af862b62e04e8d134da4816",
     "routePolicy": "slice3-routes.2026-09-01.staging-qualified-v3",
     "routePolicySha256": "B752D2D42A63AAAD11F3B89F67BAD64861CE767F633BEE8190549DF23A6F4155",
-    "schemaHead": "0011_admin_system_scope_and_run_tier_immutability",
-    "migrationRange": "0001-0011",
+    "schemaHead": "0013_domain_pack_v2_and_legacy_annotation",
+    "migrationRange": "0001-0013",
+    "verifiedBackup": {
+      "id": "1788284251034",
+      "status": "SUCCESSFUL"
+    },
+    "retainedFailedRetryableRows": 5,
+    "activeLeases": 0,
+    "pdfRuntime": {
+      "status": "ENABLED",
+      "templateSha256": "473c4a1383b3ae99965a62eed29defa195cd1236a521581efa9c7f31b8afac9f",
+      "fontSha256": "abdc775b21b1bc470d50c97e790d276f2054b7504e56e5bd3e64f48d68582322",
+      "toolchainSha256": "af3810688779ce540e91eb42fc17304267c6384026d9eadc9d9e230957a083c0",
+      "allowedAttestationSha256": "6585ad8d7f8788480cdab833ba9a703dbc683e6dd86d25aeb809da7e508c1d98"
+    },
     "productionStatus": "UNTOUCHED",
-    "deploymentRelationship": "DEPLOYED_PREDECESSOR_REVISIONS_DO_NOT_INCLUDE_RUNTIME_DERIVED_CURRENT_SOURCE_REMEDIATION",
+    "deploymentRelationship": "PUBLISHED_SOURCE_EQUALS_SUCCESSFULLY_BUILT_AND_DEPLOYED_SUCCESSOR",
+    "publicAcceptance": "PASS_QUALIFIED_LIVE_RESEARCH_LANDING_PAGE",
+    "authenticatedAcceptance": "PENDING_FRESH_GOOGLE_SIGN_IN_EXISTING_SESSION_API_ME_HTTP_401",
     "processingResidency": "NONCONFORMING_STAGING_ME_CENTRAL1_VS_OWNER_EUROPE_REQUIREMENT"
   },
   "capabilities": [
@@ -109,25 +129,25 @@
       "id": "CAP-P5-QUALIFIED-LIVE",
       "title": "Qualified-live research cycle",
       "status": "ACTIVE",
-      "summary": "A predecessor Staging run reached a complete candidate result; the initial governed remediation candidate was published at 77c58cd4c95dc8016d369080b095bed0e554cad1, while the current hotfix remains undeployed and runtime-derived."
+      "summary": "The current successor is deployed with qualified-live policy; authenticated exact-request acceptance is pending a fresh Google sign-in."
     },
     {
       "id": "CAP-P5-OWNER-PROFILE",
       "title": "Owner profile and research history",
       "status": "ACTIVE",
-      "summary": "The deployed predecessor exposes identity and history; current remediation remains undeployed and its source-transition state is runtime-derived."
+      "summary": "The current successor exposes owner identity and history; authenticated live acceptance is pending a fresh Google sign-in."
     },
     {
       "id": "CAP-P5-SUPER-ADMIN",
       "title": "Super-admin product and audited oversight",
       "status": "ACTIVE",
-      "summary": "The deployed predecessor exposes Admin execution and audited oversight; current remediation remains pending deployment."
+      "summary": "The current successor exposes Admin execution and audited oversight; authenticated live acceptance is pending a fresh Google sign-in."
     },
     {
       "id": "CAP-P5-UX-CORRECTION",
       "title": "Identity and research-history UX correction",
       "status": "ACTIVE",
-      "summary": "Revision 00034 passed its recorded UX acceptance, but it is a deployed predecessor to the runtime-derived current remediation source."
+      "summary": "Revision 00036 is the current deployed successor; public landing-page acceptance passed."
     }
   ],
   "currentGates": [
@@ -135,13 +155,13 @@
       "id": "P5-GATE-STAGING",
       "name": "P5 Staging operational evidence",
       "status": "ACTIVE",
-      "summary": "Deployed predecessor revisions and migration head are recorded; current remediation is not deployed and Staging is degraded."
+      "summary": "Successor revisions, schema head 0013 and PDF runtime are deployed; authenticated exact-request/PDF acceptance awaits fresh sign-in."
     },
     {
       "id": "P5-GATE-UX",
       "name": "P5 identity, profile and oversight UX",
       "status": "ACTIVE",
-      "summary": "Revision 00034 acceptance is predecessor evidence; current UX remediation remains undeployed and its commit/publication state is runtime-derived."
+      "summary": "Revision 00036 public acceptance passed; authenticated UX and PDF acceptance awaits fresh sign-in."
     },
     {
       "id": "P5-GATE-CONTROL-PLANE",
@@ -153,13 +173,13 @@
       "id": "ROADMAP-P5-HARDENING",
       "name": "Roadmap P5 evaluation and hardening",
       "status": "BLOCKED",
-      "summary": "T-1 through T-11 release-blocking demonstration, timed rollback, PITR restore, spend-ceiling abort and runbook acknowledgements remain unevidenced."
+      "summary": "Blocked only by authenticated exact-request/PDF live acceptance, Europe residency, and SME validation plus separate production authorization."
     },
     {
       "id": "ROADMAP-P6-PILOT",
       "name": "Roadmap P6 pilot admission",
       "status": "BLOCKED",
-      "summary": "Pilot is not admitted until every Roadmap P5 exit criterion and every P6 precondition passes."
+      "summary": "Pilot and production remain blocked by authenticated live acceptance, Europe residency, SME validation and separate production authorization."
     }
   ],
   "currentBacklog": [
@@ -168,7 +188,13 @@
       "title": "Reconcile governed current state and dashboard",
       "status": "PASS",
       "owner": "Role 3 documentation and traceability steward",
-      "summary": "Distinguish the deployed predecessor from runtime-derived current source state and project Staging degradation without rewriting history."
+      "summary": "Project the deployed successor and preserve the predecessor chain without rewriting history."
+    },
+    {
+      "id": "P5-AUTHENTICATED-EXACT-PDF-ACCEPTANCE",
+      "title": "Complete exact agricultural request-to-PDF live acceptance after fresh Google sign-in",
+      "status": "OPEN",
+      "owner": "Product, QA and Staging operations"
     },
     {
       "id": "P5-HARDENING-REGION",
@@ -177,28 +203,10 @@
       "owner": "Platform, Security and Privacy"
     },
     {
-      "id": "P5-HARDENING-EVAL-CI",
-      "title": "Enforce T-1 through T-11 as demonstrated release blockers",
+      "id": "P5-SME-PRODUCTION-WEIGHTS",
+      "title": "Document SME validation of production scoring weights and obtain separate production authorization",
       "status": "OPEN",
-      "owner": "QA and Evaluation"
-    },
-    {
-      "id": "P5-HARDENING-RECOVERY",
-      "title": "Rehearse timed Staging rollback and non-production PITR restore",
-      "status": "OPEN",
-      "owner": "SRE, Observability and Cost"
-    },
-    {
-      "id": "P5-HARDENING-SPEND",
-      "title": "Demonstrate per-run spend-ceiling abort",
-      "status": "OPEN",
-      "owner": "SRE, Observability and Cost"
-    },
-    {
-      "id": "P5-HARDENING-RUNBOOKS",
-      "title": "Record named owners and read acknowledgements for every runbook",
-      "status": "OPEN",
-      "owner": "Release and Operations"
+      "owner": "Product owner and domain SME"
     },
     {
       "id": "P5-ROLE2-CURRENT-BYTES",
@@ -211,7 +219,7 @@
     {
       "id": "AGENT-P5-CURRENT-STATE",
       "role": "Documentation and traceability steward",
-      "status": "IN_PROGRESS",
+      "status": "PASS",
       "scope": "Current-state projection, register convergence, artifact manifest and dashboard regeneration"
     },
     {
@@ -262,13 +270,10 @@
     "slices": ["SLICE-0", "SLICE-1"]
   },
   "knownBlockers": [
-    "Cloud Build b68c1bba-1e09-46ab-86f0-a493acbb7276 succeeded with VERIFIED at revision e0af82b0af8bbfa8203f3d3cb04e836964bce4dc and published two images. Publisher dual provenance validation passed, then failed closed on PowerShell StrictMode scalar .Count before exact build-record admission/output. No deployment occurred. Explicit array-count patch/tests are uncommitted/runtime-derived; prior builds remain historical.",
-    "Independent Role 2 repository/remediation audit passed on exact stable bytes; cloud apply, deployment and live acceptance remain pending.",
-    "The current remediation source has not been deployed; its dirty, committed and published state is derived at snapshot generation.",
+    "Authenticated exact-request, terminal result and PDF live acceptance await a fresh Google sign-in because the existing browser session returned /api/v1/me HTTP 401.",
     "Staging remains in me-central1 and does not satisfy the owner-authorized Europe processing and persistent-storage boundary.",
-    "Roadmap P5 evaluation-and-hardening exit criteria are not yet evidenced.",
-    "Production release and production traffic remain unauthorized and untouched.",
-    "Roadmap P6 real-data pilot remains blocked until P5 exit criteria and P6 preconditions pass."
+    "Production scoring weights require documented SME validation.",
+    "Production release requires separate authorization and production remains untouched."
   ],
   "evidenceRefs": [
     {
@@ -278,6 +283,10 @@
     {
       "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md",
       "sha256": "484FE10C3DB8FB8E5512DF71A56F6AD6617DD4406565479DADDC32F3F43DEDE7"
+    },
+    {
+      "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\CURRENT_STATE_CONTROL_PLANE_CONVERGENCE_2026-09-01.md",
+      "sha256": "FF67A510D38E282960FFBF4E0C201FABEFE0750CE3D8D1E21FC99994FD63FC50"
     }
   ]
 }

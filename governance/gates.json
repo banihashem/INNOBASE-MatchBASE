@@ -297,7 +297,7 @@
       "evidence": [
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md"
       ],
-      "summary": "The deployed predecessor records a qualified-live result and migration head 0011. Current remediation is undeployed, its source-transition state is runtime-derived, Staging is degraded and production remains untouched.",
+      "summary": "Published successor source is deployed as web 00036 and worker 00048 with schema head 0013 and PDF runtime enabled. Public acceptance passed; authenticated exact-request/PDF acceptance awaits fresh sign-in. Production remains untouched.",
       "traceabilityIds": []
     },
     {
@@ -308,7 +308,7 @@
       "evidence": [
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md"
       ],
-      "summary": "Revision matchbase-staging-web-00034-cn5 passed its recorded acceptance but is the deployed predecessor; current UX remediation is undeployed and its commit/publication state is runtime-derived.",
+      "summary": "Revision matchbase-staging-web-00036-g4l is current and passed public landing-page acceptance. Authenticated UX/result/PDF acceptance awaits fresh sign-in.",
       "traceabilityIds": []
     },
     {
@@ -317,7 +317,7 @@
       "status": "PASS",
       "owner": "Documentation and traceability steward",
       "evidence": ["governance/current-state-projection.v1.json"],
-      "summary": "Current-state overlay and dashboard convergence are implemented; independent Role 2 repository/remediation audit passed with zero Critical or Major defects on the exact stable bytes. External cloud state and live acceptance remain pending.",
+      "summary": "Current-state overlay records the exact published source, successful build, successor revisions, schema 0013, PDF runtime and remaining bounded blockers without rewriting history.",
       "traceabilityIds": ["TRACE-P5-CURRENT-STATE"]
     },
     {
@@ -329,7 +329,7 @@
         "C:\\INNOBASE\\MatchBASE\\02_Product_Research_and_Planning\\05_Cloud_Repository_Delivery\\DELIVERY_ROADMAP.md",
         "governance/current-state-projection.v1.json"
       ],
-      "summary": "T-1 through T-11 blocking CI, timed rollback, PITR restore, spend-ceiling abort and runbook acknowledgements remain unevidenced.",
+      "summary": "Blocked only by authenticated exact agricultural request/PDF acceptance, Europe residency convergence, and documented SME validation plus separate production authorization.",
       "traceabilityIds": []
     },
     {
@@ -341,7 +341,7 @@
         "C:\\INNOBASE\\MatchBASE\\02_Product_Research_and_Planning\\05_Cloud_Repository_Delivery\\DELIVERY_ROADMAP.md",
         "governance/current-state-projection.v1.json"
       ],
-      "summary": "Pilot admission remains blocked until every Roadmap P5 exit criterion and P6 precondition passes.",
+      "summary": "Pilot and production remain blocked by authenticated live acceptance, Europe residency, SME validation and separate production authorization.",
       "traceabilityIds": []
     }
   ]

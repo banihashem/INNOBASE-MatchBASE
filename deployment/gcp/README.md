@@ -1,12 +1,15 @@
 # MatchBASE Google Cloud deployment scaffold
 
-This directory is an execution scaffold, not evidence that a deployment exists.
-Current disposition: the independent Role 2 audit of the exact repository
-remediation bytes passed with zero Critical or Major defects. The initial
-governed candidate was committed and pushed as
-`77c58cd4c95dc8016d369080b095bed0e554cad1`. No image build/publication, cloud
-apply, EU migration, OAuth or Cloudflare mutation, or live acceptance has been
-performed. The current hotfix remains runtime-derived.
+This directory is the governed execution scaffold used for the current Staging
+deployment. Exact source `1236a78203f62ff32f7db8b7519c724aa620b8bf` was
+published, built by successful Cloud Build
+`6d0b0a4f-ce12-452d-bf2b-441599bfb66b`, and deployed as web revision
+`matchbase-staging-web-00036-g4l` and worker revision
+`matchbase-staging-worker-00048-f4t`. Build
+`fe5c0b5b-2bcb-40e6-8304-76850d226336` remains a historical failed attempt.
+Staging schema head is `0013_domain_pack_v2_and_legacy_annotation`; production
+is untouched. Europe residency and authenticated exact-request/PDF acceptance
+remain open.
 Every script requires an explicit `-Environment staging` or
 `-Environment production` and defaults to plan-only output. No environment
 defaults to production. Mutation requires both `-Apply` and the exact mapped
@@ -358,21 +361,24 @@ failed Docker step 0. Build `7a956868-3d02-414b-b4dc-988d7c215cdf` succeeded at
 revision `fee259e18ce4a6ba73195e06f3248be0043d64a3` and published two images, but
 `--show-provenance` returned only `image_summary`, unknown SLSA build level, and
 no `provenance_summary`. Publisher admission therefore failed closed and no
-deployment occurred. The `options.requestedVerifyOption=VERIFIED` correction is
-runtime-derived/uncommitted.
+deployment occurred. The `options.requestedVerifyOption=VERIFIED` correction was
+runtime-derived/uncommitted at that historical checkpoint and was later
+superseded by the published successful successor.
 
 Build `9023f76a-e60c-41c0-b21d-d46f0d6a5817` subsequently succeeded with
 `requestedVerifyOption=VERIFIED` at exact revision
 `1f1a438685cb951a5bb30a17ca072aab1e1c6be6` and published two images. SLSA
 level 3 appeared as one v1 plus one legacy v0.1 occurrence. The parser rejected
 the cardinality/old schema and publisher admission failed closed before
-deployment. Parser/build-record/retry correction is runtime-derived/uncommitted.
+deployment. Parser/build-record/retry correction was runtime-derived/uncommitted
+at that historical checkpoint and was later superseded.
 
 Build `b68c1bba-1e09-46ab-86f0-a493acbb7276` then succeeded with VERIFIED for
 revision `e0af82b0af8bbfa8203f3d3cb04e836964bce4dc` and published two images.
 Dual provenance validation passed, but PowerShell StrictMode scalar `.Count`
 failed closed before exact build-record admission/output. No deployment
-occurred. Explicit array-count patch/tests are runtime-derived/uncommitted.
+occurred. Explicit array-count patch/tests were runtime-derived/uncommitted at
+that historical checkpoint and were later superseded.
 
 Role 2 passed the repository deployment-admission remediation. Deployment still
 fails closed unless `CandidateCommit` equals a clean `HEAD` and `origin/main`
@@ -380,8 +386,9 @@ and live source SLSA provenance validates both exact digests before mutation.
 The main-region path validates the direct image. The EU path validates the exact
 live target image identity and deterministic same-name/same-digest
 `me-central1` source provenance. The two build `7a956868...` images remain
-non-deployable. The combined VERIFIED/deploy-gate patch is
-runtime-derived/uncommitted.
+non-deployable. The combined VERIFIED/deploy-gate patch was
+runtime-derived/uncommitted at that historical checkpoint and was later
+published in the successful successor.
 
 Plan and execute only after the candidate commit is pushed to `origin/main`:
 

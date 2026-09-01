@@ -25,9 +25,9 @@
       ]
     },
     {
-      "id": "BUILD-P5-STAGING-WEB-00034",
+      "id": "BUILD-P5-STAGING-WEB-00036",
       "status": "ACTIVE",
-      "summary": "Deployed predecessor source 1224b4c is represented by Staging web revision matchbase-staging-web-00034-cn5. Current remediation remains undeployed; its commit/publication state is runtime-derived and production is untouched.",
+      "summary": "Published successor 1236a782 is deployed as web revision matchbase-staging-web-00036-g4l. Public acceptance passed; authenticated exact-request/PDF acceptance awaits fresh sign-in. Production is untouched.",
       "evidenceRefs": [
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md"
       ]
@@ -58,8 +58,20 @@
     },
     {
       "id": "BUILD-P5-LINKED-SOURCE-B68C1BBA",
-      "status": "BUILD_PASS_PROVENANCE_PASS_BUILD_RECORD_ADMISSION_FAIL",
+      "status": "HISTORICAL_BUILD_PASS_PROVENANCE_PASS_BUILD_RECORD_ADMISSION_FAIL",
       "summary": "Build b68c1bba-1e09-46ab-86f0-a493acbb7276 succeeded with VERIFIED for revision e0af82b0af8bbfa8203f3d3cb04e836964bce4dc and published web sha256:a2a0a031997d12564975103ae0b073aadfe2b1e8fb00494afe6e0b41514ec76f plus worker sha256:4cc8bd46d3931b1a918a2af1505f390a5f86a6c3aae56d4877f4a8399163ae7a. Dual provenance validation passed, then PowerShell StrictMode scalar .Count failed closed before exact build-record admission/output. No deployment occurred.",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"]
+    },
+    {
+      "id": "BUILD-P5-LINKED-SOURCE-FE5C0B5B",
+      "status": "HISTORICAL_FAIL",
+      "summary": "Immediate predecessor build fe5c0b5b-2bcb-40e6-8304-76850d226336 failed and remains historical evidence.",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"]
+    },
+    {
+      "id": "BUILD-P5-LINKED-SOURCE-6D0B0A4F",
+      "status": "ACTIVE",
+      "summary": "Build 6d0b0a4f-ce12-452d-bf2b-441599bfb66b succeeded for exact published source 1236a78203f62ff32f7db8b7519c724aa620b8bf and produced the admitted web and worker digests deployed to Staging.",
       "evidenceRefs": ["governance/current-state-projection.v1.json"]
     }
   ],
@@ -122,6 +134,15 @@
       "status": "PASS",
       "path": "governance/current-state-projection.v1.json",
       "evidenceRefs": ["governance/current-state-projection.v1.json"]
+    },
+    {
+      "id": "ARTIFACT-P5-SUCCESSOR-DEPLOYMENT-CLOSURE",
+      "status": "PASS",
+      "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\CURRENT_STATE_CONTROL_PLANE_CONVERGENCE_2026-09-01.md",
+      "sha256": "FF67A510D38E282960FFBF4E0C201FABEFE0750CE3D8D1E21FC99994FD63FC50",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\CURRENT_STATE_CONTROL_PLANE_CONVERGENCE_2026-09-01.md"
+      ]
     }
   ],
   "sboms": [
@@ -179,8 +200,15 @@
       "note": "The initial governed remediation candidate was committed and pushed to origin/main while the repository was private. Repository visibility later changed to public. It has not been built, published as an image, deployed, migrated, or live-accepted; the subsequent hotfix source remains runtime-derived."
     },
     {
-      "id": "PROV-P5-STAGING",
+      "id": "PROV-P5-STAGING-SUCCESSOR",
       "status": "PASS",
+      "source": "https://github.com/banihashem/INNOBASE-MatchBASE/commit/1236a78203f62ff32f7db8b7519c724aa620b8bf",
+      "note": "Published source, successful build and current Staging web/worker revisions are bound to the same governed successor identity.",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"]
+    },
+    {
+      "id": "PROV-P5-STAGING",
+      "status": "HISTORICAL_PREDECESSOR",
       "source": "https://github.com/banihashem/INNOBASE-MatchBASE/commit/1224b4c485a9f3533a15e1d50b606f7aa53c2d23",
       "note": "Local HEAD and origin/main resolve to the exact bounded identity-display commit represented by Staging revision 00034.",
       "evidenceRefs": [
@@ -191,28 +219,28 @@
   "deployments": [
     {
       "id": "ARTIFACT-DEPLOY-P5-STAGING-WEB",
-      "title": "Deployed predecessor P5 Staging web revision 00034",
+      "title": "Current P5 Staging web successor revision 00036",
       "status": "ACTIVE",
       "target": "innobase-matchbase-stg / me-central1",
-      "revision": "matchbase-staging-web-00034-cn5",
-      "image": "sha256:3bf6be141f027a9242b8406e62aa5c1704431afacbf60e619f9fa085922f9cad",
+      "revision": "matchbase-staging-web-00036-g4l",
+      "image": "sha256:088f3a29fadc0bc9caedfd7f93fd19767a3d6d434fc3a0d333d09b20029ae071",
       "trafficPercent": 100,
       "production": "UNTOUCHED",
-      "relationship": "DEPLOYED_PREDECESSOR_CURRENT_REMEDIATION_PENDING",
+      "relationship": "PUBLISHED_SUCCESSOR_CURRENT_PUBLIC_ACCEPTANCE_PASS",
       "evidenceRefs": [
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md"
       ]
     },
     {
       "id": "ARTIFACT-DEPLOY-P5-STAGING-WORKER",
-      "title": "Deployed predecessor P5 Staging worker revision 00045",
+      "title": "Current P5 Staging worker successor revision 00048",
       "status": "ACTIVE",
       "target": "innobase-matchbase-stg / me-central1",
-      "revision": "matchbase-staging-worker-00045-k2b",
-      "image": "sha256:ca6d1627309ce333dcbde354b17d4588135fa2993988bf24a4de39ca264c191d",
-      "migrationHead": "0011_admin_system_scope_and_run_tier_immutability",
+      "revision": "matchbase-staging-worker-00048-f4t",
+      "image": "sha256:9f0422c70e09bf24f654d8c4e7af4241ef8dd5305af862b62e04e8d134da4816",
+      "migrationHead": "0013_domain_pack_v2_and_legacy_annotation",
       "production": "UNTOUCHED",
-      "relationship": "DEPLOYED_PREDECESSOR_CURRENT_REMEDIATION_PENDING",
+      "relationship": "PUBLISHED_SUCCESSOR_CURRENT_PDF_RUNTIME_ENABLED",
       "evidenceRefs": [
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md"
       ]

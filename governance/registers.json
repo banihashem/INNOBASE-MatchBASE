@@ -498,7 +498,7 @@
       "id": "TEST-P5-CONTROL-PLANE",
       "title": "Current-state governance and dashboard validation",
       "status": "PASS",
-      "summary": "Governance, snapshot generation, snapshot validation and exact source-reference validation passed after current-state convergence; the independent Role 2 repository/remediation audit also passed, while external operations remain separate and pending.",
+      "summary": "Governance and snapshot controls validate the exact published source, successful build, successor revisions, schema 0013, enabled PDF runtime and bounded remaining blockers.",
       "command": "pnpm run governance:check && pnpm run snapshot:generate && pnpm run snapshot:check",
       "evidenceRefs": ["governance/current-state-projection.v1.json"],
       "traceabilityIds": ["TRACE-P5-CURRENT-STATE"]
@@ -607,9 +607,9 @@
       "id": "DEPLOY-P5-STAGING",
       "target": "innobase-matchbase-stg / me-central1",
       "status": "ACTIVE",
-      "reason": "Deployed predecessor web revision matchbase-staging-web-00034-cn5 serves 100 percent traffic and migrations are applied through 0011. Build 7a images remain non-deployable because live dual-digest SLSA provenance is absent. The Role2-PASS deployment admission remediation requires CandidateCommit=clean HEAD=origin/main and provenance validation before mutation; its combined VERIFIED/deploy-gate patch is uncommitted/runtime-derived. Staging is degraded and production remains untouched.",
-      "artifact": "sha256:3bf6be141f027a9242b8406e62aa5c1704431afacbf60e619f9fa085922f9cad",
-      "rollback": "Use the recorded prior Cloud Run revision and the verified 0011 down migration only in Staging; Roadmap P5 still requires a timed revision rollback and non-production PITR rehearsal before pilot admission.",
+      "reason": "Published source 1236a78203f62ff32f7db8b7519c724aa620b8bf is deployed as web 00036 and worker 00048; schema head is 0013 and the exact-digest Consultant PDF runtime is enabled. Public acceptance passed, authenticated acceptance awaits fresh sign-in, and production is untouched.",
+      "artifact": "sha256:088f3a29fadc0bc9caedfd7f93fd19767a3d6d434fc3a0d333d09b20029ae071",
+      "rollback": "Use the recorded prior Cloud Run revisions and verified 0013/0012 down migrations only in the authorized Staging environment.",
       "evidenceRefs": [
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md",
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md"
@@ -667,7 +667,7 @@
       "critical": 0,
       "major": 0,
       "minor": 0,
-      "summary": "Independent Role 2 repository/remediation audit passed with zero Critical or Major defects on the exact stable bytes; external cloud execution and live acceptance remain pending."
+      "summary": "Published successor deployment and governance convergence passed; authenticated exact-request/PDF live acceptance remains pending fresh sign-in."
     }
   ],
   "evidence": [
@@ -752,7 +752,7 @@
       "id": "EVIDENCE-P5-CURRENT-STATE",
       "title": "Additive current-state projection",
       "status": "PASS",
-      "summary": "Exact current source, Staging identity, capabilities, the independent repository/remediation PASS and remaining external hardening blockers are projected without changing historical records.",
+      "summary": "Exact published source, successful build, successor revisions, schema 0013, PDF runtime and remaining bounded blockers are projected without changing historical records.",
       "evidenceRefs": ["governance/current-state-projection.v1.json"]
     }
   ]

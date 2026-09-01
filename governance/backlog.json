@@ -170,6 +170,26 @@
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md",
         "governance/current-state-projection.v1.json"
       ]
+    },
+    {
+      "id": "P5-AUTHENTICATED-EXACT-PDF-ACCEPTANCE",
+      "slice": "P5-STAGING",
+      "title": "Complete exact agricultural request-to-PDF live acceptance after fresh Google sign-in",
+      "status": "IN_PROGRESS",
+      "owner": "Product, QA and Staging operations",
+      "priority": "MUST",
+      "dependencies": ["P5-CURRENT-STATE-CONVERGENCE"],
+      "evidence": ["governance/current-state-projection.v1.json"]
+    },
+    {
+      "id": "P5-SME-PRODUCTION-WEIGHTS",
+      "slice": "ROADMAP-P5",
+      "title": "Document SME validation of production scoring weights and obtain separate production authorization",
+      "status": "BLOCKED",
+      "owner": "Product owner and domain SME",
+      "priority": "MUST",
+      "dependencies": ["P5-AUTHENTICATED-EXACT-PDF-ACCEPTANCE"],
+      "evidence": ["governance/current-state-projection.v1.json"]
     }
   ]
 }

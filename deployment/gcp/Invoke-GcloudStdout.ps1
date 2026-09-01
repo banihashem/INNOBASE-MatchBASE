@@ -21,4 +21,3 @@ function Invoke-GcloudStdout {
     Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
   }
 }
-

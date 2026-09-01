@@ -172,7 +172,10 @@ function Get-GovernedEvidence {
   if ([string]::IsNullOrWhiteSpace($EvidenceSignaturePath) -or [string]::IsNullOrWhiteSpace($EvidenceKmsKeyVersion)) { throw "Apply requires the detached KMS signature and exact same-project EU KMS key version." }
   $signatureResolved = (Resolve-Path -LiteralPath $EvidenceSignaturePath -ErrorAction Stop).Path
   $raw = Get-Content -LiteralPath $resolved -Raw
-  $evidence = $raw | ConvertFrom-Json
+  # Preserve signed ISO-8601 values exactly. PowerShell otherwise materializes
+  # timestamps as local DateTime values and changes the bytes used by the
+  # durable ledger hash chain when the document is read in another time zone.
+  $evidence = $raw | ConvertFrom-Json -DateKind String
   if ($evidence.schema_version -cne $EvidenceSchemaVersion -or
       $evidence.checkpoint -cne $Checkpoint -or
       $evidence.project_id -cne $ProjectId -or
@@ -347,7 +350,9 @@ function Get-MigrationLedger {
   if ($generation -cnotmatch '^[1-9][0-9]*$') { throw "Durable ledger generation is invalid." }
   $null = Invoke-MigrationGcloud -Arguments @("storage", "cp", $uri, $work, "--quiet")
   $ledgerRaw = Get-Content -LiteralPath $work -Raw
-  $document = $ledgerRaw | ConvertFrom-Json
+  # Hash-chain material includes the exact persisted timestamp. Keep JSON date
+  # tokens as strings so validation is independent of the operator time zone.
+  $document = $ledgerRaw | ConvertFrom-Json -DateKind String
   if ($document.schema_version -cne $LedgerSchemaVersion -or $document.project_id -cne $ProjectId -or
       $document.source_region -cne $SourceRegion -or $document.target_region -cne $TargetRegion) {
     throw "Durable ledger identity is invalid."

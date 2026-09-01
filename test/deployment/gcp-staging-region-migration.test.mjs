@@ -266,6 +266,11 @@ test("cutover verifies the chained predecessors and exact EU identity before one
 test("durable ledger is ordered, hash-chained, evidence-bound, and generation-conditional", async () => {
   const source = await read("../../deployment/gcp/Migrate-StagingRegion.ps1");
   assert.match(source, /matchbase-staging-region-migration-ledger\.v1/u);
+  assert.equal(
+    (source.match(/ConvertFrom-Json -DateKind String/gu) ?? []).length >= 2,
+    true,
+    "signed evidence and ledger timestamps must remain exact JSON strings",
+  );
   assert.match(source, /previous_entry_sha256/u);
   assert.match(source, /entry_sha256/u);
   assert.match(source, /evidence_sha256/u);

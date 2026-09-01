@@ -29,3 +29,11 @@ test("timeout performs exactly 16 probes and 15 delays", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout.trim(), /^THREW\|16\|15\|.*45-second window/u);
 });
+
+test("strict-mode unique build identity remains an explicit one-item array", () => {
+  const result = run(
+    'Set-StrictMode -Version Latest; $ids=@("build-id","build-id"); @($ids | Sort-Object -Unique).Count',
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), "1");
+});

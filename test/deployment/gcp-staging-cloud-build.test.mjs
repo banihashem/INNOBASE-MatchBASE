@@ -74,6 +74,10 @@ test("governed Staging Cloud Build binds exact Git material, images and provenan
   );
   assert.match(publisher, /immutableTags/u);
   assert.match(publisher, /Invoke-BoundedProvenanceProbe/u);
+  assert.match(
+    publisher,
+    /@\(\$buildIds \| Sort-Object -Unique\)\.Count -ne 1/u,
+  );
   assert.match(publisher, /builds", "describe", \$buildIds\[0\]/u);
   assert.ok(
     publisher.indexOf('builds", "describe", $buildIds[0]') <

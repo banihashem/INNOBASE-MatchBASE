@@ -112,7 +112,7 @@ for ($imageIndex = 0; $imageIndex -lt $resolvedImages.Count; $imageIndex++) {
     $published += $digest
   } finally { Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue }
 }
-if (($buildIds | Sort-Object -Unique).Count -ne 1) { throw "Published images do not bind to one exact Cloud Build invocation." }
+if (@($buildIds | Sort-Object -Unique).Count -ne 1) { throw "Published images do not bind to one exact Cloud Build invocation." }
 $buildRecordFile = Join-Path ([IO.Path]::GetTempPath()) "matchbase-build-record-$([guid]::NewGuid().ToString('N')).json"
 try {
   Invoke-GcloudStdout -Arguments @("builds", "describe", $buildIds[0], "--project=$project", "--region=$region", "--format=json") | Set-Content -LiteralPath $buildRecordFile -Encoding utf8NoBOM

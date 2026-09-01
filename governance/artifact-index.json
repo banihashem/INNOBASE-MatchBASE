@@ -52,8 +52,14 @@
     },
     {
       "id": "BUILD-P5-LINKED-SOURCE-9023F76A",
-      "status": "BUILD_PASS_PUBLISHER_ADMISSION_FAIL",
+      "status": "HISTORICAL_BUILD_PASS_PUBLISHER_ADMISSION_FAIL",
       "summary": "Build 9023f76a-e60c-41c0-b21d-d46f0d6a5817 succeeded with requestedVerifyOption VERIFIED for revision 1f1a438685cb951a5bb30a17ca072aab1e1c6be6 and published web sha256:1efa936f4fa1ea56c39c2985a1616b1e22f9f9ad8b782ada2ee589020ebb0817 plus worker sha256:f5f40a8602c4f23dcea0e3b3e9a7e5a6153d2e2ea135cf297e1eda8ca4b0146b. SLSA level 3 appeared in one v1 and one legacy v0.1 occurrence; parser cardinality/schema admission failed closed. No deployment occurred.",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"]
+    },
+    {
+      "id": "BUILD-P5-LINKED-SOURCE-B68C1BBA",
+      "status": "BUILD_PASS_PROVENANCE_PASS_BUILD_RECORD_ADMISSION_FAIL",
+      "summary": "Build b68c1bba-1e09-46ab-86f0-a493acbb7276 succeeded with VERIFIED for revision e0af82b0af8bbfa8203f3d3cb04e836964bce4dc and published web sha256:a2a0a031997d12564975103ae0b073aadfe2b1e8fb00494afe6e0b41514ec76f plus worker sha256:4cc8bd46d3931b1a918a2af1505f390a5f86a6c3aae56d4877f4a8399163ae7a. Dual provenance validation passed, then PowerShell StrictMode scalar .Count failed closed before exact build-record admission/output. No deployment occurred.",
       "evidenceRefs": ["governance/current-state-projection.v1.json"]
     }
   ],

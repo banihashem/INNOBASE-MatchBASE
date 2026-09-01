@@ -368,6 +368,12 @@ level 3 appeared as one v1 plus one legacy v0.1 occurrence. The parser rejected
 the cardinality/old schema and publisher admission failed closed before
 deployment. Parser/build-record/retry correction is runtime-derived/uncommitted.
 
+Build `b68c1bba-1e09-46ab-86f0-a493acbb7276` then succeeded with VERIFIED for
+revision `e0af82b0af8bbfa8203f3d3cb04e836964bce4dc` and published two images.
+Dual provenance validation passed, but PowerShell StrictMode scalar `.Count`
+failed closed before exact build-record admission/output. No deployment
+occurred. Explicit array-count patch/tests are runtime-derived/uncommitted.
+
 Role 2 passed the repository deployment-admission remediation. Deployment still
 fails closed unless `CandidateCommit` equals a clean `HEAD` and `origin/main`
 and live source SLSA provenance validates both exact digests before mutation.

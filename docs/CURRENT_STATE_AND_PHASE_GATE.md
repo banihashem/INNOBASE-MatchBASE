@@ -56,6 +56,15 @@ the historical record as provenance.
   SLSA level 3 appeared as one v1 and one legacy v0.1 occurrence. Parser
   cardinality/old-schema admission failed closed; no deployment occurred. The
   parser/build-record/retry correction is uncommitted/runtime-derived.
+- Build `b68c1bba-1e09-46ab-86f0-a493acbb7276` succeeded with VERIFIED for
+  revision `e0af82b0af8bbfa8203f3d3cb04e836964bce4dc`, publishing web digest
+  `sha256:a2a0a031997d12564975103ae0b073aadfe2b1e8fb00494afe6e0b41514ec76f`
+  and worker digest
+  `sha256:4cc8bd46d3931b1a918a2af1505f390a5f86a6c3aae56d4877f4a8399163ae7a`.
+  Dual provenance validation passed. Publisher then failed closed on PowerShell
+  StrictMode scalar `.Count` before exact build-record admission/output. No
+  deployment occurred. Explicit array-count patch/tests are
+  uncommitted/runtime-derived.
 - Staging project: `innobase-matchbase-stg`
 - Region: `me-central1`
 - Public origin: `https://matchbase-staging.innobase.app`

@@ -14,6 +14,10 @@ test("Cloud Run deployment gates every mutation on exact commit and two live pro
   );
   assert.match(script, /status --porcelain=v1 --untracked-files=all/u);
   assert.match(script, /ls-remote origin refs\/heads\/main/u);
+  assert.match(
+    script,
+    /@\(\$provenanceBuildIds \| Sort-Object -Unique\)\.Count -ne 1/u,
+  );
   assert.equal((script.match(/--show-provenance/gu) ?? []).length, 1);
   assert.match(
     script,

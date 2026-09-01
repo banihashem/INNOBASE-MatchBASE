@@ -95,20 +95,26 @@
           "status": "SUCCESS",
           "imagesPublished": 2,
           "publisherAdmission": "FAILED_CLOSED_PROVENANCE_SUMMARY_ABSENT_SLSA_LEVEL_UNKNOWN"
+        },
+        {
+          "id": "9023f76a-e60c-41c0-b21d-d46f0d6a5817",
+          "status": "SUCCESS",
+          "imagesPublished": 2,
+          "publisherAdmission": "FAILED_CLOSED_PARSER_CARDINALITY_AND_SCHEMA"
         }
       ],
       "lastLinkedSourceBuild": {
-        "id": "9023f76a-e60c-41c0-b21d-d46f0d6a5817",
+        "id": "b68c1bba-1e09-46ab-86f0-a493acbb7276",
         "sourceFetch": "SUCCEEDED_CONNECTED_REPOSITORY",
-        "sourceRevision": "1f1a438685cb951a5bb30a17ca072aab1e1c6be6",
+        "sourceRevision": "e0af82b0af8bbfa8203f3d3cb04e836964bce4dc",
         "requestedVerifyOption": "VERIFIED",
         "status": "SUCCESS",
         "imagesPublished": 2,
-        "webDigest": "sha256:1efa936f4fa1ea56c39c2985a1616b1e22f9f9ad8b782ada2ee589020ebb0817",
-        "workerDigest": "sha256:f5f40a8602c4f23dcea0e3b3e9a7e5a6153d2e2ea135cf297e1eda8ca4b0146b",
-        "provenance": "SLSA_LEVEL_3_ONE_V1_AND_ONE_LEGACY_V0_1_OCCURRENCE",
-        "publisherAdmission": "FAILED_CLOSED_PARSER_CARDINALITY_AND_SCHEMA",
-        "parserBuildRecordRetryPatch": "UNCOMMITTED_RUNTIME_DERIVED"
+        "webDigest": "sha256:a2a0a031997d12564975103ae0b073aadfe2b1e8fb00494afe6e0b41514ec76f",
+        "workerDigest": "sha256:4cc8bd46d3931b1a918a2af1505f390a5f86a6c3aae56d4877f4a8399163ae7a",
+        "provenance": "DUAL_PROVENANCE_VALIDATION_PASS",
+        "publisherAdmission": "FAILED_CLOSED_POWERSHELL_STRICTMODE_SCALAR_COUNT_BEFORE_BUILD_RECORD_ADMISSION_OUTPUT",
+        "arrayCountPatchTests": "UNCOMMITTED_RUNTIME_DERIVED"
       },
       "readiness": "DEGRADED_REMEDIATION_PENDING_DEPLOY",
       "production": "UNTOUCHED"

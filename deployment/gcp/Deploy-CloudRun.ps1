@@ -213,7 +213,7 @@ foreach ($image in @($WebImageDigest, $WorkerImageDigest)) {
   } finally { Remove-Item -LiteralPath $capture, $targetCapture -Force -ErrorAction SilentlyContinue }
   $imageIndex++
 }
-if (($provenanceBuildIds | Sort-Object -Unique).Count -ne 1) { throw "Deployment images do not bind to one exact Cloud Build invocation." }
+if (@($provenanceBuildIds | Sort-Object -Unique).Count -ne 1) { throw "Deployment images do not bind to one exact Cloud Build invocation." }
 $policyId = $routePolicySha256.Substring(0, 16)
 $webSourceTag = "$($sourceImages[0].Split('@')[0]):$CandidateCommit"
 $workerSourceTag = "$($sourceImages[1].Split('@')[0]):$CandidateCommit"

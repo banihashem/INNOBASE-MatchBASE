@@ -52,21 +52,27 @@
           "status": "SUCCESS",
           "imagesPublished": 2,
           "publisherAdmission": "FAILED_CLOSED_PROVENANCE_SUMMARY_ABSENT_SLSA_LEVEL_UNKNOWN"
+        },
+        {
+          "id": "9023f76a-e60c-41c0-b21d-d46f0d6a5817",
+          "status": "SUCCESS",
+          "imagesPublished": 2,
+          "publisherAdmission": "FAILED_CLOSED_PARSER_CARDINALITY_AND_SCHEMA"
         }
       ],
       "lastBuild": {
-        "id": "9023f76a-e60c-41c0-b21d-d46f0d6a5817",
+        "id": "b68c1bba-1e09-46ab-86f0-a493acbb7276",
         "sourceFetch": "SUCCEEDED_CONNECTED_REPOSITORY",
-        "sourceRevision": "1f1a438685cb951a5bb30a17ca072aab1e1c6be6",
+        "sourceRevision": "e0af82b0af8bbfa8203f3d3cb04e836964bce4dc",
         "requestedVerifyOption": "VERIFIED",
         "status": "SUCCESS",
         "imagesPublished": 2,
-        "webDigest": "sha256:1efa936f4fa1ea56c39c2985a1616b1e22f9f9ad8b782ada2ee589020ebb0817",
-        "workerDigest": "sha256:f5f40a8602c4f23dcea0e3b3e9a7e5a6153d2e2ea135cf297e1eda8ca4b0146b",
-        "provenanceObservation": "SLSA_LEVEL_3_ONE_V1_AND_ONE_LEGACY_V0_1_OCCURRENCE",
-        "publisherAdmission": "FAILED_CLOSED_PARSER_REQUIRED_EXACTLY_ONE_OCCURRENCE_AND_OLD_SCHEMA"
+        "webDigest": "sha256:a2a0a031997d12564975103ae0b073aadfe2b1e8fb00494afe6e0b41514ec76f",
+        "workerDigest": "sha256:4cc8bd46d3931b1a918a2af1505f390a5f86a6c3aae56d4877f4a8399163ae7a",
+        "provenanceObservation": "DUAL_PROVENANCE_VALIDATION_PASS",
+        "publisherAdmission": "FAILED_CLOSED_POWERSHELL_STRICTMODE_SCALAR_COUNT_BEFORE_EXACT_BUILD_RECORD_ADMISSION_OUTPUT"
       },
-      "currentPatch": "PARSER_BUILD_RECORD_RETRY_CORRECTION_UNCOMMITTED_RUNTIME_DERIVED",
+      "currentPatch": "EXPLICIT_ARRAY_COUNT_PATCH_TESTS_UNCOMMITTED_RUNTIME_DERIVED",
       "nextState": "REBUILD_GOVERNED_PUBLICATION_DEPLOYMENT_AND_LIVE_ACCEPTANCE_PENDING"
     },
     "deploymentAdmission": {
@@ -75,8 +81,8 @@
       "preMutationRequirement": "LIVE_SOURCE_SLSA_PROVENANCE_FOR_BOTH_EXACT_DIGESTS",
       "mainRegion": "VALIDATE_DIRECT_IMAGE_PROVENANCE",
       "euRegion": "VALIDATE_EXACT_LIVE_TARGET_IDENTITY_AND_DETERMINISTIC_SAME_NAME_SAME_DIGEST_ME_CENTRAL1_SOURCE_PROVENANCE",
-      "build9023Images": "PUBLISHED_WITH_SLSA_LEVEL_3_BUT_NOT_GOVERNED_ADMITTED_OR_DEPLOYABLE",
-      "currentPatch": "PARSER_BUILD_RECORD_RETRY_CORRECTION_UNCOMMITTED_RUNTIME_DERIVED",
+      "buildB68Images": "DUAL_PROVENANCE_VALIDATED_BUT_NOT_EXACT_BUILD_RECORD_ADMITTED_OR_DEPLOYABLE",
+      "currentPatch": "EXPLICIT_ARRAY_COUNT_PATCH_TESTS_UNCOMMITTED_RUNTIME_DERIVED",
       "remaining": "REBUILD_GOVERNED_PUBLICATION_DEPLOYMENT_AND_LIVE_ACCEPTANCE_PENDING"
     }
   },
@@ -256,7 +262,7 @@
     "slices": ["SLICE-0", "SLICE-1"]
   },
   "knownBlockers": [
-    "Cloud Build 9023f76a-e60c-41c0-b21d-d46f0d6a5817 succeeded with requestedVerifyOption VERIFIED at revision 1f1a438685cb951a5bb30a17ca072aab1e1c6be6 and published two images. SLSA level 3 provenance appeared as one v1 plus one legacy v0.1 occurrence, but parser admission failed closed on cardinality/old-schema handling. No deployment occurred. Parser/build-record/retry correction is uncommitted/runtime-derived; prior builds remain historical.",
+    "Cloud Build b68c1bba-1e09-46ab-86f0-a493acbb7276 succeeded with VERIFIED at revision e0af82b0af8bbfa8203f3d3cb04e836964bce4dc and published two images. Publisher dual provenance validation passed, then failed closed on PowerShell StrictMode scalar .Count before exact build-record admission/output. No deployment occurred. Explicit array-count patch/tests are uncommitted/runtime-derived; prior builds remain historical.",
     "Independent Role 2 repository/remediation audit passed on exact stable bytes; cloud apply, deployment and live acceptance remain pending.",
     "The current remediation source has not been deployed; its dirty, committed and published state is derived at snapshot generation.",
     "Staging remains in me-central1 and does not satisfy the owner-authorized Europe processing and persistent-storage boundary.",

@@ -158,6 +158,10 @@ copies source generations oldest-first before its live-object rsync so bucket
 version history is retained. The database URL is supplied only through
 `MATCHBASE_EVIDENCE_DATABASE_URL`; it is replaced by `<REDACTED_DATABASE_URL>`
 in signed command provenance and is never printed or written to evidence.
+Versioned artifact inventory uses the current `gcloud storage ls --all-versions
+--json` contract and validates the nested object metadata before copying or
+reconciliation; the removed `storage objects list --all-versions` form is not
+used.
 
 Canary and Cutover evidence is not operator-authored. The producer runs the
 fixed `scripts/validate-staging-eu-acceptance.mjs` collector against

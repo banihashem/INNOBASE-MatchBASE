@@ -181,8 +181,8 @@ if ($Checkpoint -in @("Canary", "Cutover")) {
 }
 
 if ($Checkpoint -ceq "SourceRetirement") {
-  $captures += Invoke-ReadOnlyCapture -Id "source-object-inventory" -Arguments @("storage", "objects", "list", "gs://innobase-matchbase-stg-artifacts/**", "--all-versions", "--format=json(name,generation,size,crc32c)")
-  $captures += Invoke-ReadOnlyCapture -Id "target-object-inventory" -Arguments @("storage", "objects", "list", "gs://innobase-matchbase-stg-eu-artifacts/**", "--all-versions", "--format=json(name,generation,size,crc32c)")
+  $captures += Invoke-ReadOnlyCapture -Id "source-object-inventory" -Arguments @("storage", "ls", "gs://innobase-matchbase-stg-artifacts/**", "--all-versions", "--json")
+  $captures += Invoke-ReadOnlyCapture -Id "target-object-inventory" -Arguments @("storage", "ls", "gs://innobase-matchbase-stg-eu-artifacts/**", "--all-versions", "--json")
   $psql = Get-Command psql -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($null -eq $psql) { throw "SourceRetirement evidence requires psql for the read-only persisted artifact URI query." }
   if ([string]::IsNullOrWhiteSpace($env:MATCHBASE_EVIDENCE_DATABASE_URL)) { throw "SourceRetirement evidence requires MATCHBASE_EVIDENCE_DATABASE_URL; its value is never recorded." }

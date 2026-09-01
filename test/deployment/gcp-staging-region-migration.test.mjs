@@ -411,7 +411,10 @@ test("source retirement requires full versioned artifact reconciliation and pers
     "../../deployment/gcp/Migrate-StagingRegion.ps1",
   );
   assert.match(producer, /--all-versions/u);
-  assert.match(producer, /json\(name,generation,size,crc32c\)/u);
+  assert.match(producer, /"storage", "ls"/u);
+  assert.match(producer, /"--json"/u);
+  assert.match(migration, /Convert-StorageLsInventory/u);
+  assert.match(migration, /\.metadata\.crc32c|metadata\.crc32c/u);
   assert.match(producer, /persisted_artifact_uris/u);
   assert.match(
     producer,

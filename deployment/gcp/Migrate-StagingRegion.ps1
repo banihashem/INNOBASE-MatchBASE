@@ -297,8 +297,8 @@ function Assert-ArtifactInventoryReconciled {
   $sourceCapture = @($Evidence.Document.raw_results | Where-Object id -eq "source-object-inventory")
   $targetCapture = @($Evidence.Document.raw_results | Where-Object id -eq "target-object-inventory")
   if ($sourceCapture.Count -ne 1 -or $targetCapture.Count -ne 1) { throw "SourceRetirement requires one full source and target object inventory." }
-  $sourceObjects = @(([string]$sourceCapture[0].stdout | ConvertFrom-Json))
-  $targetObjects = @(([string]$targetCapture[0].stdout | ConvertFrom-Json))
+  $sourceObjects = @(Convert-StorageLsInventory -Raw ([string]$sourceCapture[0].stdout))
+  $targetObjects = @(Convert-StorageLsInventory -Raw ([string]$targetCapture[0].stdout))
   $targetByName = @{}
   $targetVersions = @{}
   foreach ($item in $targetObjects) {
@@ -519,9 +519,21 @@ function Assert-ResourceExists {
   }
 }
 
+function Convert-StorageLsInventory {
+  param([Parameter(Mandatory)][string]$Raw)
+  foreach ($item in @($Raw | ConvertFrom-Json -DateKind String)) {
+    if ($item.type -cne "cloud_object" -or $null -eq $item.metadata) { throw "Storage inventory contains a non-object entry." }
+    $metadata = $item.metadata
+    if ([string]$metadata.name -eq "" -or [string]$metadata.generation -cnotmatch '^[1-9][0-9]*$' -or [string]$metadata.size -cnotmatch '^[0-9]+$' -or [string]::IsNullOrWhiteSpace([string]$metadata.crc32c)) {
+      throw "Storage inventory object metadata is incomplete or malformed."
+    }
+    [pscustomobject]@{ name = [string]$metadata.name; generation = [string]$metadata.generation; size = [string]$metadata.size; crc32c = [string]$metadata.crc32c }
+  }
+}
+
 function Copy-AllSourceArtifactGenerations {
-  $inventoryRaw = Invoke-MigrationGcloud -Arguments @("storage", "objects", "list", "gs://$($migration.SourceArtifactBucket)/**", "--all-versions", "--format=json(name,generation,size,crc32c)")
-  $inventory = @($inventoryRaw | ConvertFrom-Json | Sort-Object { [int64]$_.generation })
+  $inventoryRaw = Invoke-MigrationGcloud -Arguments @("storage", "ls", "gs://$($migration.SourceArtifactBucket)/**", "--all-versions", "--json")
+  $inventory = @(Convert-StorageLsInventory -Raw $inventoryRaw | Sort-Object { [int64]$_.generation })
   foreach ($item in $inventory) {
     $name = ([string]$item.name).Replace("gs://$($migration.SourceArtifactBucket)/", "")
     if ([string]::IsNullOrWhiteSpace($name) -or [string]$item.generation -cnotmatch '^[1-9][0-9]*$') { throw "Source artifact inventory contains an invalid object identity." }
@@ -722,7 +734,7 @@ if (Test-Checkpoint -Name "RegionalFoundation") {
     }
     Write-MigrationGcloudPlan -Arguments $logBucketCreate
     Write-MigrationGcloudPlan -Arguments $logSinkCreate
-    Write-MigrationGcloudPlan -Arguments @("storage", "objects", "list", "gs://$($migration.SourceArtifactBucket)/**", "--all-versions", "--format=json(name,generation,size,crc32c)")
+    Write-MigrationGcloudPlan -Arguments @("storage", "ls", "gs://$($migration.SourceArtifactBucket)/**", "--all-versions", "--json")
     Write-Output "For every source object generation in ascending generation order: gcloud storage cp gs://$($migration.SourceArtifactBucket)/<OBJECT>#<GENERATION> gs://$($migration.TargetArtifactBucket)/<OBJECT> --quiet"
     Write-MigrationGcloudPlan -Arguments @("storage", "rsync", "gs://$($migration.SourceArtifactBucket)", "gs://$($migration.TargetArtifactBucket)", "--recursive", "--checksums-only", "--quiet")
     Write-Output "Verify the same-project EU log-bucket sink has no writer identity; no destination IAM grant is required."

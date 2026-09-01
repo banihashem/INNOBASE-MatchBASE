@@ -34,24 +34,43 @@
       "visibility": "PUBLIC",
       "githubAppScope": "SELECTED_REPOSITORIES_INCLUDES_MATCHBASE_NOT_ALL_REPOSITORIES",
       "temporarySecretManagerAdmin": "REVOKED",
-      "historicalBuild": {
-        "id": "2dc5254a-4048-4d19-a81b-fc3ee30f7d78",
-        "status": "FAILURE",
-        "failureType": "FETCH_SOURCE_FAILED",
-        "imagesProduced": 0
-      },
+      "historicalBuilds": [
+        {
+          "id": "2dc5254a-4048-4d19-a81b-fc3ee30f7d78",
+          "status": "FAILURE",
+          "failureType": "FETCH_SOURCE_FAILED",
+          "imagesProduced": 0
+        },
+        {
+          "id": "acffc5a1-1c2f-4e70-920d-d0b558f87f08",
+          "status": "FAILURE",
+          "failureType": "USER_BUILD_STEP",
+          "imagesProduced": 0
+        }
+      ],
       "lastBuild": {
-        "id": "acffc5a1-1c2f-4e70-920d-d0b558f87f08",
+        "id": "7a956868-3d02-414b-b4dc-988d7c215cdf",
         "sourceFetch": "SUCCEEDED_CONNECTED_REPOSITORY",
-        "sourceRevisionPrefix": "e95e8696",
-        "status": "FAILURE",
-        "failureType": "USER_BUILD_STEP",
-        "failedStep": "0_DOCKER_BUILDKIT_CACHE_MOUNT_UNSUPPORTED",
-        "workerState": "QUEUED",
-        "imagesPublished": 0
+        "sourceRevision": "fee259e18ce4a6ba73195e06f3248be0043d64a3",
+        "status": "SUCCESS",
+        "imagesPublished": 2,
+        "webDigest": "sha256:aef287862e2ce0dcb0a8e960df3226afc107f3a7e12024d8c882cc1f1ea8e212",
+        "workerDigest": "sha256:e95f35067717731badf61accd80e2c974a6a63443dc3a739fb136667c86226ba",
+        "provenanceObservation": "IMAGE_SUMMARY_ONLY_SLSA_BUILD_LEVEL_UNKNOWN_NO_PROVENANCE_SUMMARY",
+        "publisherAdmission": "FAILED_CLOSED"
       },
-      "currentPatch": "BUILDKIT_CONFIG_PATCH_UNCOMMITTED_RUNTIME_DERIVED",
-      "nextState": "BUILD_PUBLICATION_DEPLOYMENT_AND_LIVE_ACCEPTANCE_PENDING"
+      "currentPatch": "REQUESTED_VERIFY_OPTION_VERIFIED_UNCOMMITTED_RUNTIME_DERIVED",
+      "nextState": "REBUILD_GOVERNED_PUBLICATION_DEPLOYMENT_AND_LIVE_ACCEPTANCE_PENDING"
+    },
+    "deploymentAdmission": {
+      "role2Disposition": "PASS_REPOSITORY_REMEDIATION_ONLY",
+      "candidateBinding": "CANDIDATE_COMMIT_EQUALS_CLEAN_HEAD_EQUALS_ORIGIN_MAIN",
+      "preMutationRequirement": "LIVE_SOURCE_SLSA_PROVENANCE_FOR_BOTH_EXACT_DIGESTS",
+      "mainRegion": "VALIDATE_DIRECT_IMAGE_PROVENANCE",
+      "euRegion": "VALIDATE_EXACT_LIVE_TARGET_IDENTITY_AND_DETERMINISTIC_SAME_NAME_SAME_DIGEST_ME_CENTRAL1_SOURCE_PROVENANCE",
+      "unverifiedBuild7aImages": "NON_DEPLOYABLE",
+      "currentPatch": "COMBINED_VERIFIED_AND_DEPLOY_GATE_UNCOMMITTED_RUNTIME_DERIVED",
+      "remaining": "REBUILD_GOVERNED_PUBLICATION_DEPLOYMENT_AND_LIVE_ACCEPTANCE_PENDING"
     }
   },
   "staging": {
@@ -230,7 +249,7 @@
     "slices": ["SLICE-0", "SLICE-1"]
   },
   "knownBlockers": [
-    "Cloud Build acffc5a1-1c2f-4e70-920d-d0b558f87f08 fetched connected-repository source at revision prefix e95e8696, then failed USER_BUILD_STEP at Docker step 0 because the cache mount requires BuildKit; the worker remained queued and zero images were published. The BuildKit config patch is uncommitted/runtime-derived. Prior FETCH_SOURCE_FAILED build 2dc5254a-4048-4d19-a81b-fc3ee30f7d78 remains historical.",
+    "Cloud Build 7a956868-3d02-414b-b4dc-988d7c215cdf succeeded at connected-repository revision fee259e18ce4a6ba73195e06f3248be0043d64a3 and published two images, but provenance inspection returned only image_summary with unknown SLSA build level and no provenance_summary. The governed publisher failed closed; no deployment occurred. The requestedVerifyOption=VERIFIED correction is uncommitted/runtime-derived. Prior failed builds remain historical.",
     "Independent Role 2 repository/remediation audit passed on exact stable bytes; cloud apply, deployment and live acceptance remain pending.",
     "The current remediation source has not been deployed; its dirty, committed and published state is derived at snapshot generation.",
     "Staging remains in me-central1 and does not satisfy the owner-authorized Europe processing and persistent-storage boundary.",

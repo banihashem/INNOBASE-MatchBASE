@@ -38,6 +38,7 @@ images:
   - me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-worker-${_ROUTE_POLICY_ID}:${_CANDIDATE_COMMIT}
 options:
   logging: CLOUD_LOGGING_ONLY
+  requestedVerifyOption: VERIFIED
 substitutions:
   _CANDIDATE_COMMIT: unset
   _ROUTE_POLICY_SHA256: unset

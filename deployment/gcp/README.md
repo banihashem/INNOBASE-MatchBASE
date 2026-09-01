@@ -351,12 +351,24 @@ Cloud Build, Artifact Registry, and Container Analysis APIs plus the complete
 publisher permissions needed to submit builds and retrieve stored provenance.
 The connection must be COMPLETE, not reconciling, and bound to GitHub App
 installation `142544573`; the linked repository must retain the exact governed
-remote URI and non-empty etags. Failed raw-source build
-Historical build `2dc5254a-4048-4d19-a81b-fc3ee30f7d78` failed source fetch.
-Build `acffc5a1-1c2f-4e70-920d-d0b558f87f08` then proved connected-repository
-fetch at revision prefix `e95e8696`, but failed `USER_BUILD_STEP` at Docker step
-0 because the cache mount requires BuildKit; its worker remained queued and it
-published zero images. The BuildKit config patch is runtime-derived/uncommitted.
+remote URI and non-empty etags. Historical build
+`2dc5254a-4048-4d19-a81b-fc3ee30f7d78` failed source fetch.
+Historical build `acffc5a1-1c2f-4e70-920d-d0b558f87f08` then fetched source but
+failed Docker step 0. Build `7a956868-3d02-414b-b4dc-988d7c215cdf` succeeded at
+revision `fee259e18ce4a6ba73195e06f3248be0043d64a3` and published two images, but
+`--show-provenance` returned only `image_summary`, unknown SLSA build level, and
+no `provenance_summary`. Publisher admission therefore failed closed and no
+deployment occurred. The `options.requestedVerifyOption=VERIFIED` correction is
+runtime-derived/uncommitted.
+
+Role 2 passed the repository deployment-admission remediation. Deployment still
+fails closed unless `CandidateCommit` equals a clean `HEAD` and `origin/main`
+and live source SLSA provenance validates both exact digests before mutation.
+The main-region path validates the direct image. The EU path validates the exact
+live target image identity and deterministic same-name/same-digest
+`me-central1` source provenance. The two build `7a956868...` images remain
+non-deployable. The combined VERIFIED/deploy-gate patch is
+runtime-derived/uncommitted.
 
 Plan and execute only after the candidate commit is pushed to `origin/main`:
 

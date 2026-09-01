@@ -8,6 +8,7 @@ param(
   [Parameter(Mandatory)][string]$WorkerServiceAccountName,
   [Parameter(Mandatory)][string]$WebImageDigest,
   [Parameter(Mandatory)][string]$WorkerImageDigest,
+  [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$CandidateCommit,
   [Parameter(Mandatory)][string]$RoutePolicyPath,
   [Parameter(Mandatory)][string[]]$WebSecretVersionRef,
   [Parameter(Mandatory)][string[]]$WorkerSecretVersionRef,
@@ -20,6 +21,7 @@ param(
 )
 
 . (Join-Path $PSScriptRoot "Common.ps1")
+. (Join-Path $PSScriptRoot "Invoke-GcloudStdout.ps1")
 $selectedTarget = if ($DeploymentTarget) { $DeploymentTarget } else { $Environment }
 if ($StagingEuropeWest2) {
   if ($Environment -cne "staging") { throw "-StagingEuropeWest2 is closed to Staging." }
@@ -170,6 +172,30 @@ if (-not $Apply) {
 }
 
 Assert-GcloudAvailable
+if ((& git -C (Join-Path $PSScriptRoot "..\..") rev-parse HEAD).Trim() -cne $CandidateCommit) { throw "Candidate commit must equal clean HEAD before deployment." }
+if (-not [string]::IsNullOrWhiteSpace((& git -C (Join-Path $PSScriptRoot "..\..") status --porcelain=v1 --untracked-files=all | Out-String))) { throw "Deployment requires a clean tracked and untracked worktree." }
+$originUrl = (& git -C (Join-Path $PSScriptRoot "..\..") remote get-url origin).Trim()
+if ($originUrl -cne "https://github.com/banihashem/INNOBASE-MatchBASE.git") { throw "Deployment origin identity is invalid." }
+$originMain = ((& git -C (Join-Path $PSScriptRoot "..\..") ls-remote origin refs/heads/main | Out-String).Trim() -split '\s+')[0]
+if ($LASTEXITCODE -ne 0 -or $originMain -cne $CandidateCommit) { throw "origin/main must resolve to the exact candidate commit." }
+$provenanceParser = Join-Path $PSScriptRoot "..\..\scripts\lib\staging-eu-provenance.mjs"
+$imageBindingParser = Join-Path $PSScriptRoot "..\..\scripts\lib\deploy-image-source-binding.mjs"
+foreach ($image in @($WebImageDigest, $WorkerImageDigest)) {
+  $capture = Join-Path ([IO.Path]::GetTempPath()) "matchbase-deploy-provenance-$([guid]::NewGuid().ToString('N')).json"
+  $targetCapture = Join-Path ([IO.Path]::GetTempPath()) "matchbase-deploy-target-$([guid]::NewGuid().ToString('N')).json"
+  try {
+    $sourceImage = $image
+    if ($image.StartsWith("europe-west2-docker.pkg.dev/", [StringComparison]::Ordinal)) {
+      Invoke-GcloudStdout -Arguments @("artifacts", "docker", "images", "describe", $image, "--project=$ProjectId", "--format=json") | Set-Content -LiteralPath $targetCapture -Encoding utf8NoBOM
+      $binding = (& node $imageBindingParser --file $targetCapture --image $image 2>&1 | Out-String).Trim()
+      if ($LASTEXITCODE -ne 0) { throw "EU deployment image is absent or its target identity is forged." }
+      $sourceImage = [string](($binding | ConvertFrom-Json).source_image)
+    }
+    Invoke-GcloudStdout -Arguments @("artifacts", "docker", "images", "describe", $sourceImage, "--project=$ProjectId", "--show-provenance", "--format=json") | Set-Content -LiteralPath $capture -Encoding utf8NoBOM
+    & node $provenanceParser --file $capture --image $sourceImage --commit $CandidateCommit | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Deployment image provenance is absent, incomplete, or not bound to the exact candidate." }
+  } finally { Remove-Item -LiteralPath $capture, $targetCapture -Force -ErrorAction SilentlyContinue }
+}
 Invoke-Gcloud -Arguments @("run", "worker-pools", "deploy", "--help") | Out-Null
 Invoke-Gcloud -Arguments @("iam", "service-accounts", "describe", $webEmail, "--project=$ProjectId", "--format=value(email)") | Out-Null
 Invoke-Gcloud -Arguments @("iam", "service-accounts", "describe", $workerEmail, "--project=$ProjectId", "--format=value(email)") | Out-Null

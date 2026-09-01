@@ -52,6 +52,7 @@ function deployPlan(overrides = {}) {
     "-WorkerServiceAccountName matchbase-staging-worker-sa",
     `-WebImageDigest ${quote(`europe-west2-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-web@${digest}`)}`,
     `-WorkerImageDigest ${quote(`europe-west2-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-worker-${policyIdentity}@${digest}`)}`,
+    `-CandidateCommit ${quote("0".repeat(40))}`,
     `-RoutePolicyPath ${quote(policyPath)}`,
     `-WebSecretVersionRef ${array(selectedWebSecrets)}`,
     `-WorkerSecretVersionRef ${array(workerSecrets)}`,

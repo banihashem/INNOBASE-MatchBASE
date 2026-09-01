@@ -77,22 +77,31 @@
       "project": "innobase-matchbase-stg",
       "region": "me-central1",
       "temporarySecretManagerAdmin": "REVOKED",
-      "historicalPrivateSourceBuild": {
-        "id": "2dc5254a-4048-4d19-a81b-fc3ee30f7d78",
-        "status": "FAILURE",
-        "failureType": "FETCH_SOURCE_FAILED",
-        "imagesProduced": 0
-      },
-      "lastPrivateSourceBuild": {
-        "id": "acffc5a1-1c2f-4e70-920d-d0b558f87f08",
+      "historicalBuilds": [
+        {
+          "id": "2dc5254a-4048-4d19-a81b-fc3ee30f7d78",
+          "status": "FAILURE",
+          "failureType": "FETCH_SOURCE_FAILED",
+          "imagesProduced": 0
+        },
+        {
+          "id": "acffc5a1-1c2f-4e70-920d-d0b558f87f08",
+          "status": "FAILURE",
+          "failureType": "USER_BUILD_STEP",
+          "imagesProduced": 0
+        }
+      ],
+      "lastLinkedSourceBuild": {
+        "id": "7a956868-3d02-414b-b4dc-988d7c215cdf",
         "sourceFetch": "SUCCEEDED_CONNECTED_REPOSITORY",
-        "sourceRevisionPrefix": "e95e8696",
-        "status": "FAILURE",
-        "failureType": "USER_BUILD_STEP",
-        "failedStep": "0_DOCKER_BUILDKIT_CACHE_MOUNT_UNSUPPORTED",
-        "workerState": "QUEUED",
-        "imagesPublished": 0,
-        "buildKitConfigPatch": "UNCOMMITTED_RUNTIME_DERIVED"
+        "sourceRevision": "fee259e18ce4a6ba73195e06f3248be0043d64a3",
+        "status": "SUCCESS",
+        "imagesPublished": 2,
+        "webDigest": "sha256:aef287862e2ce0dcb0a8e960df3226afc107f3a7e12024d8c882cc1f1ea8e212",
+        "workerDigest": "sha256:e95f35067717731badf61accd80e2c974a6a63443dc3a739fb136667c86226ba",
+        "provenance": "IMAGE_SUMMARY_ONLY_SLSA_BUILD_LEVEL_UNKNOWN_NO_PROVENANCE_SUMMARY",
+        "publisherAdmission": "FAILED_CLOSED",
+        "requestedVerifyOptionPatch": "UNCOMMITTED_RUNTIME_DERIVED"
       },
       "readiness": "DEGRADED_REMEDIATION_PENDING_DEPLOY",
       "production": "UNTOUCHED"

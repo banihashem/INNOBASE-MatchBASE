@@ -607,7 +607,7 @@
       "id": "DEPLOY-P5-STAGING",
       "target": "innobase-matchbase-stg / me-central1",
       "status": "ACTIVE",
-      "reason": "Deployed predecessor web revision matchbase-staging-web-00034-cn5 serves 100 percent traffic and migrations are applied through 0011. Current remediation is undeployed, its source-transition state is runtime-derived, Staging is degraded and production remains untouched.",
+      "reason": "Deployed predecessor web revision matchbase-staging-web-00034-cn5 serves 100 percent traffic and migrations are applied through 0011. Build 7a images remain non-deployable because live dual-digest SLSA provenance is absent. The Role2-PASS deployment admission remediation requires CandidateCommit=clean HEAD=origin/main and provenance validation before mutation; its combined VERIFIED/deploy-gate patch is uncommitted/runtime-derived. Staging is degraded and production remains untouched.",
       "artifact": "sha256:3bf6be141f027a9242b8406e62aa5c1704431afacbf60e619f9fa085922f9cad",
       "rollback": "Use the recorded prior Cloud Run revision and the verified 0011 down migration only in Staging; Roadmap P5 still requires a timed revision rollback and non-production PITR rehearsal before pilot admission.",
       "evidenceRefs": [

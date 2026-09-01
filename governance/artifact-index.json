@@ -40,8 +40,14 @@
     },
     {
       "id": "BUILD-P5-LINKED-SOURCE-ACFFC5A1",
-      "status": "FAIL",
+      "status": "HISTORICAL_FAIL",
       "summary": "Cloud Build acffc5a1-1c2f-4e70-920d-d0b558f87f08 fetched connected-repository source at revision prefix e95e8696, then failed USER_BUILD_STEP at Docker step 0 because the cache mount requires BuildKit; the worker remained queued and zero images were published. The BuildKit config patch is uncommitted/runtime-derived.",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"]
+    },
+    {
+      "id": "BUILD-P5-LINKED-SOURCE-7A956868",
+      "status": "BUILD_PASS_PUBLISHER_ADMISSION_FAIL",
+      "summary": "Build 7a956868-3d02-414b-b4dc-988d7c215cdf succeeded for exact connected-repository revision fee259e18ce4a6ba73195e06f3248be0043d64a3 and published web sha256:aef287862e2ce0dcb0a8e960df3226afc107f3a7e12024d8c882cc1f1ea8e212 plus worker sha256:e95f35067717731badf61accd80e2c974a6a63443dc3a739fb136667c86226ba. Provenance output lacked provenance_summary and reported unknown SLSA level, so the publisher failed closed and nothing was deployed.",
       "evidenceRefs": ["governance/current-state-projection.v1.json"]
     }
   ],

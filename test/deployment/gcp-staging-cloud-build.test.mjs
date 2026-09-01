@@ -40,6 +40,14 @@ test("governed Staging Cloud Build binds exact Git material, images and provenan
     2,
   );
   assert.match(config, /^images:\n(?:\s+- .+\n){2}/mu);
+  assert.match(
+    config,
+    /^options:\n  logging: CLOUD_LOGGING_ONLY\n  requestedVerifyOption: VERIFIED$/mu,
+  );
+  assert.equal(
+    (config.match(/requestedVerifyOption: VERIFIED/gu) ?? []).length,
+    1,
+  );
   assert.doesNotMatch(config, /docker\s+push|\n\s+- push\s*$/imu);
   assert.match(publisher, /status --porcelain=v1 --untracked-files=all/u);
   assert.match(publisher, /ls-remote origin refs\/heads\/main/u);

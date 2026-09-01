@@ -30,12 +30,23 @@ the historical record as provenance.
 - Repository visibility is `PUBLIC`, independently observed through the GitHub
   repository API after the owner changed it on 2026-09-01. Cloud Build remains
   bound to the governed linked-repository resource and exact commit.
-- Build `acffc5a1-1c2f-4e70-920d-d0b558f87f08` fetched the connected-repository
-  source at commit prefix `e95e8696`, then failed `USER_BUILD_STEP` at Docker
-  step 0 because the cache mount requires BuildKit. The worker remained queued
-  and zero images were published. The BuildKit config patch is uncommitted and
-  runtime-derived. Earlier build `2dc5254a-4048-4d19-a81b-fc3ee30f7d78`
-  remains historical `FETCH_SOURCE_FAILED` evidence.
+- Build `7a956868-3d02-414b-b4dc-988d7c215cdf` succeeded for exact linked-source
+  revision `fee259e18ce4a6ba73195e06f3248be0043d64a3` and published web digest
+  `sha256:aef287862e2ce0dcb0a8e960df3226afc107f3a7e12024d8c882cc1f1ea8e212`
+  and worker digest
+  `sha256:e95f35067717731badf61accd80e2c974a6a63443dc3a739fb136667c86226ba`.
+  Provenance inspection returned only `image_summary`, unknown SLSA build level,
+  and no `provenance_summary`; the governed publisher failed closed and no
+  deployment occurred. The `options.requestedVerifyOption=VERIFIED` correction
+  is uncommitted/runtime-derived. Both earlier failed builds remain historical.
+- Role 2 passed the repository deployment-admission remediation. Before any
+  mutation, `Deploy-CloudRun.ps1` requires `CandidateCommit` to equal clean
+  `HEAD` and `origin/main`, plus live source SLSA provenance for both exact
+  digests. The main-region path validates the direct image. The EU path validates
+  exact live target identity and deterministic same-name/same-digest
+  `me-central1` source provenance. Build `7a956868...` images remain
+  non-deployable. The combined VERIFIED/deploy-gate patch is
+  uncommitted/runtime-derived.
 - Staging project: `innobase-matchbase-stg`
 - Region: `me-central1`
 - Public origin: `https://matchbase-staging.innobase.app`

@@ -28,8 +28,8 @@ param(
   [string]$RetirementBackupId = "",
   [ValidateRange(1, 30)][int]$SourceHoldDays = 7,
   [string]$ExpectedRoutePolicySha256 = "b752d2d42a63aaad11f3b89f67bad64861ce767f633bee8190549df23a6f4155",
-  [string]$WebSourceImageDigest = "me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-web-b752d2d42a63aaad@sha256:3bf6be141f027a9242b8406e62aa5c1704431afacbf60e619f9fa085922f9cad",
-  [string]$WorkerSourceImageDigest = "me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-worker-b752d2d42a63aaad@sha256:ca6d1627309ce333dcbde354b17d4588135fa2993988bf24a4de39ca264c191d",
+  [string]$WebSourceImageDigest = "me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-web@sha256:088f3a29fadc0bc9caedfd7f93fd19767a3d6d434fc3a0d333d09b20029ae071",
+  [string]$WorkerSourceImageDigest = "me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-worker-b752d2d42a63aaad@sha256:9f0422c70e09bf24f654d8c4e7af4241ef8dd5305af862b62e04e8d134da4816",
   [string]$MaintenanceBaseImageDigest = "node:24.14.0-bookworm-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8",
   [ValidatePattern('^db-custom-[1-9][0-9]*-[1-9][0-9]*$')][string]$TargetCloudSqlTier = "db-custom-2-7680"
 )
@@ -42,7 +42,7 @@ $SourceRegion = [string]$migration.SourceRegion
 $TargetRegion = [string]$migration.TargetRegion
 $ResidualMarker = "I_ACKNOWLEDGE_GLOBAL_REQUIRED_EDGE_PROVIDER_LIMITATIONS"
 $RetirementMarker = "I_AUTHORIZE_VERIFIED_SOURCE_RETIREMENT_AND_CRYPTOGRAPHIC_ERASURE"
-$ExpectedMigrationHead = "0011_admin_system_scope_and_run_tier_immutability"
+$ExpectedMigrationHead = "0013_domain_pack_v2_and_legacy_annotation"
 $LedgerSchemaVersion = "matchbase-staging-region-migration-ledger.v1"
 $EvidenceSchemaVersion = "matchbase-staging-region-checkpoint-evidence.v1"
 $PinnedGcraneVersion = "0.22.0"

@@ -251,7 +251,7 @@ test("cutover verifies the chained predecessors and exact EU identity before one
     "Assert-ExactEuRuntimeAndDatabase",
     "MATCHBASE_ROUTE_POLICY_SHA256",
     "MATCHBASE_IMAGE_DIGEST",
-    "0011_admin_system_scope_and_run_tier_immutability",
+    "0013_domain_pack_v2_and_legacy_annotation",
   ]) {
     assert.match(source, new RegExp(invariant, "u"));
   }

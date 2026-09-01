@@ -33,6 +33,13 @@ deployed Staging resources in `me-central1` to a blue/green target in
 `europe-west2`. That map does not claim the migration has occurred and does not
 change the active deployment target used by `Deploy-CloudRun.ps1`.
 
+The migration script defaults are bound to the current deployed successor:
+web image `sha256:088f3a29fadc0bc9caedfd7f93fd19767a3d6d434fc3a0d333d09b20029ae071`,
+worker image `sha256:9f0422c70e09bf24f654d8c4e7af4241ef8dd5305af862b62e04e8d134da4816`,
+and migration head `0013_domain_pack_v2_and_legacy_annotation`. Any successor
+deployment must update these bindings and their tests before migration evidence
+can be produced.
+
 ## Governed Staging region migration
 
 `Migrate-StagingRegion.ps1` plans a same-project migration. Its default

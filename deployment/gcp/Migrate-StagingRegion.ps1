@@ -663,7 +663,10 @@ if (Test-Checkpoint -Name "RegionalFoundation") {
   $logBucketCreate = @("logging", "buckets", "create", [string]$migration.TargetLogBucket, "--project=$ProjectId", "--location=$TargetRegion", "--retention-days=30", "--quiet")
   $logDestination = "logging.googleapis.com/projects/$ProjectId/locations/$TargetRegion/buckets/$($migration.TargetLogBucket)"
   $logFilter = "(((resource.type=`"cloud_run_revision`" OR resource.type=`"cloud_run_worker_pool`") AND resource.labels.location=`"$TargetRegion`") OR (resource.type=`"cloudsql_database`" AND resource.labels.database_id=`"$ProjectId`:$($migration.TargetCloudSqlInstance)`"))"
-  $logSinkCreate = @("logging", "sinks", "create", [string]$migration.TargetLogSink, $logDestination, "--project=$ProjectId", "--log-filter=$logFilter", "--unique-writer-identity", "--quiet")
+  # Current gcloud creates a dedicated writer identity automatically when no
+  # custom identity is supplied. The removed --unique-writer-identity flag is
+  # not accepted by the governed CLI and must not be reintroduced.
+  $logSinkCreate = @("logging", "sinks", "create", [string]$migration.TargetLogSink, $logDestination, "--project=$ProjectId", "--log-filter=$logFilter", "--quiet")
 
   if ($Apply) {
     if (-not (Test-GcloudResource -Arguments @("artifacts", "repositories", "describe", [string]$migration.TargetArtifactRepository, "--project=$ProjectId", "--location=$TargetRegion"))) {

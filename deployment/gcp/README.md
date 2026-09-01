@@ -107,6 +107,9 @@ Apply exactly one checkpoint only after its preceding evidence gates pass:
 `RegionalFoundation` Apply accepts only the governed Windows x86_64 `gcrane`
 v0.22.0 executable (SHA-256
 `094281bd4c98e1dbf805350f3f59a152244324fb86a4b4b908c741d012a9615d`).
+The regional log sink uses the dedicated writer identity generated automatically
+by the current `gcloud logging sinks create` contract; custom writer identities
+and the removed `--unique-writer-identity` flag are not used.
 Install it without changing a system-wide PATH:
 
 ```powershell

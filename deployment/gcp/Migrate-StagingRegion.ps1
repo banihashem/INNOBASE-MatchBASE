@@ -663,9 +663,9 @@ if (Test-Checkpoint -Name "RegionalFoundation") {
   $logBucketCreate = @("logging", "buckets", "create", [string]$migration.TargetLogBucket, "--project=$ProjectId", "--location=$TargetRegion", "--retention-days=30", "--quiet")
   $logDestination = "logging.googleapis.com/projects/$ProjectId/locations/$TargetRegion/buckets/$($migration.TargetLogBucket)"
   $logFilter = "(((resource.type=`"cloud_run_revision`" OR resource.type=`"cloud_run_worker_pool`") AND resource.labels.location=`"$TargetRegion`") OR (resource.type=`"cloudsql_database`" AND resource.labels.database_id=`"$ProjectId`:$($migration.TargetCloudSqlInstance)`"))"
-  # Current gcloud creates a dedicated writer identity automatically when no
-  # custom identity is supplied. The removed --unique-writer-identity flag is
-  # not accepted by the governed CLI and must not be reintroduced.
+  # A sink writing to a log bucket in the same project has no writer identity
+  # and requires no destination IAM grant. The removed CLI flag and custom
+  # writer identities must not be reintroduced for this closed destination.
   $logSinkCreate = @("logging", "sinks", "create", [string]$migration.TargetLogSink, $logDestination, "--project=$ProjectId", "--log-filter=$logFilter", "--quiet")
 
   if ($Apply) {
@@ -687,9 +687,11 @@ if (Test-Checkpoint -Name "RegionalFoundation") {
     if (-not (Test-GcloudResource -Arguments @("logging", "sinks", "describe", [string]$migration.TargetLogSink, "--project=$ProjectId"))) {
       $null = Invoke-MigrationGcloud -Arguments $logSinkCreate
     }
-    $writerIdentity = Invoke-MigrationGcloud -Arguments @("logging", "sinks", "describe", [string]$migration.TargetLogSink, "--project=$ProjectId", "--format=value(writerIdentity)")
-    if ($writerIdentity -cnotmatch '^serviceAccount:[a-z0-9@._-]+$') { throw "EU log sink writer identity is missing or malformed." }
-    $null = Invoke-MigrationGcloud -Arguments @("projects", "add-iam-policy-binding", $ProjectId, "--member=$writerIdentity", "--role=roles/logging.bucketWriter", "--condition=None", "--quiet")
+    $sink = Invoke-MigrationGcloud -Arguments @("logging", "sinks", "describe", [string]$migration.TargetLogSink, "--project=$ProjectId", "--format=json") | ConvertFrom-Json
+    $hasWriterIdentity = $sink.PSObject.Properties.Name -contains "writerIdentity" -and -not [string]::IsNullOrWhiteSpace([string]$sink.writerIdentity)
+    if ([string]$sink.name -cne [string]$migration.TargetLogSink -or [string]$sink.destination -cne $logDestination -or [string]$sink.filter -cne $logFilter -or $hasWriterIdentity) {
+      throw "EU same-project log sink identity, destination, filter, or no-writer contract drifted."
+    }
     if (-not (Test-GcloudResource -Arguments @("artifacts", "docker", "images", "describe", $TargetWebImageDigest, "--project=$ProjectId"))) {
       & $PinnedGcraneExecutable cp $WebSourceImageDigest "$TargetRepositoryRoot/${SourceWebImageName}:migration-ew2"
       if ($LASTEXITCODE -ne 0) { throw "gcrane failed to copy the web digest." }
@@ -723,7 +725,7 @@ if (Test-Checkpoint -Name "RegionalFoundation") {
     Write-MigrationGcloudPlan -Arguments @("storage", "objects", "list", "gs://$($migration.SourceArtifactBucket)/**", "--all-versions", "--format=json(name,generation,size,crc32c)")
     Write-Output "For every source object generation in ascending generation order: gcloud storage cp gs://$($migration.SourceArtifactBucket)/<OBJECT>#<GENERATION> gs://$($migration.TargetArtifactBucket)/<OBJECT> --quiet"
     Write-MigrationGcloudPlan -Arguments @("storage", "rsync", "gs://$($migration.SourceArtifactBucket)", "gs://$($migration.TargetArtifactBucket)", "--recursive", "--checksums-only", "--quiet")
-    Write-Output "Resolve the sink writer identity and grant roles/logging.bucketWriter; never print or access secret versions in this scaffold."
+    Write-Output "Verify the same-project EU log-bucket sink has no writer identity; no destination IAM grant is required."
   }
 }
 

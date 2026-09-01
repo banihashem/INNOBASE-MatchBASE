@@ -165,6 +165,8 @@ test("foundation plans regional metadata and immutable digest copies without sec
     /gcloud logging sinks create matchbase-staging-runtime-ew2/u,
   );
   assert.doesNotMatch(result.stdout, /--unique-writer-identity/u);
+  assert.doesNotMatch(source, /roles\/logging\.bucketWriter/u);
+  assert.match(result.stdout, /has no writer identity/u);
   assert.match(
     result.stdout,
     /gcloud artifacts repositories create matchbase[\s\S]*--location=europe-west2[\s\S]*--immutable-tags/u,

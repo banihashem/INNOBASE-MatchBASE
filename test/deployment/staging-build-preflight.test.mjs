@@ -35,6 +35,13 @@ test("accepts only the immutable closed Docker repository and complete provenanc
     validateStagingBuildPreflight(valid()).repository.endsWith("/matchbase"),
     true,
   );
+  const omittedDefault = valid();
+  delete omittedDefault.source_connection.reconciling;
+  delete omittedDefault.source_repository.reconciling;
+  assert.equal(
+    validateStagingBuildPreflight(omittedDefault).source_repository,
+    omittedDefault.source_repository.name,
+  );
   for (const mutate of [
     (v) => {
       v.repository.dockerConfig.immutableTags = false;

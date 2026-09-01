@@ -14,7 +14,9 @@ the historical record as provenance.
 - Source branch: `main`
 - Deployed predecessor source:
   `1224b4c485a9f3533a15e1d50b606f7aa53c2d23`
-- Current remediation source: derived at snapshot-generation time. The
+- Initial governed remediation candidate: commit
+  `77c58cd4c95dc8016d369080b095bed0e554cad1`, pushed to `origin/main`.
+- Current hotfix source: derived at snapshot-generation time. The
   generator reports one of `WORKTREE_UNCOMMITTED`, `COMMITTED_UNPUBLISHED` or
   `PUBLISHED_SOURCE`, together with HEAD, `origin/main`, dirty state and an
   exact candidate SHA-256. No transition-sensitive state is hardcoded.
@@ -54,10 +56,11 @@ the following have exact evidence:
    Major defects on the exact stable bytes. This does not satisfy the separate
    external-state, deployment, migration or live-acceptance evidence gates.
 
-No governed candidate commit or push, image build or publication, Staging/EU
-deployment, database migration, OAuth/Cloudflare apply, or live acceptance has
-been performed for the current remediation bytes. Each remains a separate
-evidence-gated operation.
+The initial governed remediation candidate was committed and pushed. No image
+build or publication, Staging/EU deployment, database migration,
+OAuth/Cloudflare apply, or live acceptance has been performed for it. The
+current hotfix remains runtime-derived and has no hardcoded future commit hash.
+Each operational transition remains a separate evidence-gated operation.
 
 Roadmap P6 real-data pilot remains blocked until every Roadmap P5 exit criterion
 and every P6 precondition passes. Production release remains unauthorized.

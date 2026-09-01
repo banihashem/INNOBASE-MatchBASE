@@ -2,9 +2,11 @@
 
 This directory is an execution scaffold, not evidence that a deployment exists.
 Current disposition: the independent Role 2 audit of the exact repository
-remediation bytes passed with zero Critical or Major defects. No candidate
-commit/push, image build/publication, cloud apply, EU migration, OAuth or
-Cloudflare mutation, or live acceptance has been performed for those bytes.
+remediation bytes passed with zero Critical or Major defects. The initial
+governed candidate was committed and pushed as
+`77c58cd4c95dc8016d369080b095bed0e554cad1`. No image build/publication, cloud
+apply, EU migration, OAuth or Cloudflare mutation, or live acceptance has been
+performed. The current hotfix remains runtime-derived.
 Every script requires an explicit `-Environment staging` or
 `-Environment production` and defaults to plan-only output. No environment
 defaults to production. Mutation requires both `-Apply` and the exact mapped

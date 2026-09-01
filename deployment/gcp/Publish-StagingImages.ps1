@@ -7,6 +7,7 @@ param(
 )
 
 . (Join-Path $PSScriptRoot "Common.ps1")
+. (Join-Path $PSScriptRoot "Invoke-GcloudStdout.ps1")
 $project = "innobase-matchbase-stg"
 $region = "me-central1"
 $repository = "matchbase"
@@ -36,7 +37,7 @@ foreach ($service in $requiredApis) {
   $enabled = Invoke-Gcloud -Arguments @("services", "list", "--project=$project", "--enabled", "--filter=config.name:$service", "--format=value(config.name)")
   if ($enabled -cne $service) { throw "Required API '$service' is not enabled." }
 }
-$repositoryDocument = Invoke-Gcloud -Arguments @("artifacts", "repositories", "describe", $repository, "--project=$project", "--location=$region", "--format=json") | ConvertFrom-Json
+$repositoryDocument = Invoke-GcloudStdout -Arguments @("artifacts", "repositories", "describe", $repository, "--project=$project", "--location=$region", "--format=json") | ConvertFrom-Json
 if ($repositoryDocument.name -cne "projects/$project/locations/$region/repositories/$repository" -or $repositoryDocument.format -cne "DOCKER" -or $repositoryDocument.dockerConfig.immutableTags -ne $true) { throw "Artifact Registry repository identity, location, format, or immutable-tag policy is invalid." }
 Invoke-Gcloud -Arguments @("iam", "service-accounts", "describe", $BuildServiceAccount, "--project=$project", "--format=value(email)") | Out-Null
 Assert-NoUserManagedServiceAccountKeys -Email $BuildServiceAccount -ProjectId $project
@@ -46,7 +47,7 @@ Assert-ExactArtifactRepositoryRoles -Email $BuildServiceAccount -ProjectId $proj
 $projectNumber = Invoke-Gcloud -Arguments @("projects", "describe", $project, "--format=value(projectNumber)")
 $buildAgent = "service-$projectNumber@gcp-sa-cloudbuild.iam.gserviceaccount.com"
 Assert-ExactProjectRoles -Email $buildAgent -ProjectId $project -ExpectedRoles @("roles/cloudbuild.serviceAgent")
-$serviceAccountPolicy = Invoke-Gcloud -Arguments @("iam", "service-accounts", "get-iam-policy", $BuildServiceAccount, "--project=$project", "--format=json") | ConvertFrom-Json
+$serviceAccountPolicy = Invoke-GcloudStdout -Arguments @("iam", "service-accounts", "get-iam-policy", $BuildServiceAccount, "--project=$project", "--format=json") | ConvertFrom-Json
 $tokenCreators = @($serviceAccountPolicy.bindings | Where-Object role -CEQ "roles/iam.serviceAccountTokenCreator" | ForEach-Object members)
 if ($tokenCreators.Count -ne 1 -or $tokenCreators[0] -cne "serviceAccount:$buildAgent") { throw "Only the Cloud Build service agent may mint the governed build identity token." }
 $activeAccount = Invoke-Gcloud -Arguments @("config", "get-value", "account")
@@ -82,7 +83,7 @@ foreach ($tag in @($webTag, $workerTag)) {
   if ($digest -cnotmatch "^$([regex]::Escape($tag.Split(':')[0]))@sha256:[a-f0-9]{64}$") { throw "Published image did not resolve to its immutable digest." }
   $temporary = Join-Path ([IO.Path]::GetTempPath()) "matchbase-build-provenance-$([guid]::NewGuid().ToString('N')).json"
   try {
-    Invoke-Gcloud -Arguments @("artifacts", "docker", "images", "describe", $digest, "--project=$project", "--show-provenance", "--format=json") | Set-Content -LiteralPath $temporary -Encoding utf8NoBOM
+    Invoke-GcloudStdout -Arguments @("artifacts", "docker", "images", "describe", $digest, "--project=$project", "--show-provenance", "--format=json") | Set-Content -LiteralPath $temporary -Encoding utf8NoBOM
     & node $parser --file $temporary --image $digest --commit $CandidateCommit | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Closed SLSA/in-toto provenance validation failed for '$digest'." }
     Write-Output $digest

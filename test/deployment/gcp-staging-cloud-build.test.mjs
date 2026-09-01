@@ -43,6 +43,14 @@ test("governed Staging Cloud Build binds exact Git material, images and provenan
   assert.match(publisher, /artifactregistry\.googleapis\.com/u);
   assert.match(publisher, /containeranalysis\.googleapis\.com/u);
   assert.match(publisher, /repositories", "describe"[\s\S]*--format=json/u);
+  assert.equal(
+    (publisher.match(/Invoke-GcloudStdout[^\n]+--format=json/gu) ?? []).length,
+    3,
+  );
+  assert.doesNotMatch(
+    publisher,
+    /Invoke-Gcloud -Arguments[^\n]+--format=json/u,
+  );
   assert.match(publisher, /immutableTags/u);
   assert.match(publisher, /DOCKER/u);
   assert.match(

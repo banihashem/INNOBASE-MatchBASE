@@ -7,6 +7,8 @@
     "defaultBranch": "main",
     "initialCommit": "518ff98aa4c4b719460bca020894782fc660ce21",
     "deployedPredecessorSourceCommit": "1224b4c485a9f3533a15e1d50b606f7aa53c2d23",
+    "initialGovernedRemediationCandidateCommit": "77c58cd4c95dc8016d369080b095bed0e554cad1",
+    "initialGovernedRemediationCandidatePublication": "PUSHED_TO_ORIGIN_MAIN",
     "currentSourceState": "RUNTIME_DERIVED_AT_SNAPSHOT_GENERATION",
     "publicReleaseAuthorized": false
   },

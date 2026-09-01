@@ -143,6 +143,12 @@
   ],
   "currentProvenance": [
     {
+      "id": "PROV-P5-GOVERNED-REMEDIATION-CANDIDATE",
+      "status": "PUSHED_PRIVATE",
+      "source": "https://github.com/banihashem/INNOBASE-MatchBASE/commit/77c58cd4c95dc8016d369080b095bed0e554cad1",
+      "note": "The initial governed remediation candidate was committed and pushed to origin/main. It has not been built, published as an image, deployed, migrated, or live-accepted; the subsequent hotfix source remains runtime-derived."
+    },
+    {
       "id": "PROV-P5-STAGING",
       "status": "PASS",
       "source": "https://github.com/banihashem/INNOBASE-MatchBASE/commit/1224b4c485a9f3533a15e1d50b606f7aa53c2d23",

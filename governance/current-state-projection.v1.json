@@ -11,6 +11,11 @@
       "sourceCommit": "1224b4c485a9f3533a15e1d50b606f7aa53c2d23",
       "status": "DEPLOYED_PREDECESSOR"
     },
+    "initialGovernedRemediationCandidate": {
+      "sourceCommit": "77c58cd4c95dc8016d369080b095bed0e554cad1",
+      "publication": "PUSHED_TO_ORIGIN_MAIN",
+      "deploymentStatus": "NOT_BUILT_OR_DEPLOYED"
+    },
     "sourceTransition": {
       "runtimeDerived": true,
       "identityMethod": "DERIVED_BY_SNAPSHOT_GENERATOR_FROM_HEAD_DIFF_AND_UNTRACKED_BYTES",
@@ -45,7 +50,7 @@
       "id": "CAP-P5-QUALIFIED-LIVE",
       "title": "Qualified-live research cycle",
       "status": "ACTIVE",
-      "summary": "A predecessor Staging run reached a complete candidate result; current remediation remains undeployed and its commit/publication state is runtime-derived."
+      "summary": "A predecessor Staging run reached a complete candidate result; the initial governed remediation candidate was published at 77c58cd4c95dc8016d369080b095bed0e554cad1, while the current hotfix remains undeployed and runtime-derived."
     },
     {
       "id": "CAP-P5-OWNER-PROFILE",

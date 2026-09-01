@@ -148,7 +148,7 @@ $webCommand = @(
   "run", "deploy", $WebServiceName,
   "--project=$ProjectId", "--region=$Region", "--platform=managed",
   "--image=$WebImageDigest", "--service-account=$webEmail",
-  "--clear-command", "--clear-args",
+  "--command=", "--args=",
   "--port=8080", "--ingress=internal-and-cloud-load-balancing",
   "--no-invoker-iam-check", "--min-instances=1", "--max-instances=$WebMaxInstances",
   "--concurrency=8", "--cpu=1", "--memory=1Gi", "--timeout=60s",

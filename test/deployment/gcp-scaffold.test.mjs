@@ -154,8 +154,8 @@ test("foundation and runtime plans preserve least privilege and fail-closed ingr
   assert.match(deploy, /"--max-instances=\$WebMaxInstances"/u);
   assert.doesNotMatch(deploy, /"--min=1"|"--max=\$WebMaxInstances"/u);
   assert.match(deploy, /MATCHBASE_IMAGE_DIGEST/u);
-  assert.match(deploy, /--clear-command/u);
-  assert.match(deploy, /--clear-args/u);
+  assert.match(deploy, /"--command=", "--args="/u);
+  assert.doesNotMatch(deploy, /--clear-(?:command|args)/u);
   assert.match(deploy, /MATCHBASE_ROUTE_POLICY_SHA256/u);
   assert.match(deploy, /MATCHBASE_ARTIFACT_MAXIMUM_BYTES=8388608/u);
   assert.match(deploy, /--concurrency=8/u);

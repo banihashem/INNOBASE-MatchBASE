@@ -914,7 +914,7 @@ if (Test-Checkpoint -Name "Rollback") {
   Invoke-OrPlanGcloud -Arguments @("sql", "backups", "restore", $backupId, "--project=$ProjectId", "--backup-instance=$($migration.TargetCloudSqlInstance)", "--restore-instance=$($migration.TargetCloudSqlInstance)", "--quiet")
   Set-TargetSqlPostRestorePolicy
   Invoke-OrPlanGcloud -Arguments @("run", "services", "update-traffic", [string]$migration.TargetWebService, "--project=$ProjectId", "--region=$TargetRegion", "--to-revisions=${revision}=100", "--quiet")
-  Invoke-OrPlanGcloud -Arguments @("run", "worker-pools", "update", [string]$migration.TargetWorkerPool, "--project=$ProjectId", "--region=$TargetRegion", "--image=$workerDigest", "--clear-command", "--clear-args", "--instances=1", "--quiet")
+  Invoke-OrPlanGcloud -Arguments @("run", "worker-pools", "update", [string]$migration.TargetWorkerPool, "--project=$ProjectId", "--region=$TargetRegion", "--image=$workerDigest", "--command=", "--args=", "--instances=1", "--quiet")
   Invoke-OrPlanGcloud -Arguments @("compute", "url-maps", "set-default-service", [string]$migration.UrlMap, "--project=$ProjectId", "--global", "--default-service=$($migration.TargetBackendService)", "--quiet")
   if ($Apply) {
     $backup = Invoke-MigrationGcloud -Arguments @("sql", "backups", "describe", $backupId, "--project=$ProjectId", "--instance=$($migration.TargetCloudSqlInstance)", "--format=json") | ConvertFrom-Json
@@ -933,7 +933,7 @@ if (Test-Checkpoint -Name "PreWriteRollback") {
   }
   Invoke-OrPlanGcloud -Arguments @("compute", "url-maps", "set-default-service", [string]$migration.UrlMap, "--project=$ProjectId", "--global", "--default-service=$($migration.MaintenanceBackendService)", "--quiet")
   Invoke-OrPlanGcloud -Arguments @("run", "worker-pools", "update", [string]$migration.TargetWorkerPool, "--project=$ProjectId", "--region=$TargetRegion", "--image=$TargetWorkerImageDigest", "--command=/bin/sleep", "--args=2147483647", "--instances=1", "--quiet")
-  Invoke-OrPlanGcloud -Arguments @("run", "worker-pools", "update", [string]$migration.SourceWorkerPool, "--project=$ProjectId", "--region=$SourceRegion", "--image=$WorkerSourceImageDigest", "--clear-command", "--clear-args", "--instances=1", "--quiet")
+  Invoke-OrPlanGcloud -Arguments @("run", "worker-pools", "update", [string]$migration.SourceWorkerPool, "--project=$ProjectId", "--region=$SourceRegion", "--image=$WorkerSourceImageDigest", "--command=", "--args=", "--instances=1", "--quiet")
   Invoke-OrPlanGcloud -Arguments @("sql", "instances", "describe", [string]$migration.SourceCloudSqlInstance, "--project=$ProjectId", "--format=value(state,region,databaseVersion)")
   Invoke-OrPlanGcloud -Arguments @("compute", "url-maps", "set-default-service", [string]$migration.UrlMap, "--project=$ProjectId", "--global", "--default-service=$($migration.SourceBackendService)", "--quiet")
   if ($Apply) {

@@ -281,7 +281,7 @@ test("post-write rollback coordinates EU web, worker, and database while source 
   assert.match(rollback.stdout, /sql backups restore <VERIFIED_EU_BACKUP_ID>/u);
   assert.match(
     rollback.stdout,
-    /--default-service=matchbase-staging-maintenance-backend-ew2[\s\S]*--command=\/bin\/sleep[\s\S]*sql backups restore[\s\S]*--clear-command[\s\S]*--default-service=matchbase-staging-backend-ew2/u,
+    /--default-service=matchbase-staging-maintenance-backend-ew2[\s\S]*--command=\/bin\/sleep[\s\S]*sql backups restore[\s\S]*--command= --args=[\s\S]*--default-service=matchbase-staging-backend-ew2/u,
   );
   assert.doesNotMatch(
     rollback.stdout,

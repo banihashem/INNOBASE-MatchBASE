@@ -336,7 +336,8 @@ Publishing is deliberately separate. Resolve the pushed Artifact Registry image
 to its immutable digest before running `Deploy-CloudRun.ps1`.
 
 The governed Staging publisher is `Publish-StagingImages.ps1`. Its build source
-is the exact public `origin/main` Git commit, never the local directory. It
+is the exact commit in the closed Cloud Build 2nd-generation repository resource
+`projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github/repositories/matchbase`, never the local directory or an ungoverned raw Git URL. It
 requires a clean worktree, the committed `cloudbuild.staging.yaml`, all required
 APIs, the closed Artifact Registry repository, and a build service account with
 exactly project `roles/logging.logWriter`, repository
@@ -348,6 +349,10 @@ Before mutation it reads the repository as JSON and requires its exact
 `me-central1` resource name, Docker format, and immutable tags. It also requires
 Cloud Build, Artifact Registry, and Container Analysis APIs plus the complete
 publisher permissions needed to submit builds and retrieve stored provenance.
+The connection must be COMPLETE, not reconciling, and bound to GitHub App
+installation `142544573`; the linked repository must retain the exact governed
+remote URI and non-empty etags. Failed raw-source build
+`2dc5254a-4048-4d19-a81b-fc3ee30f7d78` is external failure evidence only.
 
 Plan and execute only after the candidate commit is pushed to `origin/main`:
 

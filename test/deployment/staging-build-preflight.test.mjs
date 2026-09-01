@@ -12,6 +12,19 @@ const valid = () => ({
     format: "DOCKER",
     dockerConfig: { immutableTags: true },
   },
+  source_connection: {
+    name: "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github",
+    installationState: { stage: "COMPLETE" },
+    githubConfig: { appInstallationId: "142544573" },
+    reconciling: false,
+    etag: "connection-etag",
+  },
+  source_repository: {
+    name: "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github/repositories/matchbase",
+    remoteUri: "https://github.com/banihashem/INNOBASE-MatchBASE.git",
+    reconciling: false,
+    etag: "repository-etag",
+  },
   enabled_apis: [...REQUIRED_APIS],
   publisher_permissions: [...REQUIRED_PUBLISHER_PERMISSIONS],
   build_agent_project_roles: ["roles/cloudbuild.serviceAgent"],
@@ -50,6 +63,18 @@ test("accepts only the immutable closed Docker repository and complete provenanc
     },
     (v) => {
       v.build_agent_project_roles = [];
+    },
+    (v) => {
+      v.source_connection.installationState.stage = "PENDING_USER_OAUTH";
+    },
+    (v) => {
+      v.source_connection.reconciling = true;
+    },
+    (v) => {
+      v.source_repository.remoteUri = "https://github.com/other/repo.git";
+    },
+    (v) => {
+      v.source_repository.etag = "";
     },
   ]) {
     const candidate = structuredClone(valid());

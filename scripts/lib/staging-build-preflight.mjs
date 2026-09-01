@@ -37,6 +37,26 @@ export function validateStagingBuildPreflight(value) {
   if (repository.format !== "DOCKER") fail("repository format mismatch");
   if (repository.dockerConfig?.immutableTags !== true)
     fail("repository tags are mutable");
+  const connection = value.source_connection;
+  if (
+    connection?.name !==
+      "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github" ||
+    connection?.installationState?.stage !== "COMPLETE" ||
+    connection?.reconciling === true ||
+    !connection?.etag ||
+    String(connection?.githubConfig?.appInstallationId) !== "142544573"
+  )
+    fail("source connection identity or readiness drifted");
+  const sourceRepository = value.source_repository;
+  if (
+    sourceRepository?.name !==
+      "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github/repositories/matchbase" ||
+    sourceRepository?.remoteUri !==
+      "https://github.com/banihashem/INNOBASE-MatchBASE.git" ||
+    sourceRepository?.reconciling === true ||
+    !sourceRepository?.etag
+  )
+    fail("linked source repository drifted");
   const services = [...new Set(value.enabled_apis ?? [])].sort();
   for (const service of REQUIRED_APIS)
     if (!services.includes(service))
@@ -52,6 +72,7 @@ export function validateStagingBuildPreflight(value) {
     fail("Cloud Build service-agent role set drifted");
   return Object.freeze({
     repository: repository.name,
+    source_repository: sourceRepository.name,
     enabled_apis: services,
     publisher_permissions: permissions,
   });

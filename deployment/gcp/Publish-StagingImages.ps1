@@ -12,6 +12,8 @@ $project = "innobase-matchbase-stg"
 $region = "me-central1"
 $repository = "matchbase"
 $source = "https://github.com/banihashem/INNOBASE-MatchBASE.git"
+$sourceConnection = "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github"
+$sourceRepository = "$sourceConnection/repositories/matchbase"
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..") -ErrorAction Stop).Path
 $policyRelative = "config/slice3/research-route-policy.staging.v1.json"
 $policyPath = Join-Path $repoRoot $policyRelative
@@ -39,6 +41,10 @@ foreach ($service in $requiredApis) {
 }
 $repositoryDocument = Invoke-GcloudStdout -Arguments @("artifacts", "repositories", "describe", $repository, "--project=$project", "--location=$region", "--format=json") | ConvertFrom-Json
 if ($repositoryDocument.name -cne "projects/$project/locations/$region/repositories/$repository" -or $repositoryDocument.format -cne "DOCKER" -or $repositoryDocument.dockerConfig.immutableTags -ne $true) { throw "Artifact Registry repository identity, location, format, or immutable-tag policy is invalid." }
+$connectionDocument = Invoke-GcloudStdout -Arguments @("builds", "connections", "describe", "matchbase-github", "--project=$project", "--region=$region", "--format=json") | ConvertFrom-Json
+$linkedRepositoryDocument = Invoke-GcloudStdout -Arguments @("builds", "repositories", "describe", "matchbase", "--connection=matchbase-github", "--project=$project", "--region=$region", "--format=json") | ConvertFrom-Json
+if ($connectionDocument.name -cne $sourceConnection -or $connectionDocument.installationState.stage -cne "COMPLETE" -or $connectionDocument.reconciling -eq $true -or [string]::IsNullOrWhiteSpace([string]$connectionDocument.etag) -or [string]$connectionDocument.githubConfig.appInstallationId -cne "142544573") { throw "Cloud Build GitHub connection identity, installation, reconciliation, or etag is invalid." }
+if ($linkedRepositoryDocument.name -cne $sourceRepository -or $linkedRepositoryDocument.remoteUri -cne $source -or $linkedRepositoryDocument.reconciling -eq $true -or [string]::IsNullOrWhiteSpace([string]$linkedRepositoryDocument.etag)) { throw "Cloud Build linked repository identity, remote URI, reconciliation, or etag is invalid." }
 Invoke-Gcloud -Arguments @("iam", "service-accounts", "describe", $BuildServiceAccount, "--project=$project", "--format=value(email)") | Out-Null
 Assert-NoUserManagedServiceAccountKeys -Email $BuildServiceAccount -ProjectId $project
 Assert-ExactProjectRoles -Email $BuildServiceAccount -ProjectId $project -ExpectedRoles @("roles/logging.logWriter")
@@ -64,7 +70,7 @@ try {
 } finally { $accessToken = $null }
 $publisherPermissions = @($permissionResponse.permissions | Sort-Object -Unique)
 if (($publisherPermissions -join "`n") -cne (($requiredPublisherPermissions | Sort-Object) -join "`n")) { throw "Active publisher lacks a required build or stored-provenance permission." }
-$preflightFacts = [ordered]@{ repository = $repositoryDocument; enabled_apis = $requiredApis; publisher_permissions = $publisherPermissions; build_agent_project_roles = @("roles/cloudbuild.serviceAgent") }
+$preflightFacts = [ordered]@{ repository = $repositoryDocument; source_connection = $connectionDocument; source_repository = $linkedRepositoryDocument; enabled_apis = $requiredApis; publisher_permissions = $publisherPermissions; build_agent_project_roles = @("roles/cloudbuild.serviceAgent") }
 $preflightFile = Join-Path ([IO.Path]::GetTempPath()) "matchbase-build-preflight-$([guid]::NewGuid().ToString('N')).json"
 try {
   $preflightFacts | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $preflightFile -Encoding utf8NoBOM
@@ -74,7 +80,7 @@ try {
 
 $webTag = "$region-docker.pkg.dev/$project/$repository/staging-web:$CandidateCommit"
 $workerTag = "$region-docker.pkg.dev/$project/$repository/staging-worker-$policyId`:$CandidateCommit"
-$arguments = @("builds", "submit", $source, "--git-source-revision=$CandidateCommit", "--config=$configPath", "--project=$project", "--region=$region", "--service-account=projects/$project/serviceAccounts/$BuildServiceAccount", "--substitutions=_CANDIDATE_COMMIT=$CandidateCommit,_ROUTE_POLICY_SHA256=$policySha,_ROUTE_POLICY_ID=$policyId", "--quiet")
+$arguments = @("builds", "submit", $sourceRepository, "--revision=$CandidateCommit", "--config=$configPath", "--project=$project", "--region=$region", "--service-account=projects/$project/serviceAccounts/$BuildServiceAccount", "--substitutions=_CANDIDATE_COMMIT=$CandidateCommit,_ROUTE_POLICY_SHA256=$policySha,_ROUTE_POLICY_ID=$policyId", "--quiet")
 if (-not $Apply) { Write-GcloudPlan -Arguments $arguments; return }
 Assert-ApplyConfirmation -Apply $true -ExpectedProjectId $project -ConfirmProjectId $ConfirmProjectId
 Invoke-Gcloud -Arguments $arguments | Out-Null

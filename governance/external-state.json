@@ -63,6 +63,12 @@
     "github": {
       "repository": "banihashem/INNOBASE-MatchBASE",
       "branch": "main",
+      "remote": "https://github.com/banihashem/INNOBASE-MatchBASE.git",
+      "visibility": "PUBLIC",
+      "cloudBuildConnection": "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github",
+      "cloudBuildConnectionStatus": "COMPLETE",
+      "cloudBuildRepositoryResource": "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github/repositories/matchbase",
+      "githubAppScope": "SELECTED_REPOSITORIES_INCLUDES_MATCHBASE_NOT_ALL_REPOSITORIES",
       "deployedPredecessorSourceCommit": "1224b4c485a9f3533a15e1d50b606f7aa53c2d23",
       "status": "CURRENT_SOURCE_STATE_RUNTIME_DERIVED",
       "relationship": "STATIC_COMMIT_IDENTIFIES_THE_DEPLOYED_PREDECESSOR;_CURRENT_HEAD_ORIGIN_AND_WORKTREE_STATE_ARE_DERIVED_IN_THE_DASHBOARD_SNAPSHOT"
@@ -70,6 +76,13 @@
     "gcp": {
       "project": "innobase-matchbase-stg",
       "region": "me-central1",
+      "temporarySecretManagerAdmin": "REVOKED",
+      "lastPrivateSourceBuild": {
+        "id": "2dc5254a-4048-4d19-a81b-fc3ee30f7d78",
+        "status": "FAILURE",
+        "failureType": "FETCH_SOURCE_FAILED",
+        "imagesProduced": 0
+      },
       "readiness": "DEGRADED_REMEDIATION_PENDING_DEPLOY",
       "production": "UNTOUCHED"
     },

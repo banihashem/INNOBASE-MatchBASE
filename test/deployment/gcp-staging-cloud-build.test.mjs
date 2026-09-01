@@ -37,7 +37,12 @@ test("governed Staging Cloud Build binds exact Git material, images and provenan
   assert.match(publisher, /ls-remote origin refs\/heads\/main/u);
   assert.match(
     publisher,
-    /builds", "submit", \$source, "--git-source-revision=\$CandidateCommit"/u,
+    /builds", "submit", \$sourceRepository, "--revision=\$CandidateCommit"/u,
+  );
+  assert.doesNotMatch(publisher, /--git-source-revision/u);
+  assert.match(
+    publisher,
+    /connections", "describe"[\s\S]*repositories", "describe"/u,
   );
   assert.match(publisher, /cloudbuild\.googleapis\.com/u);
   assert.match(publisher, /artifactregistry\.googleapis\.com/u);
@@ -45,7 +50,7 @@ test("governed Staging Cloud Build binds exact Git material, images and provenan
   assert.match(publisher, /repositories", "describe"[\s\S]*--format=json/u);
   assert.equal(
     (publisher.match(/Invoke-GcloudStdout[^\n]+--format=json/gu) ?? []).length,
-    3,
+    5,
   );
   assert.doesNotMatch(
     publisher,

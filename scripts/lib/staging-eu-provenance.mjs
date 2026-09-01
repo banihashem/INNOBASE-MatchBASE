@@ -15,6 +15,10 @@ const exactKeys = (value, allowed, label) => {
   if (JSON.stringify(keys) !== JSON.stringify(expected))
     fail(`${label} keys are not closed`);
 };
+const CLOSED_SOURCE_IDENTITIES = new Set([
+  "https://github.com/banihashem/INNOBASE-MatchBASE.git",
+  "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github/repositories/matchbase",
+]);
 
 export function validateStagingEuProvenance(value, expected) {
   exactKeys(value, ["image_summary", "provenance_summary"], "root");
@@ -57,15 +61,18 @@ export function validateStagingEuProvenance(value, expected) {
     "https://cloudbuild.googleapis.com/GoogleHostedWorker"
   )
     fail("builder mismatch");
-  if (definition.externalParameters?.source?.repository !== expected.repository)
-    fail("source repository mismatch");
+  const declaredRepository = definition.externalParameters?.source?.repository;
+  if (!CLOSED_SOURCE_IDENTITIES.has(declaredRepository))
+    fail(
+      "source repository mismatch; expected the exact linked repository resource or its governed remote URI",
+    );
   const materials = definition.resolvedDependencies;
   if (
     !Array.isArray(materials) ||
     materials.length < 1 ||
     !materials.some(
       (item) =>
-        item.uri === expected.repository &&
+        CLOSED_SOURCE_IDENTITIES.has(item.uri) &&
         item.digest?.gitCommit === expected.commit,
     )
   )
@@ -74,7 +81,7 @@ export function validateStagingEuProvenance(value, expected) {
     schema_version: "matchbase-staging-eu-build-provenance.v1",
     image: expected.image,
     subject_sha256: expected.digest.slice(7),
-    source_repository: expected.repository,
+    source_repository: declaredRepository,
     source_commit: expected.commit,
     builder_id: details.builder.id,
     build_type: definition.buildType,

@@ -481,6 +481,25 @@ test("closed provenance parser binds exact subject, material, builder, build typ
   assert.equal(binding.subject_sha256, "a".repeat(64));
 });
 
+test("closed provenance parser accepts only the exact linked repository resource representation", () => {
+  const linked = provenanceFixture();
+  const resource =
+    "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github/repositories/matchbase";
+  linked.provenance_summary.provenance[0].intotoStatement.predicate.buildDefinition.externalParameters.source.repository =
+    resource;
+  linked.provenance_summary.provenance[0].intotoStatement.predicate.buildDefinition.resolvedDependencies[0].uri =
+    resource;
+  assert.equal(
+    validateStagingEuProvenance(linked, expectedProvenance).source_repository,
+    resource,
+  );
+  linked.provenance_summary.provenance[0].intotoStatement.predicate.buildDefinition.externalParameters.source.repository = `${resource}-forged`;
+  assert.throws(
+    () => validateStagingEuProvenance(linked, expectedProvenance),
+    /source repository mismatch/u,
+  );
+});
+
 test("closed provenance parser rejects digest and commit appearing only in unrelated fields", () => {
   const forged = provenanceFixture();
   forged.provenance_summary.provenance[0].intotoStatement.subject[0].digest.sha256 =

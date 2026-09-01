@@ -25,6 +25,23 @@
         "PUBLISHED_SOURCE"
       ],
       "status": "DERIVE_AT_SNAPSHOT_GENERATION"
+    },
+    "cloudBuildLinkedSource": {
+      "connection": "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github",
+      "connectionStatus": "COMPLETE",
+      "repositoryResource": "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github/repositories/matchbase",
+      "remoteUri": "https://github.com/banihashem/INNOBASE-MatchBASE.git",
+      "visibility": "PUBLIC",
+      "githubAppScope": "SELECTED_REPOSITORIES_INCLUDES_MATCHBASE_NOT_ALL_REPOSITORIES",
+      "temporarySecretManagerAdmin": "REVOKED",
+      "lastBuild": {
+        "id": "2dc5254a-4048-4d19-a81b-fc3ee30f7d78",
+        "status": "FAILURE",
+        "failureType": "FETCH_SOURCE_FAILED",
+        "imagesProduced": 0
+      },
+      "currentPatch": "UNCOMMITTED_RUNTIME_DERIVED",
+      "nextState": "BUILD_PUBLICATION_DEPLOYMENT_AND_LIVE_ACCEPTANCE_PENDING"
     }
   },
   "staging": {
@@ -203,6 +220,7 @@
     "slices": ["SLICE-0", "SLICE-1"]
   },
   "knownBlockers": [
+    "Cloud Build 2dc5254a-4048-4d19-a81b-fc3ee30f7d78 failed FETCH_SOURCE_FAILED with zero images; the linked-source patch is uncommitted/runtime-derived.",
     "Independent Role 2 repository/remediation audit passed on exact stable bytes; cloud apply, deployment and live acceptance remain pending.",
     "The current remediation source has not been deployed; its dirty, committed and published state is derived at snapshot generation.",
     "Staging remains in me-central1 and does not satisfy the owner-authorized Europe processing and persistent-storage boundary.",

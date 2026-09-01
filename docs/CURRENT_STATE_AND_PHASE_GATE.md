@@ -20,6 +20,19 @@ the historical record as provenance.
   generator reports one of `WORKTREE_UNCOMMITTED`, `COMMITTED_UNPUBLISHED` or
   `PUBLISHED_SOURCE`, together with HEAD, `origin/main`, dirty state and an
   exact candidate SHA-256. No transition-sensitive state is hardcoded.
+- Cloud Build GitHub connection: `COMPLETE` at
+  `projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github`.
+- Linked repository resource:
+  `projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github/repositories/matchbase`,
+  remote `https://github.com/banihashem/INNOBASE-MatchBASE.git`.
+- GitHub App access is selected-repository scope including MatchBASE, not all
+  repositories. Temporary `roles/secretmanager.admin` access was revoked.
+- Repository visibility is `PUBLIC`, independently observed through the GitHub
+  repository API after the owner changed it on 2026-09-01. Cloud Build remains
+  bound to the governed linked-repository resource and exact commit.
+- Build `2dc5254a-4048-4d19-a81b-fc3ee30f7d78` failed with
+  `FETCH_SOURCE_FAILED` and produced zero images. The private-source correction
+  is currently uncommitted and runtime-derived.
 - Staging project: `innobase-matchbase-stg`
 - Region: `me-central1`
 - Public origin: `https://matchbase-staging.innobase.app`

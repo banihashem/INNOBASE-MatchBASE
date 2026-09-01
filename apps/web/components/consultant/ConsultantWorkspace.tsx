@@ -137,7 +137,9 @@ export function ConsultantWorkspace({
         </nav>
         <div className="identity">
           <span>
-            <bdi dir="auto">{initialSession.display_name}</bdi>
+            <bdi dir="auto">
+              {initialSession.user_display_name ?? initialSession.display_name}
+            </bdi>
           </span>
           <span className="tier-badge">{workspaceBadge}</span>
         </div>
@@ -165,7 +167,14 @@ export function ConsultantWorkspace({
         {view.state === "profile" ? (
           <UserProfile
             tier="consultant"
-            displayName={initialSession.display_name}
+            displayName={
+              initialSession.user_display_name ?? initialSession.display_name
+            }
+            email={initialSession.email}
+            quota={initialSession.quota}
+            newRequestHref={
+              initialSession.tier === "admin" ? "/admin/product" : undefined
+            }
           />
         ) : null}
         {view.state === "runs" ? (

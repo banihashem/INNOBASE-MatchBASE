@@ -14,7 +14,7 @@ const context: RequestContext = {
 describe("user profile route", () => {
   test("returns an owner-scoped no-store history projection", async () => {
     const body = {
-      schema_version: "user-profile-history.v1" as const,
+      schema_version: "user-profile-history.v2" as const,
       current_tier: "demo" as const,
       requests: [],
       runs: [],

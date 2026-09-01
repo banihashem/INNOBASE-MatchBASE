@@ -7,7 +7,7 @@ import {
 } from "@matchbase/data";
 import { ApplicationFault, type RequestContext } from "./types.js";
 
-const PROJECTION = "admin-research-inventory.v1";
+const PROJECTION = "admin-research-inventory.v2";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
@@ -16,6 +16,7 @@ export interface AdminResearchQuery {
   readonly scope: "all" | "own";
   readonly cursor?: string;
   readonly subject_user_id?: string;
+  readonly identity?: string;
   readonly state?: AdminResearchRunState;
   readonly purpose: string;
 }
@@ -47,6 +48,7 @@ export function parseAdminResearchQuery(
     "scope",
     "cursor",
     "subject_user_id",
+    "identity",
     "state",
     "purpose",
   ]);
@@ -71,6 +73,12 @@ export function parseAdminResearchQuery(
     (scope !== "all" && scope !== "own") ||
     (input.subject_user_id !== undefined &&
       !UUID_PATTERN.test(input.subject_user_id)) ||
+    (input.identity !== undefined &&
+      (input.identity !== input.identity.trim() ||
+        input.identity.length > 200 ||
+        [...input.identity].some(
+          (character) => (character.codePointAt(0) ?? 0) <= 0x1f,
+        ))) ||
     (input.state !== undefined && !state) ||
     (input.cursor !== undefined && input.cursor.length > 2_048) ||
     input.purpose === undefined ||
@@ -90,6 +98,7 @@ export function parseAdminResearchQuery(
     ...(input.subject_user_id
       ? { subject_user_id: input.subject_user_id }
       : {}),
+    ...(input.identity ? { identity: input.identity } : {}),
     ...(state ? { state } : {}),
   };
 }
@@ -99,6 +108,7 @@ function queryBinding(query: AdminResearchQuery): string {
     limit: query.limit,
     scope: query.scope,
     subject_user_id: query.subject_user_id ?? null,
+    identity: query.identity ?? null,
     state: query.state ?? null,
     purpose: query.purpose,
   });
@@ -136,6 +146,7 @@ export class AdminResearchApplication {
         ...(query.subject_user_id
           ? { subjectUserId: query.subject_user_id }
           : {}),
+        ...(query.identity ? { identityQuery: query.identity } : {}),
         ...(query.state ? { runState: query.state } : {}),
       });
     } catch {
@@ -179,7 +190,7 @@ export class AdminResearchApplication {
       },
       privacy_boundary: {
         source_text_released: false,
-        email_released: false,
+        email_released: true,
         complete_result_released: false,
       },
     } as const;

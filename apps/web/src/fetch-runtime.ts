@@ -681,8 +681,8 @@ async function simulatorSession(
       [accountId, identity.displayName],
     );
     await client.query(
-      `INSERT INTO app_user (user_id, account_id, google_sub, email, email_verified, hosted_domain, status)
-         VALUES ($1,$2,$3,$4,$5,$6,'active')`,
+      `INSERT INTO app_user (user_id, account_id, google_sub, email, email_verified, hosted_domain, display_name, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'active')`,
       [
         userId,
         accountId,
@@ -690,6 +690,7 @@ async function simulatorSession(
         identity.email ?? null,
         identity.emailVerified ?? false,
         identity.hostedDomain ?? null,
+        identity.displayName,
       ],
     );
     if (identity.tier === "demo") {
@@ -721,6 +722,23 @@ async function simulatorSession(
       });
     }
   }
+  await client.query(
+    `UPDATE app_user
+        SET display_name=COALESCE($3,display_name),
+            email=CASE WHEN $2 THEN COALESCE($1,email) ELSE email END,
+            email_verified=CASE WHEN $2 THEN true ELSE email_verified END,
+            hosted_domain=COALESCE($4,hosted_domain),
+            last_seen_at=clock_timestamp()
+      WHERE account_id=$5 AND user_id=$6`,
+    [
+      identity.email ?? null,
+      identity.emailVerified === true,
+      identity.displayName,
+      identity.hostedDomain ?? null,
+      accountId,
+      userId,
+    ],
+  );
   const issued = issueSession();
   await client.query(
     `INSERT INTO user_session
@@ -1120,7 +1138,7 @@ export async function handleRoute(request: Request): Promise<Response> {
         );
         return simulatorSession(current, correlationId, client, {
           ...identity,
-          displayName: "Google user",
+          displayName: identity.displayName ?? identity.email ?? "Google user",
           simulator: false,
           tier: "demo",
         });

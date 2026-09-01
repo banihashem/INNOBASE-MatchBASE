@@ -36,6 +36,7 @@ export interface AdminResearchReadInput {
   readonly cursor: AdminResearchCursorPosition | null;
   readonly scope: "all" | "own";
   readonly subjectUserId?: string;
+  readonly identityQuery?: string;
   readonly runState?: AdminResearchRunState;
   readonly purpose: string;
 }
@@ -47,7 +48,9 @@ export interface AdminResearchReadItem {
   readonly requester: {
     readonly user_id: string;
     readonly display_name: string;
+    readonly email: string | null;
   };
+  readonly product_group: string;
   readonly request_summary: string;
   readonly tier_at_submission: "demo" | "standard" | "consultant";
   readonly research_mode: "synthetic_reference" | "qualified_live_research";
@@ -75,6 +78,8 @@ const RELEASED_FIELDS = [
   "items[].request_id",
   "items[].requester.user_id",
   "items[].requester.display_name",
+  "items[].requester.email",
+  "items[].product_group",
   "items[].request_summary",
   "items[].tier_at_submission",
   "items[].research_mode",
@@ -123,6 +128,100 @@ export function adminResearchRequestSummary(document: unknown): string {
     canonicalText ||
     "Canonical request available"
   );
+}
+
+function canonicalFieldValue(
+  fields: readonly unknown[],
+  fieldIds: ReadonlySet<string>,
+): string | null {
+  for (const entry of fields) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const field = entry as Record<string, unknown>;
+    if (
+      typeof field.field_id !== "string" ||
+      !fieldIds.has(field.field_id.toLocaleLowerCase("en"))
+    )
+      continue;
+    const typed =
+      field.typed_value &&
+      typeof field.typed_value === "object" &&
+      !Array.isArray(field.typed_value)
+        ? (field.typed_value as Record<string, unknown>)
+        : null;
+    const value = boundedText(
+      typed?.value ?? field.canonical_value ?? field.canonicalValue,
+    );
+    if (value) return value;
+  }
+  return null;
+}
+
+const PRODUCT_CATEGORY_FIELDS = new Set(["fld-core-ps-01", "product_category"]);
+const PRODUCT_NAME_FIELDS = new Set([
+  "product_need",
+  "fld-core-ps-03",
+  "product_name_raw",
+]);
+
+function conciseProductGroup(value: string): string {
+  const normalized = value
+    .replace(
+      /^(?:(?:procurement\s+)?request\s+for|procurement\s+of|we\s+(?:require|need)|(?:requirement|need)\s*:\s*)\s*/iu,
+      "",
+    )
+    .replace(
+      /^(?:(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+)?(?:containers?|units?|pieces?|lots?|shipments?)\s+of\s+/iu,
+      "",
+    )
+    .split(/(?:[.;]|\s[—–]\s)/u, 1)[0]
+    ?.split(
+      /\s+(?:for\s+(?:delivery|distribution|use|water\s+transfer)|with\s+|which\s+|that\s+|must\s+|should\s+)/iu,
+      1,
+    )[0]
+    ?.trim();
+  if (!normalized) return "Product group unavailable";
+  const words = normalized.split(/\s+/u);
+  const boundedWords =
+    words.length > 8 ? `${words.slice(0, 8).join(" ")}…` : normalized;
+  return boundedWords.length > 80
+    ? `${boundedWords.slice(0, 77).trimEnd()}…`
+    : boundedWords;
+}
+
+/**
+ * Produces one short, non-sensitive category label for inventory scanning.
+ * Structured product category is authoritative; a product name or bounded
+ * canonical prefix is used only when historical documents lack that field.
+ */
+export function adminResearchProductGroup(document: unknown): string {
+  if (!document || typeof document !== "object" || Array.isArray(document))
+    return "Product group unavailable";
+  const record = document as Record<string, unknown>;
+  const fields = Array.isArray(record.fields) ? record.fields : [];
+  const category = canonicalFieldValue(fields, PRODUCT_CATEGORY_FIELDS);
+  if (category) return conciseProductGroup(category);
+  const productName = canonicalFieldValue(fields, PRODUCT_NAME_FIELDS);
+  if (productName) return conciseProductGroup(productName);
+  const canonicalText = boundedText(
+    record.canonical_text ?? record.canonicalText,
+  );
+  if (canonicalText) {
+    const prefix = canonicalText
+      .replace(/^(?:requirement|request|need)\s*:\s*/iu, "")
+      .split(/(?:[.;]|\s[—–-]\s)/u, 1)[0]
+      ?.trim();
+    if (prefix) return conciseProductGroup(prefix);
+  }
+  const domainPack =
+    record.domain_pack &&
+    typeof record.domain_pack === "object" &&
+    !Array.isArray(record.domain_pack)
+      ? (record.domain_pack as Record<string, unknown>)
+      : null;
+  const categoryId = boundedText(domainPack?.category_id);
+  return categoryId
+    ? categoryId.replaceAll("_", " ")
+    : "Product group unavailable";
 }
 
 async function hasSuperAdminAuthority(
@@ -179,6 +278,8 @@ export async function readAdminResearch(
       request_id: string;
       requested_by_user_id: string;
       display_name: string | null;
+      email: string | null;
+      email_verified: boolean;
       canonical_document: unknown;
       tier_at_submission: "demo" | "standard" | "consultant";
       research_mode: "synthetic_reference" | "qualified_live_research";
@@ -191,6 +292,7 @@ export async function readAdminResearch(
       result_available: boolean;
     }>(
       `SELECT rr.run_id,v.request_id,rr.requested_by_user_id,u.display_name,
+              u.email::text AS email,u.email_verified,
               rr.account_id,v.canonical_document,rr.tier_at_submission,rr.research_mode,
               CASE WHEN rr.state='failed_retryable' AND lt.live_research_terminal_id IS NOT NULL
                    THEN 'failed' ELSE rr.state END AS state,
@@ -219,15 +321,19 @@ export async function readAdminResearch(
           AND ($5::text IS NULL OR
                CASE WHEN rr.state='failed_retryable' AND lt.live_research_terminal_id IS NOT NULL
                     THEN 'failed' ELSE rr.state END=$5)
-          AND ($6::timestamptz IS NULL OR (rr.queued_at,rr.run_id)<($6,$7::uuid))
+          AND ($6::text IS NULL OR
+               u.display_name ILIKE '%' || $6 || '%' OR
+               (u.email_verified AND u.email::text ILIKE '%' || $6 || '%'))
+          AND ($7::timestamptz IS NULL OR (rr.queued_at,rr.run_id)<($7,$8::uuid))
         ORDER BY rr.queued_at DESC,rr.run_id DESC
-        LIMIT $8`,
+        LIMIT $9`,
       [
         input.accountId,
         input.scope,
         input.actorUserId,
         input.subjectUserId ?? null,
         input.runState ?? null,
+        input.identityQuery ?? null,
         input.cursor?.queuedAt ?? null,
         input.cursor?.runId ?? null,
         input.limit + 1,
@@ -244,7 +350,9 @@ export async function readAdminResearch(
         display_name:
           boundedText(row.display_name) ??
           `User ${row.requested_by_user_id.slice(0, 8)}`,
+        email: row.email_verified ? boundedText(row.email) : null,
       },
+      product_group: adminResearchProductGroup(row.canonical_document),
       request_summary: adminResearchRequestSummary(row.canonical_document),
       tier_at_submission: row.tier_at_submission,
       research_mode: row.research_mode,
@@ -271,10 +379,12 @@ export async function readAdminResearch(
       detail: {
         scope: input.scope,
         subjectFilterApplied: Boolean(input.subjectUserId),
+        identityFilterApplied: Boolean(input.identityQuery),
         stateFilterApplied: Boolean(input.runState),
         itemCount: items.length,
         sourceTextReleased: false,
         completeResultReleased: false,
+        verifiedEmailOnly: true,
         systemWide: input.scope === "all",
       },
     });

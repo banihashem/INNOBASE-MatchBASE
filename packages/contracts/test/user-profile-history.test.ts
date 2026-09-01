@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseUserProfileHistoryV1 } from "../src/v1/user-profile-history.js";
+import { parseUserProfileHistoryV2 } from "../src/v1/user-profile-history-v2.js";
 
 const history = {
   schema_version: "user-profile-history.v1",
@@ -60,6 +61,29 @@ test("rejects projection widening and unknown fields", () => {
     parseUserProfileHistoryV1({
       ...history,
       page: { limit: 50, has_more: true, next_cursor: null },
+    }),
+  );
+});
+
+test("adds one closed server-owned product group without changing v1", () => {
+  const parsed = parseUserProfileHistoryV2({
+    ...history,
+    schema_version: "user-profile-history.v2",
+    requests: history.requests.map((request) => ({
+      ...request,
+      product_group: "Industrial controllers",
+    })),
+  });
+  assert.equal(parsed.requests[0]?.product_group, "Industrial controllers");
+  assert.equal(history.schema_version, "user-profile-history.v1");
+  assert.throws(() =>
+    parseUserProfileHistoryV2({
+      ...history,
+      schema_version: "user-profile-history.v2",
+      requests: history.requests.map((request) => ({
+        ...request,
+        product_group: "",
+      })),
     }),
   );
 });

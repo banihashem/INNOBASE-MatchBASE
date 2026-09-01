@@ -11,6 +11,8 @@ import type {
 
 export type WorkspaceSession = {
   display_name: string;
+  user_display_name?: string | null;
+  email?: string | null;
   tier: "demo" | "standard" | "consultant" | "admin";
   admin_sub_roles?: string[];
   quota: {

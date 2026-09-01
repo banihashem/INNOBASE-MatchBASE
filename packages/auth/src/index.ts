@@ -114,6 +114,16 @@ export interface VerifiedOidcIdentity {
   issuer: string;
   subject: string;
   audience: string | string[];
+  displayName?: string;
+  email?: string;
+  emailVerified?: boolean;
+  hostedDomain?: string;
+}
+
+function boundedClaim(value: unknown, maximum: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.replace(/\s+/gu, " ").trim();
+  return normalized && normalized.length <= maximum ? normalized : undefined;
 }
 
 export async function verifyOidcIdToken(input: {
@@ -139,10 +149,19 @@ export async function verifyOidcIdToken(input: {
     throw new Error("OIDC nonce mismatch.");
   }
   if (!payload.aud) throw new Error("OIDC audience is missing.");
+  const displayName = boundedClaim(payload.name, 200);
+  const verifiedEmail =
+    payload.email_verified === true
+      ? boundedClaim(payload.email, 320)
+      : undefined;
+  const hostedDomain = boundedClaim(payload.hd, 253);
   return {
     issuer: payload.iss ?? "",
     subject: payload.sub,
     audience: payload.aud,
+    ...(displayName ? { displayName } : {}),
+    ...(verifiedEmail ? { email: verifiedEmail, emailVerified: true } : {}),
+    ...(hostedDomain ? { hostedDomain } : {}),
   };
 }
 
@@ -158,6 +177,7 @@ export interface GoogleOidcAdapterConfig {
 
 export interface GoogleOidcIdentity {
   subject: string;
+  displayName?: string;
   email?: string;
   emailVerified?: boolean;
   hostedDomain?: string;
@@ -221,7 +241,15 @@ export function createGoogleOidcAdapter(
         audience: config.clientId,
         expectedNonce: input.nonce,
       });
-      return { subject: identity.subject };
+      return {
+        subject: identity.subject,
+        ...(identity.displayName ? { displayName: identity.displayName } : {}),
+        ...(identity.email ? { email: identity.email } : {}),
+        ...(identity.emailVerified === true ? { emailVerified: true } : {}),
+        ...(identity.hostedDomain
+          ? { hostedDomain: identity.hostedDomain }
+          : {}),
+      };
     },
   };
 }

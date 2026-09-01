@@ -26,7 +26,7 @@ test("shows bounded tenant research and requires a purpose for full result acces
         });
       if (url.startsWith("/api/v1/admin/research?"))
         return Response.json({
-          schema_version: "admin-research-inventory.v1",
+          schema_version: "admin-research-inventory.v2",
           items: [
             {
               account_id: "00000000-0000-4000-8000-000000000004",
@@ -35,8 +35,10 @@ test("shows bounded tenant research and requires a purpose for full result acces
               requester: {
                 user_id: "00000000-0000-4000-8000-000000000003",
                 display_name: "Test user",
+                email: "test.user@example.com",
               },
               request_summary: "product_need: Industrial pump",
+              product_group: "Industrial pump",
               tier_at_submission: "consultant",
               research_mode: "qualified_live_research",
               state: "complete",
@@ -51,7 +53,7 @@ test("shows bounded tenant research and requires a purpose for full result acces
           page: { limit: 20, has_more: false, next_cursor: null },
           privacy_boundary: {
             source_text_released: false,
-            email_released: false,
+            email_released: true,
             complete_result_released: false,
           },
         });
@@ -59,7 +61,21 @@ test("shows bounded tenant research and requires a purpose for full result acces
         const headers = new Headers(init?.headers);
         expect(headers.get("X-CSRF-Token")).toBe("test-csrf");
         expect(headers.get("Idempotency-Key")).toMatch(/^admin-result-/u);
-        return Response.json({ run_id: runId, outcome: "matched" });
+        return Response.json({
+          run_id: runId,
+          complete_result_document: {
+            outcome: "matched",
+            eligible_count: 1,
+            candidates: [
+              {
+                display_name: "Example Pumps",
+                country_or_region: "United Arab Emirates",
+                compatibility_score: 91,
+                rationale_short: "Meets the recorded mandatory constraints.",
+              },
+            ],
+          },
+        });
       }
       return new Response(null, { status: 404 });
     },
@@ -68,14 +84,18 @@ test("shows bounded tenant research and requires a purpose for full result acces
   render(<AdminResearchOversight />);
 
   expect(
-    await screen.findByRole("heading", { name: "All user research" }),
+    await screen.findByRole("heading", { name: "All research runs" }),
   ).toBeVisible();
   fireEvent.change(screen.getByLabelText("Inventory purpose"), {
     target: { value: "Investigate system-wide research operations" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
   expect(await screen.findByText("Test user")).toBeVisible();
-  expect(screen.queryByText(/@/u)).not.toBeInTheDocument();
+  expect(screen.getByText("test.user@example.com")).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "Industrial pump" }),
+  ).toBeVisible();
+  expect(screen.getByText("View request details")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Open complete result" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     /operational purpose/iu,
@@ -92,7 +112,10 @@ test("shows bounded tenant research and requires a purpose for full result acces
       expect.objectContaining({ method: "POST" }),
     ),
   );
-  expect(await screen.findByText(/Audited complete result/iu)).toBeVisible();
+  expect(
+    await screen.findByRole("heading", { name: "Complete result" }),
+  ).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Example Pumps" })).toBeVisible();
   expect((await axe.run(document, axeOptions)).violations).toEqual([]);
 });
 
@@ -123,7 +146,7 @@ test("labels a terminal failed run without releasing a raw provider reason", asy
           csrf_token: "test-csrf",
         });
       return Response.json({
-        schema_version: "admin-research-inventory.v1",
+        schema_version: "admin-research-inventory.v2",
         items: [
           {
             account_id: "00000000-0000-4000-8000-000000000004",
@@ -132,8 +155,10 @@ test("labels a terminal failed run without releasing a raw provider reason", asy
             requester: {
               user_id: "00000000-0000-4000-8000-000000000003",
               display_name: "Test user",
+              email: "test.user@example.com",
             },
             request_summary: "product_need: Industrial pump",
+            product_group: "Industrial pump",
             tier_at_submission: "consultant",
             research_mode: "qualified_live_research",
             state: "failed",
@@ -148,14 +173,14 @@ test("labels a terminal failed run without releasing a raw provider reason", asy
         page: { limit: 20, has_more: false, next_cursor: null },
         privacy_boundary: {
           source_text_released: false,
-          email_released: false,
+          email_released: true,
           complete_result_released: false,
         },
       });
     }),
   );
   render(<AdminResearchOversight />);
-  await screen.findByRole("heading", { name: "All user research" });
+  await screen.findByRole("heading", { name: "All research runs" });
   fireEvent.change(screen.getByLabelText("Inventory purpose"), {
     target: { value: "Inspect terminal failed research" },
   });

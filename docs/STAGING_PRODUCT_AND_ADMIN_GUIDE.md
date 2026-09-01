@@ -11,10 +11,12 @@
 ## User profile
 
 Every authenticated Demo, Standard, or Consultant workspace exposes `Profile`.
-The profile is owner-scoped and contains canonical request history, research-run
-state, outcome, and the result projection fixed at submission time. History is
-paginated in bounded pages; `Load more history` retrieves the next owner-bound
-page.
+The profile is owner-scoped and displays the verified Google name and email,
+current access tier, research capacity and reset time, last activity, request
+metrics, concise product-group request cards, research-run state/outcome, and
+the result projection fixed at submission time. Canonical detail and result
+bytes remain behind explicit actions. History is paginated in bounded pages;
+`Load more history` retrieves the next owner-bound page.
 
 An entitlement upgrade does not rewrite or widen a historical result. A Demo
 run remains Demo-projected, a Standard run remains Standard-projected, and a
@@ -29,7 +31,7 @@ An identity must have both the stored `admin` entitlement and an active stored
 - `/` — Admin operations home
 - `/admin/product` — owner-bound structured request and qualified-live execution
 - `/admin/profile` — the Admin identity's own requests, runs, and submission-bound results
-- `/admin/research` — bounded system-wide inventory of all users' research across accounts
+- `/admin/research` — bounded system-wide inventory of research runs across accounts
 - `/admin/entitlements` — governed entitlement operations
 - `/admin/requests` — governance queue
 
@@ -39,13 +41,31 @@ only after re-reading the stored `super_admin` grant. A Consultant-tier result
 is never down-projected through the Standard result endpoint; it is disclosed
 through the Admin profile's Consultant route.
 
-The system-wide inventory excludes email, submitted source text, evidence
-bodies, provider failures, and complete result documents. Every inventory page
-requires a specific operational purpose. Purpose is bound to pagination and the
-immutable access audit. Opening a complete result additionally requires a
-written justification, CSRF validation, a unique idempotency key, stored
-authority revalidation, and a separate immutable disclosure audit. Account
-analysts remain account-scoped and cannot use the system-wide path.
+The system-wide inventory releases verified account name/email, a concise
+server-derived product group, run state, submission tier, and result
+availability only to stored Super-admin authority after a specific operational
+purpose is supplied. It excludes submitted source text, evidence bodies,
+provider failures, and complete result documents. Purpose is bound to
+pagination and the immutable access audit. Opening a complete result
+additionally requires a written justification, CSRF validation, a unique
+idempotency key, stored authority revalidation, and a separate immutable
+disclosure audit. Account analysts remain account-scoped and cannot use the
+system-wide path.
+
+The inventory is deliberately run-led. It is named `All research runs` and
+does not claim to include accounts or canonical requests that have no run.
+
+## Current interaction model
+
+- The first request-history layer shows only product group, outcome, version or
+  run count, and time. UUIDs and long canonical text are not primary labels.
+- Selecting a request reveals its complete canonical context and linked runs.
+- Selecting an available result opens the tier-authorized structured result.
+- Admin complete results render candidate, evidence-count, and limitation
+  sections. Raw JSON is not a user interface.
+- Admin home and profile contain direct product-research actions.
+- Historical long procurement descriptions receive a deterministic bounded
+  product-group label without changing stored canonical data.
 
 `tier_at_submission` is an immutable server-owned fact. Migration
 `0011_admin_system_scope_and_run_tier_immutability` installs an `ALWAYS` trigger
@@ -71,11 +91,11 @@ ordering, and exact served-provider/model identity.
 4. Submit the three-part request: need, mandatory constraints, and preferences/context.
 5. Review and confirm the canonical English request.
 6. Start the run and wait for a terminal state. Do not reload while the request is still being canonicalized.
-7. Open `/admin/profile`; confirm that the new request and run are present.
+7. Open `/admin/profile`; confirm verified name/email, capacity, the concise product-group card, and the linked run.
 8. Open the result from the profile and verify that its projection matches the tier recorded at submission.
-9. Open `/admin/research`, enter a specific operational purpose, and load the system-wide inventory.
-10. Confirm that the run appears with its opaque account and user identifiers and submission tier, but without email or raw submitted source text.
-11. Enter a separate specific disclosure justification and open the complete result. Confirm that the immutable disclosure audit is created before result bytes are returned.
+9. Open `/admin/research`, enter a specific operational purpose, and load the system-wide run inventory.
+10. Filter by verified name/email and confirm that the run appears with user identity, concise product group, submission tier, state, and result availability, but without raw submitted source text.
+11. Enter a separate specific disclosure justification and open the complete result. Confirm the structured candidate/evidence/limitations view and that the immutable disclosure audit is created before result bytes are returned.
 
 For an ordinary user, use the workspace `Profile` control and repeat steps 4–8.
 If the profile has more than 50 requests or runs, use `Load more history` until
@@ -92,8 +112,8 @@ no continuation remains.
 
 - Route policy: `slice3-routes.2026-09-01.staging-qualified-v3`
 - Route-policy SHA-256: `b752d2d42a63aaad11f3b89f67bad64861ce767f633bee8190549df23a6f4155`
-- Web revision: `matchbase-staging-web-00029-tj4`
-- Web image: `sha256:9e768f3f9e6c8cfd74df1aae77ad54212044c104bbf0f5c70b9c81f64f5d1489`
+- Web revision: `matchbase-staging-web-00033-jnz`
+- Web image: `sha256:f7acce06c05fd9dff848816313f3faec1ecba632af519a338b1dfafe2053cbb4`
 - Worker revision: `matchbase-staging-worker-00045-k2b`
 - Worker image: `sha256:ca6d1627309ce333dcbde354b17d4588135fa2993988bf24a4de39ca264c191d`
 - Final qualified run: `3898ed1c-d237-42eb-9001-a0409a185895`
@@ -103,13 +123,20 @@ no continuation remains.
 - System inventory read: passed through `/admin/research` with a separate inventory purpose.
 - Cross-account complete-result read: passed only after a separate operational justification; immutable disclosure audit `84a1e926-885a-40c2-8ef5-cc63a15c4d01` was returned with the result.
 - Public health: `GET /api/v1/health` returned HTTP `200` with `{"status":"ok"}`.
+- Verified identity repair: the owner reauthenticated through Google; Staging displayed `Ehsan Banihashem` and the verified email instead of `Google user`.
+- Search admission: Admin product workspace displayed `14` of `20` runs remaining and an active `New structured request` action.
+- Profile UX: request and run tables were replaced by progressive product-group cards; the historical pistachio request displays `high-quality Iranian Ahmad Aghaei pistachios` in the first layer.
+- Admin UX: verified name/email filter and structured complete-result rendering passed; raw JSON and primary UUID labels are absent.
+- Browser matrix: Playwright `42/42` passed across mobile/reflow/keyboard/accessibility and Admin, Consultant, Standard, and qualified-live paths.
+- Runtime privacy scan: 7,757 regular artifacts, four canaries, zero findings.
 
 Migration `0011_admin_system_scope_and_run_tier_immutability` was applied only to
 the authorized Staging database after backup verification. Its down migration
 and rollback were verified before the final reapply. Production was not
 mutated.
 
-The reviewed implementation, migration, policy, tests, and this guide were
-published to `origin/main` in feature commit
-`6166195c0fb1d53496c183571aea806217708dc1` before the additive documentation
-closure. Credential files and temporary diagnostic files were excluded.
+The prior P5 backend implementation, migration, and policy were published in
+feature commit `6166195c0fb1d53496c183571aea806217708dc1`. The additive UX
+correction documented above is a later source publication and does not rewrite
+that commit or its evidence. Credential files and temporary diagnostic files
+remain excluded.

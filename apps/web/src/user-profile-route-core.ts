@@ -3,11 +3,11 @@ import {
   type RequestContext,
   type UserProfileApplication,
 } from "@matchbase/application";
-import type { UserProfileHistoryV1 } from "@matchbase/contracts";
+import type { UserProfileHistoryV2 } from "@matchbase/contracts";
 
 export interface UserProfileRouteResult {
   readonly status: 200;
-  readonly body: UserProfileHistoryV1;
+  readonly body: UserProfileHistoryV2;
   readonly headers: Readonly<Record<string, string>>;
 }
 

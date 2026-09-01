@@ -22,7 +22,13 @@ describe("OIDC and local-mode boundaries", () => {
     const { privateKey, publicKey } = generateKeyPairSync("rsa", {
       modulusLength: 2048,
     });
-    const token = await new SignJWT({ nonce: "nonce-fixture" })
+    const token = await new SignJWT({
+      nonce: "nonce-fixture",
+      name: "Verified Operator",
+      email: "operator@example.test",
+      email_verified: true,
+      hd: "example.test",
+    })
       .setProtectedHeader({ alg: "RS256", kid: "fixture-key" })
       .setIssuer("https://issuer.example.test")
       .setAudience("client-fixture")
@@ -72,7 +78,13 @@ describe("OIDC and local-mode boundaries", () => {
         nonce: "nonce-fixture",
         verifier: "verifier-fixture",
       }),
-    ).resolves.toEqual({ subject: "verified-subject" });
+    ).resolves.toEqual({
+      subject: "verified-subject",
+      displayName: "Verified Operator",
+      email: "operator@example.test",
+      emailVerified: true,
+      hostedDomain: "example.test",
+    });
     expect(requests).toEqual([
       "https://issuer.example.test/token",
       "https://issuer.example.test/jwks",
@@ -226,6 +238,41 @@ describe("OIDC and local-mode boundaries", () => {
         expectedNonce: "expected",
       }),
     ).rejects.toThrow();
+  });
+
+  it("releases profile claims only from the verified token and withholds an unverified email", async () => {
+    const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+      modulusLength: 2048,
+    });
+    const token = await new SignJWT({
+      nonce: "expected",
+      name: "  Verified   User  ",
+      email: "unverified@example.test",
+      email_verified: false,
+      hd: "example.test",
+    })
+      .setProtectedHeader({ alg: "RS256" })
+      .setIssuer("https://issuer.example.test")
+      .setAudience("matchbase-local")
+      .setSubject("synthetic-subject")
+      .setIssuedAt()
+      .setExpirationTime("5m")
+      .sign(privateKey);
+    await expect(
+      verifyOidcIdToken({
+        token,
+        key: publicKey,
+        issuer: "https://issuer.example.test",
+        audience: "matchbase-local",
+        expectedNonce: "expected",
+      }),
+    ).resolves.toEqual({
+      issuer: "https://issuer.example.test",
+      subject: "synthetic-subject",
+      audience: "matchbase-local",
+      displayName: "Verified User",
+      hostedDomain: "example.test",
+    });
   });
 
   it("refuses simulator or fixtures in production", () => {

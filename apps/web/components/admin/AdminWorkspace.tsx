@@ -38,7 +38,9 @@ export function AdminWorkspace({
         </nav>
         <div className="identity">
           <span>
-            <bdi dir="auto">{initialSession.display_name}</bdi>
+            <bdi dir="auto">
+              {initialSession.user_display_name ?? initialSession.display_name}
+            </bdi>
           </span>
           <span className="tier-badge">Admin</span>
         </div>
@@ -92,10 +94,10 @@ export function AdminWorkspace({
 
             <article className="admin-operation-card">
               <p className="eyebrow">System oversight</p>
-              <h2>All user research</h2>
+              <h2>All research runs</h2>
               <p>
-                Inspect bounded request summaries and run outcomes across all
-                accounts. Inventory and complete-result access require recorded
+                Inspect bounded run records and outcomes across all accounts.
+                Inventory and complete-result access require recorded
                 operational purposes.
               </p>
               <a className="secondary-action" href="/admin/research">

@@ -1,10 +1,11 @@
 import {
-  parseUserProfileHistoryV1,
+  parseUserProfileHistoryV2,
   type ProductTier,
-  type UserProfileHistoryV1,
+  type UserProfileHistoryV2,
   type UserProfileRunV1,
 } from "@matchbase/contracts";
 import {
+  adminResearchProductGroup,
   appendAuditEvent,
   inTransaction,
   type ConnectionPool,
@@ -91,7 +92,7 @@ export class UserProfileApplication {
   async getHistory(
     context: RequestContext,
     cursor?: string,
-  ): Promise<UserProfileHistoryV1> {
+  ): Promise<UserProfileHistoryV2> {
     const offset = profileOffset(cursor);
     return inTransaction(this.pool, async (client) => {
       const grant = await client.query<{
@@ -136,7 +137,7 @@ export class UserProfileApplication {
       const requests = await client.query<{
         request_id: string;
         current_version: number;
-        lifecycle_state: UserProfileHistoryV1["requests"][number]["lifecycle_state"];
+        lifecycle_state: UserProfileHistoryV2["requests"][number]["lifecycle_state"];
         created_at: Date;
         canonical_created_at: Date;
         canonical_document: CanonicalDocument;
@@ -199,13 +200,14 @@ export class UserProfileApplication {
       const currentTier: ProductTier = adminProductAccess
         ? "consultant"
         : (context.tier as ProductTier);
-      const body = parseUserProfileHistoryV1({
-        schema_version: "user-profile-history.v1",
+      const body = parseUserProfileHistoryV2({
+        schema_version: "user-profile-history.v2",
         current_tier: currentTier,
         requests: requestRows.map((row) => ({
           request_id: row.request_id,
           canonical_request_version: row.current_version,
           canonical_summary: canonicalSummary(row.canonical_document),
+          product_group: adminResearchProductGroup(row.canonical_document),
           lifecycle_state: row.lifecycle_state,
           created_at: row.created_at.toISOString(),
           updated_at: row.canonical_created_at.toISOString(),

@@ -19,7 +19,7 @@ const context: RequestContext = {
 describe("Admin research inventory route", () => {
   it("passes a closed query and server context to the application", async () => {
     const body = {
-      schema_version: "admin-research-inventory.v1",
+      schema_version: "admin-research-inventory.v2",
       items: [],
       page: { limit: 20, has_more: false, next_cursor: null },
     };
@@ -32,6 +32,7 @@ describe("Admin research inventory route", () => {
         limit: "20",
         scope: "all",
         subject_user_id: subject,
+        identity: "Verified Operator",
         state: "failed",
         purpose: "Investigate system-wide research operations",
       }),
@@ -47,6 +48,7 @@ describe("Admin research inventory route", () => {
       limit: 20,
       scope: "all",
       subject_user_id: subject,
+      identity: "Verified Operator",
       state: "failed",
       purpose: "Investigate system-wide research operations",
     });
@@ -66,6 +68,7 @@ describe("Admin research inventory route", () => {
       new URLSearchParams({ limit: "101" }),
       new URLSearchParams({ scope: "all" }),
       new URLSearchParams({ purpose: " padded " }),
+      new URLSearchParams({ purpose: "audit", identity: " padded " }),
     ]) {
       await expect(
         handleAdminResearchRoute({

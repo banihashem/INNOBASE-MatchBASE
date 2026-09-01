@@ -109,7 +109,9 @@ export function StandardWorkspace({
         </nav>
         <div className="identity">
           <span>
-            <bdi dir="auto">{session.display_name}</bdi>
+            <bdi dir="auto">
+              {session.user_display_name ?? session.display_name}
+            </bdi>
           </span>
           <span className="tier-badge">{workspaceBadge}</span>
         </div>
@@ -163,7 +165,9 @@ export function StandardWorkspace({
         {screen === "profile" ? (
           <UserProfile
             tier={adminProductMode ? "consultant" : "standard"}
-            displayName={session.display_name}
+            displayName={session.user_display_name ?? session.display_name}
+            email={session.email}
+            quota={session.quota}
             onNewRequest={() => transition("intake")}
           />
         ) : null}

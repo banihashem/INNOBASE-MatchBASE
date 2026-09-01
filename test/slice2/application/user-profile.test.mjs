@@ -86,6 +86,8 @@ test("projects owner history without widening submission-bound results", async (
     history.requests[0].canonical_summary,
     "Owner canonical request",
   );
+  assert.equal(history.schema_version, "user-profile-history.v2");
+  assert.equal(history.requests[0].product_group, "Owner canonical request");
   assert.equal(history.runs[0].submitted_tier, "demo");
   assert.equal(history.runs[0].result_projection, "demo");
   assert.match(history.runs[0].links.result, /\/result$/u);

@@ -170,9 +170,18 @@ export class MatchBaseApplication {
       [context.accountId],
     );
     const used = quota.rows[0]?.used ?? 0;
-    const identity = await this.pool.query<{ display_name: string }>(
-      "SELECT display_name FROM account WHERE account_id = $1",
-      [context.accountId],
+    const identity = await this.pool.query<{
+      account_display_name: string;
+      user_display_name: string | null;
+      email: string | null;
+    }>(
+      `SELECT a.display_name AS account_display_name,
+              NULLIF(btrim(u.display_name),'') AS user_display_name,
+              CASE WHEN u.email_verified THEN u.email::text ELSE NULL END AS email
+         FROM account a
+         JOIN app_user u ON u.account_id=a.account_id AND u.user_id=$2
+        WHERE a.account_id=$1 AND a.status='active' AND u.status='active'`,
+      [context.accountId, context.userId],
     );
     const execution = await this.pool.query<{ active: number }>(
       `SELECT count(*)::int AS active FROM execution_lease
@@ -182,7 +191,10 @@ export class MatchBaseApplication {
     );
     const researchMode = this.researchAdmission.decide(context.tier);
     return {
-      display_name: identity.rows[0]?.display_name ?? "Demo account",
+      display_name:
+        identity.rows[0]?.account_display_name ?? "MatchBASE account",
+      user_display_name: identity.rows[0]?.user_display_name ?? null,
+      email: identity.rows[0]?.email ?? null,
       subject: { user_id: context.userId, account_id: context.accountId },
       tier: context.tier,
       admin_sub_roles: [...context.adminSubRoles],

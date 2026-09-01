@@ -684,7 +684,7 @@ test("reconstructs history and renders deterministic no-match and scarcity paths
     page.getByRole("heading", { name: "Requests", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("region", { name: "Request history table" }),
+    page.getByRole("list", { name: "Product request history" }),
   ).toBeVisible();
   await expect(
     page.getByRole("region", { name: "Research runs" }),

@@ -482,6 +482,7 @@ export function createWebRuntime(
   async function createSubjectSession(
     subject: string,
     attributes: {
+      displayName?: string;
       email?: string;
       emailVerified?: boolean;
       hostedDomain?: string;
@@ -503,13 +504,14 @@ export function createWebRuntime(
           "INSERT INTO account (account_id, display_name, status) VALUES ($1,$2,'active')",
           [
             accountId,
-            tier === "standard" ? "Standard account" : "Demo account",
+            attributes.displayName ??
+              (tier === "standard" ? "Standard account" : "Demo account"),
           ],
         );
         await client.query(
           `INSERT INTO app_user
-             (user_id, account_id, google_sub, email, email_verified, hosted_domain, status)
-           VALUES ($1,$2,$3,$4,$5,$6,'active')`,
+             (user_id, account_id, google_sub, email, email_verified, hosted_domain, display_name, status)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'active')`,
           [
             userId,
             accountId,
@@ -517,6 +519,7 @@ export function createWebRuntime(
             attributes.email ?? null,
             attributes.emailVerified ?? false,
             attributes.hostedDomain ?? null,
+            attributes.displayName ?? null,
           ],
         );
         if (tier === "demo") {
@@ -547,6 +550,23 @@ export function createWebRuntime(
           });
         }
       }
+      await client.query(
+        `UPDATE app_user
+            SET display_name=COALESCE($3,display_name),
+                email=CASE WHEN $2 THEN COALESCE($1,email) ELSE email END,
+                email_verified=CASE WHEN $2 THEN true ELSE email_verified END,
+                hosted_domain=COALESCE($4,hosted_domain),
+                last_seen_at=clock_timestamp()
+          WHERE account_id=$5 AND user_id=$6`,
+        [
+          attributes.email ?? null,
+          attributes.emailVerified === true,
+          attributes.displayName ?? null,
+          attributes.hostedDomain ?? null,
+          accountId,
+          userId,
+        ],
+      );
       const issued = issueSession();
       await client.query(
         `INSERT INTO user_session
@@ -723,7 +743,11 @@ export function createWebRuntime(
         pendingSimulator.delete(state);
         const created = await createSubjectSession(
           `simulator-${fixture}-subject-v1:${options.config.deploymentId}`,
-          { email: `${fixture}@example.invalid`, emailVerified: true },
+          {
+            displayName: `${fixture === "standard" ? "Standard" : "Demo"} user`,
+            email: `${fixture}@example.invalid`,
+            emailVerified: true,
+          },
           correlationId,
           fixture,
         );

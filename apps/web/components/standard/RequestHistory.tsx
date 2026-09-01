@@ -9,6 +9,29 @@ type Props = {
   qualifiedLive?: boolean;
 };
 
+function conciseRequestLabel(summary: string): string {
+  const need = summary
+    .replace(/^(?:need|fld-core-ps-01|product_category)\s*:\s*/iu, "")
+    .split(/[.;]/u, 1)[0]
+    ?.replace(
+      /^(?:(?:procurement\s+)?request\s+for|procurement\s+of|we\s+(?:require|need))\s*/iu,
+      "",
+    )
+    .replace(
+      /^(?:(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+)?(?:containers?|units?|pieces?|lots?|shipments?)\s+of\s+/iu,
+      "",
+    )
+    .split(
+      /\s+(?:for\s+(?:delivery|distribution|use|water\s+transfer)|with\s+|which\s+|that\s+|must\s+|should\s+)/iu,
+      1,
+    )[0]
+    ?.trim();
+  if (!need) return "Product request";
+  const words = need.split(/\s+/u);
+  const bounded = words.length > 8 ? `${words.slice(0, 8).join(" ")}…` : need;
+  return bounded.length > 80 ? `${bounded.slice(0, 77).trimEnd()}…` : bounded;
+}
+
 export function RequestHistory({
   onNewRequest,
   onOpenRequest,
@@ -101,51 +124,35 @@ export function RequestHistory({
         </div>
       ) : null}
       {requests && requests.items.length > 0 ? (
-        <div
-          className="standard-table-scroll"
-          tabIndex={0}
-          role="region"
-          aria-label="Request history table"
+        <ul
+          className="standard-history-list"
+          aria-label="Product request history"
         >
-          <table className="standard-table">
-            <caption>
-              Owner-scoped request history without hidden totals
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Request</th>
-                <th scope="col">Canonical summary</th>
-                <th scope="col">Versions</th>
-                <th scope="col">Latest outcome</th>
-                <th scope="col">Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requests.items.map((item) => (
-                <tr key={item.request_id}>
-                  <th scope="row">
-                    <button
-                      className="text-button"
-                      onClick={() => onOpenRequest(item.request_id)}
-                    >
-                      <code>{item.request_id.slice(0, 8)}</code>
-                    </button>
-                  </th>
-                  <td>
-                    <bdi dir="auto">{item.canonical_summary}</bdi>
-                  </td>
-                  <td>{item.version_count}</td>
-                  <td>{item.latest_run_outcome.replaceAll("_", " ")}</td>
-                  <td>
-                    <time dateTime={item.updated_at}>
-                      {new Date(item.updated_at).toLocaleString()}
-                    </time>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          {requests.items.map((item) => (
+            <li key={item.request_id}>
+              <button
+                className="standard-history-card"
+                onClick={() => onOpenRequest(item.request_id)}
+              >
+                <span>
+                  <strong>
+                    <bdi dir="auto">
+                      {conciseRequestLabel(item.canonical_summary)}
+                    </bdi>
+                  </strong>
+                  <small>
+                    {item.latest_run_outcome.replaceAll("_", " ")} ·{" "}
+                    {item.version_count} canonical version
+                    {item.version_count === 1 ? "" : "s"}
+                  </small>
+                </span>
+                <time dateTime={item.updated_at}>
+                  {new Date(item.updated_at).toLocaleString()}
+                </time>
+              </button>
+            </li>
+          ))}
+        </ul>
       ) : null}
       {requests?.next_cursor ? (
         <button
@@ -169,10 +176,16 @@ export function RequestHistory({
                 >
                   <span>
                     <strong>
-                      <bdi dir="auto">{run.phase_label}</bdi>
+                      <bdi dir="auto">
+                        {conciseRequestLabel(
+                          requests?.items.find(
+                            (request) => request.request_id === run.request_id,
+                          )?.canonical_summary ?? "Product request",
+                        )}
+                      </bdi>
                     </strong>
                     <small>
-                      {run.outcome.replaceAll("_", " ")} ·{" "}
+                      {run.phase_label} · {run.outcome.replaceAll("_", " ")} ·{" "}
                       {run.scarcity.replaceAll("_", " ")}
                     </small>
                   </span>

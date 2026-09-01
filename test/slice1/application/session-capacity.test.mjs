@@ -12,7 +12,16 @@ test("session capacity excludes released terminal leases", async () => {
         return { rows: [{ used: 3, next_capacity_at: null }], rowCount: 1 };
       }
       if (sql.includes("FROM account")) {
-        return { rows: [{ display_name: "Demo fixture" }], rowCount: 1 };
+        return {
+          rows: [
+            {
+              account_display_name: "Demo fixture",
+              user_display_name: "Verified Google User",
+              email: "verified.user@example.test",
+            },
+          ],
+          rowCount: 1,
+        };
       }
       if (sql.includes("FROM execution_lease")) {
         assert.match(sql, /released_at IS NULL/u);
@@ -42,5 +51,10 @@ test("session capacity excludes released terminal leases", async () => {
   });
 
   assert.deepEqual(session.execution, { active: 0, capacity: 3 });
+  assert.equal(session.display_name, "Demo fixture");
+  assert.equal(session.user_display_name, "Verified Google User");
+  assert.equal(session.email, "verified.user@example.test");
+  assert.match(queries[1], /CASE WHEN u\.email_verified/u);
+  assert.match(queries[1], /u\.user_id=\$2/u);
   assert.equal(queries.length, 3);
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { conciseCategory } from "../profile/UserProfile";
 import styles from "./AdminResearchOversight.module.css";
 
 type Session = {
@@ -12,7 +13,8 @@ type Item = {
   account_id: string;
   run_id: string;
   request_id: string;
-  requester: { user_id: string; display_name: string };
+  requester: { user_id: string; display_name: string; email?: string | null };
+  product_group?: string;
   request_summary: string;
   tier_at_submission: string;
   research_mode: string;
@@ -25,15 +27,152 @@ type Item = {
   result_available: boolean;
 };
 type Inventory = {
-  schema_version: "admin-research-inventory.v1";
+  schema_version: "admin-research-inventory.v1" | "admin-research-inventory.v2";
   items: Item[];
   page: { limit: number; has_more: boolean; next_cursor: string | null };
   privacy_boundary: {
     source_text_released: false;
-    email_released: false;
+    email_released: boolean;
     complete_result_released: false;
   };
 };
+
+type GenericRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): GenericRecord | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as GenericRecord)
+    : null;
+}
+
+function text(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readable(value: string | null | undefined): string {
+  return value ? value.replaceAll("_", " ") : "Not available";
+}
+
+function resultCandidates(result: unknown): GenericRecord[] {
+  const root = asRecord(result);
+  const document =
+    asRecord(root?.complete_result_document) ??
+    asRecord(root?.complete_result) ??
+    root;
+  const candidates = document?.candidates;
+  return Array.isArray(candidates)
+    ? candidates.flatMap((candidate) => {
+        const record = asRecord(candidate);
+        return record ? [record] : [];
+      })
+    : [];
+}
+
+function CompleteResultSummary({
+  result,
+  runId,
+}: {
+  readonly result: unknown;
+  readonly runId: string;
+}) {
+  const root = asRecord(result);
+  const document =
+    asRecord(root?.complete_result_document) ??
+    asRecord(root?.complete_result) ??
+    root;
+  const candidates = resultCandidates(result);
+  const outcome = text(document?.outcome) ?? text(root?.outcome);
+  const eligible =
+    typeof document?.eligible_count === "number"
+      ? document.eligible_count
+      : candidates.length;
+  const limitations =
+    text(document?.limitations_text) ?? text(root?.limitations_text);
+  const evidenceCount = Array.isArray(document?.evidence)
+    ? document.evidence.length
+    : 0;
+  return (
+    <section
+      className={styles.result}
+      aria-labelledby="complete-result-heading"
+    >
+      <div className={styles.resultHeading}>
+        <div>
+          <p className={styles.eyebrow}>Audited disclosure</p>
+          <h3 id="complete-result-heading">Complete result</h3>
+          <p>Run {runId.slice(0, 8)}</p>
+        </div>
+        <span className={styles.resultOutcome}>{readable(outcome)}</span>
+      </div>
+      <dl className={styles.resultMetrics}>
+        <div>
+          <dt>Eligible candidates</dt>
+          <dd>{eligible}</dd>
+        </div>
+        <div>
+          <dt>Displayed candidates</dt>
+          <dd>{candidates.length}</dd>
+        </div>
+        <div>
+          <dt>Evidence records</dt>
+          <dd>{evidenceCount}</dd>
+        </div>
+      </dl>
+      {candidates.length > 0 ? (
+        <ol className={styles.candidateList}>
+          {candidates.map((candidate, index) => {
+            const name =
+              text(candidate.display_name) ??
+              text(candidate.displayName) ??
+              `Candidate ${index + 1}`;
+            const rationale =
+              text(candidate.rationale_short) ??
+              text(candidate.rationale_extended);
+            const country =
+              text(candidate.country_or_region) ??
+              text(candidate.country) ??
+              text(candidate.country_code);
+            const score =
+              typeof candidate.compatibility_score === "number"
+                ? candidate.compatibility_score
+                : null;
+            return (
+              <li key={`${name}-${index}`}>
+                <div className={styles.candidateHeading}>
+                  <div>
+                    <span>#{index + 1}</span>
+                    <h4>
+                      <bdi dir="auto">{name}</bdi>
+                    </h4>
+                  </div>
+                  {score !== null ? (
+                    <strong>{score} compatibility</strong>
+                  ) : null}
+                </div>
+                {country ? <p>{country}</p> : null}
+                {rationale ? (
+                  <p>
+                    <bdi dir="auto">{rationale}</bdi>
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p>No eligible candidate is recorded in this result.</p>
+      )}
+      {limitations ? (
+        <details className={styles.resultLimitations}>
+          <summary>Limitations and cautions</summary>
+          <p>
+            <bdi dir="auto">{limitations}</bdi>
+          </p>
+        </details>
+      ) : null}
+    </section>
+  );
+}
 
 function authorized(session: Session): boolean {
   return (
@@ -73,12 +212,12 @@ export function AdminResearchOversight() {
     "loading" | "allowed" | "denied" | "error"
   >("loading");
   const [scope, setScope] = useState<"all" | "own">("all");
-  const [subject, setSubject] = useState("");
+  const [identity, setIdentity] = useState("");
   const [state, setState] = useState("");
   const [inventoryPurpose, setInventoryPurpose] = useState("");
   const [applied, setApplied] = useState({
     scope: "all" as "all" | "own",
-    subject: "",
+    identity: "",
     state: "",
     purpose: "",
   });
@@ -123,7 +262,7 @@ export function AdminResearchOversight() {
       scope: applied.scope,
       purpose: applied.purpose,
     });
-    if (applied.subject) query.set("subject_user_id", applied.subject);
+    if (applied.identity) query.set("identity", applied.identity);
     if (applied.state) query.set("state", applied.state);
     if (cursor) query.set("cursor", cursor);
     try {
@@ -154,7 +293,7 @@ export function AdminResearchOversight() {
     setCursor(null);
     setApplied({
       scope,
-      subject: subject.trim(),
+      identity: identity.trim(),
       state,
       purpose: inventoryPurpose.trim(),
     });
@@ -215,15 +354,16 @@ export function AdminResearchOversight() {
     <main className={styles.shell} id="main-content">
       <header className={styles.header}>
         <p className={styles.eyebrow}>MatchBASE · Super-admin</p>
-        <h1>All user research</h1>
+        <h1>All research runs</h1>
         <p className={styles.lede}>
           System-wide request summaries, run status and result availability.
           Every read is authorized from stored grants and purpose-audited.
         </p>
         <p className={styles.boundary}>
-          Source text, email, evidence and complete result documents are
-          excluded from the inventory. Complete-result access requires a written
-          operational purpose and creates a disclosure audit.
+          Source text, evidence and complete result documents are excluded from
+          the inventory. Verified account name and email identify the requester.
+          Complete-result access requires a written operational purpose and
+          creates a disclosure audit.
         </p>
         <p>
           <a href="/">Return to Admin operations</a>
@@ -248,11 +388,12 @@ export function AdminResearchOversight() {
             </select>
           </label>
           <label className={styles.field}>
-            User ID
+            User name or verified email
             <input
-              value={subject}
-              onChange={(event) => setSubject(event.target.value)}
-              placeholder="Optional exact UUID"
+              value={identity}
+              onChange={(event) => setIdentity(event.target.value)}
+              placeholder="Optional name or email"
+              autoComplete="off"
             />
           </label>
           <label className={styles.field}>
@@ -307,75 +448,111 @@ export function AdminResearchOversight() {
           <p>No research records match this view.</p>
         ) : null}
         {!loading && inventory && inventory.items.length > 0 ? (
-          <div
-            className={styles.tableScroll}
-            tabIndex={0}
-            role="region"
-            aria-label="All user research table"
-          >
-            <table className={styles.table}>
-              <caption>Bounded system-wide research inventory</caption>
-              <thead>
-                <tr>
-                  <th scope="col">User</th>
-                  <th scope="col">Request</th>
-                  <th scope="col">Run</th>
-                  <th scope="col">State</th>
-                  <th scope="col">Result</th>
-                  <th scope="col">Updated</th>
-                </tr>
-              </thead>
-              <tbody>
-                {inventory.items.map((item) => (
-                  <tr key={item.run_id}>
-                    <td>
+          <ol className={styles.inventoryList} aria-label="All research runs">
+            {inventory.items.map((item) => (
+              <li key={item.run_id} className={styles.researchCard}>
+                <div className={styles.cardSummary}>
+                  <div className={styles.userIdentity}>
+                    <span className={styles.avatar} aria-hidden="true">
+                      {item.requester.display_name
+                        .trim()
+                        .slice(0, 1)
+                        .toUpperCase() || "U"}
+                    </span>
+                    <div>
                       <strong>
                         <bdi dir="auto">{item.requester.display_name}</bdi>
                       </strong>
-                      <br />
-                      <code>{item.requester.user_id.slice(0, 8)}</code>
-                      <br />
-                      <small>Account {item.account_id.slice(0, 8)}</small>
-                    </td>
-                    <td className={styles.summary}>
-                      <bdi dir="auto">{item.request_summary}</bdi>
-                      <br />
-                      <small>
-                        {item.tier_at_submission} ·{" "}
-                        {item.research_mode.replaceAll("_", " ")}
-                      </small>
-                    </td>
-                    <td>
-                      <code>{item.run_id.slice(0, 8)}</code>
-                    </td>
-                    <td className={styles.status}>
-                      {item.state.replaceAll("_", " ")}
-                    </td>
-                    <td>
-                      {item.result_available ? (
-                        <button
-                          className={styles.button}
-                          type="button"
-                          onClick={() => void openCompleteResult(item.run_id)}
-                        >
-                          Open complete result
-                        </button>
-                      ) : item.outcome === "failed" ? (
-                        "Research failed — no result was generated"
+                      {item.requester.email ? (
+                        <small>
+                          <bdi dir="ltr">{item.requester.email}</bdi>
+                        </small>
                       ) : (
-                        (item.outcome ?? "Not available")
+                        <small>Verified account</small>
                       )}
-                    </td>
-                    <td>
+                    </div>
+                  </div>
+                  <div className={styles.productSummary}>
+                    <span>Product / category</span>
+                    <h3>
+                      <bdi dir="auto">
+                        {item.product_group ||
+                          conciseCategory(item.request_summary)}
+                      </bdi>
+                    </h3>
+                    <small>
+                      Updated{" "}
                       <time dateTime={item.updated_at}>
                         {new Date(item.updated_at).toLocaleString()}
                       </time>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </small>
+                  </div>
+                  <div className={styles.cardStatus}>
+                    <span className={styles.status}>
+                      {readable(item.outcome ?? item.state)}
+                    </span>
+                    <small>{readable(item.tier_at_submission)} access</small>
+                  </div>
+                </div>
+                <div className={styles.cardActions}>
+                  {item.result_available ? (
+                    <button
+                      className={styles.button}
+                      type="button"
+                      onClick={() => void openCompleteResult(item.run_id)}
+                      aria-pressed={
+                        selectedRun === item.run_id && result !== null
+                      }
+                    >
+                      Open complete result
+                    </button>
+                  ) : item.outcome === "failed" ? (
+                    <span className={styles.failure}>
+                      Research failed — no result was generated
+                    </span>
+                  ) : (
+                    <span>{readable(item.outcome)}</span>
+                  )}
+                  <details className={styles.details}>
+                    <summary>View request details</summary>
+                    <div className={styles.detailGrid}>
+                      <div className={styles.fullSummary}>
+                        <span>Request summary</span>
+                        <p>
+                          <bdi dir="auto">{item.request_summary}</bdi>
+                        </p>
+                      </div>
+                      <dl>
+                        <div>
+                          <dt>Run</dt>
+                          <dd>
+                            <code>{item.run_id.slice(0, 8)}</code>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>User</dt>
+                          <dd>
+                            <code>{item.requester.user_id.slice(0, 8)}</code>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Mode</dt>
+                          <dd>{readable(item.research_mode)}</dd>
+                        </div>
+                        <div>
+                          <dt>Candidates</dt>
+                          <dd>
+                            {item.eligible_count ?? 0} eligible /{" "}
+                            {item.considered_count ?? 0} considered
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                  </details>
+                </div>
+              </li>
+            ))}
+          </ol>
         ) : null}
         <nav
           className={styles.pagination}
@@ -423,10 +600,7 @@ export function AdminResearchOversight() {
           />
         </label>
         {selectedRun && result ? (
-          <div className={styles.result}>
-            <h3>Audited complete result · {selectedRun.slice(0, 8)}</h3>
-            <pre>{JSON.stringify(result, null, 2)}</pre>
-          </div>
+          <CompleteResultSummary result={result} runId={selectedRun} />
         ) : null}
       </section>
     </main>

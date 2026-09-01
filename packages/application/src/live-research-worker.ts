@@ -35,12 +35,21 @@ export class QualifiedLiveResearchWorkerDispatcher {
       throw new Error("Live worker requires an enabled closed route policy.");
   }
 
-  async dispatchNext(
-    signal: AbortSignal,
-    limit = 3,
-  ): Promise<readonly string[]> {
-    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 3)
-      throw new Error("Live worker dispatch limit is invalid.");
+  private policyIsCurrent(at: Date): boolean {
+    const instant = at.toISOString();
+    const qualifiedRoutes = this.policy.routes.filter(
+      (route) => route.enabled && route.liveQualified,
+    );
+    return (
+      this.policy.evaluatedAt <= instant &&
+      qualifiedRoutes.length === 2 &&
+      qualifiedRoutes.every(
+        (route) => route.dataHandling.evidenceExpiresAt >= instant,
+      )
+    );
+  }
+
+  private async qualifiedPolicyId(): Promise<string | null> {
     const policy = await this.options.pool.query<{
       research_route_policy_id: string;
     }>(
@@ -50,7 +59,29 @@ export class QualifiedLiveResearchWorkerDispatcher {
         ORDER BY created_at DESC LIMIT 1`,
       [this.policy.policyVersion, this.policy.environment],
     );
-    const policyId = policy.rows[0]?.research_route_policy_id;
+    return policy.rows[0]?.research_route_policy_id ?? null;
+  }
+
+  async readiness(): Promise<boolean> {
+    try {
+      return (
+        this.policyIsCurrent(this.options.now?.() ?? new Date()) &&
+        (await this.qualifiedPolicyId()) !== null
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  async dispatchNext(
+    signal: AbortSignal,
+    limit = 3,
+  ): Promise<readonly string[]> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 3)
+      throw new Error("Live worker dispatch limit is invalid.");
+    if (!this.policyIsCurrent(this.options.now?.() ?? new Date()))
+      return Object.freeze([]);
+    const policyId = await this.qualifiedPolicyId();
     if (!policyId) return Object.freeze([]);
     const queued = await this.options.pool.query<{
       run_id: string;

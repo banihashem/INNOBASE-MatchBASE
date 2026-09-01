@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import { isAbsolute, join, resolve, win32 } from "node:path";
 import { buildArtifactSnapshot } from "../packages/artifact-indexer/dist/src/indexer.js";
@@ -42,6 +43,7 @@ import {
   assertSafeSnapshotOutput,
   validateGeneratorConfig,
 } from "./lib/snapshot-path-policy.mjs";
+import { sourceTransitionState } from "./lib/source-transition-policy.mjs";
 
 const [asOfArgument] = process.argv.slice(2);
 if (process.argv.slice(2).length > 1)
@@ -53,6 +55,71 @@ const effectiveAsOf = asOfArgument ?? new Date().toISOString();
 if (Number.isNaN(Date.parse(effectiveAsOf)))
   throw new Error("as-of override must be ISO-8601");
 config.asOf = new Date(effectiveAsOf).toISOString();
+function gitBytes(args) {
+  const result = spawnSync("git", args, {
+    cwd: process.cwd(),
+    encoding: null,
+    windowsHide: true,
+  });
+  if (result.status !== 0)
+    throw new Error(`Current worktree identity failed: git ${args[0]}.`);
+  return result.stdout;
+}
+
+async function deriveWorktreeCandidate() {
+  const before = gitBytes(["status", "--porcelain=v2", "-z"]);
+  const baseCommit = gitBytes(["rev-parse", "HEAD"]).toString("utf8").trim();
+  const originMain = gitBytes(["rev-parse", "refs/remotes/origin/main"])
+    .toString("utf8")
+    .trim();
+  const diff = gitBytes(["diff", "--binary", "HEAD", "--"]);
+  const untracked = gitBytes([
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+    "-z",
+  ])
+    .toString("utf8")
+    .split("\0")
+    .filter(Boolean)
+    .sort();
+  const identity = createHash("sha256")
+    .update("MATCHBASE_WORKTREE_CANDIDATE_V1\0")
+    .update(baseCommit)
+    .update("\0")
+    .update(diff);
+  for (const path of untracked) {
+    if (isAbsolute(path) || path.split(/[\\/]/u).includes(".."))
+      throw new Error("Current worktree identity contains an unsafe path.");
+    identity.update("\0UNTRACKED\0").update(path).update("\0");
+    identity.update(await readFile(resolve(path)));
+  }
+  const after = gitBytes(["status", "--porcelain=v2", "-z"]);
+  if (!before.equals(after))
+    throw new Error("Current worktree changed while deriving its identity.");
+  return {
+    kind: sourceTransitionState({
+      dirty: before.length > 0,
+      head: baseCommit,
+      originMain,
+    }),
+    baseCommit,
+    originMain,
+    dirty: before.length > 0,
+    published: baseCommit === originMain,
+    identityMethod: "HEAD_DIFF_AND_UNTRACKED_BYTES_SHA256",
+    sha256: identity.digest("hex").toUpperCase(),
+    statusSha256: createHash("sha256")
+      .update(before)
+      .digest("hex")
+      .toUpperCase(),
+    trackedDiffBytes: diff.length,
+    untrackedFiles: untracked.length,
+    derivedAt: config.asOf,
+  };
+}
+
+const worktreeCandidate = await deriveWorktreeCandidate();
 const artifactSnapshot = await buildArtifactSnapshot(config);
 const slice3EvidencePath = resolve("evidence/slice3/local-validation.json");
 const slice3EvidenceBytes = await readFile(slice3EvidencePath);
@@ -295,6 +362,11 @@ const semantic = buildSemanticViews({
   ),
   agents: agentsDocument,
   artifactIndex: artifactIndexDocument,
+  currentState: await indexedDocument(
+    "implementation-governance",
+    "current-state-projection.v1.json",
+  ),
+  worktreeCandidate,
   externalState: await indexedDocument(
     "implementation-governance",
     "external-state.json",

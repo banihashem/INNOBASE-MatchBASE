@@ -9,6 +9,7 @@ const productionEnvironment = {
   MATCHBASE_ENVIRONMENT: "production",
   MATCHBASE_DEPLOYMENT_ENVIRONMENT: "staging",
   MATCHBASE_DEPLOYMENT_ID: `sha256:${"a".repeat(64)}`,
+  MATCHBASE_IMAGE_DIGEST: `sha256:${"a".repeat(64)}`,
   MATCHBASE_ORIGIN: "https://matchbase-staging.innobase.app",
   GOOGLE_CLIENT_ID: "client-id-fixture",
   GOOGLE_CLIENT_SECRET: "client-secret-fixture",

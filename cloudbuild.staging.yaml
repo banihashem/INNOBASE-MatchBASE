@@ -1,0 +1,40 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --pull
+      - --target
+      - web-runtime
+      - --build-arg
+      - DEPLOYMENT_ENVIRONMENT=staging
+      - --build-arg
+      - ROUTE_POLICY_PATH=config/slice3/research-route-policy.staging.v1.json
+      - --build-arg
+      - ROUTE_POLICY_SHA256=${_ROUTE_POLICY_SHA256}
+      - --tag
+      - me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-web:${_CANDIDATE_COMMIT}
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --pull
+      - --target
+      - worker-runtime
+      - --build-arg
+      - DEPLOYMENT_ENVIRONMENT=staging
+      - --build-arg
+      - ROUTE_POLICY_PATH=config/slice3/research-route-policy.staging.v1.json
+      - --build-arg
+      - ROUTE_POLICY_SHA256=${_ROUTE_POLICY_SHA256}
+      - --tag
+      - me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-worker-${_ROUTE_POLICY_ID}:${_CANDIDATE_COMMIT}
+      - .
+images:
+  - me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-web:${_CANDIDATE_COMMIT}
+  - me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-worker-${_ROUTE_POLICY_ID}:${_CANDIDATE_COMMIT}
+options:
+  logging: CLOUD_LOGGING_ONLY
+substitutions:
+  _CANDIDATE_COMMIT: unset
+  _ROUTE_POLICY_SHA256: unset
+  _ROUTE_POLICY_ID: unset

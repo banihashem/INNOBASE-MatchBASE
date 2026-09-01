@@ -32,6 +32,13 @@ export interface UserProfileRunV1 {
   readonly updated_at: string;
   readonly result_available: boolean;
   readonly result_projection: ProductTier | null;
+  readonly artifact_download?: {
+    readonly run_id: string;
+    readonly artifact_version_id: string;
+    readonly version: number;
+    readonly grant_id: string;
+    readonly href: string;
+  } | null;
   readonly links: {
     readonly request: string;
     readonly run: string;
@@ -151,23 +158,28 @@ export function parseUserProfileHistoryV1(
   });
   const runs = root.runs.map((entry, index) => {
     const item = record(entry, `Profile run ${index}`);
-    exactKeys(
-      item,
-      [
-        "run_id",
-        "request_id",
-        "canonical_request_version",
-        "submitted_tier",
-        "state",
-        "outcome",
-        "queued_at",
-        "updated_at",
-        "result_available",
-        "result_projection",
-        "links",
-      ],
-      `Profile run ${index}`,
-    );
+    const supportedRunKeys = [
+      "run_id",
+      "request_id",
+      "canonical_request_version",
+      "submitted_tier",
+      "state",
+      "outcome",
+      "queued_at",
+      "updated_at",
+      "result_available",
+      "result_projection",
+      "artifact_download",
+      "links",
+    ];
+    const actualRunKeys = Object.keys(item);
+    if (
+      actualRunKeys.some((key) => !supportedRunKeys.includes(key)) ||
+      supportedRunKeys
+        .filter((key) => key !== "artifact_download")
+        .some((key) => !actualRunKeys.includes(key))
+    )
+      throw new Error(`Profile run ${index} contains an unsupported field.`);
     const submittedTier = productTier(
       item.submitted_tier,
       `Profile run ${index} submitted tier`,
@@ -185,6 +197,22 @@ export function parseUserProfileHistoryV1(
       throw new Error(`Profile run ${index} result availability is invalid.`);
     if (!item.result_available && projection !== null)
       throw new Error(`Profile run ${index} result availability drifted.`);
+    const artifact =
+      item.artifact_download == null
+        ? null
+        : record(
+            item.artifact_download,
+            `Profile run ${index} artifact download`,
+          );
+    if (artifact !== null) {
+      exactKeys(
+        artifact,
+        ["run_id", "artifact_version_id", "version", "grant_id", "href"],
+        `Profile run ${index} artifact download`,
+      );
+      if (artifact.run_id !== item.run_id || projection === null)
+        throw new Error(`Profile run ${index} artifact binding drifted.`);
+    }
     const outcome = nonEmpty(item.outcome, `Profile run ${index} outcome`);
     if (
       ![
@@ -221,6 +249,31 @@ export function parseUserProfileHistoryV1(
       updated_at: iso(item.updated_at, `Profile run ${index} updated at`),
       result_available: item.result_available,
       result_projection: projection,
+      artifact_download:
+        artifact === null
+          ? null
+          : {
+              run_id: nonEmpty(
+                artifact.run_id,
+                `Profile run ${index} artifact run id`,
+              ),
+              artifact_version_id: nonEmpty(
+                artifact.artifact_version_id,
+                `Profile run ${index} artifact version id`,
+              ),
+              version: natural(
+                artifact.version,
+                `Profile run ${index} artifact version`,
+              ),
+              grant_id: nonEmpty(
+                artifact.grant_id,
+                `Profile run ${index} artifact grant id`,
+              ),
+              href: nonEmpty(
+                artifact.href,
+                `Profile run ${index} artifact href`,
+              ),
+            },
       links: {
         request: nonEmpty(links.request, `Profile run ${index} request link`),
         run: nonEmpty(links.run, `Profile run ${index} run link`),

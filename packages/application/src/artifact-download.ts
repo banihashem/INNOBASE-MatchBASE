@@ -24,7 +24,7 @@ export class ArtifactDownloadApplication {
   async download(
     context: RequestContext,
     grantId: string,
-    token: string,
+    token: string | null,
   ): Promise<RetrievedArtifact> {
     let attempt: RetrievalAttempt;
     try {

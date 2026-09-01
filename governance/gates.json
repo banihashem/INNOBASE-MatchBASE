@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-29T09:18:40Z",
+  "updatedAt": "2026-09-01T18:00:00+04:00",
+  "currentProjectionRef": "governance/current-state-projection.v1.json",
   "gates": [
     {
       "id": "AG0",
@@ -285,7 +286,62 @@
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P4_GATE_B_PREFLIGHT_EVIDENCE_2026-08-29.md",
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P4_RELEASE_CANDIDATE_FREEZE_2026-08-29.md"
       ],
-      "summary": "All 26 PF-8.1 through PF-12.8 controls remain fail-closed until a named target is tested, raw evidence is attached, OAuth is In production and the Security Owner signs the exact result set.",
+      "summary": "HISTORICAL_PREDECESSOR: this fail-closed P4 preflight record preceded the authorized P5 Staging deployment. It remains historical evidence and does not authorize production.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "P5-GATE-STAGING",
+      "name": "P5 Staging operational evidence",
+      "status": "ACTIVE",
+      "owner": "Role 3 and Staging operators",
+      "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md"
+      ],
+      "summary": "The deployed predecessor records a qualified-live result and migration head 0011. Current remediation is undeployed, its source-transition state is runtime-derived, Staging is degraded and production remains untouched.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "P5-GATE-UX",
+      "name": "P5 verified identity and research-history UX",
+      "status": "ACTIVE",
+      "owner": "Product and UX",
+      "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md"
+      ],
+      "summary": "Revision matchbase-staging-web-00034-cn5 passed its recorded acceptance but is the deployed predecessor; current UX remediation is undeployed and its commit/publication state is runtime-derived.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "P5-GATE-CONTROL-PLANE",
+      "name": "Current-state governance convergence",
+      "status": "PASS",
+      "owner": "Documentation and traceability steward",
+      "evidence": ["governance/current-state-projection.v1.json"],
+      "summary": "Current-state overlay and dashboard convergence are implemented; independent Role 2 repository/remediation audit passed with zero Critical or Major defects on the exact stable bytes. External cloud state and live acceptance remain pending.",
+      "traceabilityIds": ["TRACE-P5-CURRENT-STATE"]
+    },
+    {
+      "id": "ROADMAP-P5-HARDENING",
+      "name": "Roadmap P5 evaluation and hardening",
+      "status": "BLOCKED",
+      "owner": "Role 3 and discipline owners",
+      "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\02_Product_Research_and_Planning\\05_Cloud_Repository_Delivery\\DELIVERY_ROADMAP.md",
+        "governance/current-state-projection.v1.json"
+      ],
+      "summary": "T-1 through T-11 blocking CI, timed rollback, PITR restore, spend-ceiling abort and runbook acknowledgements remain unevidenced.",
+      "traceabilityIds": []
+    },
+    {
+      "id": "ROADMAP-P6-PILOT",
+      "name": "Roadmap P6 real-data pilot admission",
+      "status": "BLOCKED",
+      "owner": "Product owner and Role 2",
+      "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\02_Product_Research_and_Planning\\05_Cloud_Repository_Delivery\\DELIVERY_ROADMAP.md",
+        "governance/current-state-projection.v1.json"
+      ],
+      "summary": "Pilot admission remains blocked until every Roadmap P5 exit criterion and P6 precondition passes.",
       "traceabilityIds": []
     }
   ]

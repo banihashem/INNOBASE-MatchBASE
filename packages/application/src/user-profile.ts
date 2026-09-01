@@ -7,6 +7,7 @@ import {
 import {
   adminResearchProductGroup,
   appendAuditEvent,
+  ensureSessionArtifactGrantForRun,
   inTransaction,
   type ConnectionPool,
 } from "@matchbase/data";
@@ -200,6 +201,62 @@ export class UserProfileApplication {
       const currentTier: ProductTier = adminProductAccess
         ? "consultant"
         : (context.tier as ProductTier);
+      const projectedRuns = [];
+      for (const row of runRows) {
+        const terminal = ["complete", "no_responsible_match"].includes(
+          row.state,
+        );
+        const resultExists = terminal && row.result_document_available;
+        const entitled =
+          PRODUCT_TIER_RANK[currentTier] >=
+          PRODUCT_TIER_RANK[row.tier_at_submission];
+        const visible = resultExists && entitled;
+        const grant =
+          visible && row.tier_at_submission === "consultant"
+            ? await ensureSessionArtifactGrantForRun(client, {
+                runId: row.run_id,
+                accountId: context.accountId,
+                subjectUserId: context.userId,
+                subjectTier: context.tier === "admin" ? "admin" : "consultant",
+              })
+            : null;
+        projectedRuns.push({
+          run_id: row.run_id,
+          request_id: row.request_id,
+          canonical_request_version: row.version,
+          submitted_tier: row.tier_at_submission,
+          state: row.state,
+          outcome: outcome(row.state),
+          queued_at: row.queued_at.toISOString(),
+          updated_at: (
+            row.completed_at ??
+            row.cancelled_at ??
+            row.started_at ??
+            row.queued_at
+          ).toISOString(),
+          result_available: resultExists,
+          result_projection: visible ? row.tier_at_submission : null,
+          artifact_download:
+            grant === null
+              ? null
+              : {
+                  run_id: grant.runId,
+                  artifact_version_id: grant.artifactVersionId,
+                  version: grant.version,
+                  grant_id: grant.grantId,
+                  href: `/api/v1/artifacts/${grant.grantId}/download`,
+                },
+          links: {
+            request: `/api/v1/requests/${row.request_id}`,
+            run: `/api/v1/runs/${row.run_id}`,
+            result: visible
+              ? adminProductAccess && row.tier_at_submission === "consultant"
+                ? `/api/v1/consultant/runs/${row.run_id}/result`
+                : `/api/v1/runs/${row.run_id}/result`
+              : null,
+          },
+        });
+      }
       const body = parseUserProfileHistoryV2({
         schema_version: "user-profile-history.v2",
         current_tier: currentTier,
@@ -213,42 +270,7 @@ export class UserProfileApplication {
           updated_at: row.canonical_created_at.toISOString(),
           run_count: row.run_count,
         })),
-        runs: runRows.map((row) => {
-          const terminal = ["complete", "no_responsible_match"].includes(
-            row.state,
-          );
-          const resultExists = terminal && row.result_document_available;
-          const entitled =
-            PRODUCT_TIER_RANK[currentTier] >=
-            PRODUCT_TIER_RANK[row.tier_at_submission];
-          const visible = resultExists && entitled;
-          return {
-            run_id: row.run_id,
-            request_id: row.request_id,
-            canonical_request_version: row.version,
-            submitted_tier: row.tier_at_submission,
-            state: row.state,
-            outcome: outcome(row.state),
-            queued_at: row.queued_at.toISOString(),
-            updated_at: (
-              row.completed_at ??
-              row.cancelled_at ??
-              row.started_at ??
-              row.queued_at
-            ).toISOString(),
-            result_available: resultExists,
-            result_projection: visible ? row.tier_at_submission : null,
-            links: {
-              request: `/api/v1/requests/${row.request_id}`,
-              run: `/api/v1/runs/${row.run_id}`,
-              result: visible
-                ? adminProductAccess && row.tier_at_submission === "consultant"
-                  ? `/api/v1/consultant/runs/${row.run_id}/result`
-                  : `/api/v1/runs/${row.run_id}/result`
-                : null,
-            },
-          };
-        }),
+        runs: projectedRuns,
         page: {
           limit: PROFILE_PAGE_LIMIT,
           has_more: hasMore,

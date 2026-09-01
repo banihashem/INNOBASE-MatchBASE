@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-15T07:00:00+04:00",
+  "updatedAt": "2026-09-01T18:00:00+04:00",
+  "currentProjectionRef": "governance/current-state-projection.v1.json",
   "slices": [
     {
       "id": "SLICE-0",
@@ -91,6 +92,58 @@
         "approved OpenRouter credential and paid credit path",
         "explicit direct Gemini billing authorization",
         "two-route bounded live qualification"
+      ]
+    },
+    {
+      "id": "P5-STAGING",
+      "name": "Qualified-live Staging product, profiles and Admin oversight",
+      "status": "IN_PROGRESS",
+      "scope": [
+        "qualified-live research cycle",
+        "verified Google identity",
+        "owner profile and concise research history",
+        "Admin Consultant-depth product execution",
+        "purpose-audited cross-user run oversight and result disclosure",
+        "migrations through 0011",
+        "revision 00034 browser acceptance"
+      ],
+      "exclusions": [
+        "production deployment",
+        "production traffic",
+        "real-data pilot admission",
+        "Roadmap P5 hardening completion"
+      ],
+      "terminal": "STAGING_DEGRADED_REMEDIATION_PENDING_DEPLOY",
+      "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md",
+        "governance/current-state-projection.v1.json"
+      ]
+    },
+    {
+      "id": "ROADMAP-P5",
+      "name": "Evaluation and Hardening",
+      "status": "IN_PROGRESS",
+      "scope": [
+        "T-1 through T-11 enforced release blockers",
+        "security and privacy hardening",
+        "SLIs, SLOs, dashboards and alerts",
+        "per-run spend abort",
+        "timed rollback and PITR rehearsal",
+        "runbook ownership acknowledgements",
+        "same-byte integration critic and Role 2 audit"
+      ],
+      "exclusions": [
+        "real-data pilot before every exit criterion passes",
+        "production launch"
+      ],
+      "terminal": "P5_HARDENING_PASS",
+      "blockedBy": [
+        "demonstrated blocking CI evidence",
+        "timed rollback evidence",
+        "timed PITR restore evidence",
+        "spend-ceiling abort evidence",
+        "runbook owner acknowledgements"
       ]
     }
   ]

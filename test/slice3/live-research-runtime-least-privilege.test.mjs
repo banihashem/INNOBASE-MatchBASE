@@ -13,6 +13,10 @@ const workerSource = await readFile(
   new URL("../../packages/application/src/combined-worker.ts", import.meta.url),
   "utf8",
 );
+const workerRuntimeSource = await readFile(
+  new URL("../../packages/application/src/worker-runtime.ts", import.meta.url),
+  "utf8",
+);
 const environmentRuntimeSource = await readFile(
   new URL(
     "../../packages/application/src/live-research-environment-runtime.ts",
@@ -41,7 +45,9 @@ test("live reservation preserves immutable configuration under a read-only runti
 });
 
 test("combined worker emits only a closed failure category", () => {
-  assert.match(workerSource, /matchbase\.worker\.cycle_failed/u);
+  assert.match(workerSource, /workerCycleFailureEvent/u);
+  assert.match(workerRuntimeSource, /matchbase\.worker\.cycle_failed/u);
+  assert.match(workerRuntimeSource, /severity: "ERROR"/u);
   assert.match(workerSource, /database_permission_denied/u);
   assert.match(workerSource, /database_serialization_retry/u);
   assert.doesNotMatch(workerSource, /errorMessage/u);

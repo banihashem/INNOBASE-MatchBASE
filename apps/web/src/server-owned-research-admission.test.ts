@@ -51,10 +51,13 @@ describe("server-owned live research admission", () => {
     "fails closed when worker credentials are not verified (%s)",
     (verified) => {
       const admission = loadServerOwnedResearchAdmission(config(verified));
-      expect(admission.decide("demo")).toMatchObject({
-        id: "synthetic_reference",
-        liveQualified: false,
-      });
+      expect(admission.isReady()).toBe(false);
+      expect(() => admission.decide("demo")).toThrowError(
+        expect.objectContaining({
+          status: 503,
+          code: "MB-503-LIVE-ADMISSION",
+        }),
+      );
     },
   );
 
@@ -63,11 +66,10 @@ describe("server-owned live research admission", () => {
       ...config(true),
       deploymentEnvironment: "production",
     };
-    expect(
-      loadServerOwnedResearchAdmission(mismatched).decide("demo"),
-    ).toMatchObject({
-      id: "synthetic_reference",
-      liveQualified: false,
-    });
+    const admission = loadServerOwnedResearchAdmission(mismatched);
+    expect(admission.isReady()).toBe(false);
+    expect(() => admission.decide("demo")).toThrowError(
+      expect.objectContaining({ code: "MB-503-LIVE-ADMISSION" }),
+    );
   });
 });

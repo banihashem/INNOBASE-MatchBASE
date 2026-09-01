@@ -13,12 +13,32 @@ param(
   [Parameter(Mandatory)][string[]]$WorkerSecretVersionRef,
   [Parameter(Mandatory)][ValidateRange(1, 100)][int]$WebMaxInstances,
   [Parameter(Mandatory)][ValidateRange(1, 100)][int]$WorkerInstances,
+  [ValidateSet("staging", "staging-eu", "staging-eu-canary", "production")][string]$DeploymentTarget = "",
+  [switch]$StagingEuropeWest2,
   [switch]$Apply,
   [string]$ConfirmProjectId = ""
 )
 
 . (Join-Path $PSScriptRoot "Common.ps1")
-$target = Get-MatchBaseTarget -Environment $Environment
+$selectedTarget = if ($DeploymentTarget) { $DeploymentTarget } else { $Environment }
+if ($StagingEuropeWest2) {
+  if ($Environment -cne "staging") { throw "-StagingEuropeWest2 is closed to Staging." }
+  if ($DeploymentTarget -and $DeploymentTarget -cne "staging-eu") { throw "-StagingEuropeWest2 conflicts with -DeploymentTarget." }
+  $selectedTarget = "staging-eu"
+}
+$target = Get-MatchBaseTarget -Environment $selectedTarget
+if ($target.Environment -cne $Environment) { throw "Deployment target does not belong to the selected environment." }
+if ($selectedTarget -cin @("staging-eu", "staging-eu-canary")) {
+  if ($Environment -cne "staging") { throw "EU Staging deployment target is closed to Staging." }
+  $regional = Get-MatchBaseStagingRegionMigration
+  if (
+    $target.ArtifactBucket -cne $regional.TargetArtifactBucket -or
+    $target.Region -cne $regional.TargetRegion -or
+    $target.CloudSqlInstanceConnectionName -cne "$($regional.ProjectId):$($regional.TargetRegion):$($regional.TargetCloudSqlInstance)"
+  ) { throw "EU Staging deployment target drifted from the governed migration map." }
+  if ($selectedTarget -ceq "staging-eu-canary" -and $WebServiceName -cne $regional.CanaryWebService) { throw "EU Canary deployment must use the closed canary Cloud Run service identity." }
+  if ($selectedTarget -ceq "staging-eu" -and $WebServiceName -ceq $regional.CanaryWebService) { throw "Main EU Staging deployment cannot use the isolated canary service identity." }
+}
 $ProjectId = $target.ProjectId
 $Region = $target.Region
 $Hostname = $target.Hostname
@@ -65,6 +85,14 @@ foreach ($required in $webRequiredSecrets) {
 foreach ($required in $workerRequiredSecrets) {
   if (-not ($WorkerSecretVersionRef | Where-Object { $_ -cmatch "^$required=" })) { throw "Worker secret '$required' is required." }
 }
+$secretNameMap = $target.SecretNameMap
+if ($null -ne $secretNameMap) {
+  foreach ($parts in @($webSecretParts + $workerSecretParts)) {
+    if (-not $secretNameMap.ContainsKey($parts.EnvironmentName) -or $parts.SecretName -cne $secretNameMap[$parts.EnvironmentName]) {
+      throw "EU Staging secret '$($parts.EnvironmentName)' is outside the closed target secret-name map."
+    }
+  }
+}
 $webGeminiSecretParts = @($webSecretParts | Where-Object EnvironmentName -CEQ "MATCHBASE_GEMINI_API_KEY")
 if ($webGeminiSecretParts.Count -ne 1 -or $webGeminiSecretParts[0].SecretName -cne $WebGeminiSecretName) {
   throw "Web MATCHBASE_GEMINI_API_KEY must bind the approved '$WebGeminiSecretName' secret."
@@ -76,6 +104,7 @@ $origin = "https://$Hostname"
 $webEnv = @(
   "MATCHBASE_ENVIRONMENT=production",
   "MATCHBASE_DEPLOYMENT_ENVIRONMENT=$Environment",
+  "MATCHBASE_DEPLOYMENT_TARGET=$selectedTarget",
   "MATCHBASE_ORIGIN=$origin",
   "MATCHBASE_DEPLOYMENT_ID=$($WebImageDigest.Split('@')[1])",
   "MATCHBASE_IMAGE_DIGEST=$($WebImageDigest.Split('@')[1])",
@@ -92,6 +121,7 @@ $webEnv = @(
 $workerEnv = @(
   "MATCHBASE_ENVIRONMENT=production",
   "MATCHBASE_DEPLOYMENT_ENVIRONMENT=$Environment",
+  "MATCHBASE_DEPLOYMENT_TARGET=$selectedTarget",
   "MATCHBASE_DEPLOYMENT_ID=$($WorkerImageDigest.Split('@')[1])",
   "MATCHBASE_IMAGE_DIGEST=$($WorkerImageDigest.Split('@')[1])",
   "MATCHBASE_ROUTE_POLICY_SHA256=$routePolicySha256",
@@ -106,6 +136,8 @@ $workerEnv = @(
   "MATCHBASE_GEMINI_CONSERVATIVE_REQUEST_USD=1",
   "MATCHBASE_OPENROUTER_CONSERVATIVE_REQUEST_USD=1",
   "MATCHBASE_WORKER_HEALTH_PORT=3011"
+  "MATCHBASE_WORKER_DB_CONNECTION_TIMEOUT_MS=10000"
+  "MATCHBASE_WORKER_DB_PROBE_TIMEOUT_MS=5000"
 ) -join ","
 $webSecrets = $WebSecretVersionRef -join ","
 $workerSecrets = $WorkerSecretVersionRef -join ","
@@ -114,6 +146,7 @@ $webCommand = @(
   "run", "deploy", $WebServiceName,
   "--project=$ProjectId", "--region=$Region", "--platform=managed",
   "--image=$WebImageDigest", "--service-account=$webEmail",
+  "--clear-command", "--clear-args",
   "--port=8080", "--ingress=internal-and-cloud-load-balancing",
   "--no-invoker-iam-check", "--min-instances=1", "--max-instances=$WebMaxInstances",
   "--concurrency=8", "--cpu=1", "--memory=1Gi", "--timeout=60s",
@@ -183,6 +216,7 @@ function Assert-DeployedIdentity {
     $CloudSqlInstanceConnectionName,
     '"name":"MATCHBASE_ENVIRONMENT","value":"production"',
     '"name":"MATCHBASE_DEPLOYMENT_ENVIRONMENT","value":"' + $Environment + '"',
+    '"name":"MATCHBASE_DEPLOYMENT_TARGET","value":"' + $selectedTarget + '"',
     '"name":"MATCHBASE_DEPLOYMENT_ID","value":"' + $Digest + '"',
     '"name":"MATCHBASE_IMAGE_DIGEST","value":"' + $Digest + '"',
     '"name":"MATCHBASE_ROUTE_POLICY_SHA256","value":"' + $routePolicySha256 + '"',
@@ -195,6 +229,9 @@ $webStateNormalized = (($webState | ConvertFrom-Json) | ConvertTo-Json -Depth 10
 $workerStateNormalized = (($workerState | ConvertFrom-Json) | ConvertTo-Json -Depth 100 -Compress)
 Assert-DeployedIdentity -State $webStateNormalized -Image $WebImageDigest -ServiceAccount $webEmail -Digest $WebImageDigest.Split('@')[1] -RuntimeName "Web"
 Assert-DeployedIdentity -State $workerStateNormalized -Image $WorkerImageDigest -ServiceAccount $workerEmail -Digest $WorkerImageDigest.Split('@')[1] -RuntimeName "Worker"
+if ($webStateNormalized -cmatch '"command":' -or $webStateNormalized -cmatch '"args":') {
+  throw "Web deployed identity bypasses the governed image entrypoint or command."
+}
 if ($webStateNormalized -cnotmatch [regex]::Escape('"name":"MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED","value":"true"')) {
   throw "Web deployed identity is missing the verified worker-credential marker."
 }

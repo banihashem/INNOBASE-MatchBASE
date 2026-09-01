@@ -156,7 +156,24 @@ export function validateSlice2DashboardClosure(
     ["EXT-DEPLOYMENT", ["ACTIVE", "BLOCKED", "UNKNOWN"]],
   ]) {
     const record = one(views.deployments.records, id, id);
-    if (!allowed.includes(record.status))
+    if (record.status === "HISTORICAL") {
+      const currentId =
+        id === "EXT-GCP"
+          ? "EXT-CURRENT-GCP-STAGING"
+          : id === "EXT-CLOUDFLARE"
+            ? "EXT-CURRENT-CLOUDFLARE-STAGING"
+            : "EXT-CURRENT-DEPLOYMENT";
+      const current = one(
+        views.deployments.records,
+        currentId,
+        `${id} current-state successor`,
+      );
+      if (
+        !["ACTIVE", "BLOCKED"].includes(current.status) ||
+        (id === "EXT-DEPLOYMENT" && current.status !== "BLOCKED")
+      )
+        throw new Error(`${id} current-state successor is not fail-closed.`);
+    } else if (!allowed.includes(record.status))
       throw new Error(`${id} contains a false live-readiness claim.`);
   }
 

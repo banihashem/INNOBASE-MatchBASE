@@ -87,3 +87,31 @@ test("adds one closed server-owned product group without changing v1", () => {
     }),
   );
 });
+
+test("accepts an exactly run-bound released artifact descriptor and rejects drift", () => {
+  const artifact = {
+    run_id: "run-1",
+    artifact_version_id: "artifact-version-1",
+    version: 2,
+    grant_id: "grant-1",
+    href: "/api/v1/artifacts/grant-1/download",
+  };
+  assert.equal(
+    parseUserProfileHistoryV1({
+      ...history,
+      runs: [{ ...history.runs[0], artifact_download: artifact }],
+    }).runs[0]?.artifact_download?.run_id,
+    "run-1",
+  );
+  assert.throws(() =>
+    parseUserProfileHistoryV1({
+      ...history,
+      runs: [
+        {
+          ...history.runs[0],
+          artifact_download: { ...artifact, run_id: "other-run" },
+        },
+      ],
+    }),
+  );
+});

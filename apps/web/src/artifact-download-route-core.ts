@@ -40,8 +40,8 @@ export async function handleArtifactDownloadRoute(
   const grantId = match[1] ?? "";
   if (
     !UUID_PATTERN.test(grantId) ||
-    request.artifactToken === null ||
-    !TOKEN_PATTERN.test(request.artifactToken)
+    (request.artifactToken !== null &&
+      !TOKEN_PATTERN.test(request.artifactToken))
   ) {
     return neutralGrantFault();
   }

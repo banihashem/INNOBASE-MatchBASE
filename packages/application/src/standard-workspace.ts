@@ -47,6 +47,7 @@ import {
   appendAuditEvent,
   bindConsultantProjectionPolicyAtResultProduction,
   DEFAULT_CONSULTANT_PROJECTION_CONFIG,
+  getMigrationStatus,
   inTransaction,
   releaseExecutionLease,
   type ConsultantProjectionConfigRelease,
@@ -597,11 +598,10 @@ export class StandardWorkspaceApplication {
 
   async readiness(): Promise<boolean> {
     try {
-      const result = await this.pool.query<{ ready: boolean }>(
-        `SELECT count(*) = 2 AS ready FROM matchbase_schema_migration
-          WHERE migration_id IN ('0001_slice_1_foundation','0002_slice_2_standard_workspace')`,
+      return (
+        this.researchAdmission.isReady() &&
+        (await getMigrationStatus(this.pool)).ready
       );
-      return result.rows[0]?.ready === true;
     } catch {
       return false;
     }
@@ -1917,6 +1917,7 @@ export class StandardWorkspaceApplication {
       context,
       "run.submit",
     );
+    const researchMode = this.researchAdmission.decide(productTier);
     const target = await this.pool.query<{
       canonical_request_version_id: string;
       match_readiness: string;
@@ -1937,7 +1938,6 @@ export class StandardWorkspaceApplication {
         "The request is not ready and confirmed.",
       );
     const configuration = await this.configuration();
-    const researchMode = this.researchAdmission.decide(productTier);
     const admitted = await admitRunWithinQuota(this.pool, {
       accountId: context.accountId,
       userId: context.userId,

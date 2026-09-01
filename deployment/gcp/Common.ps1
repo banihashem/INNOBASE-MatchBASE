@@ -2,33 +2,144 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $script:RequiredRegion = "me-central1"
+$script:StagingRegionMigration = [pscustomobject]@{
+  ProjectId = "innobase-matchbase-stg"
+  Hostname = "matchbase-staging.innobase.app"
+  CanaryHostname = "matchbase-staging-eu-canary.innobase.app"
+  SourceRegion = "me-central1"
+  TargetRegion = "europe-west2"
+  SourceArtifactRepository = "matchbase"
+  TargetArtifactRepository = "matchbase"
+  SourceArtifactBucket = "innobase-matchbase-stg-artifacts"
+  TargetArtifactBucket = "innobase-matchbase-stg-eu-artifacts"
+  SourceCloudSqlInstance = "matchbase-stg-pg18"
+  TargetCloudSqlInstance = "matchbase-stg-pg18-ew2"
+  SourceWebService = "matchbase-staging-web"
+  TargetWebService = "matchbase-staging-web"
+  CanaryWebService = "matchbase-staging-web-canary-ew2"
+  SourceWorkerPool = "matchbase-staging-worker"
+  TargetWorkerPool = "matchbase-staging-worker"
+  SourceNetworkEndpointGroup = "matchbase-staging-neg"
+  TargetNetworkEndpointGroup = "matchbase-staging-neg-ew2"
+  CanaryNetworkEndpointGroup = "matchbase-staging-canary-neg-ew2"
+  SourceBackendService = "matchbase-staging-backend"
+  TargetBackendService = "matchbase-staging-backend-ew2"
+  CanaryBackendService = "matchbase-staging-canary-backend-ew2"
+  MaintenanceService = "matchbase-staging-maintenance-ew2"
+  MaintenanceNetworkEndpointGroup = "matchbase-staging-maintenance-neg-ew2"
+  MaintenanceBackendService = "matchbase-staging-maintenance-backend-ew2"
+  UrlMap = "matchbase-staging-map"
+  SecurityPolicy = "matchbase-staging-edge"
+  AddressName = "matchbase-staging-ip"
+  CertificateName = "matchbase-staging-cert"
+  CanaryCertificateName = "matchbase-staging-edge-cm-cert"
+  MainDnsAuthorization = "matchbase-staging-main-dns-auth"
+  CanaryDnsAuthorization = "matchbase-staging-canary-dns-auth"
+  CertificateMap = "matchbase-staging-edge-map"
+  MainCertificateMapEntry = "matchbase-staging-main-entry"
+  CanaryCertificateMapEntry = "matchbase-staging-canary-entry"
+  HttpsProxyName = "matchbase-staging-https-proxy"
+  TargetLogBucket = "matchbase-staging-runtime-ew2"
+  TargetLogSink = "matchbase-staging-runtime-ew2"
+}
+$script:EuSecretNameMap = @{
+  DATABASE_URL = "matchbase-db-runtime-url-ew2"
+  MATCHBASE_DIGEST_KEY = "matchbase-digest-key-ew2"
+  GOOGLE_CLIENT_ID = "matchbase-google-client-id-ew2"
+  GOOGLE_CLIENT_SECRET = "matchbase-google-client-secret-ew2"
+  MATCHBASE_ORIGIN_ADMISSION_KEY = "matchbase-origin-admission-key-ew2"
+  MATCHBASE_GEMINI_API_KEY = "matchbase-gemini-api-key-ew2"
+  MATCHBASE_OPENROUTER_API_KEY = "matchbase-openrouter-api-key-ew2"
+}
 $script:Targets = @{
   staging = [pscustomobject]@{
     Environment = "staging"
+    DeploymentTarget = "staging"
     ProjectId = "innobase-matchbase-stg"
     Hostname = "matchbase-staging.innobase.app"
     ArtifactBucket = "innobase-matchbase-stg-artifacts"
     CloudSqlInstanceConnectionName = "innobase-matchbase-stg:me-central1:matchbase-stg-pg18"
     WebGeminiSecretName = "matchbase-gemini-api-key"
     Region = $script:RequiredRegion
+    SecretNameMap = $null
+  }
+  "staging-eu" = [pscustomobject]@{
+    Environment = "staging"
+    DeploymentTarget = "staging-eu"
+    ProjectId = "innobase-matchbase-stg"
+    Hostname = "matchbase-staging.innobase.app"
+    ArtifactBucket = "innobase-matchbase-stg-eu-artifacts"
+    CloudSqlInstanceConnectionName = "innobase-matchbase-stg:europe-west2:matchbase-stg-pg18-ew2"
+    WebGeminiSecretName = "matchbase-gemini-api-key-ew2"
+    Region = "europe-west2"
+    SecretNameMap = $script:EuSecretNameMap
+  }
+  "staging-eu-canary" = [pscustomobject]@{
+    Environment = "staging"
+    DeploymentTarget = "staging-eu-canary"
+    ProjectId = "innobase-matchbase-stg"
+    Hostname = "matchbase-staging-eu-canary.innobase.app"
+    ArtifactBucket = "innobase-matchbase-stg-eu-artifacts"
+    CloudSqlInstanceConnectionName = "innobase-matchbase-stg:europe-west2:matchbase-stg-pg18-ew2"
+    WebGeminiSecretName = "matchbase-gemini-api-key-ew2"
+    Region = "europe-west2"
+    SecretNameMap = $script:EuSecretNameMap
   }
   production = [pscustomobject]@{
     Environment = "production"
+    DeploymentTarget = "production"
     ProjectId = "innobase-matchbase"
     Hostname = "matchbase.innobase.app"
     ArtifactBucket = "innobase-matchbase-artifacts"
     CloudSqlInstanceConnectionName = $null
     WebGeminiSecretName = $null
     Region = $script:RequiredRegion
+    SecretNameMap = $null
   }
 }
 
 function Get-MatchBaseTarget {
-  param([Parameter(Mandatory)][ValidateSet("staging", "production")][string]$Environment)
-  if ($Environment -cnotin @("staging", "production") -or -not $script:Targets.ContainsKey($Environment)) {
-    throw "Environment is outside the closed MatchBASE target map."
+  param([Parameter(Mandatory)][ValidateSet("staging", "staging-eu", "staging-eu-canary", "production")][string]$Environment)
+  if ($Environment -cnotin @("staging", "staging-eu", "staging-eu-canary", "production") -or -not $script:Targets.ContainsKey($Environment)) {
+    throw "Deployment target is outside the closed MatchBASE target map."
   }
   return $script:Targets[$Environment]
+}
+
+function Get-MatchBaseStagingRegionMigration {
+  return $script:StagingRegionMigration
+}
+
+function Assert-ExactDomainSet {
+  param([Parameter(Mandatory)][string[]]$Actual,[Parameter(Mandatory)][string[]]$Expected,[Parameter(Mandatory)][string]$Description)
+  $actualJoined = (@($Actual) | Sort-Object) -join ","
+  $expectedJoined = (@($Expected) | Sort-Object) -join ","
+  if ($actualJoined -cne $expectedJoined) { throw "$Description domain set drifted." }
+}
+
+function Wait-CertificateManagerActive {
+  param(
+    [Parameter(Mandatory)][scriptblock]$Describe,
+    [ValidateRange(1,3600)][int]$TimeoutSeconds = 900,
+    [ValidateRange(1,60)][int]$IntervalSeconds = 10,
+    [scriptblock]$Sleep = { param($Seconds) Start-Sleep -Seconds $Seconds },
+    [scriptblock]$Clock = { [DateTimeOffset]::UtcNow }
+  )
+  $deadline = (& $Clock).AddSeconds($TimeoutSeconds)
+  do {
+    $certificate = & $Describe
+    $state = [string]$certificate.managed.state
+    $now = & $Clock
+    Write-Output ("Certificate Manager state={0} observed_at_utc={1}" -f $state,$now.ToString("o"))
+    if ($state -ceq "ACTIVE") { return $certificate }
+    if ($state -ceq "FAILED") {
+      $issue = [string]$certificate.managed.provisioningIssue.reason
+      throw "Certificate Manager issuance FAILED. reason=$issue"
+    }
+    if ($state -cne "PROVISIONING") { throw "Certificate Manager returned unsupported state '$state'." }
+    if ($now -ge $deadline) { throw "Certificate Manager issuance timed out before ACTIVE; HTTPS proxy was not changed." }
+    & $Sleep $IntervalSeconds
+  } while ($true)
 }
 
 function Assert-ApplyConfirmation {
@@ -208,7 +319,7 @@ function Assert-SecretVersionReference {
     [Parameter(Mandatory)][string]$Reference,
     [Parameter(Mandatory)][string]$ProjectId
   )
-  if ($ProjectId -notin @($script:Targets.staging.ProjectId, $script:Targets.production.ProjectId)) { throw "Secret project is outside the approved target map." }
+  if ($ProjectId -notin @($script:Targets.Values | ForEach-Object { $_.ProjectId } | Sort-Object -Unique)) { throw "Secret project is outside the approved target map." }
   if ($Reference -cnotmatch "^[A-Z][A-Z0-9_]{1,63}=[a-zA-Z0-9_-]{1,255}:[1-9][0-9]*$") {
     throw "Secret references must use ENV=SECRET_NAME:NUMERIC_VERSION for the approved target project."
   }

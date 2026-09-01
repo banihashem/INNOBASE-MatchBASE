@@ -123,6 +123,21 @@ test("readiness starts closed, opens only after a successful bounded probe, and 
   assert.equal(await pending, true);
   assert.deepEqual(readiness.snapshot(), { status: "ready", reason: null });
 
+  readiness.markUnready("schema_not_ready");
+  assert.equal(
+    await probeDatabaseReadiness(
+      { query: async () => ({ rows: [{ readiness_probe: 1 }] }) },
+      readiness,
+      500,
+      { markReadyOnSuccess: false },
+    ),
+    true,
+  );
+  assert.deepEqual(readiness.snapshot(), {
+    status: "not_ready",
+    reason: "schema_not_ready",
+  });
+
   assert.equal(
     await probeDatabaseReadiness(
       { query: async () => Promise.reject(new Error("refused")) },

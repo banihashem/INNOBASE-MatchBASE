@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "updatedAt": "2026-09-01T18:00:00+04:00",
+  "currentProjectionRef": "governance/current-state-projection.v1.json",
   "items": [
     {
       "id": "S0-001",
@@ -147,7 +149,27 @@
         "evidence/p4/zero-defect-audit.json",
         "C:\\INNOBASE\\MatchBASE\\02_Product_Research_and_Planning\\05_Cloud_Repository_Delivery\\DELIVERY_ROADMAP.md"
       ],
-      "blocker": "BLOCKED_EXTERNAL: isolated-local closure passed; production release remains prohibited until a target is named, Gate B is executed and signed, OAuth is In production, target object storage is bound, and legal, accessibility and SME authorities approve their exact records."
+      "blocker": "HISTORICAL_PREDECESSOR: this P4 isolated-local freeze preceded the governed P5 Staging deployment. Production release remains prohibited and Roadmap P5 hardening remains open."
+    },
+    {
+      "id": "P5-CURRENT-STATE-CONVERGENCE",
+      "slice": "P5-STAGING",
+      "title": "Reconcile governed current state and dashboard",
+      "status": "PASS",
+      "owner": "Role 3 documentation and traceability steward",
+      "priority": "MUST",
+      "dependencies": ["P4-RC-FREEZE"],
+      "requirementIds": ["REQ-P5-CURRENT-STATE"],
+      "riskIds": ["RISK-P5-CONTROL-DRIFT"],
+      "acceptanceTestIds": ["TEST-P5-CONTROL-PLANE"],
+      "gateIds": ["P5-GATE-CONTROL-PLANE"],
+      "deploymentId": "DEPLOY-P5-STAGING",
+      "traceabilityIds": ["TRACE-P5-CURRENT-STATE"],
+      "evidence": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md",
+        "governance/current-state-projection.v1.json"
+      ]
     }
   ]
 }

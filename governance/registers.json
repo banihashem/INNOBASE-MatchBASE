@@ -42,6 +42,13 @@
       "status": "ACTIVE",
       "summary": "All S2-AC-001 through S2-AC-034 for the owner-scoped, deterministic, local-synthetic Standard workspace.",
       "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "REQ-P5-CURRENT-STATE",
+      "title": "Additive current-state control-plane convergence",
+      "status": "ACTIVE",
+      "summary": "Expose runtime-derived current source transition, deployed predecessor revisions, migration head, operational capabilities and remaining phase blockers without rewriting historical evidence.",
+      "traceabilityIds": ["TRACE-P5-CURRENT-STATE"]
     }
   ],
   "tests": [
@@ -486,6 +493,15 @@
       "status": "PASS",
       "evidenceRefs": ["evidence/slice2/local-validation.json"],
       "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "TEST-P5-CONTROL-PLANE",
+      "title": "Current-state governance and dashboard validation",
+      "status": "PASS",
+      "summary": "Governance, snapshot generation, snapshot validation and exact source-reference validation passed after current-state convergence; the independent Role 2 repository/remediation audit also passed, while external operations remain separate and pending.",
+      "command": "pnpm run governance:check && pnpm run snapshot:generate && pnpm run snapshot:check",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"],
+      "traceabilityIds": ["TRACE-P5-CURRENT-STATE"]
     }
   ],
   "risks": [
@@ -523,6 +539,13 @@
       "status": "OPEN",
       "summary": "Live research, OAuth, infrastructure, deployment, PDF, Consultant, Admin, rescore and reresearch remain outside Slice 2 and must stay fail-closed.",
       "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "RISK-P5-CONTROL-DRIFT",
+      "severity": "major",
+      "status": "OPEN",
+      "summary": "Historical machine registers can overstate obsolete blockers or hide current Staging facts unless the additive current-state overlay remains validated and independently audited.",
+      "traceabilityIds": ["TRACE-P5-CURRENT-STATE"]
     }
   ],
   "defects": [
@@ -579,6 +602,19 @@
       "artifact": "apps/web/.next/BUILD_ID",
       "rollback": "Revert only the bounded Slice 2 successor commit and apply the 0002 down migration on a verified disposable PostgreSQL database; no external state exists to roll back.",
       "traceabilityIds": ["TRACE-S2-001"]
+    },
+    {
+      "id": "DEPLOY-P5-STAGING",
+      "target": "innobase-matchbase-stg / me-central1",
+      "status": "ACTIVE",
+      "reason": "Deployed predecessor web revision matchbase-staging-web-00034-cn5 serves 100 percent traffic and migrations are applied through 0011. Current remediation is undeployed, its source-transition state is runtime-derived, Staging is degraded and production remains untouched.",
+      "artifact": "sha256:3bf6be141f027a9242b8406e62aa5c1704431afacbf60e619f9fa085922f9cad",
+      "rollback": "Use the recorded prior Cloud Run revision and the verified 0011 down migration only in Staging; Roadmap P5 still requires a timed revision rollback and non-production PITR rehearsal before pilot admission.",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md",
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md"
+      ],
+      "traceabilityIds": ["TRACE-P5-CURRENT-STATE"]
     }
   ],
   "costs": [
@@ -596,6 +632,11 @@
       "scope": "Slice 2",
       "status": "ACTIVE",
       "reason": "Every synthetic capability attempt records one fully attributed explicit-zero event; deterministic internal scoring creates no provider attempt and live/deployed cost remains UNKNOWN."
+    },
+    {
+      "scope": "P5 Staging",
+      "status": "ACTIVE",
+      "reason": "Staging provider use and quota are operational; Roadmap P5 still requires demonstrated per-run spend-ceiling abort and measured pilot cost before P6 admission."
     }
   ],
   "loops": [
@@ -619,6 +660,14 @@
       "critical": 0,
       "major": 0,
       "minor": 0
+    },
+    {
+      "id": "P5-CURRENT-STATE-LOOP",
+      "status": "PASS",
+      "critical": 0,
+      "major": 0,
+      "minor": 0,
+      "summary": "Independent Role 2 repository/remediation audit passed with zero Critical or Major defects on the exact stable bytes; external cloud execution and live acceptance remain pending."
     }
   ],
   "evidence": [
@@ -680,6 +729,31 @@
       "status": "ACTIVE",
       "summary": "Targeted technical gates and the correction re-audit pass; the exact full runner, final same-byte discipline audits, hosted successor and Role 2 remain pending.",
       "evidenceRefs": ["evidence/slice2/local-validation.json"]
+    },
+    {
+      "id": "EVIDENCE-P5-STAGING",
+      "title": "P5 Staging product, profile and Admin execution evidence",
+      "status": "PASS",
+      "summary": "Qualified-live result, profile, Admin oversight, migration 0011 and exact deployed revisions are recorded; production remained untouched.",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md"
+      ]
+    },
+    {
+      "id": "EVIDENCE-P5-UX",
+      "title": "P5 identity and research-history UX correction evidence",
+      "status": "PASS",
+      "summary": "Verified identity, concise owner history, structured Admin results and 42-browser-scenario acceptance are recorded on revision 00034.",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md"
+      ]
+    },
+    {
+      "id": "EVIDENCE-P5-CURRENT-STATE",
+      "title": "Additive current-state projection",
+      "status": "PASS",
+      "summary": "Exact current source, Staging identity, capabilities, the independent repository/remediation PASS and remaining external hardening blockers are projected without changing historical records.",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"]
     }
   ]
 }

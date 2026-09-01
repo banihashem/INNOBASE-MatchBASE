@@ -23,6 +23,7 @@ import {
   appendAuditEvent,
   bindConsultantProjectionPolicyAtResultProduction,
   DEFAULT_CONSULTANT_PROJECTION_CONFIG,
+  getMigrationStatus,
   inTransaction,
   releaseExecutionLease,
   ROLLING_QUOTA_LIMITS,
@@ -134,13 +135,10 @@ export class MatchBaseApplication {
 
   async readiness(): Promise<boolean> {
     try {
-      const result = await this.pool.query<{ ready: boolean }>(
-        `SELECT EXISTS (
-           SELECT 1 FROM matchbase_schema_migration
-            WHERE migration_id = '0001_slice_1_foundation'
-         ) AS ready`,
+      return (
+        this.researchAdmission.isReady() &&
+        (await getMigrationStatus(this.pool)).ready
       );
-      return result.rows[0]?.ready === true;
     } catch {
       return false;
     }
@@ -606,6 +604,7 @@ export class MatchBaseApplication {
     input: { requestId: string; version: number },
   ): Promise<Record<string, unknown>> {
     assertSlice1EndpointAuthorized(context, "POST /api/v1/runs");
+    const researchMode = this.researchAdmission.decide(context.tier);
     const configuration = await this.ensureConfigurationVersions();
     const version = await this.pool.query<{
       canonical_request_version_id: string;
@@ -631,7 +630,6 @@ export class MatchBaseApplication {
         "The canonical request is not ready.",
       );
     }
-    const researchMode = this.researchAdmission.decide(context.tier);
     const result = await admitRunWithinQuota(this.pool, {
       accountId: context.accountId,
       userId: context.userId,

@@ -55,6 +55,7 @@ describe("production identity configuration", () => {
         MATCHBASE_ENVIRONMENT: "production",
         MATCHBASE_DEPLOYMENT_ENVIRONMENT: "staging",
         MATCHBASE_DEPLOYMENT_ID: `sha256:${"a".repeat(64)}`,
+        MATCHBASE_IMAGE_DIGEST: `sha256:${"a".repeat(64)}`,
         MATCHBASE_ORIGIN: "https://matchbase-staging.innobase.app",
         GOOGLE_CLIENT_ID: "client-id-fixture",
         GOOGLE_CLIENT_SECRET: "client-secret-fixture",
@@ -94,6 +95,7 @@ describe("production identity configuration", () => {
         MATCHBASE_ENVIRONMENT: "production",
         MATCHBASE_DEPLOYMENT_ENVIRONMENT: "staging",
         MATCHBASE_DEPLOYMENT_ID: `sha256:${"a".repeat(64)}`,
+        MATCHBASE_IMAGE_DIGEST: `sha256:${"a".repeat(64)}`,
         MATCHBASE_ORIGIN: "https://matchbase-staging.innobase.app",
         GOOGLE_CLIENT_ID: "client-id-fixture",
         GOOGLE_CLIENT_SECRET: "client-secret-fixture",
@@ -110,6 +112,7 @@ describe("production identity configuration", () => {
         MATCHBASE_ENVIRONMENT: "production",
         MATCHBASE_DEPLOYMENT_ENVIRONMENT: "staging",
         MATCHBASE_DEPLOYMENT_ID: `sha256:${"a".repeat(64)}`,
+        MATCHBASE_IMAGE_DIGEST: `sha256:${"a".repeat(64)}`,
         MATCHBASE_ORIGIN: "https://matchbase-staging.innobase.app",
         GOOGLE_CLIENT_ID: "client-id-fixture",
         GOOGLE_CLIENT_SECRET: "client-secret-fixture",
@@ -130,6 +133,7 @@ describe("production identity configuration", () => {
       MATCHBASE_ENVIRONMENT: "production",
       MATCHBASE_DEPLOYMENT_ENVIRONMENT: "staging",
       MATCHBASE_DEPLOYMENT_ID: `sha256:${"a".repeat(64)}`,
+      MATCHBASE_IMAGE_DIGEST: `sha256:${"a".repeat(64)}`,
       MATCHBASE_ORIGIN: "https://matchbase-staging.innobase.app",
       GOOGLE_CLIENT_ID: "client-id-fixture",
       GOOGLE_CLIENT_SECRET: "client-secret-fixture",
@@ -170,9 +174,75 @@ describe("production identity configuration", () => {
     expect(() =>
       loadWebConfig({
         ...production,
+        MATCHBASE_IMAGE_DIGEST: undefined,
+      }),
+    ).toThrow(/image identity must be an immutable SHA-256 digest/iu);
+    expect(() =>
+      loadWebConfig({
+        ...production,
+        MATCHBASE_IMAGE_DIGEST: `sha256:${"b".repeat(64)}`,
+      }),
+    ).toThrow(/must match the deployed image digest/iu);
+    expect(() =>
+      loadWebConfig({
+        ...production,
         MATCHBASE_ARTIFACT_GCS_BUCKET: "innobase-matchbase-artifacts",
       }),
     ).toThrow(/closed target map/iu);
+  });
+
+  it("admits the EU Staging bucket only through the explicit closed deployment target", () => {
+    const staging = {
+      ...base,
+      MATCHBASE_ENVIRONMENT: "production",
+      MATCHBASE_DEPLOYMENT_ENVIRONMENT: "staging",
+      MATCHBASE_DEPLOYMENT_ID: `sha256:${"a".repeat(64)}`,
+      MATCHBASE_IMAGE_DIGEST: `sha256:${"a".repeat(64)}`,
+      MATCHBASE_ORIGIN: "https://matchbase-staging.innobase.app",
+      GOOGLE_CLIENT_ID: "client-id-fixture",
+      GOOGLE_CLIENT_SECRET: "client-secret-fixture",
+      GOOGLE_REDIRECT_URI:
+        "https://matchbase-staging.innobase.app/auth/google/callback",
+      MATCHBASE_ARTIFACT_GCS_BUCKET: "innobase-matchbase-stg-artifacts",
+      MATCHBASE_ORIGIN_ADMISSION_KEY:
+        "synthetic-origin-admission-key-material-32-bytes",
+      MATCHBASE_GEMINI_API_KEY: "gemini-canonicalization-test-key",
+    };
+    expect(
+      loadWebConfig({
+        ...staging,
+        MATCHBASE_DEPLOYMENT_TARGET: "staging-eu",
+        MATCHBASE_ARTIFACT_GCS_BUCKET: "innobase-matchbase-stg-eu-artifacts",
+      }),
+    ).toMatchObject({
+      deploymentEnvironment: "staging",
+      deploymentTarget: "staging-eu",
+      artifactGcsBucket: "innobase-matchbase-stg-eu-artifacts",
+    });
+    expect(() =>
+      loadWebConfig({
+        ...staging,
+        MATCHBASE_ARTIFACT_GCS_BUCKET: "innobase-matchbase-stg-eu-artifacts",
+      }),
+    ).toThrow(/closed target map/iu);
+    expect(() =>
+      loadWebConfig({
+        ...staging,
+        MATCHBASE_DEPLOYMENT_TARGET: "staging-eu",
+      }),
+    ).toThrow(/closed target map/iu);
+    expect(() =>
+      loadWebConfig({
+        ...staging,
+        MATCHBASE_DEPLOYMENT_TARGET: "production",
+      }),
+    ).toThrow(/closed target map/iu);
+    expect(() =>
+      loadWebConfig({
+        ...staging,
+        MATCHBASE_DEPLOYMENT_TARGET: "eu-west-unknown",
+      }),
+    ).toThrow(/deployment target is invalid/iu);
   });
 });
 

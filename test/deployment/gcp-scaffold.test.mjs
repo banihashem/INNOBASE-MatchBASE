@@ -149,10 +149,13 @@ test("foundation and runtime plans preserve least privilege and fail-closed ingr
   );
   assert.match(deploy, /"MATCHBASE_ENVIRONMENT=production"/u);
   assert.match(deploy, /"MATCHBASE_DEPLOYMENT_ENVIRONMENT=\$Environment"/u);
+  assert.match(deploy, /"MATCHBASE_DEPLOYMENT_TARGET=\$selectedTarget"/u);
   assert.match(deploy, /"--min-instances=1"/u);
   assert.match(deploy, /"--max-instances=\$WebMaxInstances"/u);
   assert.doesNotMatch(deploy, /"--min=1"|"--max=\$WebMaxInstances"/u);
   assert.match(deploy, /MATCHBASE_IMAGE_DIGEST/u);
+  assert.match(deploy, /--clear-command/u);
+  assert.match(deploy, /--clear-args/u);
   assert.match(deploy, /MATCHBASE_ROUTE_POLICY_SHA256/u);
   assert.match(deploy, /MATCHBASE_ARTIFACT_MAXIMUM_BYTES=8388608/u);
   assert.match(deploy, /--concurrency=8/u);
@@ -221,6 +224,7 @@ test("runtime entrypoint rejects non-production image and route-policy identity 
   const entrypoint = await read("../../deployment/gcp/runtime-entrypoint.sh");
   assert.match(entrypoint, /MATCHBASE_ENVIRONMENT:-.*production/u);
   assert.match(entrypoint, /MATCHBASE_DEPLOYMENT_ENVIRONMENT/u);
+  assert.match(entrypoint, /MATCHBASE_DEPLOYMENT_TARGET/u);
   assert.match(entrypoint, /MATCHBASE_IMAGE_DIGEST/u);
   assert.match(entrypoint, /MATCHBASE_ROUTE_POLICY_SHA256/u);
   assert.match(entrypoint, /web\|worker/u);

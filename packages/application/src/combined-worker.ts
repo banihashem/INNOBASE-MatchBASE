@@ -15,6 +15,11 @@ import { MatchBaseApplication } from "./service.js";
 import { StandardWorkspaceApplication } from "./standard-workspace.js";
 import type { PersistedTier, RequestContext } from "./types.js";
 import { probeDatabaseReadiness, WorkerReadiness } from "./worker-readiness.js";
+import {
+  workerCycleFailureEvent,
+  workerDatabaseRuntimePolicy,
+  workerSchemaIsReady,
+} from "./worker-runtime.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const digestKeyText = process.env.MATCHBASE_DIGEST_KEY;
@@ -24,15 +29,14 @@ const syntheticEnabled =
   ["local", "test"].includes(environment ?? "");
 if (!databaseUrl || !digestKeyText || Buffer.byteLength(digestKeyText) < 32)
   throw new Error("Combined worker database or digest-key handle is invalid.");
-const probeMs = Number(
-  process.env.MATCHBASE_WORKER_DB_PROBE_TIMEOUT_MS ?? "1000",
-);
-if (!Number.isSafeInteger(probeMs) || probeMs < 100 || probeMs > 5_000)
-  throw new Error("Combined worker database probe timeout is invalid.");
+const databaseRuntimePolicy = workerDatabaseRuntimePolicy(process.env);
 const pool = createPool({
   connectionString: databaseUrl,
   max: 6,
-  connectionTimeoutMillis: probeMs,
+  connectionTimeoutMillis: databaseRuntimePolicy.connectionTimeoutMilliseconds,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10_000,
+  idleTimeoutMillis: 30_000,
 });
 const digestKey = Buffer.from(digestKeyText, "utf8");
 const consultantProjectionConfig = consultantProjectionConfigFromEnvironment(
@@ -136,7 +140,24 @@ function stagingWorkerFailureDetail(error: unknown): string | undefined {
 async function work(): Promise<void> {
   if (stopping) return;
   try {
-    if (!(await probeDatabaseReadiness(pool, readiness, probeMs))) return;
+    if (
+      !(await probeDatabaseReadiness(
+        pool,
+        readiness,
+        databaseRuntimePolicy.probeTimeoutMilliseconds,
+        { markReadyOnSuccess: false },
+      ))
+    )
+      return;
+    if (!(await workerSchemaIsReady(pool))) {
+      readiness.markUnready("schema_not_ready");
+      return;
+    }
+    if (liveDispatcher && !(await liveDispatcher.readiness())) {
+      readiness.markUnready("live_research_admission_failed");
+      return;
+    }
+    readiness.markReady();
     await recoverExpiredExecutionLeases(
       pool,
       randomUUID(),
@@ -196,11 +217,12 @@ async function work(): Promise<void> {
   } catch (error) {
     const detail = stagingWorkerFailureDetail(error);
     console.error(
-      JSON.stringify({
-        event: "matchbase.worker.cycle_failed",
-        category: workerCycleFailureCategory(error),
-        ...(detail ? { detail } : {}),
-      }),
+      JSON.stringify(
+        workerCycleFailureEvent({
+          category: workerCycleFailureCategory(error),
+          ...(detail ? { detail } : {}),
+        }),
+      ),
     );
     readiness.markUnready("database_operation_failed");
   } finally {

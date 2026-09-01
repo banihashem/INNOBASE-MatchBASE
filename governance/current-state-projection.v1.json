@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "projectionId": "MATCHBASE-CURRENT-STATE-2026-09-01-P5",
+  "observedAt": "2026-09-01T18:00:00+04:00",
+  "precedence": "ADDITIVE_CURRENT_STATE_OVERLAY",
+  "historicalRecordsRemainImmutable": true,
+  "repository": {
+    "name": "banihashem/INNOBASE-MatchBASE",
+    "branch": "main",
+    "deployedPredecessor": {
+      "sourceCommit": "1224b4c485a9f3533a15e1d50b606f7aa53c2d23",
+      "status": "DEPLOYED_PREDECESSOR"
+    },
+    "sourceTransition": {
+      "runtimeDerived": true,
+      "identityMethod": "DERIVED_BY_SNAPSHOT_GENERATOR_FROM_HEAD_DIFF_AND_UNTRACKED_BYTES",
+      "allowedStates": [
+        "WORKTREE_UNCOMMITTED",
+        "COMMITTED_UNPUBLISHED",
+        "PUBLISHED_SOURCE"
+      ],
+      "status": "DERIVE_AT_SNAPSHOT_GENERATION"
+    }
+  },
+  "staging": {
+    "status": "DEGRADED_REMEDIATION_PENDING_DEPLOY",
+    "project": "innobase-matchbase-stg",
+    "region": "me-central1",
+    "publicOrigin": "https://matchbase-staging.innobase.app",
+    "webRevision": "matchbase-staging-web-00034-cn5",
+    "webImage": "sha256:3bf6be141f027a9242b8406e62aa5c1704431afacbf60e619f9fa085922f9cad",
+    "webTrafficPercent": 100,
+    "workerRevision": "matchbase-staging-worker-00045-k2b",
+    "workerImage": "sha256:ca6d1627309ce333dcbde354b17d4588135fa2993988bf24a4de39ca264c191d",
+    "routePolicy": "slice3-routes.2026-09-01.staging-qualified-v3",
+    "routePolicySha256": "B752D2D42A63AAAD11F3B89F67BAD64861CE767F633BEE8190549DF23A6F4155",
+    "schemaHead": "0011_admin_system_scope_and_run_tier_immutability",
+    "migrationRange": "0001-0011",
+    "productionStatus": "UNTOUCHED",
+    "deploymentRelationship": "DEPLOYED_PREDECESSOR_REVISIONS_DO_NOT_INCLUDE_RUNTIME_DERIVED_CURRENT_SOURCE_REMEDIATION",
+    "processingResidency": "NONCONFORMING_STAGING_ME_CENTRAL1_VS_OWNER_EUROPE_REQUIREMENT"
+  },
+  "capabilities": [
+    {
+      "id": "CAP-P5-QUALIFIED-LIVE",
+      "title": "Qualified-live research cycle",
+      "status": "ACTIVE",
+      "summary": "A predecessor Staging run reached a complete candidate result; current remediation remains undeployed and its commit/publication state is runtime-derived."
+    },
+    {
+      "id": "CAP-P5-OWNER-PROFILE",
+      "title": "Owner profile and research history",
+      "status": "ACTIVE",
+      "summary": "The deployed predecessor exposes identity and history; current remediation remains undeployed and its source-transition state is runtime-derived."
+    },
+    {
+      "id": "CAP-P5-SUPER-ADMIN",
+      "title": "Super-admin product and audited oversight",
+      "status": "ACTIVE",
+      "summary": "The deployed predecessor exposes Admin execution and audited oversight; current remediation remains pending deployment."
+    },
+    {
+      "id": "CAP-P5-UX-CORRECTION",
+      "title": "Identity and research-history UX correction",
+      "status": "ACTIVE",
+      "summary": "Revision 00034 passed its recorded UX acceptance, but it is a deployed predecessor to the runtime-derived current remediation source."
+    }
+  ],
+  "currentGates": [
+    {
+      "id": "P5-GATE-STAGING",
+      "name": "P5 Staging operational evidence",
+      "status": "ACTIVE",
+      "summary": "Deployed predecessor revisions and migration head are recorded; current remediation is not deployed and Staging is degraded."
+    },
+    {
+      "id": "P5-GATE-UX",
+      "name": "P5 identity, profile and oversight UX",
+      "status": "ACTIVE",
+      "summary": "Revision 00034 acceptance is predecessor evidence; current UX remediation remains undeployed and its commit/publication state is runtime-derived."
+    },
+    {
+      "id": "P5-GATE-CONTROL-PLANE",
+      "name": "Current-state governance convergence",
+      "status": "PASS",
+      "summary": "Current-state projection exists and the independent Role 2 repository/remediation audit passed with zero Critical or Major defects on the exact stable bytes; external cloud execution remains pending."
+    },
+    {
+      "id": "ROADMAP-P5-HARDENING",
+      "name": "Roadmap P5 evaluation and hardening",
+      "status": "BLOCKED",
+      "summary": "T-1 through T-11 release-blocking demonstration, timed rollback, PITR restore, spend-ceiling abort and runbook acknowledgements remain unevidenced."
+    },
+    {
+      "id": "ROADMAP-P6-PILOT",
+      "name": "Roadmap P6 pilot admission",
+      "status": "BLOCKED",
+      "summary": "Pilot is not admitted until every Roadmap P5 exit criterion and every P6 precondition passes."
+    }
+  ],
+  "currentBacklog": [
+    {
+      "id": "P5-CURRENT-STATE-CONVERGENCE",
+      "title": "Reconcile governed current state and dashboard",
+      "status": "PASS",
+      "owner": "Role 3 documentation and traceability steward",
+      "summary": "Distinguish the deployed predecessor from runtime-derived current source state and project Staging degradation without rewriting history."
+    },
+    {
+      "id": "P5-HARDENING-REGION",
+      "title": "Converge Staging processing and persistent storage on the owner-authorized Europe boundary",
+      "status": "OPEN",
+      "owner": "Platform, Security and Privacy"
+    },
+    {
+      "id": "P5-HARDENING-EVAL-CI",
+      "title": "Enforce T-1 through T-11 as demonstrated release blockers",
+      "status": "OPEN",
+      "owner": "QA and Evaluation"
+    },
+    {
+      "id": "P5-HARDENING-RECOVERY",
+      "title": "Rehearse timed Staging rollback and non-production PITR restore",
+      "status": "OPEN",
+      "owner": "SRE, Observability and Cost"
+    },
+    {
+      "id": "P5-HARDENING-SPEND",
+      "title": "Demonstrate per-run spend-ceiling abort",
+      "status": "OPEN",
+      "owner": "SRE, Observability and Cost"
+    },
+    {
+      "id": "P5-HARDENING-RUNBOOKS",
+      "title": "Record named owners and read acknowledgements for every runbook",
+      "status": "OPEN",
+      "owner": "Release and Operations"
+    },
+    {
+      "id": "P5-ROLE2-CURRENT-BYTES",
+      "title": "Independent Role 2 repository/remediation audit of exact stable bytes",
+      "status": "PASS",
+      "owner": "Role 2"
+    }
+  ],
+  "currentAgents": [
+    {
+      "id": "AGENT-P5-CURRENT-STATE",
+      "role": "Documentation and traceability steward",
+      "status": "IN_PROGRESS",
+      "scope": "Current-state projection, register convergence, artifact manifest and dashboard regeneration"
+    },
+    {
+      "id": "AGENT-P5-QA-EVALUATION",
+      "role": "QA and evaluation hardening",
+      "status": "PENDING",
+      "scope": "T-1 through T-11 release blockers, golden evaluation and regression evidence"
+    },
+    {
+      "id": "AGENT-P5-SECURITY-PRIVACY",
+      "role": "Security, privacy and IAM hardening",
+      "status": "PENDING",
+      "scope": "Cross-account disclosure, retention, negative authorization and Admin acting-capacity review"
+    },
+    {
+      "id": "AGENT-P5-SRE-RECOVERY",
+      "role": "SRE, observability, cost and recovery",
+      "status": "PENDING",
+      "scope": "SLIs, SLOs, alerts, spend abort, timed rollback and PITR rehearsal"
+    },
+    {
+      "id": "AGENT-P5-PRODUCT-PILOT",
+      "role": "Product, UX and pilot operations",
+      "status": "PENDING",
+      "scope": "Failure funnel, accessibility, pilot-user readiness and product-boundary comprehension"
+    },
+    {
+      "id": "AGENT-P5-INTEGRATION-CRITIC",
+      "role": "Independent integration critic",
+      "status": "PENDING",
+      "scope": "Same-byte cross-discipline audit"
+    },
+    {
+      "id": "AGENT-P5-ROLE2",
+      "role": "Role 2 independent governance auditor",
+      "status": "PASS",
+      "scope": "Independent repository/remediation PASS with zero Critical or Major defects; no external-state acceptance claim"
+    }
+  ],
+  "historicalDashboardRecords": {
+    "agents": [
+      "AGENT-INTEGRATION-CRITIC",
+      "AGENT-S1-ORCHESTRATOR",
+      "AGENT-S1-SRE-RELEASE"
+    ],
+    "backlog": ["S1-001", "S2-001", "P4-RC-FREEZE"],
+    "gates": ["P4-GATE-B"],
+    "slices": ["SLICE-0", "SLICE-1"]
+  },
+  "knownBlockers": [
+    "Independent Role 2 repository/remediation audit passed on exact stable bytes; cloud apply, deployment and live acceptance remain pending.",
+    "The current remediation source has not been deployed; its dirty, committed and published state is derived at snapshot generation.",
+    "Staging remains in me-central1 and does not satisfy the owner-authorized Europe processing and persistent-storage boundary.",
+    "Roadmap P5 evaluation-and-hardening exit criteria are not yet evidenced.",
+    "Production release and production traffic remain unauthorized and untouched.",
+    "Roadmap P6 real-data pilot remains blocked until P5 exit criteria and P6 preconditions pass."
+  ],
+  "evidenceRefs": [
+    {
+      "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md",
+      "sha256": "9F6912A2D8CCD991EFC3BECBC15FF4434B850B0F4739A0C9D46A414343860085"
+    },
+    {
+      "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md",
+      "sha256": "484FE10C3DB8FB8E5512DF71A56F6AD6617DD4406565479DADDC32F3F43DEDE7"
+    }
+  ]
+}

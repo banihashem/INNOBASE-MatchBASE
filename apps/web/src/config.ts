@@ -11,8 +11,10 @@ import { isAbsolute } from "node:path";
 export interface WebConfig {
   environment: RuntimeEnvironment;
   deploymentEnvironment?: "staging" | "production";
+  deploymentTarget?: "staging" | "staging-eu" | "production";
   origin: string;
   deploymentId: string;
+  imageDigest?: string;
   databaseUrl: string;
   oidcSimulatorEnabled: boolean;
   syntheticFixtureEnabled: boolean;
@@ -37,10 +39,17 @@ export interface WebConfig {
 
 const PRODUCTION_TARGETS = Object.freeze({
   staging: Object.freeze({
+    deploymentEnvironment: "staging" as const,
     origin: "https://matchbase-staging.innobase.app",
     artifactBucket: "innobase-matchbase-stg-artifacts",
   }),
+  "staging-eu": Object.freeze({
+    deploymentEnvironment: "staging" as const,
+    origin: "https://matchbase-staging.innobase.app",
+    artifactBucket: "innobase-matchbase-stg-eu-artifacts",
+  }),
   production: Object.freeze({
+    deploymentEnvironment: "production" as const,
     origin: "https://matchbase.innobase.app",
     artifactBucket: "innobase-matchbase-artifacts",
   }),
@@ -160,6 +169,7 @@ export function loadWebConfig(
     throw new Error("Production origin admission configuration is incomplete.");
   }
   let deploymentEnvironment: "staging" | "production" | undefined;
+  let deploymentTarget: "staging" | "staging-eu" | "production" | undefined;
   if (runtime === "production") {
     const targetName = environment.MATCHBASE_DEPLOYMENT_ENVIRONMENT;
     if (targetName !== "staging" && targetName !== "production") {
@@ -168,18 +178,39 @@ export function loadWebConfig(
       );
     }
     deploymentEnvironment = targetName;
-    const target = PRODUCTION_TARGETS[targetName];
+    const selectedTarget =
+      environment.MATCHBASE_DEPLOYMENT_TARGET ?? targetName;
     if (
+      selectedTarget !== "staging" &&
+      selectedTarget !== "staging-eu" &&
+      selectedTarget !== "production"
+    ) {
+      throw new Error("Production deployment target is invalid.");
+    }
+    deploymentTarget = selectedTarget;
+    const target = PRODUCTION_TARGETS[selectedTarget];
+    if (
+      target.deploymentEnvironment !== targetName ||
       environment.MATCHBASE_ORIGIN !== target.origin ||
       environment.MATCHBASE_ARTIFACT_GCS_BUCKET !== target.artifactBucket
     ) {
       throw new Error("Production runtime is outside the closed target map.");
     }
-    if (
-      !/^sha256:[a-f0-9]{64}$/u.test(environment.MATCHBASE_DEPLOYMENT_ID ?? "")
-    ) {
+    const deploymentId = environment.MATCHBASE_DEPLOYMENT_ID ?? "";
+    const imageDigest = environment.MATCHBASE_IMAGE_DIGEST ?? "";
+    if (!/^sha256:[a-f0-9]{64}$/u.test(deploymentId)) {
       throw new Error(
         "Production deployment ID must be an immutable SHA-256 digest.",
+      );
+    }
+    if (!/^sha256:[a-f0-9]{64}$/u.test(imageDigest)) {
+      throw new Error(
+        "Production image identity must be an immutable SHA-256 digest.",
+      );
+    }
+    if (deploymentId !== imageDigest) {
+      throw new Error(
+        "Production deployment identity must match the deployed image digest.",
       );
     }
   }
@@ -196,8 +227,12 @@ export function loadWebConfig(
   return {
     environment: runtime,
     ...(deploymentEnvironment ? { deploymentEnvironment } : {}),
+    ...(deploymentTarget ? { deploymentTarget } : {}),
     origin: environment.MATCHBASE_ORIGIN ?? "https://localhost:3000",
     deploymentId: environment.MATCHBASE_DEPLOYMENT_ID ?? "local-unreleased",
+    ...(environment.MATCHBASE_IMAGE_DIGEST
+      ? { imageDigest: environment.MATCHBASE_IMAGE_DIGEST }
+      : {}),
     databaseUrl,
     oidcSimulatorEnabled,
     syntheticFixtureEnabled,

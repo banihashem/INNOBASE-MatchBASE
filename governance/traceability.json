@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "updatedAt": "2026-09-01T18:00:00+04:00",
+  "currentProjectionRef": "governance/current-state-projection.v1.json",
   "verification": {
     "local": "EXACT_LOCAL_SHA256",
     "hostedCiExternalSources": "ANCHOR_ONLY_CI"
@@ -182,6 +184,37 @@
       "testIds": ["TEST-S2-LOCAL-ACCEPTANCE"],
       "gateIds": ["S2-G0", "S2-G1", "S2-G2"],
       "deploymentId": "DEPLOY-S2-LOCAL"
+    },
+    {
+      "id": "TRACE-P5-CURRENT-STATE",
+      "sourceRefs": [
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md",
+          "sha256": "9F6912A2D8CCD991EFC3BECBC15FF4434B850B0F4739A0C9D46A414343860085"
+        },
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md",
+          "sha256": "484FE10C3DB8FB8E5512DF71A56F6AD6617DD4406565479DADDC32F3F43DEDE7"
+        }
+      ],
+      "decisionRefs": [
+        {
+          "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\OWNER_DECISION_DISPOSITION_REGISTER_PO_001.json",
+          "sha256": "817029411A8D0E67318CF9FCE9E9C925BB3A261D9F8ED581EF43AC886919E112"
+        }
+      ],
+      "requirementId": "REQ-P5-CURRENT-STATE",
+      "riskIds": ["RISK-P5-CONTROL-DRIFT"],
+      "designRefs": [
+        {
+          "path": "docs/STAGING_PRODUCT_AND_ADMIN_GUIDE.md",
+          "sha256": "F39F46227C42503995A2B472E440DA4B578770A57DA5595028120154EB14AA25"
+        }
+      ],
+      "backlogIds": ["P5-CURRENT-STATE-CONVERGENCE"],
+      "testIds": ["TEST-P5-CONTROL-PLANE"],
+      "gateIds": ["P5-GATE-CONTROL-PLANE"],
+      "deploymentId": "DEPLOY-P5-STAGING"
     }
   ]
 }

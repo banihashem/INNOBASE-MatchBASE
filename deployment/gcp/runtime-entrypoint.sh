@@ -5,6 +5,22 @@ case "${MATCHBASE_DEPLOYMENT_ENVIRONMENT:-}" in
   staging|production) ;;
   *) echo "Invalid or missing MATCHBASE_DEPLOYMENT_ENVIRONMENT." >&2; exit 78 ;;
 esac
+deployment_target="${MATCHBASE_DEPLOYMENT_TARGET:-${MATCHBASE_DEPLOYMENT_ENVIRONMENT}}"
+case "${deployment_target}" in
+  staging|production)
+    if [ "${deployment_target}" != "${MATCHBASE_DEPLOYMENT_ENVIRONMENT}" ]; then
+      echo "Runtime deployment target does not match its environment." >&2
+      exit 78
+    fi
+    ;;
+  staging-eu)
+    if [ "${MATCHBASE_DEPLOYMENT_ENVIRONMENT}" != "staging" ]; then
+      echo "EU Staging runtime target is outside Staging." >&2
+      exit 78
+    fi
+    ;;
+  *) echo "Invalid MATCHBASE_DEPLOYMENT_TARGET." >&2; exit 78 ;;
+esac
 if [ "${MATCHBASE_ENVIRONMENT:-}" != "production" ]; then
   echo "Runtime image requires MATCHBASE_ENVIRONMENT=production." >&2
   exit 78

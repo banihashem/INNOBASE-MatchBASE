@@ -1,6 +1,6 @@
 import { validateResearchRoutePolicy } from "@matchbase/ai-evidence";
 import type { ResearchRoutePolicyV1 } from "@matchbase/contracts";
-import type { PersistedTier } from "./types.js";
+import { ApplicationFault, type PersistedTier } from "./types.js";
 
 export type ResearchModeId = "synthetic_reference" | "qualified_live_research";
 
@@ -12,6 +12,7 @@ export interface ResearchModeDecision {
 
 export interface ServerOwnedResearchAdmission {
   decide(tier: PersistedTier): ResearchModeDecision;
+  isReady(): boolean;
 }
 
 const SYNTHETIC_DECISION: ResearchModeDecision = Object.freeze({
@@ -28,6 +29,9 @@ const QUALIFIED_LIVE_DECISION: ResearchModeDecision = Object.freeze({
 
 export const syntheticResearchAdmission: ServerOwnedResearchAdmission =
   Object.freeze({
+    isReady() {
+      return true;
+    },
     decide() {
       return SYNTHETIC_DECISION;
     },
@@ -42,6 +46,7 @@ export function createServerOwnedResearchAdmission(input: {
     openrouter: boolean;
   }>;
   readonly eligibleTiers: readonly PersistedTier[];
+  readonly now?: () => Date;
 }): ServerOwnedResearchAdmission {
   const policy: ResearchRoutePolicyV1 = validateResearchRoutePolicy(
     input.policy,
@@ -53,16 +58,38 @@ export function createServerOwnedResearchAdmission(input: {
   const routeHandlesVerified = qualifiedRoutes.every(
     (route) => input.verifiedCredentialHandles[route.path],
   );
-  const qualified =
+  const qualifiedConfiguration =
     input.activationAuthorized &&
     policy.liveActivation === "enabled" &&
     policy.environment === input.environment &&
     qualifiedRoutes.length === 2 &&
     routeHandlesVerified;
 
+  const policyIsCurrent = (): boolean => {
+    const now = (input.now?.() ?? new Date()).toISOString();
+    return (
+      policy.evaluatedAt <= now &&
+      qualifiedRoutes.every(
+        (route) => route.dataHandling.evidenceExpiresAt >= now,
+      )
+    );
+  };
+  const liveQualified = (): boolean =>
+    qualifiedConfiguration && policyIsCurrent();
+  const ready = (): boolean => !input.activationAuthorized || liveQualified();
+
   return Object.freeze({
+    isReady: ready,
     decide(tier: PersistedTier): ResearchModeDecision {
-      return qualified && eligibleTiers.has(tier)
+      if (input.activationAuthorized && !liveQualified())
+        throw new ApplicationFault(
+          503,
+          "live-research-admission-unavailable",
+          "MB-503-LIVE-ADMISSION",
+          "Qualified live research admission is temporarily unavailable.",
+          true,
+        );
+      return liveQualified() && eligibleTiers.has(tier)
         ? QUALIFIED_LIVE_DECISION
         : SYNTHETIC_DECISION;
     },

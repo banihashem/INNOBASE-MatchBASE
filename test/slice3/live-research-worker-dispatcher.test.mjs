@@ -20,7 +20,7 @@ function work(runId, tier) {
   };
 }
 
-function fixture(rows) {
+function fixture(rows, now = "2026-09-01T00:00:00.000Z") {
   const calls = [];
   const executed = [];
   const pool = {
@@ -46,7 +46,7 @@ function fixture(rows) {
     pool,
     policy: LIVE_WORKER_FIXTURE_POLICY,
     outputSchema: {},
-    now: () => new Date("2026-09-01T00:00:00.000Z"),
+    now: () => new Date(now),
     serviceFactory: (selected, exactPolicyId) => {
       assert.equal(exactPolicyId, policyId);
       const service = new LiveResearchExecutionService({});
@@ -63,6 +63,7 @@ function fixture(rows) {
 test("dispatches a queued Consultant qualified-live run through the existing live execution service", async () => {
   const runId = "00000000-0000-4000-8000-000000000204";
   const current = fixture([work(runId, "consultant")]);
+  assert.equal(await current.dispatcher.readiness(), true);
 
   assert.deepEqual(
     await current.dispatcher.dispatchNext(new AbortController().signal),
@@ -79,6 +80,20 @@ test("dispatches a queued Consultant qualified-live run through the existing liv
     current.executed[0].input.executionId,
     `LIVE:${LIVE_WORKER_FIXTURE_POLICY.policyVersion}:${runId}`,
   );
+});
+
+test("worker readiness and dispatch close when route-policy evidence expires", async () => {
+  const current = fixture(
+    [work("00000000-0000-4000-8000-000000000208", "demo")],
+    "2026-09-15T00:00:00.001Z",
+  );
+  assert.equal(await current.dispatcher.readiness(), false);
+  assert.deepEqual(
+    await current.dispatcher.dispatchNext(new AbortController().signal),
+    [],
+  );
+  assert.equal(current.calls.length, 0);
+  assert.equal(current.executed.length, 0);
 });
 
 test("preserves Demo and Standard dispatch while adding Consultant selection", async () => {

@@ -10,6 +10,7 @@ const files = [
   "agents.json",
   "artifact-index.json",
   "backlog.json",
+  "current-state-projection.v1.json",
   "decisions.json",
   "external-evidence-anchors.json",
   "external-state.json",
@@ -30,6 +31,39 @@ for (const file of files) {
 const gates = JSON.parse(
   readFileSync(resolve("governance/gates.json"), "utf8"),
 ).gates;
+const currentState = JSON.parse(
+  readFileSync(resolve("governance/current-state-projection.v1.json"), "utf8"),
+);
+if (
+  currentState.precedence !== "ADDITIVE_CURRENT_STATE_OVERLAY" ||
+  currentState.historicalRecordsRemainImmutable !== true ||
+  currentState.repository.deployedPredecessor.sourceCommit !==
+    "1224b4c485a9f3533a15e1d50b606f7aa53c2d23" ||
+  currentState.repository.sourceTransition.runtimeDerived !== true ||
+  currentState.repository.sourceTransition.status !==
+    "DERIVE_AT_SNAPSHOT_GENERATION" ||
+  !["WORKTREE_UNCOMMITTED", "COMMITTED_UNPUBLISHED", "PUBLISHED_SOURCE"].every(
+    (state) =>
+      currentState.repository.sourceTransition.allowedStates.includes(state),
+  ) ||
+  currentState.staging.webRevision !== "matchbase-staging-web-00034-cn5" ||
+  currentState.staging.schemaHead !==
+    "0011_admin_system_scope_and_run_tier_immutability" ||
+  currentState.staging.productionStatus !== "UNTOUCHED" ||
+  currentState.staging.status !== "DEGRADED_REMEDIATION_PENDING_DEPLOY"
+) {
+  throw new Error("Current-state projection identity is invalid.");
+}
+for (const requiredGate of [
+  "P5-GATE-STAGING",
+  "P5-GATE-UX",
+  "P5-GATE-CONTROL-PLANE",
+  "ROADMAP-P5-HARDENING",
+  "ROADMAP-P6-PILOT",
+]) {
+  if (!currentState.currentGates.some(({ id }) => id === requiredGate))
+    throw new Error(`Current-state projection lacks ${requiredGate}.`);
+}
 const gateIds = gates.map((gate) => gate.id);
 if (new Set(gateIds).size !== gateIds.length)
   throw new Error("Duplicate gate IDs");

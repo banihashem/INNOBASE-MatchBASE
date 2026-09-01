@@ -30,11 +30,90 @@ export interface IssuedArtifactAccessGrant {
 
 export interface RetrieveArtifactWithGrantInput {
   readonly grantId: string;
-  readonly token: string;
+  readonly token: string | null;
   readonly accountId: string;
   readonly subjectUserId: string;
   readonly correlationId: string;
   readonly deploymentId: string;
+}
+
+export interface SessionArtifactGrant {
+  readonly runId: string;
+  readonly artifactVersionId: string;
+  readonly version: number;
+  readonly grantId: string;
+  readonly expiresAt: string;
+}
+
+const PRODUCT_UI_GRANT = "product-ui-session-bound.v1";
+
+export async function ensureSessionArtifactGrantForRun(
+  database: Queryable,
+  input: {
+    readonly runId: string;
+    readonly accountId: string;
+    readonly subjectUserId: string;
+    readonly subjectTier: "consultant" | "admin";
+  },
+): Promise<SessionArtifactGrant | null> {
+  const artifact = await database.query<{
+    artifact_version_id: string;
+    version: number;
+  }>(
+    `SELECT v.artifact_version_id,v.version
+       FROM artifact a
+       JOIN artifact_version v
+         ON v.account_id=a.account_id AND v.artifact_id=a.artifact_id
+      WHERE a.account_id=$1 AND a.run_id=$2 AND v.state='released'
+      ORDER BY v.version DESC LIMIT 1`,
+    [input.accountId, input.runId],
+  );
+  const version = artifact.rows[0];
+  if (!version) return null;
+  const existing = await database.query<{
+    grant_id: string;
+    expires_at: Date | string;
+  }>(
+    `SELECT g.grant_id,g.expires_at
+       FROM artifact_access_grant g
+      WHERE g.account_id=$1 AND g.artifact_version_id=$2
+        AND g.subject_user_id=$3 AND g.subject_tier=$4
+        AND g.justification=$5 AND g.expires_at > clock_timestamp()
+        AND NOT EXISTS (SELECT 1 FROM artifact_access_grant_revocation r
+                         WHERE r.account_id=g.account_id AND r.grant_id=g.grant_id)
+      ORDER BY g.issued_at DESC LIMIT 1`,
+    [
+      input.accountId,
+      version.artifact_version_id,
+      input.subjectUserId,
+      input.subjectTier,
+      PRODUCT_UI_GRANT,
+    ],
+  );
+  const current = existing.rows[0];
+  if (current)
+    return Object.freeze({
+      runId: input.runId,
+      artifactVersionId: version.artifact_version_id,
+      version: version.version,
+      grantId: current.grant_id,
+      expiresAt: new Date(current.expires_at).toISOString(),
+    });
+  const issued = await issueArtifactAccessGrant(database, {
+    artifactVersionId: version.artifact_version_id,
+    accountId: input.accountId,
+    subjectUserId: input.subjectUserId,
+    subjectTier: input.subjectTier,
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+    justification: PRODUCT_UI_GRANT,
+  });
+  return Object.freeze({
+    runId: input.runId,
+    artifactVersionId: version.artifact_version_id,
+    version: version.version,
+    grantId: issued.grantId,
+    expiresAt: issued.expiresAt,
+  });
 }
 
 export interface RetrievedArtifact {
@@ -203,7 +282,7 @@ export async function retrieveArtifactWithGrant(
     [input.grantId, input.accountId, input.subjectUserId],
   );
   const row = grant.rows[0];
-  const tokenDigest = sha256(input.token);
+  const tokenDigest = input.token === null ? null : sha256(input.token);
   const storedTier = authorization?.tier;
   const validTier = storedTier === "consultant" || storedTier === "admin";
   const permitted =
@@ -212,7 +291,8 @@ export async function retrieveArtifactWithGrant(
     validTier &&
     row.subject_tier === storedTier &&
     row.unexpired &&
-    secureDigestEqual(row.url_sha256, tokenDigest);
+    ((input.token === null && row.justification === PRODUCT_UI_GRANT) ||
+      (tokenDigest !== null && secureDigestEqual(row.url_sha256, tokenDigest)));
   if (!permitted || row === undefined) {
     await appendRetrievalAudit(database, input, {
       ...(validTier ? { tier: storedTier } : {}),
@@ -270,6 +350,8 @@ export async function retrieveArtifactWithGrant(
     ...(row.justification === null ? {} : { justification: row.justification }),
     detail: {
       grant_id: row.grant_id,
+      access_mode:
+        input.token === null ? "authenticated_product_ui" : "bearer_token",
       file_sha256: observedSha256.toString("hex"),
       byte_size: bytes.byteLength,
     },

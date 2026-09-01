@@ -1,18 +1,20 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-14T13:52:03.3476740+04:00",
+  "updatedAt": "2026-09-01T18:00:00+04:00",
   "repository": {
     "visibility": "private",
     "license": "UNLICENSED",
     "defaultBranch": "main",
     "initialCommit": "518ff98aa4c4b719460bca020894782fc660ce21",
+    "deployedPredecessorSourceCommit": "1224b4c485a9f3533a15e1d50b606f7aa53c2d23",
+    "currentSourceState": "RUNTIME_DERIVED_AT_SNAPSHOT_GENERATION",
     "publicReleaseAuthorized": false
   },
   "policy": {
     "region": {
       "constraint": "Europe",
       "candidate": "europe-west2",
-      "status": "PREFLIGHT_BLOCKED"
+      "status": "REPOSITORY_REMEDIATION_ROLE2_PASS_EXTERNAL_APPLY_PENDING"
     },
     "quotas": {
       "windowHours": 168,
@@ -51,6 +53,8 @@
     "slices": "governance/slices.json",
     "externalState": "governance/external-state.json",
     "traceability": "governance/traceability.json",
+    "currentState": "governance/current-state-projection.v1.json",
+    "artifactIndex": "governance/artifact-index.json",
     "slice1LocalValidation": "evidence/slice1/local-validation.json",
     "slice2LocalValidation": "evidence/slice2/local-validation.json",
     "slice2CandidateManifest": "evidence/slice2/candidate-manifest.json"

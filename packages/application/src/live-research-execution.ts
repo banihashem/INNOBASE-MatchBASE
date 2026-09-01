@@ -62,6 +62,7 @@ import {
   type SmeWeightValidationV2,
 } from "./live-complete-result-v2.js";
 import { standardCompleteResultDocumentSha256 } from "./standard-workspace.js";
+import { isTransientDatabaseConnectionFailure } from "./worker-runtime.js";
 
 const PRODUCTION_STANDARD_WEIGHTS_BP = Object.freeze({
   category_product_fit: 2500,
@@ -2800,6 +2801,11 @@ export class LiveResearchExecutionService {
           );
           await sourceCircuitProbe?.assertOwnership();
         } catch (error) {
+          if (isTransientDatabaseConnectionFailure(error))
+            throw new LiveResearchProcessInterrupted(
+              "Transient database connectivity interrupted source discovery.",
+              { cause: error },
+            );
           const failedRoute =
             error instanceof SourceDiscoveryFailure ? [error.route] : [];
           await ledger.commitTerminal(
@@ -2963,6 +2969,11 @@ export class LiveResearchExecutionService {
           );
       } catch (error) {
         if (error instanceof LiveResearchProcessInterrupted) throw error;
+        if (isTransientDatabaseConnectionFailure(error))
+          throw new LiveResearchProcessInterrupted(
+            "Transient database connectivity interrupted secure fetch persistence.",
+            { cause: error },
+          );
         await ledger.commitTerminal(ownershipToken, generation, {
           schemaVersion: "live-research-terminal.v1",
           executionId: input.executionId,

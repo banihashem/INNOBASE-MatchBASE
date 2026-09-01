@@ -1,5 +1,8 @@
 {
   "schemaVersion": 1,
+  "updatedAt": "2026-09-01T18:00:00+04:00",
+  "registrySemantics": "Historical execution identities remain immutable; the current workstream, including the independent Role 2 repository/remediation PASS and separate pending external operations, is governed by currentProjectionRef.",
+  "currentProjectionRef": "governance/current-state-projection.v1.json",
   "agents": [
     {
       "id": "AGENT-R3-ORCHESTRATOR",
@@ -17,7 +20,7 @@
           "outputHashes": [
             {
               "path": "governance/traceability.json",
-              "sha256": "A2AED9C38D9BEE7ECAAA0C4F7F4DB9B10259ADB187E83185EF5426AABAE2405B"
+              "sha256": "7AECF730480AFEBB12961E82553510EF300C9128CDCCE0DCF5E927B60A679619"
             }
           ]
         }

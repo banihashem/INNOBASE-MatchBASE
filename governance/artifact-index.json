@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "updatedAt": "2026-09-01T18:00:00+04:00",
+  "currentProjectionRef": "governance/current-state-projection.v1.json",
   "builds": [
     {
       "id": "BUILD-SLICE-1-LOCAL",
@@ -20,6 +22,14 @@
       "evidenceRefs": [
         "evidence/p4/local-validation.json",
         "evidence/p4/zero-defect-audit.json"
+      ]
+    },
+    {
+      "id": "BUILD-P5-STAGING-WEB-00034",
+      "status": "ACTIVE",
+      "summary": "Deployed predecessor source 1224b4c is represented by Staging web revision matchbase-staging-web-00034-cn5. Current remediation remains undeployed; its commit/publication state is runtime-derived and production is untouched.",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md"
       ]
     }
   ],
@@ -58,6 +68,30 @@
       "path": "evidence/p4/candidate-manifest.json",
       "sha256": "B19CAF9C8F05C47BE84821A72C4C019B4D0999D1C4F06BD17730EE19AF95DC03",
       "evidenceRefs": ["evidence/p4/candidate-manifest.json"]
+    },
+    {
+      "id": "ARTIFACT-P5-STAGING-EXECUTION",
+      "status": "PASS",
+      "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md",
+      "sha256": "9F6912A2D8CCD991EFC3BECBC15FF4434B850B0F4739A0C9D46A414343860085",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md"
+      ]
+    },
+    {
+      "id": "ARTIFACT-P5-UX-CORRECTION",
+      "status": "PASS",
+      "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md",
+      "sha256": "484FE10C3DB8FB8E5512DF71A56F6AD6617DD4406565479DADDC32F3F43DEDE7",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md"
+      ]
+    },
+    {
+      "id": "ARTIFACT-P5-CURRENT-STATE-PROJECTION",
+      "status": "PASS",
+      "path": "governance/current-state-projection.v1.json",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"]
     }
   ],
   "sboms": [
@@ -107,5 +141,45 @@
       }
     }
   ],
-  "deployments": []
+  "currentProvenance": [
+    {
+      "id": "PROV-P5-STAGING",
+      "status": "PASS",
+      "source": "https://github.com/banihashem/INNOBASE-MatchBASE/commit/1224b4c485a9f3533a15e1d50b606f7aa53c2d23",
+      "note": "Local HEAD and origin/main resolve to the exact bounded identity-display commit represented by Staging revision 00034.",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md"
+      ]
+    }
+  ],
+  "deployments": [
+    {
+      "id": "ARTIFACT-DEPLOY-P5-STAGING-WEB",
+      "title": "Deployed predecessor P5 Staging web revision 00034",
+      "status": "ACTIVE",
+      "target": "innobase-matchbase-stg / me-central1",
+      "revision": "matchbase-staging-web-00034-cn5",
+      "image": "sha256:3bf6be141f027a9242b8406e62aa5c1704431afacbf60e619f9fa085922f9cad",
+      "trafficPercent": 100,
+      "production": "UNTOUCHED",
+      "relationship": "DEPLOYED_PREDECESSOR_CURRENT_REMEDIATION_PENDING",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md"
+      ]
+    },
+    {
+      "id": "ARTIFACT-DEPLOY-P5-STAGING-WORKER",
+      "title": "Deployed predecessor P5 Staging worker revision 00045",
+      "status": "ACTIVE",
+      "target": "innobase-matchbase-stg / me-central1",
+      "revision": "matchbase-staging-worker-00045-k2b",
+      "image": "sha256:ca6d1627309ce333dcbde354b17d4588135fa2993988bf24a4de39ca264c191d",
+      "migrationHead": "0011_admin_system_scope_and_run_tier_immutability",
+      "production": "UNTOUCHED",
+      "relationship": "DEPLOYED_PREDECESSOR_CURRENT_REMEDIATION_PENDING",
+      "evidenceRefs": [
+        "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md"
+      ]
+    }
+  ]
 }

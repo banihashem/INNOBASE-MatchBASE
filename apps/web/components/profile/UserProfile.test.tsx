@@ -110,3 +110,44 @@ test("refuses history whose current entitlement does not match the workspace", a
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
 });
+
+test("exposes a keyboard-operable PDF link with exact run and artifact binding", async () => {
+  const runId = "22222222-2222-4222-8222-222222222222";
+  const artifactHistory = {
+    ...history,
+    runs: [
+      {
+        ...history.runs[0],
+        submitted_tier: "consultant",
+        state: "complete",
+        outcome: "matched",
+        result_available: true,
+        result_projection: "consultant",
+        artifact_download: {
+          run_id: runId,
+          artifact_version_id: "33333333-3333-4333-8333-333333333333",
+          version: 4,
+          grant_id: "44444444-4444-4444-8444-444444444444",
+          href: "/api/v1/artifacts/44444444-4444-4444-8444-444444444444/download",
+        },
+        links: {
+          ...history.runs[0]!.links,
+          result: `/api/v1/consultant/runs/${runId}/result`,
+        },
+      },
+    ],
+  };
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(JSON.stringify(artifactHistory), { status: 200 }),
+  );
+  render(<UserProfile tier="consultant" displayName="Owner" />);
+  const link = await screen.findByRole("link", {
+    name: `Download PDF report for run ${runId}, artifact version 4`,
+  });
+  expect(link).toHaveAttribute(
+    "href",
+    artifactHistory.runs[0]!.artifact_download.href,
+  );
+  expect(link).toHaveAttribute("data-matchbase-artifact-run-id", runId);
+  expect(link).not.toHaveAttribute("data-token");
+});

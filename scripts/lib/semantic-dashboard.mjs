@@ -106,7 +106,9 @@ function matchingReference(claim, catalog) {
 }
 
 function resolvedEvidence(item, catalog) {
-  const claims = evidenceClaims(item);
+  const claims = evidenceClaims(item).filter(
+    (claim) => !(typeof claim === "object" && claim?.gitCommit),
+  );
   const refs = [];
   let failed = false;
   for (const claim of claims) {
@@ -172,11 +174,13 @@ function evidenceState(value) {
       "PUSHED_PRIVATE",
       "OPEN",
       "CORRECTED_PENDING_ROLE2",
+      "PENDING",
     ].includes(normalized)
   )
     return "ACTIVE";
   if (normalized === "ERROR") return "ERROR";
   if (normalized === "STALE") return "STALE";
+  if (normalized === "HISTORICAL") return "HISTORICAL";
   return "UNKNOWN";
 }
 
@@ -285,8 +289,11 @@ function record(item, sourceRef, index, prefix, catalog) {
 
 function aggregate(records) {
   if (records.length === 0) return "UNKNOWN";
+  const currentRecords = records.some(({ status }) => status !== "HISTORICAL")
+    ? records.filter(({ status }) => status !== "HISTORICAL")
+    : records;
   for (const state of STATE_ORDER) {
-    if (records.some((entry) => entry.status === state)) return state;
+    if (currentRecords.some((entry) => entry.status === state)) return state;
   }
   return "UNKNOWN";
 }
@@ -326,6 +333,21 @@ export function buildSemanticViews(documents) {
   const registers = documents.registers.value;
   const artifactIndex = documents.artifactIndex.value;
   const external = documents.externalState.value;
+  const currentState = documents.currentState?.value;
+  const historicalDashboardRecords =
+    currentState?.historicalDashboardRecords ?? {};
+  const historicalRecord = (item, collection) =>
+    (historicalDashboardRecords[collection] ?? []).includes(item.id)
+      ? {
+          ...item,
+          status: "HISTORICAL",
+          executionStatus: "HISTORICAL",
+          summary: `Historical predecessor retained for provenance. ${text(
+            item.summary ?? item.scope,
+            "No additional historical summary is recorded.",
+          )}`,
+        }
+      : item;
   const closure = documents.externalClosure?.value;
   const slice2Closure = documents.slice2Closure?.value;
   const slice2SourceRef = documents.slice2Closure?.sourceRef;
@@ -436,11 +458,71 @@ export function buildSemanticViews(documents) {
       }
     : null;
   const externalRecords = [
+    ...(currentState
+      ? [
+          {
+            id: "EXT-CURRENT-GITHUB",
+            title: "Deployed predecessor source",
+            status: "PASS",
+            summary: `${currentState.repository.name} deployed predecessor source is ${currentState.repository.deployedPredecessor.sourceCommit}. Current source state is projected separately.`,
+            sourceCommit:
+              currentState.repository.deployedPredecessor.sourceCommit,
+            evidenceRefs: currentState.evidenceRefs,
+            _sourceRef: documents.currentState.sourceRef,
+          },
+          {
+            id: "EXT-CURRENT-WORKTREE-CANDIDATE",
+            title: "Current remediation source transition",
+            status: "ACTIVE",
+            summary: `State ${documents.worktreeCandidate.kind}; HEAD ${documents.worktreeCandidate.baseCommit}; origin/main ${documents.worktreeCandidate.originMain}; deployed ${!documents.worktreeCandidate.dirty && documents.worktreeCandidate.baseCommit === currentState.repository.deployedPredecessor.sourceCommit}; identity ${documents.worktreeCandidate.sha256}.`,
+            ...documents.worktreeCandidate,
+            deployed:
+              !documents.worktreeCandidate.dirty &&
+              documents.worktreeCandidate.baseCommit ===
+                currentState.repository.deployedPredecessor.sourceCommit,
+            _sourceRef: documents.currentState.sourceRef,
+          },
+          {
+            id: "EXT-CURRENT-GCP-STAGING",
+            title: "Current Google Cloud Staging",
+            status: "ACTIVE",
+            summary: `${currentState.staging.project} in ${currentState.staging.region}; deployed predecessor web ${currentState.staging.webRevision}; current remediation pending deployment; Europe residency requirement unmet.`,
+            project: currentState.staging.project,
+            region: currentState.staging.region,
+            webRevision: currentState.staging.webRevision,
+            workerRevision: currentState.staging.workerRevision,
+            evidenceRefs: currentState.evidenceRefs,
+            _sourceRef: documents.currentState.sourceRef,
+          },
+          {
+            id: "EXT-CURRENT-CLOUDFLARE-STAGING",
+            title: "Current Staging edge origin",
+            status: "ACTIVE",
+            summary: `${currentState.staging.publicOrigin}; deployed predecessor route policy ${currentState.staging.routePolicy}; current remediation pending deployment.`,
+            origin: currentState.staging.publicOrigin,
+            routePolicy: currentState.staging.routePolicy,
+            evidenceRefs: currentState.evidenceRefs,
+            _sourceRef: documents.currentState.sourceRef,
+          },
+          {
+            id: "EXT-CURRENT-DEPLOYMENT",
+            title: "Current P5 Staging deployment",
+            status: "BLOCKED",
+            summary: `Deployed predecessor revision ${currentState.staging.webRevision} serves ${currentState.staging.webTrafficPercent} percent; the runtime-derived current remediation source is not bound to a successor deployment; Staging status ${currentState.staging.status}; production ${currentState.staging.productionStatus}.`,
+            webRevision: currentState.staging.webRevision,
+            trafficPercent: currentState.staging.webTrafficPercent,
+            migrationHead: currentState.staging.schemaHead,
+            production: currentState.staging.productionStatus,
+            evidenceRefs: currentState.evidenceRefs,
+            _sourceRef: documents.currentState.sourceRef,
+          },
+        ]
+      : []),
     {
       id: "EXT-GITHUB",
       title: "GitHub repository state",
-      status: external.github.status,
-      summary: `${external.github.visibility} repository ${external.github.repository}; ${external.github.refs} refs at observation time.`,
+      status: currentState ? "HISTORICAL" : external.github.status,
+      summary: `Historical Slice 0 observation: ${external.github.visibility} repository ${external.github.repository}; ${external.github.refs} refs at observation time.`,
       evidenceRefs: external.github.evidenceRefs,
     },
     ...(closure
@@ -477,22 +559,23 @@ export function buildSemanticViews(documents) {
     {
       id: "EXT-GCP",
       title: "Google Cloud readiness",
-      status: external.gcp.readiness,
-      summary: `Project ${external.gcp.project} is ${external.gcp.lifecycle}; mutation ${external.gcp.mutation}.`,
+      status: currentState ? "HISTORICAL" : external.gcp.readiness,
+      summary: `Historical Slice 0 observation: project ${external.gcp.project} was ${external.gcp.lifecycle}; mutation ${external.gcp.mutation}.`,
       evidenceRefs: external.gcp.evidenceRefs,
     },
     {
       id: "EXT-CLOUDFLARE",
       title: "Cloudflare readiness",
-      status: external.cloudflare.readiness,
-      summary: `Zone ${external.cloudflare.zone}; ${external.cloudflare.matchbaseDnsRecords} MatchBASE DNS records; mutation ${external.cloudflare.mutation}.`,
+      status: currentState ? "HISTORICAL" : external.cloudflare.readiness,
+      summary: `Historical Slice 0 observation: zone ${external.cloudflare.zone}; ${external.cloudflare.matchbaseDnsRecords} MatchBASE DNS records; mutation ${external.cloudflare.mutation}.`,
       evidenceRefs: external.cloudflare.evidenceRefs,
     },
     {
       id: "EXT-DEPLOYMENT",
       title: "MatchBASE deployment",
-      status: external.deployment.status,
-      summary: "No MatchBASE deployment has started in the current slice.",
+      status: currentState ? "HISTORICAL" : external.deployment.status,
+      summary:
+        "Historical Slice 0 observation: no MatchBASE deployment had started.",
     },
   ].map((item, index) =>
     record(
@@ -586,15 +669,18 @@ export function buildSemanticViews(documents) {
   const collections = {
     portfolio: (documents.slices.value.slices ?? []).map((item, index) =>
       record(
-        item.id === "SLICE-2" && slice2Closure
-          ? {
-              ...item,
-              status: slice2Lifecycle.portfolioStatus,
-              summary: `${item.name}; ${slice2Closure.role3Disposition}; Role 2 ${slice2Closure.role2.status}.`,
-              ...slice2Facts,
-              evidenceRefs: slice2Evidence,
-            }
-          : item,
+        historicalRecord(
+          item.id === "SLICE-2" && slice2Closure
+            ? {
+                ...item,
+                status: slice2Lifecycle.portfolioStatus,
+                summary: `${item.name}; ${slice2Closure.role3Disposition}; Role 2 ${slice2Closure.role2.status}.`,
+                ...slice2Facts,
+                evidenceRefs: slice2Evidence,
+              }
+            : item,
+          "slices",
+        ),
         item.id === "SLICE-2" && slice2Closure
           ? slice2SourceRef
           : documents.slices.sourceRef,
@@ -605,13 +691,16 @@ export function buildSemanticViews(documents) {
     ),
     gates: (documents.gates.value.gates ?? []).map((item, index) =>
       record(
-        item.id === "S2-G1" && slice2Closure
-          ? slice2AuditGate(item)
-          : ["S2-G2", "S2-G9"].includes(item.id) && slice2Closure
-            ? slice2Gate(item)
-            : ["AG1", "AG6"].includes(item.id) && closure
-              ? closureGate(item)
-              : item,
+        historicalRecord(
+          item.id === "S2-G1" && slice2Closure
+            ? slice2AuditGate(item)
+            : ["S2-G2", "S2-G9"].includes(item.id) && slice2Closure
+              ? slice2Gate(item)
+              : ["AG1", "AG6"].includes(item.id) && closure
+                ? closureGate(item)
+                : item,
+          "gates",
+        ),
         ["S2-G1", "S2-G2", "S2-G9"].includes(item.id) && slice2Closure
           ? item.id === "S2-G1"
             ? slice2AuditSourceRef
@@ -624,9 +713,33 @@ export function buildSemanticViews(documents) {
         catalog,
       ),
     ),
-    backlog: (documents.backlog.value.items ?? []).map((item, index) =>
-      record(item, documents.backlog.sourceRef, index, "WORK", catalog),
-    ),
+    backlog: [
+      ...(documents.backlog.value.items ?? []).map((item, index) =>
+        record(
+          historicalRecord(item, "backlog"),
+          documents.backlog.sourceRef,
+          index,
+          "WORK",
+          catalog,
+        ),
+      ),
+      ...(currentState?.currentBacklog ?? [])
+        .filter(
+          ({ id }) =>
+            !(documents.backlog.value.items ?? []).some(
+              (candidate) => candidate.id === id,
+            ),
+        )
+        .map((item, index) =>
+          record(
+            { ...item, evidenceRefs: currentState.evidenceRefs },
+            documents.currentState.sourceRef,
+            index,
+            "CURRENT-WORK",
+            catalog,
+          ),
+        ),
+    ],
     decisions: decisionRecords(documents.dispositions, catalog),
     risks: (registers.risks ?? []).map((item, index) =>
       record(item, documents.registers.sourceRef, index, "RISK", catalog),
@@ -732,19 +845,33 @@ export function buildSemanticViews(documents) {
     costs: (registers.costs ?? []).map((item, index) =>
       record(item, documents.registers.sourceRef, index, "COST", catalog),
     ),
-    agents: (documents.agents.value.agents ?? []).map((item, index) =>
-      record(
-        item.id === "AGENT-S2-ORCHESTRATOR" && slice2Closure
-          ? slice2Orchestrator(item)
-          : item,
-        item.id === "AGENT-S2-ORCHESTRATOR" && slice2Closure
-          ? slice2AuditSourceRef
-          : documents.agents.sourceRef,
-        index,
-        "AGENT",
-        catalog,
+    agents: [
+      ...(documents.agents.value.agents ?? []).map((item, index) =>
+        record(
+          historicalRecord(
+            item.id === "AGENT-S2-ORCHESTRATOR" && slice2Closure
+              ? slice2Orchestrator(item)
+              : item,
+            "agents",
+          ),
+          item.id === "AGENT-S2-ORCHESTRATOR" && slice2Closure
+            ? slice2AuditSourceRef
+            : documents.agents.sourceRef,
+          index,
+          "AGENT",
+          catalog,
+        ),
       ),
-    ),
+      ...(currentState?.currentAgents ?? []).map((item, index) =>
+        record(
+          { ...item, evidenceRefs: currentState.evidenceRefs },
+          documents.currentState.sourceRef,
+          index,
+          "CURRENT-AGENT",
+          catalog,
+        ),
+      ),
+    ],
     loops: [
       ...(registers.loops ?? []).map((item, index) =>
         record(item, documents.registers.sourceRef, index, "LOOP", catalog),
@@ -792,6 +919,15 @@ export function buildSemanticViews(documents) {
             ),
           ]
         : []),
+      ...(currentState?.capabilities ?? []).map((item, index) =>
+        record(
+          { ...item, evidenceRefs: currentState.evidenceRefs },
+          documents.currentState.sourceRef,
+          index,
+          "CURRENT-CAPABILITY",
+          catalog,
+        ),
+      ),
     ],
     evidence: [
       ...(registers.evidence ?? []).map((item, index) =>
@@ -802,6 +938,7 @@ export function buildSemanticViews(documents) {
         ...(artifactIndex.artifacts ?? []),
         ...(artifactIndex.sboms ?? []),
         ...(artifactIndex.provenance ?? []),
+        ...(artifactIndex.currentProvenance ?? []),
       ].map((item, index) =>
         historicalProvenanceOptions
           ? (projectHistoricalLocalRecord(

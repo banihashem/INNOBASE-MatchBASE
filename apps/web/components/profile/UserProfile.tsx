@@ -25,7 +25,11 @@ type ProfileHistory = UserProfileHistoryV1 | UserProfileHistoryV2;
 type ProfileView =
   | { state: "loading" }
   | { state: "history"; history: ProfileHistory }
-  | { state: "result"; result: ConsultantVisibleResult }
+  | {
+      state: "result";
+      result: ConsultantVisibleResult;
+      artifactDownload: UserProfileRunV1["artifact_download"];
+    }
   | { state: "error"; message: string };
 
 const STATUS_LABELS: Readonly<Record<string, string>> = {
@@ -239,11 +243,16 @@ export function UserProfile({
     if (view.state !== "loading") headingRef.current?.focus();
   }, [view.state]);
 
-  async function openResult(path: string) {
+  async function openResult(run: UserProfileRunV1) {
+    if (!run.links.result) return;
     setView({ state: "loading" });
     try {
-      const response = await workspaceJson<unknown>(path);
-      setView({ state: "result", result: parseVisibleResult(response.body) });
+      const response = await workspaceJson<unknown>(run.links.result);
+      setView({
+        state: "result",
+        result: parseVisibleResult(response.body),
+        artifactDownload: run.artifact_download ?? null,
+      });
     } catch {
       setView({
         state: "error",
@@ -276,6 +285,7 @@ export function UserProfile({
       <ConsultantResultView
         result={view.result}
         headingRef={headingRef}
+        artifactDownload={view.artifactDownload}
         onBack={() => void loadHistory()}
       />
     );
@@ -329,7 +339,7 @@ function ProfileHistory({
   readonly pageError: string | null;
   readonly onNewRequest?: (() => void) | undefined;
   readonly newRequestHref?: string | undefined;
-  readonly onOpenResult: (path: string) => Promise<void>;
+  readonly onOpenResult: (run: UserProfileRunV1) => Promise<void>;
   readonly onLoadMore: (cursor: string) => void;
 }) {
   const runsByRequest = useMemo(() => {
@@ -488,14 +498,31 @@ function ProfileHistory({
 
                   <div className={styles.cardActions}>
                     {latestRun?.links.result ? (
-                      <button
-                        className="primary-action"
-                        onClick={() =>
-                          void onOpenResult(latestRun.links.result!)
-                        }
-                      >
-                        View result
-                      </button>
+                      <>
+                        <button
+                          className="primary-action"
+                          onClick={() => void onOpenResult(latestRun)}
+                        >
+                          View result
+                        </button>
+                        {latestRun.artifact_download ? (
+                          <a
+                            className="secondary-action"
+                            href={latestRun.artifact_download.href}
+                            download
+                            data-matchbase-artifact-run-id={latestRun.run_id}
+                            data-matchbase-artifact-version-id={
+                              latestRun.artifact_download.artifact_version_id
+                            }
+                            data-matchbase-artifact-version={
+                              latestRun.artifact_download.version
+                            }
+                            aria-label={`Download PDF report for run ${latestRun.run_id}, artifact version ${latestRun.artifact_download.version}`}
+                          >
+                            Download PDF report
+                          </a>
+                        ) : null}
+                      </>
                     ) : latestRun?.outcome === "failed" ? (
                       <span className={styles.failureText}>
                         No result was generated
@@ -558,12 +585,31 @@ function ProfileHistory({
                                   run.run_id !== latestRun?.run_id ? (
                                     <button
                                       className="secondary-action"
-                                      onClick={() =>
-                                        void onOpenResult(run.links.result!)
-                                      }
+                                      onClick={() => void onOpenResult(run)}
                                     >
                                       View this result
                                     </button>
+                                  ) : null}
+                                  {run.artifact_download &&
+                                  run.run_id !== latestRun?.run_id ? (
+                                    <a
+                                      className="secondary-action"
+                                      href={run.artifact_download.href}
+                                      download
+                                      data-matchbase-artifact-run-id={
+                                        run.run_id
+                                      }
+                                      data-matchbase-artifact-version-id={
+                                        run.artifact_download
+                                          .artifact_version_id
+                                      }
+                                      data-matchbase-artifact-version={
+                                        run.artifact_download.version
+                                      }
+                                      aria-label={`Download PDF report for run ${run.run_id}, artifact version ${run.artifact_download.version}`}
+                                    >
+                                      Download PDF report
+                                    </a>
                                   ) : null}
                                 </li>
                               ))}

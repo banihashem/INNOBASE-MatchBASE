@@ -5,6 +5,7 @@ export type WorkerReadinessReason =
   | "database_probe_failed"
   | "database_probe_timeout"
   | "database_operation_failed"
+  | "live_research_admission_failed"
   | "schema_not_ready"
   | "shutdown";
 
@@ -45,14 +46,15 @@ export async function probeDatabaseReadiness(
   database: Queryable,
   readiness: WorkerReadiness,
   timeoutMilliseconds: number,
+  options: Readonly<{ markReadyOnSuccess?: boolean }> = {},
 ): Promise<boolean> {
   if (
     !Number.isInteger(timeoutMilliseconds) ||
     timeoutMilliseconds < 100 ||
-    timeoutMilliseconds > 5_000
+    timeoutMilliseconds > 15_000
   ) {
     throw new Error(
-      "Database readiness timeout must be an integer between 100 and 5000 milliseconds",
+      "Database readiness timeout must be an integer between 100 and 15000 milliseconds",
     );
   }
 
@@ -67,7 +69,7 @@ export async function probeDatabaseReadiness(
         );
       }),
     ]);
-    readiness.markReady();
+    if (options.markReadyOnSuccess !== false) readiness.markReady();
     return true;
   } catch (error) {
     readiness.markUnready(

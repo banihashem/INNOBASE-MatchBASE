@@ -13,14 +13,23 @@ export type ConsultantVisibleResult =
   | ConsultantResultProjectionV1
   | ConsultantResultProjectionV2;
 
+export interface ResultArtifactDownload {
+  readonly run_id: string;
+  readonly artifact_version_id: string;
+  readonly version: number;
+  readonly href: string;
+}
+
 export function ConsultantResultView({
   result,
   onBack,
   headingRef,
+  artifactDownload,
 }: {
   result: ConsultantVisibleResult;
   onBack: () => void;
   headingRef?: RefObject<HTMLHeadingElement | null>;
+  artifactDownload?: ResultArtifactDownload | null | undefined;
 }) {
   if (result.schema_version === "standard-result-projection.v1")
     return (
@@ -85,6 +94,23 @@ export function ConsultantResultView({
       backLabel="Return to runs"
       contextBanner={
         <>
+          {artifactDownload ? (
+            <p>
+              <a
+                className="secondary-action"
+                href={artifactDownload.href}
+                download
+                data-matchbase-artifact-run-id={artifactDownload.run_id}
+                data-matchbase-artifact-version-id={
+                  artifactDownload.artifact_version_id
+                }
+                data-matchbase-artifact-version={artifactDownload.version}
+                aria-label={`Download PDF report for run ${artifactDownload.run_id}, artifact version ${artifactDownload.version}`}
+              >
+                Download PDF report
+              </a>
+            </p>
+          ) : null}
           <dl
             className="result-facts"
             aria-label="Candidate landscape disclosure"

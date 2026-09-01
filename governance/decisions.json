@@ -2,6 +2,11 @@
   "schemaVersion": 1,
   "source": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\OWNER_DECISION_DISPOSITION_REGISTER_PO_001.json",
   "sourceSha256": "817029411A8D0E67318CF9FCE9E9C925BB3A261D9F8ED581EF43AC886919E112",
+  "currentOverlayRefs": [
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md",
+    "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md",
+    "governance/current-state-projection.v1.json"
+  ],
   "summary": {
     "total": 162,
     "closed": 28,

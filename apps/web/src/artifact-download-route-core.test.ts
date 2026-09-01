@@ -60,7 +60,6 @@ describe("artifact download route core", () => {
 
   it.each([
     ["not-a-uuid", "A".repeat(43)],
-    [randomUUID(), null],
     [randomUUID(), "short"],
     [randomUUID(), `${"A".repeat(32)}!`],
   ])(
@@ -84,6 +83,25 @@ describe("artifact download route core", () => {
       expect(download).not.toHaveBeenCalled();
     },
   );
+
+  it("passes a tokenless authenticated product-UI grant to application authorization", async () => {
+    const grantId = randomUUID();
+    const download = vi.fn(async () => ({
+      artifactVersionId: randomUUID(),
+      artifactId: randomUUID(),
+      version: 1,
+      fileSha256: "0".repeat(64),
+      bytes: Uint8Array.from([37, 80, 68, 70]),
+    }));
+    await handleArtifactDownloadRoute({
+      method: "GET",
+      pathname: `/api/v1/artifacts/${grantId}/download`,
+      artifactToken: null,
+      context,
+      application: applicationWithDownload(download),
+    });
+    expect(download).toHaveBeenCalledWith(context, grantId, null);
+  });
 
   it("does not claim unrelated paths or methods", async () => {
     const application = applicationWithDownload(vi.fn());

@@ -5,6 +5,7 @@ import { ArtifactDownloadApplication } from "../../../packages/application/dist/
 import { handleArtifactDownloadRoute } from "../../../apps/web/src/artifact-download-route-core.ts";
 import {
   createPool,
+  ensureSessionArtifactGrantForRun,
   issueArtifactAccessGrant,
   migrateUp,
   retrieveArtifactWithGrant,
@@ -422,6 +423,25 @@ postgresTest(
       assert.equal(downloaded.headers["Cache-Control"], "private, no-store");
       assert.equal("storage_uri" in downloaded, false);
       assert.equal(JSON.stringify(downloaded).includes(issued.token), false);
+      const sessionGrant = await ensureSessionArtifactGrantForRun(isolated, {
+        runId: ids.run,
+        accountId: ids.account,
+        subjectUserId: ids.owner,
+        subjectTier: "consultant",
+      });
+      assert.equal(sessionGrant.runId, ids.run);
+      const sessionDownload = await handleArtifactDownloadRoute({
+        method: "GET",
+        pathname: `/api/v1/artifacts/${sessionGrant.grantId}/download`,
+        artifactToken: null,
+        context: { ...downloadContext, correlationId: randomUUID() },
+        application: downloadApplication,
+      });
+      assert.equal(sessionDownload.status, 200);
+      assert.equal(
+        JSON.stringify(sessionDownload).includes("product-ui-session-bound"),
+        false,
+      );
       await assert.rejects(
         downloadApplication.download(
           { ...downloadContext, correlationId: randomUUID() },
@@ -512,12 +532,14 @@ postgresTest(
         /invalid, expired, revoked, or not entitled/u,
       );
       const outcomes = await isolated.query(
-        `SELECT outcome,fields_released FROM audit_event
+        `SELECT outcome,fields_released,resource_id,actor_user_id,account_id,detail
+           FROM audit_event
           WHERE event_type='artifact.download' ORDER BY occurred_at,audit_id`,
       );
       assert.deepEqual(
         outcomes.rows.map(({ outcome }) => outcome).sort(),
         [
+          "allow",
           "allow",
           "allow",
           "deny",
@@ -535,13 +557,36 @@ postgresTest(
           .fields_released,
         ["artifact_bytes"],
       );
+      const sessionAllows = outcomes.rows.filter(
+        ({ outcome, detail }) =>
+          outcome === "allow" &&
+          detail.grant_id === sessionGrant.grantId &&
+          detail.access_mode === "authenticated_product_ui",
+      );
+      assert.equal(sessionAllows.length, 1);
+      assert.equal(sessionAllows[0].resource_id, ids.version);
+      assert.equal(sessionAllows[0].actor_user_id, ids.owner);
+      assert.equal(sessionAllows[0].account_id, ids.account);
+      assert.equal(
+        sessionAllows[0].detail.file_sha256,
+        digest(releasedBytes).toString("hex"),
+      );
+      assert.equal(sessionAllows[0].detail.byte_size, releasedBytes.byteLength);
+      assert.equal(
+        outcomes.rows.filter(
+          ({ outcome, detail }) =>
+            outcome === "allow" &&
+            detail.access_mode === "authenticated_product_ui",
+        ).length,
+        1,
+      );
       assert.equal(
         (
           await isolated.query(
             "SELECT count(*)::integer AS count FROM artifact_access_grant_use",
           )
         ).rows[0].count,
-        2,
+        3,
       );
     } finally {
       await isolated?.end();

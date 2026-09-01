@@ -55,5 +55,39 @@
   },
   "deployment": {
     "status": "NOT_STARTED"
+  },
+  "historicalObservation": true,
+  "currentProjectionRef": "governance/current-state-projection.v1.json",
+  "currentProjection": {
+    "observedAt": "2026-09-01T18:00:00+04:00",
+    "github": {
+      "repository": "banihashem/INNOBASE-MatchBASE",
+      "branch": "main",
+      "deployedPredecessorSourceCommit": "1224b4c485a9f3533a15e1d50b606f7aa53c2d23",
+      "status": "CURRENT_SOURCE_STATE_RUNTIME_DERIVED",
+      "relationship": "STATIC_COMMIT_IDENTIFIES_THE_DEPLOYED_PREDECESSOR;_CURRENT_HEAD_ORIGIN_AND_WORKTREE_STATE_ARE_DERIVED_IN_THE_DASHBOARD_SNAPSHOT"
+    },
+    "gcp": {
+      "project": "innobase-matchbase-stg",
+      "region": "me-central1",
+      "readiness": "DEGRADED_REMEDIATION_PENDING_DEPLOY",
+      "production": "UNTOUCHED"
+    },
+    "cloudflare": {
+      "zone": "innobase.app",
+      "origin": "https://matchbase-staging.innobase.app",
+      "readiness": "DEGRADED_REMEDIATION_PENDING_DEPLOY"
+    },
+    "deployment": {
+      "status": "STAGING_DEGRADED_REMEDIATION_PENDING_DEPLOY",
+      "webRevision": "matchbase-staging-web-00034-cn5",
+      "workerRevision": "matchbase-staging-worker-00045-k2b",
+      "migrationHead": "0011_admin_system_scope_and_run_tier_immutability",
+      "deployedRelationship": "DEPLOYED_PREDECESSOR_CURRENT_REMEDIATION_UNDEPLOYED_SOURCE_STATE_RUNTIME_DERIVED"
+    },
+    "evidenceRefs": [
+      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md",
+      "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md"
+    ]
   }
 }

@@ -47,6 +47,15 @@ the historical record as provenance.
   `me-central1` source provenance. Build `7a956868...` images remain
   non-deployable. The combined VERIFIED/deploy-gate patch is
   uncommitted/runtime-derived.
+- Build `9023f76a-e60c-41c0-b21d-d46f0d6a5817` succeeded with VERIFIED
+  provenance requested for revision `1f1a438685cb951a5bb30a17ca072aab1e1c6be6`
+  and published web digest
+  `sha256:1efa936f4fa1ea56c39c2985a1616b1e22f9f9ad8b782ada2ee589020ebb0817`
+  plus worker digest
+  `sha256:f5f40a8602c4f23dcea0e3b3e9a7e5a6153d2e2ea135cf297e1eda8ca4b0146b`.
+  SLSA level 3 appeared as one v1 and one legacy v0.1 occurrence. Parser
+  cardinality/old-schema admission failed closed; no deployment occurred. The
+  parser/build-record/retry correction is uncommitted/runtime-derived.
 - Staging project: `innobase-matchbase-stg`
 - Region: `me-central1`
 - Public origin: `https://matchbase-staging.innobase.app`

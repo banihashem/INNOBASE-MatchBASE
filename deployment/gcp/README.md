@@ -361,6 +361,13 @@ no `provenance_summary`. Publisher admission therefore failed closed and no
 deployment occurred. The `options.requestedVerifyOption=VERIFIED` correction is
 runtime-derived/uncommitted.
 
+Build `9023f76a-e60c-41c0-b21d-d46f0d6a5817` subsequently succeeded with
+`requestedVerifyOption=VERIFIED` at exact revision
+`1f1a438685cb951a5bb30a17ca072aab1e1c6be6` and published two images. SLSA
+level 3 appeared as one v1 plus one legacy v0.1 occurrence. The parser rejected
+the cardinality/old schema and publisher admission failed closed before
+deployment. Parser/build-record/retry correction is runtime-derived/uncommitted.
+
 Role 2 passed the repository deployment-admission remediation. Deployment still
 fails closed unless `CandidateCommit` equals a clean `HEAD` and `origin/main`
 and live source SLSA provenance validates both exact digests before mutation.

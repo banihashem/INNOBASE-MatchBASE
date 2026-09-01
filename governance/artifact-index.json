@@ -46,8 +46,14 @@
     },
     {
       "id": "BUILD-P5-LINKED-SOURCE-7A956868",
-      "status": "BUILD_PASS_PUBLISHER_ADMISSION_FAIL",
+      "status": "HISTORICAL_BUILD_PASS_PUBLISHER_ADMISSION_FAIL",
       "summary": "Build 7a956868-3d02-414b-b4dc-988d7c215cdf succeeded for exact connected-repository revision fee259e18ce4a6ba73195e06f3248be0043d64a3 and published web sha256:aef287862e2ce0dcb0a8e960df3226afc107f3a7e12024d8c882cc1f1ea8e212 plus worker sha256:e95f35067717731badf61accd80e2c974a6a63443dc3a739fb136667c86226ba. Provenance output lacked provenance_summary and reported unknown SLSA level, so the publisher failed closed and nothing was deployed.",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"]
+    },
+    {
+      "id": "BUILD-P5-LINKED-SOURCE-9023F76A",
+      "status": "BUILD_PASS_PUBLISHER_ADMISSION_FAIL",
+      "summary": "Build 9023f76a-e60c-41c0-b21d-d46f0d6a5817 succeeded with requestedVerifyOption VERIFIED for revision 1f1a438685cb951a5bb30a17ca072aab1e1c6be6 and published web sha256:1efa936f4fa1ea56c39c2985a1616b1e22f9f9ad8b782ada2ee589020ebb0817 plus worker sha256:f5f40a8602c4f23dcea0e3b3e9a7e5a6153d2e2ea135cf297e1eda8ca4b0146b. SLSA level 3 appeared in one v1 and one legacy v0.1 occurrence; parser cardinality/schema admission failed closed. No deployment occurred.",
       "evidenceRefs": ["governance/current-state-projection.v1.json"]
     }
   ],

@@ -19,6 +19,10 @@ test("Cloud Run deployment gates every mutation on exact commit and two live pro
     script,
     /foreach \(\$image in @\(\$WebImageDigest, \$WorkerImageDigest\)\)/u,
   );
+  assert.match(script, /builds", "describe", \$provenanceBuildIds\[0\]/u);
+  const buildRecordGate = script.indexOf(
+    'builds", "describe", $provenanceBuildIds[0]',
+  );
   const provenanceGate = script.indexOf("--show-provenance");
   for (const mutation of [
     "add-iam-policy-binding",
@@ -28,6 +32,15 @@ test("Cloud Run deployment gates every mutation on exact commit and two live pro
     assert.ok(
       provenanceGate > -1 && provenanceGate < script.indexOf(mutation),
       `${mutation} precedes provenance gate`,
+    );
+  for (const mutation of [
+    "add-iam-policy-binding",
+    "Invoke-Gcloud -Arguments $workerCommand",
+    "Invoke-Gcloud -Arguments $webCommand",
+  ])
+    assert.ok(
+      buildRecordGate > -1 && buildRecordGate < script.indexOf(mutation),
+      `${mutation} precedes build-record gate`,
     );
 });
 
@@ -52,6 +65,6 @@ test("image-summary-only Artifact Registry response is rejected before deploymen
           repository: "https://github.com/banihashem/INNOBASE-MatchBASE.git",
         },
       ),
-    /exactly one provenance occurrence is required/u,
+    /provenance occurrence collection is absent/u,
   );
 });

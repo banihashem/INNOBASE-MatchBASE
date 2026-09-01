@@ -8,6 +8,7 @@ param(
 
 . (Join-Path $PSScriptRoot "Common.ps1")
 . (Join-Path $PSScriptRoot "Invoke-GcloudStdout.ps1")
+. (Join-Path $PSScriptRoot "Invoke-BoundedProvenanceProbe.ps1")
 $project = "innobase-matchbase-stg"
 $region = "me-central1"
 $repository = "matchbase"
@@ -19,6 +20,7 @@ $policyRelative = "config/slice3/research-route-policy.staging.v1.json"
 $policyPath = Join-Path $repoRoot $policyRelative
 $configPath = Join-Path $repoRoot "cloudbuild.staging.yaml"
 $parser = Join-Path $repoRoot "scripts/lib/staging-eu-provenance.mjs"
+$buildRecordParser = Join-Path $repoRoot "scripts/lib/staging-build-record.mjs"
 $preflightParser = Join-Path $repoRoot "scripts/lib/staging-build-preflight.mjs"
 $policySha = (Get-FileHash -LiteralPath $policyPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $policyId = $policySha.Substring(0, 16)
@@ -86,14 +88,35 @@ $arguments = @("builds", "submit", $sourceRepository, "--revision=$CandidateComm
 if (-not $Apply) { Write-GcloudPlan -Arguments $arguments; return }
 Assert-ApplyConfirmation -Apply $true -ExpectedProjectId $project -ConfirmProjectId $ConfirmProjectId
 Invoke-Gcloud -Arguments $arguments | Out-Null
-foreach ($tag in @($webTag, $workerTag)) {
+$published = @()
+$buildIds = @()
+$resolvedImages = @($webTag, $workerTag) | ForEach-Object {
+  $tag = $_
   $digest = Invoke-Gcloud -Arguments @("artifacts", "docker", "images", "describe", $tag, "--project=$project", "--format=value(image_summary.fully_qualified_digest)")
   if ($digest -cnotmatch "^$([regex]::Escape($tag.Split(':')[0]))@sha256:[a-f0-9]{64}$") { throw "Published image did not resolve to its immutable digest." }
+  $digest
+}
+for ($imageIndex = 0; $imageIndex -lt $resolvedImages.Count; $imageIndex++) {
+  $digest = $resolvedImages[$imageIndex]
+  $peerDigest = $resolvedImages[1 - $imageIndex]
   $temporary = Join-Path ([IO.Path]::GetTempPath()) "matchbase-build-provenance-$([guid]::NewGuid().ToString('N')).json"
   try {
-    Invoke-GcloudStdout -Arguments @("artifacts", "docker", "images", "describe", $digest, "--project=$project", "--show-provenance", "--format=json") | Set-Content -LiteralPath $temporary -Encoding utf8NoBOM
-    & node $parser --file $temporary --image $digest --commit $CandidateCommit | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Closed SLSA/in-toto provenance validation failed for '$digest'." }
-    Write-Output $digest
+    $validated = Invoke-BoundedProvenanceProbe -Attempt {
+      param([int]$Probe)
+      Invoke-GcloudStdout -Arguments @("artifacts", "docker", "images", "describe", $digest, "--project=$project", "--show-provenance", "--format=json") | Set-Content -LiteralPath $temporary -Encoding utf8NoBOM
+      $validationOutput = (& node $parser --file $temporary --image $digest --peer-image $peerDigest --commit $CandidateCommit 2>$null | Out-String).Trim()
+      if ($LASTEXITCODE -eq 0) { return ($validationOutput | ConvertFrom-Json) }
+      return $null
+    }
+    $buildIds += [string]$validated.build_id
+    $published += $digest
   } finally { Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue }
 }
+if (($buildIds | Sort-Object -Unique).Count -ne 1) { throw "Published images do not bind to one exact Cloud Build invocation." }
+$buildRecordFile = Join-Path ([IO.Path]::GetTempPath()) "matchbase-build-record-$([guid]::NewGuid().ToString('N')).json"
+try {
+  Invoke-GcloudStdout -Arguments @("builds", "describe", $buildIds[0], "--project=$project", "--region=$region", "--format=json") | Set-Content -LiteralPath $buildRecordFile -Encoding utf8NoBOM
+  & node $buildRecordParser --file $buildRecordFile --build-id $buildIds[0] --commit $CandidateCommit --policy-sha $policySha --policy-id $policyId --web-tag $webTag --worker-tag $workerTag --web-digest $resolvedImages[0].Split('@')[1] --worker-digest $resolvedImages[1].Split('@')[1] | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "Closed Cloud Build record validation failed." }
+} finally { Remove-Item -LiteralPath $buildRecordFile -Force -ErrorAction SilentlyContinue }
+$published | Write-Output

@@ -179,7 +179,17 @@ if ($originUrl -cne "https://github.com/banihashem/INNOBASE-MatchBASE.git") { th
 $originMain = ((& git -C (Join-Path $PSScriptRoot "..\..") ls-remote origin refs/heads/main | Out-String).Trim() -split '\s+')[0]
 if ($LASTEXITCODE -ne 0 -or $originMain -cne $CandidateCommit) { throw "origin/main must resolve to the exact candidate commit." }
 $provenanceParser = Join-Path $PSScriptRoot "..\..\scripts\lib\staging-eu-provenance.mjs"
+. (Join-Path $PSScriptRoot "Invoke-BoundedProvenanceProbe.ps1")
+$buildRecordParser = Join-Path $PSScriptRoot "..\..\scripts\lib\staging-build-record.mjs"
 $imageBindingParser = Join-Path $PSScriptRoot "..\..\scripts\lib\deploy-image-source-binding.mjs"
+$provenanceBuildIds = @()
+$sourceImages = @()
+$expectedSourceImages = @($WebImageDigest, $WorkerImageDigest) | ForEach-Object {
+  if ($_.StartsWith("europe-west2-docker.pkg.dev/", [StringComparison]::Ordinal)) {
+    "me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/$($_.Split('/')[-1])"
+  } else { $_ }
+}
+$imageIndex = 0
 foreach ($image in @($WebImageDigest, $WorkerImageDigest)) {
   $capture = Join-Path ([IO.Path]::GetTempPath()) "matchbase-deploy-provenance-$([guid]::NewGuid().ToString('N')).json"
   $targetCapture = Join-Path ([IO.Path]::GetTempPath()) "matchbase-deploy-target-$([guid]::NewGuid().ToString('N')).json"
@@ -191,11 +201,28 @@ foreach ($image in @($WebImageDigest, $WorkerImageDigest)) {
       if ($LASTEXITCODE -ne 0) { throw "EU deployment image is absent or its target identity is forged." }
       $sourceImage = [string](($binding | ConvertFrom-Json).source_image)
     }
-    Invoke-GcloudStdout -Arguments @("artifacts", "docker", "images", "describe", $sourceImage, "--project=$ProjectId", "--show-provenance", "--format=json") | Set-Content -LiteralPath $capture -Encoding utf8NoBOM
-    & node $provenanceParser --file $capture --image $sourceImage --commit $CandidateCommit | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Deployment image provenance is absent, incomplete, or not bound to the exact candidate." }
+    $validated = Invoke-BoundedProvenanceProbe -Attempt {
+      param([int]$Probe)
+      Invoke-GcloudStdout -Arguments @("artifacts", "docker", "images", "describe", $sourceImage, "--project=$ProjectId", "--show-provenance", "--format=json") | Set-Content -LiteralPath $capture -Encoding utf8NoBOM
+      $validationOutput = (& node $provenanceParser --file $capture --image $sourceImage --peer-image $expectedSourceImages[1 - $imageIndex] --commit $CandidateCommit 2>$null | Out-String).Trim()
+      if ($LASTEXITCODE -eq 0) { return ($validationOutput | ConvertFrom-Json) }
+      return $null
+    }
+    $provenanceBuildIds += [string]$validated.build_id
+    $sourceImages += $sourceImage
   } finally { Remove-Item -LiteralPath $capture, $targetCapture -Force -ErrorAction SilentlyContinue }
+  $imageIndex++
 }
+if (($provenanceBuildIds | Sort-Object -Unique).Count -ne 1) { throw "Deployment images do not bind to one exact Cloud Build invocation." }
+$policyId = $routePolicySha256.Substring(0, 16)
+$webSourceTag = "$($sourceImages[0].Split('@')[0]):$CandidateCommit"
+$workerSourceTag = "$($sourceImages[1].Split('@')[0]):$CandidateCommit"
+$buildRecordCapture = Join-Path ([IO.Path]::GetTempPath()) "matchbase-deploy-build-record-$([guid]::NewGuid().ToString('N')).json"
+try {
+  Invoke-GcloudStdout -Arguments @("builds", "describe", $provenanceBuildIds[0], "--project=$ProjectId", "--region=me-central1", "--format=json") | Set-Content -LiteralPath $buildRecordCapture -Encoding utf8NoBOM
+  & node $buildRecordParser --file $buildRecordCapture --build-id $provenanceBuildIds[0] --commit $CandidateCommit --policy-sha $routePolicySha256 --policy-id $policyId --web-tag $webSourceTag --worker-tag $workerSourceTag --web-digest $sourceImages[0].Split('@')[1] --worker-digest $sourceImages[1].Split('@')[1] | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "Deployment Cloud Build record is not governed by the exact source revision and build contract." }
+} finally { Remove-Item -LiteralPath $buildRecordCapture -Force -ErrorAction SilentlyContinue }
 Invoke-Gcloud -Arguments @("run", "worker-pools", "deploy", "--help") | Out-Null
 Invoke-Gcloud -Arguments @("iam", "service-accounts", "describe", $webEmail, "--project=$ProjectId", "--format=value(email)") | Out-Null
 Invoke-Gcloud -Arguments @("iam", "service-accounts", "describe", $workerEmail, "--project=$ProjectId", "--format=value(email)") | Out-Null

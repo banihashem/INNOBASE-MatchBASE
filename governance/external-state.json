@@ -89,19 +89,26 @@
           "status": "FAILURE",
           "failureType": "USER_BUILD_STEP",
           "imagesProduced": 0
+        },
+        {
+          "id": "7a956868-3d02-414b-b4dc-988d7c215cdf",
+          "status": "SUCCESS",
+          "imagesPublished": 2,
+          "publisherAdmission": "FAILED_CLOSED_PROVENANCE_SUMMARY_ABSENT_SLSA_LEVEL_UNKNOWN"
         }
       ],
       "lastLinkedSourceBuild": {
-        "id": "7a956868-3d02-414b-b4dc-988d7c215cdf",
+        "id": "9023f76a-e60c-41c0-b21d-d46f0d6a5817",
         "sourceFetch": "SUCCEEDED_CONNECTED_REPOSITORY",
-        "sourceRevision": "fee259e18ce4a6ba73195e06f3248be0043d64a3",
+        "sourceRevision": "1f1a438685cb951a5bb30a17ca072aab1e1c6be6",
+        "requestedVerifyOption": "VERIFIED",
         "status": "SUCCESS",
         "imagesPublished": 2,
-        "webDigest": "sha256:aef287862e2ce0dcb0a8e960df3226afc107f3a7e12024d8c882cc1f1ea8e212",
-        "workerDigest": "sha256:e95f35067717731badf61accd80e2c974a6a63443dc3a739fb136667c86226ba",
-        "provenance": "IMAGE_SUMMARY_ONLY_SLSA_BUILD_LEVEL_UNKNOWN_NO_PROVENANCE_SUMMARY",
-        "publisherAdmission": "FAILED_CLOSED",
-        "requestedVerifyOptionPatch": "UNCOMMITTED_RUNTIME_DERIVED"
+        "webDigest": "sha256:1efa936f4fa1ea56c39c2985a1616b1e22f9f9ad8b782ada2ee589020ebb0817",
+        "workerDigest": "sha256:f5f40a8602c4f23dcea0e3b3e9a7e5a6153d2e2ea135cf297e1eda8ca4b0146b",
+        "provenance": "SLSA_LEVEL_3_ONE_V1_AND_ONE_LEGACY_V0_1_OCCURRENCE",
+        "publisherAdmission": "FAILED_CLOSED_PARSER_CARDINALITY_AND_SCHEMA",
+        "parserBuildRecordRetryPatch": "UNCOMMITTED_RUNTIME_DERIVED"
       },
       "readiness": "DEGRADED_REMEDIATION_PENDING_DEPLOY",
       "production": "UNTOUCHED"

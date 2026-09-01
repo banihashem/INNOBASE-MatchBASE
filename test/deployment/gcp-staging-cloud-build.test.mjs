@@ -66,13 +66,20 @@ test("governed Staging Cloud Build binds exact Git material, images and provenan
   assert.match(publisher, /repositories", "describe"[\s\S]*--format=json/u);
   assert.equal(
     (publisher.match(/Invoke-GcloudStdout[^\n]+--format=json/gu) ?? []).length,
-    5,
+    6,
   );
   assert.doesNotMatch(
     publisher,
     /Invoke-Gcloud -Arguments[^\n]+--format=json/u,
   );
   assert.match(publisher, /immutableTags/u);
+  assert.match(publisher, /Invoke-BoundedProvenanceProbe/u);
+  assert.match(publisher, /builds", "describe", \$buildIds\[0\]/u);
+  assert.ok(
+    publisher.indexOf('builds", "describe", $buildIds[0]') <
+      publisher.indexOf("$published | Write-Output"),
+    "build record must validate before published digests are emitted",
+  );
   assert.match(publisher, /DOCKER/u);
   assert.match(
     publisher,

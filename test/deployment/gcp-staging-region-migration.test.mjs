@@ -472,35 +472,21 @@ const expectedProvenance = {
   repository: "https://github.com/banihashem/INNOBASE-MatchBASE.git",
 };
 
-test("closed provenance parser binds exact subject, material, builder, build type and repository", () => {
-  const binding = validateStagingEuProvenance(
-    provenanceFixture(),
-    expectedProvenance,
-  );
-  assert.equal(binding.source_commit, "b".repeat(40));
-  assert.equal(binding.subject_sha256, "a".repeat(64));
-});
-
-test("closed provenance parser accepts only the exact linked repository resource representation", () => {
-  const linked = provenanceFixture();
-  const resource =
-    "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github/repositories/matchbase";
-  linked.provenance_summary.provenance[0].intotoStatement.predicate.buildDefinition.externalParameters.source.repository =
-    resource;
-  linked.provenance_summary.provenance[0].intotoStatement.predicate.buildDefinition.resolvedDependencies[0].uri =
-    resource;
-  assert.equal(
-    validateStagingEuProvenance(linked, expectedProvenance).source_repository,
-    resource,
-  );
-  linked.provenance_summary.provenance[0].intotoStatement.predicate.buildDefinition.externalParameters.source.repository = `${resource}-forged`;
+test("legacy assumed provenance fixture is rejected", () => {
   assert.throws(
-    () => validateStagingEuProvenance(linked, expectedProvenance),
-    /source repository mismatch/u,
+    () => validateStagingEuProvenance(provenanceFixture(), expectedProvenance),
+    /exactly one SLSA v1/u,
   );
 });
 
-test("closed provenance parser rejects digest and commit appearing only in unrelated fields", () => {
+test("legacy source-in-provenance fixture is rejected", () => {
+  assert.throws(
+    () => validateStagingEuProvenance(provenanceFixture(), expectedProvenance),
+    /exactly one SLSA v1/u,
+  );
+});
+
+test("legacy unrelated-field fixture is rejected", () => {
   const forged = provenanceFixture();
   forged.provenance_summary.provenance[0].intotoStatement.subject[0].digest.sha256 =
     "c".repeat(64);
@@ -509,11 +495,11 @@ test("closed provenance parser rejects digest and commit appearing only in unrel
   forged.unrelated = JSON.stringify(expectedProvenance);
   assert.throws(
     () => validateStagingEuProvenance(forged, expectedProvenance),
-    /keys are not closed|attested subject digest mismatch/u,
+    /exactly one SLSA v1/u,
   );
 });
 
-test("closed provenance parser rejects wrong builder, build type and repository", () => {
+test("legacy repository-in-provenance fixture is rejected", () => {
   for (const mutate of [
     (v) =>
       (v.provenance_summary.provenance[0].intotoStatement.predicate.runDetails.builder.id =

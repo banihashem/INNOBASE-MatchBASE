@@ -51,6 +51,7 @@ test("the closed migration map preserves the active source and names the EU targ
   );
   assert.match(evidenceProducer, /\(\[string\]\$migration\.UrlMap\)/u);
   assert.doesNotMatch(evidenceProducer, /matchbase-staging-url-map/u);
+  assert.match(evidenceProducer, /--peer-image \$PeerImage/u);
 });
 
 test("the migration defaults to a complete plan and makes no cloud call", () => {

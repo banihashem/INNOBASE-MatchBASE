@@ -154,12 +154,12 @@ function Resolve-PinnedGcrane {
 }
 
 function Get-ClosedProvenanceBinding {
-  param([Parameter(Mandatory)][string]$Raw, [Parameter(Mandatory)][string]$Image, [Parameter(Mandatory)][string]$Commit)
+  param([Parameter(Mandatory)][string]$Raw, [Parameter(Mandatory)][string]$Image, [Parameter(Mandatory)][string]$PeerImage, [Parameter(Mandatory)][string]$Commit)
   $parser = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..\scripts\lib\staging-eu-provenance.mjs") -ErrorAction Stop).Path
   $work = Join-Path ([IO.Path]::GetTempPath()) "matchbase-apply-provenance-$([guid]::NewGuid().ToString('N')).json"
   try {
     Set-Content -LiteralPath $work -Value $Raw -Encoding utf8NoBOM
-    $normalized = (& node $parser --file $work --image $Image --commit $Commit 2>&1 | Out-String).Trim()
+    $normalized = (& node $parser --file $work --image $Image --peer-image $PeerImage --commit $Commit 2>&1 | Out-String).Trim()
     if ($LASTEXITCODE -ne 0) { throw "Closed Artifact Registry provenance validation failed." }
     return $normalized | ConvertFrom-Json
   } finally { Remove-Item -LiteralPath $work -Force -ErrorAction SilentlyContinue }
@@ -208,13 +208,13 @@ function Get-GovernedEvidence {
   if ($webProvenance.Count -ne 1 -or $workerProvenance.Count -ne 1 -or
       $evidence.candidate.web_build_provenance_sha256 -cne $webProvenance[0].stdout_sha256 -or
       $evidence.candidate.worker_build_provenance_sha256 -cne $workerProvenance[0].stdout_sha256) { throw "Signed Artifact Registry provenance captures are missing or substituted." }
-  $signedWebBinding = Get-ClosedProvenanceBinding -Raw ([string]$webProvenance[0].stdout) -Image $WebSourceImageDigest -Commit $candidateCommit
-  $signedWorkerBinding = Get-ClosedProvenanceBinding -Raw ([string]$workerProvenance[0].stdout) -Image $WorkerSourceImageDigest -Commit $candidateCommit
+  $signedWebBinding = Get-ClosedProvenanceBinding -Raw ([string]$webProvenance[0].stdout) -Image $WebSourceImageDigest -PeerImage $WorkerSourceImageDigest -Commit $candidateCommit
+  $signedWorkerBinding = Get-ClosedProvenanceBinding -Raw ([string]$workerProvenance[0].stdout) -Image $WorkerSourceImageDigest -PeerImage $WebSourceImageDigest -Commit $candidateCommit
   if (($signedWebBinding | ConvertTo-Json -Compress) -cne ($evidence.candidate.web_provenance_binding | ConvertTo-Json -Compress) -or ($signedWorkerBinding | ConvertTo-Json -Compress) -cne ($evidence.candidate.worker_provenance_binding | ConvertTo-Json -Compress)) { throw "Signed closed provenance bindings do not match the evidence candidate." }
-  foreach ($binding in @(@($WebSourceImageDigest, $evidence.candidate.web_build_provenance_sha256, $evidence.candidate.web_provenance_binding), @($WorkerSourceImageDigest, $evidence.candidate.worker_build_provenance_sha256, $evidence.candidate.worker_provenance_binding))) {
+  foreach ($binding in @(@($WebSourceImageDigest, $WorkerSourceImageDigest, $evidence.candidate.web_build_provenance_sha256, $evidence.candidate.web_provenance_binding), @($WorkerSourceImageDigest, $WebSourceImageDigest, $evidence.candidate.worker_build_provenance_sha256, $evidence.candidate.worker_provenance_binding))) {
     $liveProvenance = (Invoke-MigrationGcloud -Arguments @("artifacts", "docker", "images", "describe", [string]$binding[0], "--project=$ProjectId", "--show-provenance", "--format=json") | Out-String).Trim()
-    $liveBinding = Get-ClosedProvenanceBinding -Raw $liveProvenance -Image ([string]$binding[0]) -Commit $candidateCommit
-    if ((Get-Sha256Text -Text $liveProvenance) -cne [string]$binding[1] -or ($liveBinding | ConvertTo-Json -Compress) -cne ($binding[2] | ConvertTo-Json -Compress)) { throw "Live Artifact Registry provenance changed after evidence capture." }
+    $liveBinding = Get-ClosedProvenanceBinding -Raw $liveProvenance -Image ([string]$binding[0]) -PeerImage ([string]$binding[1]) -Commit $candidateCommit
+    if ((Get-Sha256Text -Text $liveProvenance) -cne [string]$binding[2] -or ($liveBinding | ConvertTo-Json -Compress) -cne ($binding[3] | ConvertTo-Json -Compress)) { throw "Live Artifact Registry provenance changed after evidence capture." }
   }
   $capturedAt = [datetimeoffset]::MinValue
   if (-not [datetimeoffset]::TryParse([string]$evidence.captured_at_utc, [ref]$capturedAt)) { throw "Checkpoint evidence captured_at_utc is invalid." }

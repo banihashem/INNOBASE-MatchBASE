@@ -38,12 +38,12 @@ function Invoke-DatabaseFactCapture {
 }
 
 function Get-ClosedBuildProvenanceBinding {
-  param([Parameter(Mandatory)][object]$Capture, [Parameter(Mandatory)][string]$Image)
+  param([Parameter(Mandatory)][object]$Capture, [Parameter(Mandatory)][string]$Image, [Parameter(Mandatory)][string]$PeerImage)
   $parser = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..\scripts\lib\staging-eu-provenance.mjs") -ErrorAction Stop).Path
   $work = Join-Path ([IO.Path]::GetTempPath()) "matchbase-provenance-$([guid]::NewGuid().ToString('N')).json"
   try {
     Set-Content -LiteralPath $work -Value ([string]$Capture.stdout) -Encoding utf8NoBOM
-    $normalized = (& node $parser --file $work --image $Image --commit $CandidateCommit 2>&1 | Out-String).Trim()
+    $normalized = (& node $parser --file $work --image $Image --peer-image $PeerImage --commit $CandidateCommit 2>&1 | Out-String).Trim()
     if ($LASTEXITCODE -ne 0) { throw "Closed Artifact Registry build-provenance parser rejected candidate image." }
     return $normalized | ConvertFrom-Json
   } finally { Remove-Item -LiteralPath $work -Force -ErrorAction SilentlyContinue }
@@ -69,8 +69,8 @@ $captures = @(
 )
 $webProvenance = Invoke-ReadOnlyCapture -Id "candidate-web-build-provenance" -Arguments @("artifacts", "docker", "images", "describe", $WebSourceImageDigest, "--project=$project", "--show-provenance", "--format=json")
 $workerProvenance = Invoke-ReadOnlyCapture -Id "candidate-worker-build-provenance" -Arguments @("artifacts", "docker", "images", "describe", $WorkerSourceImageDigest, "--project=$project", "--show-provenance", "--format=json")
-$webProvenanceBinding = Get-ClosedBuildProvenanceBinding -Capture $webProvenance -Image $WebSourceImageDigest
-$workerProvenanceBinding = Get-ClosedBuildProvenanceBinding -Capture $workerProvenance -Image $WorkerSourceImageDigest
+$webProvenanceBinding = Get-ClosedBuildProvenanceBinding -Capture $webProvenance -Image $WebSourceImageDigest -PeerImage $WorkerSourceImageDigest
+$workerProvenanceBinding = Get-ClosedBuildProvenanceBinding -Capture $workerProvenance -Image $WorkerSourceImageDigest -PeerImage $WebSourceImageDigest
 $captures += $webProvenance
 $captures += $workerProvenance
 

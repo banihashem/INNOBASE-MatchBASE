@@ -565,13 +565,13 @@ function Copy-AllSourceArtifactGenerations {
 
 function New-FreshBackupAndRestore {
   param([Parameter(Mandatory)][string]$Label)
+  $backupDescription = "matchbase-$Label-fresh-$([datetimeoffset]::UtcNow.ToString('yyyyMMddTHHmmssZ'))-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
   $backupArguments = @(
     "sql", "backups", "create",
     "--project=$ProjectId",
     "--instance=$($migration.SourceCloudSqlInstance)",
     "--location=eu",
-    "--description=matchbase-$Label-fresh-backup",
-    "--format=value(id)",
+    "--description=$backupDescription",
     "--quiet"
   )
   $restoreTemplate = @(
@@ -581,22 +581,27 @@ function New-FreshBackupAndRestore {
     "--restore-instance=$($migration.TargetCloudSqlInstance)",
     "--quiet"
   )
+  $discoveryArguments = @(
+    "sql", "backups", "list",
+    "--project=$ProjectId",
+    "--instance=$($migration.SourceCloudSqlInstance)",
+    "--filter=description=$backupDescription",
+    "--format=json(id,status,location,description)"
+  )
   if (-not $Apply) {
     Write-MigrationGcloudPlan -Arguments $backupArguments
+    Write-MigrationGcloudPlan -Arguments $discoveryArguments
     Write-MigrationGcloudPlan -Arguments $restoreTemplate
     return
   }
-  $backupId = Invoke-MigrationGcloud -Arguments $backupArguments
-  if ($backupId -cnotmatch '^[1-9][0-9]*$') {
-    throw "Fresh Cloud SQL backup did not return a numeric backup ID."
+  $null = Invoke-MigrationGcloud -Arguments $backupArguments
+  $matches = @((Invoke-MigrationGcloud -Arguments $discoveryArguments | ConvertFrom-Json -DateKind String))
+  if ($matches.Count -ne 1 -or [string]$matches[0].id -cnotmatch '^[1-9][0-9]*$' -or
+      [string]$matches[0].description -cne $backupDescription -or [string]$matches[0].status -cne "SUCCESSFUL" -or
+      [string]$matches[0].location -cne "eu") {
+    throw "Fresh Cloud SQL backup discovery did not return one exact successful European backup."
   }
-  $status = Invoke-MigrationGcloud -Arguments @(
-    "sql", "backups", "describe", $backupId,
-    "--project=$ProjectId",
-    "--instance=$($migration.SourceCloudSqlInstance)",
-    "--format=value(status)"
-  )
-  if ($status -cne "SUCCESSFUL") { throw "Fresh Cloud SQL backup '$backupId' is not SUCCESSFUL." }
+  $backupId = [string]$matches[0].id
   $restoreArguments = @($restoreTemplate | ForEach-Object { if ($_ -ceq "<FRESH_BACKUP_ID>") { $backupId } else { $_ } })
   $null = Invoke-MigrationGcloud -Arguments $restoreArguments
   return $backupId

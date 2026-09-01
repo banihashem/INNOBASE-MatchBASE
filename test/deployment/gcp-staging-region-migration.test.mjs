@@ -139,11 +139,16 @@ test("database checkpoints always plan a fresh backup and restore", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.match(
       result.stdout,
-      /gcloud sql backups create[\s\S]*--location=eu[\s\S]*--format=value\(id\)/u,
+      /gcloud sql backups create[\s\S]*--location=eu[\s\S]*--description=matchbase-/u,
     );
+    assert.doesNotMatch(result.stdout, /--format=value\(id\)/u);
     assert.match(
       result.stdout,
       /gcloud sql backups restore <FRESH_BACKUP_ID>[\s\S]*--restore-instance=matchbase-stg-pg18-ew2/u,
+    );
+    assert.match(
+      result.stdout,
+      /gcloud sql backups list[\s\S]*--filter=description=/u,
     );
     assert.match(
       result.stdout,

@@ -83,6 +83,11 @@ written with a generation-match precondition:
 - every later checkpoint reads, verifies, and extends the EU ledger;
 - `Cutover` re-downloads every predecessor evidence object and verifies its hash.
 
+Each database checkpoint gives its fresh backup a unique governed description,
+then rediscovers exactly one numeric backup ID by that exact description. Apply
+accepts the backup only when Cloud SQL reports `SUCCESSFUL` and location `eu`;
+progress output from the backup-create command is never parsed as identity.
+
 Generate the complete plan:
 
 ```powershell

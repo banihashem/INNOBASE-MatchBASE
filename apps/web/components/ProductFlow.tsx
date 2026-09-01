@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { DemoProjectionV1 } from "@matchbase/contracts";
 import { UserProfile } from "./profile/UserProfile";
+import { userFacingSessionName } from "./standard/types";
 
 const SYNTHETIC_NOTICE = "Synthetic evaluation data — not a sourcing result";
 const QUALIFIED_LIVE_NOTICE =
@@ -36,6 +37,9 @@ const PROHIBITED_RESULT_KEYS = new Set([
 
 type Session = {
   display_name: string;
+  user_display_name?: string | null;
+  email?: string | null;
+  subject?: { user_id: string; account_id: string };
   tier: "demo";
   quota: {
     limit: number;
@@ -598,7 +602,7 @@ export function ProductFlow({
             </nav>
             <div className="identity">
               <span>
-                <bdi dir="auto">{session.display_name}</bdi>
+                <bdi dir="auto">{userFacingSessionName(session)}</bdi>
               </span>
               <span className="tier-badge">Demo</span>
             </div>
@@ -643,7 +647,8 @@ export function ProductFlow({
         {screen === "profile" && session ? (
           <UserProfile
             tier="demo"
-            displayName={session.display_name}
+            displayName={userFacingSessionName(session)}
+            email={session.email}
             onNewRequest={() => setScreen("intake")}
           />
         ) : null}

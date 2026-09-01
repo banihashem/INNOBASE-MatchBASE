@@ -9,7 +9,10 @@ import {
   parseStandardResultProjectionV1,
 } from "@matchbase/contracts";
 import { UserProfile } from "../profile/UserProfile";
-import type { WorkspaceSession } from "../standard/types";
+import {
+  type WorkspaceSession,
+  userFacingSessionName,
+} from "../standard/types";
 import { workspaceJson } from "../standard/api";
 import {
   ConsultantResultView,
@@ -137,9 +140,7 @@ export function ConsultantWorkspace({
         </nav>
         <div className="identity">
           <span>
-            <bdi dir="auto">
-              {initialSession.user_display_name ?? initialSession.display_name}
-            </bdi>
+            <bdi dir="auto">{userFacingSessionName(initialSession)}</bdi>
           </span>
           <span className="tier-badge">{workspaceBadge}</span>
         </div>
@@ -167,9 +168,7 @@ export function ConsultantWorkspace({
         {view.state === "profile" ? (
           <UserProfile
             tier="consultant"
-            displayName={
-              initialSession.user_display_name ?? initialSession.display_name
-            }
+            displayName={userFacingSessionName(initialSession)}
             email={initialSession.email}
             quota={initialSession.quota}
             newRequestHref={

@@ -1,4 +1,7 @@
-import type { WorkspaceSession } from "../standard/types";
+import {
+  type WorkspaceSession,
+  userFacingSessionName,
+} from "../standard/types";
 
 export function AdminWorkspace({
   initialSession,
@@ -38,9 +41,7 @@ export function AdminWorkspace({
         </nav>
         <div className="identity">
           <span>
-            <bdi dir="auto">
-              {initialSession.user_display_name ?? initialSession.display_name}
-            </bdi>
+            <bdi dir="auto">{userFacingSessionName(initialSession)}</bdi>
           </span>
           <span className="tier-badge">Admin</span>
         </div>

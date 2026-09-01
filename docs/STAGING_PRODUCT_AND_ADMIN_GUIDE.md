@@ -112,8 +112,8 @@ no continuation remains.
 
 - Route policy: `slice3-routes.2026-09-01.staging-qualified-v3`
 - Route-policy SHA-256: `b752d2d42a63aaad11f3b89f67bad64861ce767f633bee8190549df23a6f4155`
-- Web revision: `matchbase-staging-web-00033-jnz`
-- Web image: `sha256:f7acce06c05fd9dff848816313f3faec1ecba632af519a338b1dfafe2053cbb4`
+- Web revision: `matchbase-staging-web-00034-cn5`
+- Web image: `sha256:3bf6be141f027a9242b8406e62aa5c1704431afacbf60e619f9fa085922f9cad`
 - Worker revision: `matchbase-staging-worker-00045-k2b`
 - Worker image: `sha256:ca6d1627309ce333dcbde354b17d4588135fa2993988bf24a4de39ca264c191d`
 - Final qualified run: `3898ed1c-d237-42eb-9001-a0409a185895`
@@ -124,6 +124,7 @@ no continuation remains.
 - Cross-account complete-result read: passed only after a separate operational justification; immutable disclosure audit `84a1e926-885a-40c2-8ef5-cc63a15c4d01` was returned with the result.
 - Public health: `GET /api/v1/health` returned HTTP `200` with `{"status":"ok"}`.
 - Verified identity repair: the owner reauthenticated through Google; Staging displayed `Ehsan Banihashem` and the verified email instead of `Google user`.
+- Secondary identity repair: the historical Demo user reauthenticated and Staging displayed the verified Google name `INNOBASE UAE`. If a future verified token omits a person name, the UI uses a stable opaque `User <prefix>` label rather than presenting `Google user` as a name.
 - Search admission: Admin product workspace displayed `14` of `20` runs remaining and an active `New structured request` action.
 - Profile UX: request and run tables were replaced by progressive product-group cards; the historical pistachio request displays `high-quality Iranian Ahmad Aghaei pistachios` in the first layer.
 - Admin UX: verified name/email filter and structured complete-result rendering passed; raw JSON and primary UUID labels are absent.

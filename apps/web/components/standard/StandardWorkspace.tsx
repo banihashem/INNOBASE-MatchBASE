@@ -10,12 +10,13 @@ import { StructuredIntake } from "./StructuredIntake";
 import { SyntheticNotice } from "./SyntheticNotice";
 import { workspaceJson } from "./api";
 import { UserProfile } from "../profile/UserProfile";
-import type {
-  StandardResultProjectionV1,
-  StandardRequestDetailV1,
-  StandardScreen,
-  StructuredStandardRequestV1,
-  WorkspaceSession,
+import {
+  userFacingSessionName,
+  type StandardResultProjectionV1,
+  type StandardRequestDetailV1,
+  type StandardScreen,
+  type StructuredStandardRequestV1,
+  type WorkspaceSession,
 } from "./types";
 
 export function StandardWorkspace({
@@ -109,9 +110,7 @@ export function StandardWorkspace({
         </nav>
         <div className="identity">
           <span>
-            <bdi dir="auto">
-              {session.user_display_name ?? session.display_name}
-            </bdi>
+            <bdi dir="auto">{userFacingSessionName(session)}</bdi>
           </span>
           <span className="tier-badge">{workspaceBadge}</span>
         </div>
@@ -165,7 +164,7 @@ export function StandardWorkspace({
         {screen === "profile" ? (
           <UserProfile
             tier={adminProductMode ? "consultant" : "standard"}
-            displayName={session.user_display_name ?? session.display_name}
+            displayName={userFacingSessionName(session)}
             email={session.email}
             quota={session.quota}
             onNewRequest={() => transition("intake")}

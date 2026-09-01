@@ -6,7 +6,26 @@ import { CanonicalReview } from "./standard/CanonicalReview";
 import { StandardResult } from "./standard/StandardResult";
 import { StructuredIntake } from "./standard/StructuredIntake";
 import { workspaceJson } from "./standard/api";
-import type { StandardResultProjectionV1 } from "./standard/types";
+import {
+  type StandardResultProjectionV1,
+  userFacingSessionName,
+} from "./standard/types";
+
+test("uses an opaque user reference instead of the historical Google user placeholder", () => {
+  expect(
+    userFacingSessionName({
+      display_name: "Google user",
+      user_display_name: null,
+      subject: { user_id: "1e23f33e-0000-4000-8000-000000000001" },
+    }),
+  ).toBe("User 1e23f33e");
+  expect(
+    userFacingSessionName({
+      display_name: "Account",
+      user_display_name: "Verified Person",
+    }),
+  ).toBe("Verified Person");
+});
 
 const session = {
   display_name: "Standard Evaluator",

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   executeQualifiedResearch,
+  ProviderTransportFailure,
   RecordingFakeTransport,
   type LiveResearchAtomicLedger,
   type LiveResearchTerminalRecord,
@@ -261,6 +262,43 @@ test("unknown attempt cost blocks fallback and commits a truthful terminal failu
   assert.equal(result.reasonCode, "cost_unknown");
   assert.equal(result.routes.length, 1);
   assert.equal(openrouter.requests.length, 0);
+  assert.equal(ledger.commits, 1);
+});
+
+test("conservatively accounted transport failure continues to the closed OpenRouter route", async () => {
+  const ledger = new MemoryLedger();
+  const direct: ProviderTransport = {
+    async send() {
+      throw new ProviderTransportFailure("invalid provider response envelope", {
+        status: 200,
+        accounting,
+      });
+    },
+  };
+  const openrouter = new RecordingFakeTransport({
+    status: 200,
+    body: { candidates: ["A"] },
+    servedIdentity: {
+      providerId: "google",
+      modelId: "google/gemini-2.5-flash",
+    },
+    accounting,
+  });
+
+  const result = await executeQualifiedResearch({
+    ...base(ledger),
+    transports: { gemini_direct: direct, openrouter },
+  });
+
+  assert.equal(result.disposition, "complete");
+  assert.equal(result.reasonCode, "completed");
+  assert.equal(result.routes.length, 2);
+  assert.equal(result.routes[0]?.failureCode, "route_failed");
+  assert.equal(result.routes[0]?.attempts[0]?.costState, "estimated");
+  assert.equal(result.routes[0]?.attempts[0]?.costAmount, accounting.amount);
+  assert.equal(result.routes[1]?.failureCode, null);
+  assert.equal(openrouter.requests.length, 1);
+  assert.deepEqual(result.result, { candidates: ["A"] });
   assert.equal(ledger.commits, 1);
 });
 

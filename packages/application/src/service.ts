@@ -149,7 +149,11 @@ export class MatchBaseApplication {
   async me(context: RequestContext): Promise<Record<string, unknown>> {
     assertSlice1EndpointAuthorized(context, "GET /api/v1/me");
     const limit =
-      context.tier === "admin" ? null : ROLLING_QUOTA_LIMITS[context.tier];
+      context.tier === "admin"
+        ? context.adminSubRoles.includes("super_admin")
+          ? ROLLING_QUOTA_LIMITS.consultant
+          : null
+        : ROLLING_QUOTA_LIMITS[context.tier];
     const quota = await this.pool.query<{
       used: number;
       next_capacity_at: Date | null;
@@ -833,9 +837,12 @@ export class MatchBaseApplication {
         started_at: Date | null;
         completed_at: Date | null;
       }>(
-        `SELECT rr.run_id, v.request_id, v.version, rr.queued_at, rr.started_at, rr.completed_at
+        `SELECT rr.run_id, v.request_id, v.version, rr.queued_at, rr.started_at,
+                COALESCE(rr.completed_at,lt.completed_at) AS completed_at
          FROM research_run rr
          JOIN canonical_request_version v USING (canonical_request_version_id)
+         LEFT JOIN live_research_terminal lt
+           ON lt.account_id=rr.account_id AND lt.run_id=rr.run_id
         WHERE rr.run_id = $1 AND rr.account_id = $2 AND rr.requested_by_user_id = $3`,
         [runId, context.accountId, context.userId],
       );
@@ -1049,19 +1056,35 @@ export class MatchBaseApplication {
       "POST /api/v1/runs/:runId/cancellation",
     );
     return inTransaction(this.pool, async (client) => {
-      const run = await client.query<{ state: string }>(
-        "SELECT state FROM research_run WHERE run_id = $1 AND account_id = $2 AND requested_by_user_id = $3 FOR UPDATE",
+      const run = await client.query<{
+        state: string;
+        terminal_failure: boolean;
+      }>(
+        `SELECT r.state,
+                (r.state='failed_retryable' AND EXISTS (
+                  SELECT 1 FROM live_research_terminal t
+                   WHERE t.account_id=r.account_id AND t.run_id=r.run_id
+                )) AS terminal_failure
+           FROM research_run r
+          WHERE r.run_id=$1 AND r.account_id=$2 AND r.requested_by_user_id=$3
+          FOR UPDATE`,
         [runId, context.accountId, context.userId],
       );
-      const state = run.rows[0]?.state;
+      const state = run.rows[0]?.terminal_failure
+        ? "failed"
+        : run.rows[0]?.state;
       if (!state) throw this.notVisible();
-      if (!TERMINAL_RUN_STATES.has(state)) {
-        await client.query(
-          `UPDATE research_run SET state = 'cancelled', state_reason = 'user_cancelled', cancelled_at = clock_timestamp()
-            WHERE run_id = $1`,
-          [runId],
-        );
-      }
+      if (TERMINAL_RUN_STATES.has(state))
+        return {
+          run_id: runId,
+          state,
+          cancellation_accepted: false,
+        };
+      await client.query(
+        `UPDATE research_run SET state = 'cancelled', state_reason = 'user_cancelled', cancelled_at = clock_timestamp()
+          WHERE run_id = $1`,
+        [runId],
+      );
       await appendAuditEvent(client, {
         accountId: context.accountId,
         actorUserId: context.userId,
@@ -1076,7 +1099,7 @@ export class MatchBaseApplication {
       });
       return {
         run_id: runId,
-        state: state === "cancelled" ? state : "cancelled",
+        state: "cancelled",
         cancellation_accepted: true,
       };
     });

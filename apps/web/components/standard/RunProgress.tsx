@@ -12,12 +12,14 @@ export function RunProgress({
   onResult,
   onTerminal,
   onAnnouncement,
+  deferResultToProfile = false,
 }: {
   session: WorkspaceSession;
   runId: string;
   onResult: (result: StandardResultProjectionV1) => void;
   onTerminal: () => void;
   onAnnouncement: (message: string) => void;
+  deferResultToProfile?: boolean;
 }) {
   const [run, setRun] = useState<StandardRunProjectionV1 | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -52,6 +54,13 @@ export function RunProgress({
         }
         if (response.body.terminal) {
           if (response.body.result_available) {
+            if (deferResultToProfile) {
+              onAnnouncement(
+                "Qualified research complete. The Consultant result is available in your profile.",
+              );
+              onTerminal();
+              return null;
+            }
             setResultLoadFailed(false);
             try {
               const result = await workspaceJson<StandardResultProjectionV1>(
@@ -94,7 +103,7 @@ export function RunProgress({
         return 2_000;
       }
     },
-    [onAnnouncement, onResult, runId],
+    [deferResultToProfile, onAnnouncement, onResult, onTerminal, runId],
   );
 
   useEffect(() => {
@@ -145,7 +154,7 @@ export function RunProgress({
 
   return (
     <section className="standard-section" aria-labelledby="run-heading">
-      <p className="eyebrow">Synthetic research</p>
+      <p className="eyebrow">{session.research_mode.label}</p>
       <h1 id="run-heading" tabIndex={-1}>
         {run?.phase_label ?? "Queued for bounded execution"}
       </h1>

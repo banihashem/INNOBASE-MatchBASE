@@ -204,6 +204,30 @@ test("keeps initial focus before the skip link and formats run time in explicit 
   expect(time).toHaveAttribute("datetime", "2026-08-25T00:00:00.000Z");
 });
 
+test("labels a terminal failed run instead of presenting an unavailable result", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        schema_version: "consultant-run-history.v1",
+        items: [
+          {
+            ...history.items[0],
+            state: "failed",
+            result_available: false,
+            outcome: "failed",
+          },
+        ],
+      }),
+    ),
+  );
+  render(<ConsultantWorkspace initialSession={session} />);
+  expect(
+    await screen.findByText("Research failed — no result was generated"),
+  ).toBeVisible();
+  expect(screen.queryByText("Result not available")).not.toBeInTheDocument();
+});
+
 test("exposes empty and retryable error states", async () => {
   const fetchMock = vi
     .fn()

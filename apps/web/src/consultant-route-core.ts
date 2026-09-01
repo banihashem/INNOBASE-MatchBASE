@@ -30,7 +30,14 @@ export async function handleConsultantRoute(input: {
     "getResult" | "listRuns"
   >;
 }): Promise<ConsultantRouteResult | null> {
-  if (input.context.tier !== "consultant") return null;
+  if (
+    input.context.tier !== "consultant" &&
+    !(
+      input.context.tier === "admin" &&
+      input.context.adminSubRoles.includes("super_admin")
+    )
+  )
+    return null;
   if (input.method === "GET" && input.pathname === "/api/v1/consultant/runs") {
     return {
       status: 200,
@@ -38,7 +45,10 @@ export async function handleConsultantRoute(input: {
       headers: { "Cache-Control": "private, no-store", Vary: "Cookie" },
     };
   }
-  const match = /^\/api\/v1\/runs\/([^/]+)\/result$/u.exec(input.pathname);
+  const match =
+    input.context.tier === "admin"
+      ? /^\/api\/v1\/consultant\/runs\/([^/]+)\/result$/u.exec(input.pathname)
+      : /^\/api\/v1\/runs\/([^/]+)\/result$/u.exec(input.pathname);
   if (input.method !== "GET" || !match) return null;
   const runId = match[1];
   if (!runId || !UUID_PATTERN.test(runId))

@@ -29,11 +29,17 @@ export function validateProtectedSpans(
   canonicalText: string,
   spans: readonly ProtectedSpanV1[],
 ): void {
-  for (const span of spans) {
-    const occurrences = canonicalText.split(span.canonicalValue).length - 1;
-    if (occurrences !== 1) {
+  const expectedOccurrences = new Map<string, number>();
+  for (const span of spans)
+    expectedOccurrences.set(
+      span.canonicalValue,
+      (expectedOccurrences.get(span.canonicalValue) ?? 0) + 1,
+    );
+  for (const [canonicalValue, expected] of expectedOccurrences) {
+    const occurrences = canonicalText.split(canonicalValue).length - 1;
+    if (occurrences !== expected) {
       throw new Error(
-        `Protected span ${span.placeholder} must occur exactly once in canonical text.`,
+        `Protected value ${canonicalValue} must occur ${expected} time(s) in canonical text.`,
       );
     }
   }

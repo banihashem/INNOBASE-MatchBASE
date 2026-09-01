@@ -6,12 +6,14 @@ type Props = {
   onNewRequest: () => void;
   onOpenRequest: (requestId: string) => void;
   onOpenRun: (runId: string) => void;
+  qualifiedLive?: boolean;
 };
 
 export function RequestHistory({
   onNewRequest,
   onOpenRequest,
   onOpenRun,
+  qualifiedLive = false,
 }: Props) {
   const [requests, setRequests] = useState<StandardRequestHistoryV1 | null>(
     null,
@@ -91,7 +93,11 @@ export function RequestHistory({
       {requests?.items.length === 0 ? (
         <div className="standard-empty">
           <h2>No structured requests yet</h2>
-          <p>Create a request to begin a synthetic Standard evaluation.</p>
+          <p>
+            {qualifiedLive
+              ? "Create a request to begin qualified live research."
+              : "Create a request to begin a synthetic Standard evaluation."}
+          </p>
         </div>
       ) : null}
       {requests && requests.items.length > 0 ? (

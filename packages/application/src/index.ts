@@ -1,6 +1,7 @@
 export * from "./authorization.js";
 export * from "./admin-entitlements.js";
 export * from "./admin-runs.js";
+export * from "./admin-research.js";
 export * from "./admin-audit.js";
 export * from "./admin-unprojected.js";
 export * from "./artifact-download.js";
@@ -13,6 +14,7 @@ export * from "./standard-authorization.js";
 export * from "./standard-dto.js";
 export * from "./standard-types.js";
 export * from "./standard-workspace.js";
+export * from "./user-profile.js";
 export * from "./live-research-execution.js";
 export * from "./live-research-worker.js";
 export * from "./live-research-environment-runtime.js";

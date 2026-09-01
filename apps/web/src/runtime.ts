@@ -10,12 +10,14 @@ import {
   AdminAuditApplication,
   AdminEntitlementsApplication,
   AdminRunsApplication,
+  AdminResearchApplication,
   AdminUnprojectedApplication,
   ArtifactDownloadApplication,
   API_MINOR_VERSION,
   ConsultantResultApplication,
   MatchBaseApplication,
   StandardWorkspaceApplication,
+  UserProfileApplication,
   assertSlice1EndpointAuthorized,
   type CanonicalRevisionInput,
   type IntakeInput,
@@ -39,9 +41,11 @@ import {
 import { handleAdminEntitlementsRoute } from "./admin-entitlements-route-core";
 import { handleAdminAuditRoute } from "./admin-audit-route-core";
 import { handleAdminRunsRoute } from "./admin-runs-route-core";
+import { handleAdminResearchRoute } from "./admin-research-route-core";
 import { handleAdminUnprojectedRoute } from "./admin-unprojected-route-core";
 import { handleArtifactDownloadRoute } from "./artifact-download-route-core";
 import { handleConsultantRoute } from "./consultant-route-core";
+import { handleUserProfileRoute } from "./user-profile-route-core";
 import type { WebConfig } from "./config";
 import {
   handleStandardRoute,
@@ -79,10 +83,12 @@ interface RuntimeOptions {
   adminEntitlementsApplication?: AdminEntitlementsApplication;
   adminAuditApplication?: AdminAuditApplication;
   adminRunsApplication?: AdminRunsApplication;
+  adminResearchApplication?: AdminResearchApplication;
   adminUnprojectedApplication?: AdminUnprojectedApplication;
   artifactDownloadApplication?: ArtifactDownloadApplication;
   artifactObjectReader?: ArtifactObjectReader;
   consultantResultApplication?: ConsultantResultApplication;
+  userProfileApplication?: UserProfileApplication;
   googleProvider?: GoogleOidcProvider;
 }
 
@@ -334,6 +340,9 @@ export function createWebRuntime(
   const adminRunsApplication =
     options.adminRunsApplication ??
     new AdminRunsApplication(options.pool, options.config.digestKey);
+  const adminResearchApplication =
+    options.adminResearchApplication ??
+    new AdminResearchApplication(options.pool, options.config.digestKey);
   const adminUnprojectedApplication =
     options.adminUnprojectedApplication ??
     new AdminUnprojectedApplication(options.pool);
@@ -346,6 +355,8 @@ export function createWebRuntime(
   const consultantResultApplication =
     options.consultantResultApplication ??
     new ConsultantResultApplication(options.pool);
+  const userProfileApplication =
+    options.userProfileApplication ?? new UserProfileApplication(options.pool);
 
   async function resolveSession(
     request: IncomingMessage,
@@ -893,6 +904,32 @@ export function createWebRuntime(
         json(response, 200, {
           ...(await options.application.me(session.requestContext)),
           environment: options.config.environment,
+        });
+        return;
+      }
+      const userProfile = await handleUserProfileRoute({
+        method: request.method ?? "GET",
+        pathname: path,
+        searchParams: url.searchParams,
+        context: session.requestContext,
+        application: userProfileApplication,
+      });
+      if (userProfile) {
+        json(response, userProfile.status, userProfile.body, {
+          ...userProfile.headers,
+        });
+        return;
+      }
+      const adminResearch = await handleAdminResearchRoute({
+        method: request.method ?? "GET",
+        pathname: path,
+        searchParams: url.searchParams,
+        context: session.requestContext,
+        application: adminResearchApplication,
+      });
+      if (adminResearch) {
+        json(response, adminResearch.status, adminResearch.body, {
+          ...adminResearch.headers,
         });
         return;
       }

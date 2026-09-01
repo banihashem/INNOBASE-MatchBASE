@@ -10,10 +10,11 @@ import {
   useState,
 } from "react";
 import type { DemoProjectionV1 } from "@matchbase/contracts";
+import { UserProfile } from "./profile/UserProfile";
 
 const SYNTHETIC_NOTICE = "Synthetic evaluation data — not a sourcing result";
 const QUALIFIED_LIVE_NOTICE =
-  "Qualified live research — external evidence is fetched and verified for this run";
+  "Controlled web evidence is fetched for this run; external verification requires independent corroboration or authoritative registry evidence";
 const QUALIFIED_LIVE_AVAILABLE_NOTICE =
   "Qualified live research is enabled — each run remains evidence-bound";
 const NEED_REQUIRED = "Describe the product or capability you need.";
@@ -94,6 +95,7 @@ type Screen =
   | "loading"
   | "signed-out"
   | "intake"
+  | "profile"
   | "canonical"
   | "running"
   | "result"
@@ -583,12 +585,24 @@ export function ProductFlow({
           <span>MatchBASE</span>
         </a>
         {session ? (
-          <div className="identity">
-            <span>
-              <bdi dir="auto">{session.display_name}</bdi>
-            </span>
-            <span className="tier-badge">Demo</span>
-          </div>
+          <>
+            <nav aria-label="Primary navigation">
+              <button
+                className={
+                  screen === "profile" ? "nav-button active" : "nav-button"
+                }
+                onClick={() => setScreen("profile")}
+              >
+                Profile
+              </button>
+            </nav>
+            <div className="identity">
+              <span>
+                <bdi dir="auto">{session.display_name}</bdi>
+              </span>
+              <span className="tier-badge">Demo</span>
+            </div>
+          </>
         ) : null}
       </header>
 
@@ -624,6 +638,14 @@ export function ProductFlow({
               Dismiss error
             </button>
           </div>
+        ) : null}
+
+        {screen === "profile" && session ? (
+          <UserProfile
+            tier="demo"
+            displayName={session.display_name}
+            onNewRequest={() => setScreen("intake")}
+          />
         ) : null}
 
         {screen === "loading" ? (

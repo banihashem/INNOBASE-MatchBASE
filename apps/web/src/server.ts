@@ -21,12 +21,13 @@ if (config.environment === "production") {
 }
 const pool = createPool({ connectionString: config.databaseUrl, max: 20 });
 const canonicalizer = createRuntimeCanonicalizer(config);
+const researchAdmission = loadServerOwnedResearchAdmission(config);
 const application = new MatchBaseApplication({
   pool,
   canonicalizer,
   canonicalizationBudgetMs: 20_000,
   privacyKey: config.digestKey,
-  researchAdmission: loadServerOwnedResearchAdmission(config),
+  researchAdmission,
   consultantProjectionConfig:
     config.consultantProjectionConfig ?? DEFAULT_CONSULTANT_PROJECTION_CONFIG,
 });
@@ -35,6 +36,7 @@ const standardApplication = new StandardWorkspaceApplication({
   privacyKey: config.digestKey,
   consultantProjectionConfig:
     config.consultantProjectionConfig ?? DEFAULT_CONSULTANT_PROJECTION_CONFIG,
+  researchAdmission,
 });
 const consultantResultApplication = new ConsultantResultApplication(pool);
 const listener = createWebRuntime({

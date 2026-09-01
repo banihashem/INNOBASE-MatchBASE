@@ -25,12 +25,14 @@ import {
   standardEvidenceGraphFromStoredCompleteResult,
   standardEvidenceGraphFromCompleteResultFoundationV2,
   type ResultProjectionMetadata,
-  type StandardStoredResultProjection,
+  type StoredResultProjection,
 } from "@matchbase/ai-evidence";
 import type {
   DomainPackFieldV1,
   CompleteResultFoundationV2,
   DomainPackResolutionV1,
+  DemoProjectionV1,
+  EvidenceGraphV1,
   StandardFieldValueV1,
   StandardHardConstraintV1,
   StandardContradictionV1,
@@ -67,11 +69,17 @@ import {
   type RequestContext,
 } from "./types.js";
 import {
+  syntheticResearchAdmission,
+  type ServerOwnedResearchAdmission,
+} from "./research-admission.js";
+import {
   guardFreshRunOutputRead,
   outputRestrictedFault,
 } from "./result-output-guard.js";
 
 const STANDARD_PROJECTION_VERSION = STANDARD_DISCLOSURE_PROJECTION_VERSION;
+const QUALIFIED_LIVE_NOTICE =
+  "Controlled web evidence is fetched for this run; external verification requires independent corroboration or authoritative registry evidence";
 const HISTORY_LIMIT = 20;
 const PACK_FIELDS = [
   ...SYNTHETIC_DOMAIN_PACK.core_fields,
@@ -349,6 +357,25 @@ export function assertStoredCompleteResultIntegrity(
   return mode;
 }
 
+function assertHistoricalDemoResultIntegrity(
+  document: unknown,
+  storedSha256: unknown,
+  expectedRunId: string,
+): asserts document is EvidenceGraphV1 {
+  if (
+    document === null ||
+    typeof document !== "object" ||
+    Array.isArray(document) ||
+    (document as { runId?: unknown }).runId !== expectedRunId
+  )
+    throw new Error("Stored historical Demo result identity is invalid.");
+  if (!Buffer.isBuffer(storedSha256) || storedSha256.length !== 32)
+    throw new Error("Stored historical Demo result digest is invalid.");
+  const expected = sha256(JSON.stringify(document));
+  if (!timingSafeEqual(storedSha256, expected))
+    throw new Error("Stored historical Demo result integrity check failed.");
+}
+
 export function standardReleasedFieldPaths(value: unknown): string[] {
   const paths = new Set<string>();
   const visit = (child: unknown, path: string): void => {
@@ -377,14 +404,49 @@ function iso(value: Date | string): string {
   return (value instanceof Date ? value : new Date(value)).toISOString();
 }
 
-function canonicalSummary(fields: readonly StandardFieldValueV1[]): string {
+function canonicalSummary(document: unknown): string {
+  if (
+    document === null ||
+    typeof document !== "object" ||
+    Array.isArray(document)
+  )
+    return "Canonical request available";
+  const canonical = document as Record<string, unknown>;
+  const fields = Array.isArray(canonical.fields) ? canonical.fields : [];
   const values: string[] = [];
   for (const field of fields) {
-    if (field.typed_value.value_state === "provided")
-      values.push(`${field.field_id}: ${field.typed_value.value}`);
+    if (field === null || typeof field !== "object" || Array.isArray(field))
+      continue;
+    const item = field as Record<string, unknown>;
+    if (canonical.schema_version === "structured-standard-request.v1") {
+      const typed =
+        item.typed_value !== null &&
+        typeof item.typed_value === "object" &&
+        !Array.isArray(item.typed_value)
+          ? (item.typed_value as Record<string, unknown>)
+          : null;
+      if (
+        typeof item.field_id === "string" &&
+        typed?.value_state === "provided" &&
+        typeof typed.value === "string"
+      )
+        values.push(`${item.field_id}: ${typed.value}`);
+    } else if (
+      canonical.schema_version === "canonical-request.v1" &&
+      typeof item.fieldId === "string" &&
+      item.valueState === "provided" &&
+      typeof item.canonicalValue === "string"
+    ) {
+      values.push(`${item.fieldId}: ${item.canonicalValue}`);
+    }
     if (values.length === 3) break;
   }
-  return values.join("; ") || "Structured request with explicit unknown values";
+  if (values.length > 0) return values.join("; ");
+  return canonical.schema_version === "structured-standard-request.v1"
+    ? "Structured request with explicit unknown values"
+    : canonical.schema_version === "canonical-request.v1"
+      ? "Canonical request with explicit unknown values"
+      : "Canonical request available";
 }
 
 function contradictionSet(
@@ -493,6 +555,7 @@ interface StandardWorkspaceOptions {
   privacyKey: Uint8Array | string;
   activationTtlSeconds?: number;
   consultantProjectionConfig?: ConsultantProjectionConfigRelease;
+  researchAdmission?: ServerOwnedResearchAdmission;
 }
 
 interface CursorPayload {
@@ -511,6 +574,7 @@ export class StandardWorkspaceApplication {
   private readonly secret: Buffer;
   private readonly activationTtlSeconds: number;
   private readonly consultantProjectionConfig: ConsultantProjectionConfigRelease;
+  private readonly researchAdmission: ServerOwnedResearchAdmission;
 
   constructor(options: StandardWorkspaceOptions) {
     this.pool = options.pool;
@@ -523,6 +587,8 @@ export class StandardWorkspaceApplication {
     this.consultantProjectionConfig =
       options.consultantProjectionConfig ??
       DEFAULT_CONSULTANT_PROJECTION_CONFIG;
+    this.researchAdmission =
+      options.researchAdmission ?? syntheticResearchAdmission;
   }
 
   async authorize(context: RequestContext, action: string): Promise<void> {
@@ -963,7 +1029,7 @@ export class StandardWorkspaceApplication {
       created_at: Date;
       updated_at: Date;
       current_version: number;
-      canonical_document: StructuredStandardRequestV1;
+      canonical_document: unknown;
       latest_state: string | null;
       latest_outcome: string | null;
     }>(
@@ -972,7 +1038,16 @@ export class StandardWorkspaceApplication {
          FROM sourcing_request r JOIN canonical_request_version v
            ON v.request_id=r.request_id AND v.version=r.current_version
          LEFT JOIN LATERAL (
-           SELECT rr.state,rs.outcome,GREATEST(rr.queued_at,COALESCE(rr.started_at,rr.queued_at),COALESCE(rr.completed_at,rr.queued_at),COALESCE(rr.cancelled_at,rr.queued_at)) AS updated_at FROM research_run rr LEFT JOIN run_result rs USING(run_id)
+           SELECT CASE WHEN rr.state='failed_retryable' AND lt.live_research_terminal_id IS NOT NULL
+                       THEN 'failed' ELSE rr.state END AS state,
+                  rs.outcome,
+                  GREATEST(rr.queued_at,COALESCE(rr.started_at,rr.queued_at),
+                           COALESCE(rr.completed_at,lt.completed_at,rr.queued_at),
+                           COALESCE(rr.cancelled_at,rr.queued_at)) AS updated_at
+             FROM research_run rr
+             LEFT JOIN run_result rs USING(run_id)
+             LEFT JOIN live_research_terminal lt
+               ON lt.account_id=rr.account_id AND lt.run_id=rr.run_id
             WHERE rr.canonical_request_version_id=v.canonical_request_version_id
               AND rr.requested_by_user_id=$3 ORDER BY rr.queued_at DESC,rr.run_id DESC LIMIT 1
          ) latest ON true
@@ -1001,7 +1076,7 @@ export class StandardWorkspaceApplication {
     const rows = result.rows.slice(0, HISTORY_LIMIT);
     const items = rows.map((row) => ({
       request_id: row.request_id,
-      canonical_summary: canonicalSummary(row.canonical_document.fields),
+      canonical_summary: canonicalSummary(row.canonical_document),
       version_count: row.current_version,
       created_at: iso(row.created_at),
       updated_at: iso(row.updated_at),
@@ -1837,7 +1912,11 @@ export class StandardWorkspaceApplication {
     requestId: string,
     version: number,
   ): Promise<Record<string, unknown>> {
-    await assertStandardWorkspaceAuthorized(this.pool, context, "run.submit");
+    const productTier = await assertStandardWorkspaceAuthorized(
+      this.pool,
+      context,
+      "run.submit",
+    );
     const target = await this.pool.query<{
       canonical_request_version_id: string;
       match_readiness: string;
@@ -1858,6 +1937,7 @@ export class StandardWorkspaceApplication {
         "The request is not ready and confirmed.",
       );
     const configuration = await this.configuration();
+    const researchMode = this.researchAdmission.decide(productTier);
     const admitted = await admitRunWithinQuota(this.pool, {
       accountId: context.accountId,
       userId: context.userId,
@@ -1868,6 +1948,10 @@ export class StandardWorkspaceApplication {
       scoringConfigVersionId: configuration.scoring,
       correlationId: context.correlationId,
       deploymentId: context.deploymentId,
+      researchMode: researchMode.id,
+      ...(productTier === "consultant"
+        ? { adminProductTier: "consultant" as const }
+        : {}),
     });
     if (admitted.disposition === "quota_exceeded")
       throw new ApplicationFault(
@@ -1894,6 +1978,11 @@ export class StandardWorkspaceApplication {
         next_capacity_at: admitted.nextCapacityAt,
       },
       idempotent_replay: admitted.disposition === "replayed",
+      research_mode: {
+        id: researchMode.id,
+        label: researchMode.label,
+        live_qualified: researchMode.liveQualified,
+      },
     };
   }
 
@@ -1904,7 +1993,11 @@ export class StandardWorkspaceApplication {
     filter = "all",
     recordProjection = true,
   ): Promise<Record<string, unknown>> {
-    await assertStandardWorkspaceAuthorized(this.pool, context, "run.history");
+    const productTier = await assertStandardWorkspaceAuthorized(
+      this.pool,
+      context,
+      "run.history",
+    );
     const binding = JSON.stringify({ requestId, filter });
     const position = cursor
       ? this.openCursor(context, cursor, "run_history", binding)
@@ -1918,14 +2011,26 @@ export class StandardWorkspaceApplication {
       started_at: Date | null;
       completed_at: Date | null;
       eligible_count: number | null;
+      tier_at_submission: "demo" | "standard" | "consultant";
+      research_mode: "synthetic_reference" | "qualified_live_research";
     }>(
-      `SELECT rr.run_id,v.request_id,v.version,rr.state,rr.queued_at,rr.started_at,rr.completed_at,rs.eligible_count FROM research_run rr JOIN canonical_request_version v USING(canonical_request_version_id) LEFT JOIN run_result rs USING(run_id)
+      `SELECT rr.run_id,v.request_id,v.version,
+              CASE WHEN rr.state='failed_retryable' AND lt.live_research_terminal_id IS NOT NULL
+                   THEN 'failed' ELSE rr.state END AS state,
+              rr.queued_at,rr.started_at,COALESCE(rr.completed_at,lt.completed_at) AS completed_at,
+              rr.tier_at_submission,rr.research_mode,rs.eligible_count
+         FROM research_run rr
+         JOIN canonical_request_version v USING(canonical_request_version_id)
+         LEFT JOIN run_result rs USING(run_id)
+         LEFT JOIN live_research_terminal lt
+           ON lt.account_id=rr.account_id AND lt.run_id=rr.run_id
         WHERE rr.account_id=$1 AND rr.requested_by_user_id=$2 AND ($3::text='' OR v.request_id=$3::uuid)
           AND ($4::timestamptz IS NULL OR (rr.queued_at,rr.run_id)<($4,$5::uuid))
           AND ($7='all'
-            OR ($7='active' AND rr.state IN ('queued','researching','scoring','escalated','restricted','cancelling','failed_retryable'))
+            OR ($7='active' AND (rr.state IN ('queued','researching','scoring','escalated','restricted','cancelling')
+                                 OR (rr.state='failed_retryable' AND lt.live_research_terminal_id IS NULL)))
             OR ($7='completed' AND rr.state='complete')
-            OR ($7='failed' AND rr.state='failed')
+            OR ($7='failed' AND (rr.state='failed' OR (rr.state='failed_retryable' AND lt.live_research_terminal_id IS NOT NULL)))
             OR ($7='cancelled' AND rr.state='cancelled')
             OR ($7='superseded' AND rr.state='superseded')
             OR ($7='scarce' AND (rr.state='no_responsible_match' OR EXISTS(SELECT 1 FROM run_result rs WHERE rs.run_id=rr.run_id AND rs.outcome='scarcity')))
@@ -1941,7 +2046,9 @@ export class StandardWorkspaceApplication {
       ],
     );
     const rows = result.rows.slice(0, HISTORY_LIMIT);
-    const items = rows.map((row) => this.runProjection(row, false));
+    const items = rows.map((row) =>
+      this.runProjection(row, false, productTier),
+    );
     const last = rows.at(-1);
     const body = {
       schema_version: "standard-run-history.v1",
@@ -1979,7 +2086,11 @@ export class StandardWorkspaceApplication {
     runId: string,
     recordProjection = true,
   ): Promise<Record<string, unknown>> {
-    await assertStandardWorkspaceAuthorized(this.pool, context, "run.read");
+    const productTier = await assertStandardWorkspaceAuthorized(
+      this.pool,
+      context,
+      "run.read",
+    );
     const guarded = await inTransaction(this.pool, async (client) => {
       const guard = await guardFreshRunOutputRead(
         client,
@@ -1996,8 +2107,16 @@ export class StandardWorkspaceApplication {
         started_at: Date | null;
         completed_at: Date | null;
         eligible_count: number | null;
+        tier_at_submission: "demo" | "standard" | "consultant";
+        research_mode: "synthetic_reference" | "qualified_live_research";
       }>(
-        `SELECT rr.run_id,v.request_id,v.version,rr.queued_at,rr.started_at,rr.completed_at,rs.eligible_count FROM research_run rr JOIN canonical_request_version v USING(canonical_request_version_id) LEFT JOIN run_result rs ON rs.account_id=rr.account_id AND rs.run_id=rr.run_id WHERE rr.run_id=$1 AND rr.account_id=$2 AND rr.requested_by_user_id=$3`,
+        `SELECT rr.run_id,v.request_id,v.version,rr.queued_at,rr.started_at,
+                COALESCE(rr.completed_at,lt.completed_at) AS completed_at,
+                rr.tier_at_submission,rr.research_mode,rs.eligible_count
+           FROM research_run rr JOIN canonical_request_version v USING(canonical_request_version_id)
+           LEFT JOIN run_result rs ON rs.account_id=rr.account_id AND rs.run_id=rr.run_id
+           LEFT JOIN live_research_terminal lt ON lt.account_id=rr.account_id AND lt.run_id=rr.run_id
+          WHERE rr.run_id=$1 AND rr.account_id=$2 AND rr.requested_by_user_id=$3`,
         [runId, context.accountId, context.userId],
       );
       const row = result.rows[0];
@@ -2008,7 +2127,7 @@ export class StandardWorkspaceApplication {
     if (guarded.kind === "output_restricted") throw outputRestrictedFault();
     if (guarded.kind === "not_visible") throw standardNotVisible();
     const row = guarded.row;
-    const body = this.runProjection(row, true);
+    const body = this.runProjection(row, true, productTier);
     this.assertClosedProjection("run_status", body);
     if (recordProjection)
       await this.recordProjection(
@@ -2026,7 +2145,7 @@ export class StandardWorkspaceApplication {
   async getResultProjection(
     context: RequestContext,
     runId: string,
-  ): Promise<StandardStoredResultProjection> {
+  ): Promise<StoredResultProjection> {
     await assertStandardWorkspaceAuthorized(this.pool, context, "run.result");
     const guarded = await inTransaction(this.pool, async (client) => {
       const guard = await guardFreshRunOutputRead(
@@ -2037,15 +2156,19 @@ export class StandardWorkspaceApplication {
       );
       if (guard.kind !== "allowed") return guard;
       const result = await client.query<{
+        tier_at_submission: "demo" | "standard" | "consultant";
+        research_mode: "synthetic_reference" | "qualified_live_research";
         complete_result_document: unknown;
         result_sha256: Buffer;
-        canonical_document: StructuredStandardRequestV1;
+        canonical_document:
+          StructuredStandardRequestV1 | Record<string, unknown>;
         scarcity_outcome: "scarcity" | "no_responsible_match" | null;
         unmet_constraints: unknown;
         permitted_relaxations: unknown;
         projection_as_of: Date;
       }>(
-        `SELECT rs.complete_result_document,rs.result_sha256,v.canonical_document,
+        `SELECT rr.tier_at_submission,rr.research_mode,
+              rs.complete_result_document,rs.result_sha256,v.canonical_document,
               sa.outcome AS scarcity_outcome,sa.unmet_constraints,sa.permitted_relaxations,
               transaction_timestamp() AS projection_as_of
          FROM research_run rr
@@ -2072,6 +2195,59 @@ export class StandardWorkspaceApplication {
           "Run result is not available.",
           true,
         );
+      if (row.tier_at_submission === "demo") {
+        const document = row.complete_result_document;
+        if (
+          (document as Record<string, unknown>).schema_version ===
+          "complete-result-foundation.v2"
+        )
+          assertStoredCompleteResultIntegrity(
+            document,
+            row.result_sha256,
+            runId,
+          );
+        else
+          assertHistoricalDemoResultIntegrity(
+            document,
+            row.result_sha256,
+            runId,
+          );
+        const canonical = row.canonical_document as Record<string, unknown>;
+        const fields = Array.isArray(canonical.fields) ? canonical.fields : [];
+        const mandatoryConstraints = fields.flatMap((field) => {
+          if (
+            field === null ||
+            typeof field !== "object" ||
+            Array.isArray(field)
+          )
+            return [];
+          const value = field as Record<string, unknown>;
+          if (
+            value.fieldId !== "mandatory_constraints" ||
+            value.valueState !== "provided" ||
+            typeof value.canonicalValue !== "string"
+          )
+            return [];
+          return [value.canonicalValue];
+        });
+        return {
+          kind: "allowed" as const,
+          projected: projectStoredResult({
+            tier: "demo",
+            completeResult: document as
+              EvidenceGraphV1 | CompleteResultFoundationV2,
+            runBoundMandatoryConstraints: mandatoryConstraints,
+            researchMode: row.research_mode,
+          }),
+        };
+      }
+      if (row.tier_at_submission === "consultant")
+        throw new ApplicationFault(
+          403,
+          "run-not-visible",
+          "MB-403-NOT-VISIBLE",
+          "The requested resource is not visible.",
+        );
       const legacyEmptyScarcityLedger =
         row.scarcity_outcome !== null &&
         Array.isArray(row.unmet_constraints) &&
@@ -2096,8 +2272,9 @@ export class StandardWorkspaceApplication {
         tier: "standard",
         completeResult,
         projectionAsOf: row.projection_as_of.toISOString(),
-        runBoundCanonicalHardConstraints:
-          row.canonical_document.hard_constraints,
+        runBoundCanonicalHardConstraints: (
+          row.canonical_document as StructuredStandardRequestV1
+        ).hard_constraints,
         allowLegacyEmptyScarcityLedger: legacyEmptyScarcityLedger,
       });
       const body = projected.body;
@@ -2153,7 +2330,7 @@ export class StandardWorkspaceApplication {
     context: RequestContext,
     runId: string,
     recordProjection = true,
-  ): Promise<StandardResultProjectionV1> {
+  ): Promise<StandardResultProjectionV1 | DemoProjectionV1> {
     const projected = await this.getResultProjection(context, runId);
     const { body, metadata } = projected;
     if (recordProjection)
@@ -2166,7 +2343,7 @@ export class StandardWorkspaceApplication {
         [...metadata.fieldsReleased],
         metadata.itemCount,
         false,
-        metadata.projectionAsOf,
+        "projectionAsOf" in metadata ? metadata.projectionAsOf : undefined,
       );
     return body;
   }
@@ -3686,11 +3863,21 @@ export class StandardWorkspaceApplication {
     context: RequestContext,
     runId: string,
   ): Promise<Record<string, unknown>> {
-    const run = await client.query<{ state: string }>(
-      "SELECT state FROM research_run WHERE run_id=$1 AND account_id=$2 AND requested_by_user_id=$3 FOR UPDATE",
+    const run = await client.query<{
+      state: string;
+      terminal_failure: boolean;
+    }>(
+      `SELECT r.state,
+              (r.state='failed_retryable' AND EXISTS (
+                SELECT 1 FROM live_research_terminal t
+                 WHERE t.account_id=r.account_id AND t.run_id=r.run_id
+              )) AS terminal_failure
+         FROM research_run r
+        WHERE r.run_id=$1 AND r.account_id=$2 AND r.requested_by_user_id=$3
+        FOR UPDATE`,
       [runId, context.accountId, context.userId],
     );
-    const state = run.rows[0]?.state;
+    const state = run.rows[0]?.terminal_failure ? "failed" : run.rows[0]?.state;
     if (!state) throw standardNotVisible();
     if (state === "cancelled")
       return {
@@ -3750,13 +3937,23 @@ export class StandardWorkspaceApplication {
       started_at: Date | null;
       completed_at: Date | null;
       eligible_count?: number | null;
+      tier_at_submission?: "demo" | "standard" | "consultant";
+      research_mode?: "synthetic_reference" | "qualified_live_research";
     },
     envelope: boolean,
+    productTier: "standard" | "consultant",
   ): Record<string, unknown> {
     const terminal = TERMINAL_RUN_STATES.has(row.state);
-    const resultAvailable = ["complete", "no_responsible_match"].includes(
+    const resultExists = ["complete", "no_responsible_match"].includes(
       row.state,
     );
+    const resultAvailable =
+      resultExists &&
+      (row.tier_at_submission !== "consultant" || productTier === "consultant");
+    const qualifiedLive = row.research_mode === "qualified_live_research";
+    const modeNotice = qualifiedLive
+      ? QUALIFIED_LIVE_NOTICE
+      : STANDARD_SYNTHETIC_WARNING;
     const publicState = this.publicState(row.state);
     const scarcity =
       row.state === "no_responsible_match" || row.eligible_count === 0
@@ -3785,15 +3982,17 @@ export class StandardWorkspaceApplication {
         ? "Processing finished"
         : row.state === "queued"
           ? "Queued for execution"
-          : "Evaluating repository fixtures",
+          : qualifiedLive
+            ? "Researching qualified external evidence"
+            : "Evaluating repository fixtures",
       progress: terminal ? 100 : row.state === "queued" ? 0 : 50,
       started_at: iso(row.started_at ?? row.queued_at),
       updated_at: iso(row.completed_at ?? row.started_at ?? row.queued_at),
-      limitations_notice: STANDARD_SYNTHETIC_WARNING,
+      limitations_notice: modeNotice,
       links: {
         request: `/api/v1/requests/${row.request_id}`,
         run: `/api/v1/runs/${row.run_id}`,
-        ...(resultAvailable
+        ...(resultAvailable && row.tier_at_submission !== "consultant"
           ? { result: `/api/v1/runs/${row.run_id}/result` }
           : {}),
       },
@@ -3804,7 +4003,7 @@ export class StandardWorkspaceApplication {
       ...(!terminal
         ? { poll_after_ms: row.state === "queued" ? 10_000 : 2_000 }
         : {}),
-      ...(envelope ? { synthetic_warning: STANDARD_SYNTHETIC_WARNING } : {}),
+      ...(envelope ? { synthetic_warning: modeNotice } : {}),
       projection_version: STANDARD_PROJECTION_VERSION,
     };
   }

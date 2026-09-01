@@ -10,7 +10,7 @@ export interface QualifiedLiveWorkItem {
   readonly runId: string;
   readonly accountId: string;
   readonly userId: string;
-  readonly tier: "demo" | "standard";
+  readonly tier: "demo" | "standard" | "consultant";
 }
 
 export type QualifiedLiveServiceFactory = (
@@ -56,13 +56,13 @@ export class QualifiedLiveResearchWorkerDispatcher {
       run_id: string;
       account_id: string;
       requested_by_user_id: string;
-      tier_at_submission: "demo" | "standard";
+      tier_at_submission: "demo" | "standard" | "consultant";
     }>(
       `SELECT r.run_id,r.account_id,r.requested_by_user_id,r.tier_at_submission
          FROM research_run r
         WHERE r.research_mode='qualified_live_research'
           AND r.state IN ('queued','failed_retryable')
-          AND r.tier_at_submission IN ('demo','standard')
+          AND r.tier_at_submission IN ('demo','standard','consultant')
           AND NOT EXISTS (
             SELECT 1 FROM live_research_terminal t
              WHERE t.account_id=r.account_id AND t.run_id=r.run_id

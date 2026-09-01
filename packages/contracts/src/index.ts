@@ -17,5 +17,6 @@ export * from "./v1/standard-evidence.js";
 export * from "./v1/standard-projection.js";
 export * from "./v1/standard-validation.js";
 export * from "./v1/structured-request.js";
+export * from "./v1/user-profile-history.js";
 export * from "./v2/complete-result-foundation.js";
 export * from "./v2/consultant-projection.js";

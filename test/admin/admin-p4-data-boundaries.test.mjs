@@ -44,7 +44,7 @@ function poolFor({ role, events = [], unprojected = null, metrics = [] }) {
       if (/SELECT audit_id,occurred_at,account_id/u.test(text)) {
         return { rows: events, rowCount: events.length };
       }
-      if (/SELECT run_id,outcome,eligible_count/u.test(text)) {
+      if (/SELECT account_id,run_id,outcome,eligible_count/u.test(text)) {
         return {
           rows: unprojected ? [unprojected] : [],
           rowCount: unprojected ? 1 : 0,
@@ -241,41 +241,47 @@ test("TASK142 security_audit receives filtered rows and every read/export writes
   );
 });
 
-test("TASK138 analyst unprojected access returns exact stored fields and an attributable justification audit", async () => {
-  const assembledAt = new Date("2026-08-29T09:00:00.000Z");
-  const row = {
-    run_id: runId,
-    outcome: "candidates",
-    eligible_count: 2,
-    considered_count: 4,
-    scarcity: null,
-    limitations_text: "Synthetic limitation",
-    complete_result_document: { private_field: "visible-to-analyst" },
-    result_sha256: Buffer.alloc(32, 7),
-    assembled_at: assembledAt,
-  };
-  const pool = poolFor({ role: "analyst", unprojected: row });
-  const result = await readAdminUnprojectedResult(
-    pool,
-    input({ runId, justification: "Approved quality analysis" }),
-  );
-  assert.equal(result.status, 200);
-  assert.equal(result.body.result_sha256, Buffer.alloc(32, 7).toString("hex"));
-  assert.deepEqual(
-    result.body.complete_result_document,
-    row.complete_result_document,
-  );
-  const insert = pool.statements.find(
-    ({ text, values }) =>
-      /INSERT INTO audit_event/u.test(text) &&
-      values[5] === "unprojected.accessed",
-  );
-  assert.ok(insert);
-  assert.equal(insert.values[2], actorUserId);
-  assert.equal(insert.values[7], runId);
-  assert.deepEqual(insert.values[10], ADMIN_UNPROJECTED_RESULT_FIELDS);
-  assert.equal(insert.values[11], "Approved quality analysis");
-});
+for (const disclosureRole of ["analyst", "super_admin"]) {
+  test(`TASK138 ${disclosureRole} unprojected access returns exact stored fields and an attributable justification audit`, async () => {
+    const assembledAt = new Date("2026-08-29T09:00:00.000Z");
+    const row = {
+      account_id: accountId,
+      run_id: runId,
+      outcome: "candidates",
+      eligible_count: 2,
+      considered_count: 4,
+      scarcity: null,
+      limitations_text: "Synthetic limitation",
+      complete_result_document: { private_field: "visible-to-analyst" },
+      result_sha256: Buffer.alloc(32, 7),
+      assembled_at: assembledAt,
+    };
+    const pool = poolFor({ role: disclosureRole, unprojected: row });
+    const result = await readAdminUnprojectedResult(
+      pool,
+      input({ runId, justification: "Approved quality analysis" }),
+    );
+    assert.equal(result.status, 200);
+    assert.equal(
+      result.body.result_sha256,
+      Buffer.alloc(32, 7).toString("hex"),
+    );
+    assert.deepEqual(
+      result.body.complete_result_document,
+      row.complete_result_document,
+    );
+    const insert = pool.statements.find(
+      ({ text, values }) =>
+        /INSERT INTO audit_event/u.test(text) &&
+        values[5] === "unprojected.accessed",
+    );
+    assert.ok(insert);
+    assert.equal(insert.values[2], actorUserId);
+    assert.equal(insert.values[7], runId);
+    assert.deepEqual(insert.values[10], ADMIN_UNPROJECTED_RESULT_FIELDS);
+    assert.equal(insert.values[11], "Approved quality analysis");
+  });
+}
 
 for (const role of [
   null,
@@ -283,7 +289,6 @@ for (const role of [
   "consultant_manager",
   "product",
   "security_audit",
-  "super_admin",
 ]) {
   test(`TASK138 unprojected access denies ${role ?? "no-sub-role"} and audits zero released fields`, async () => {
     const pool = poolFor({ role });

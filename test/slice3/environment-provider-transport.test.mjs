@@ -207,6 +207,49 @@ test("Gemini interaction transport rejects ungrounded model output", async () =>
   }
 });
 
+test("dispatched Gemini response failures retain a conservative closed cost", async () => {
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ malformed: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  try {
+    const transport = new EnvironmentProviderTransport(
+      "gemini_direct",
+      "test-secret",
+      0.25,
+      "gemini-conservative-test.v1",
+      "request",
+    );
+    await assert.rejects(
+      transport.send({
+        url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+        signal: new AbortController().signal,
+      }),
+      (error) => {
+        assert.equal(error.name, "ProviderTransportFailure");
+        assert.equal(error.status, 200);
+        assert.deepEqual(error.accounting, {
+          state: "estimated",
+          quantity: 1,
+          unit: "request",
+          amount: 0.25,
+          currency: "USD",
+          pricingVersion: "gemini-conservative-test.v1",
+          measurement: "estimated",
+        });
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = priorFetch;
+  }
+});
+
 test("OpenRouter transport audits in-band served identity without a secondary metadata request", async () => {
   const priorFetch = globalThis.fetch;
   const calls = [];

@@ -244,6 +244,37 @@ test("v2 publishes deterministic TASK137 source facts and eligible reserves only
   );
 });
 
+test("v2 restores live provenance only from an explicit trusted evidence binding", () => {
+  const graph = buildStandardSyntheticEvidenceGraph(
+    "RUN-CONSULTANT-V2-LIVE",
+    "many",
+    constraints,
+  );
+  const liveEvidenceId = graph.claims.find((claim) =>
+    graph.eligible_candidate_ids.includes(claim.candidate_id),
+  ).evidence_ids[0];
+  const evidence = graph.evidence.find(
+    (item) => item.evidence_id === liveEvidenceId,
+  );
+  delete evidence.fixture_identity;
+  evidence.exact_url = "https://publisher-01.example.invalid/source";
+  evidence.publisher_domain = "publisher-01.example.invalid";
+  evidence.published_or_updated = "not stated by source";
+  const result = buildConsultantResultProjectionV2({
+    completeResult: graph,
+    trustedLiveEvidenceIds: new Set([liveEvidenceId]),
+    projectionAsOf: now,
+    hardConstraints: constraints,
+    softCap: 3,
+    configurationRelease,
+  });
+  assert.equal(
+    result.source_facts.find((fact) => fact.evidence_id === liveEvidenceId)
+      .provenance,
+    "live_secure_fetch",
+  );
+});
+
 test("v2 fails closed if a failed hard-gate candidate enters the eligible ledger", () => {
   const graph = buildStandardSyntheticEvidenceGraph(
     "RUN-CONSULTANT-V2-FORGED-ELIGIBILITY",

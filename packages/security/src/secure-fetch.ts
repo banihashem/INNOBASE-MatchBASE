@@ -815,7 +815,10 @@ export function sealUntrustedSource(
   body: Uint8Array,
   contentType = "text/plain",
 ): SealedUntrustedSource {
-  const decoded = new TextDecoder("utf-8", { fatal: true }).decode(body);
+  // Public pages can contain isolated invalid UTF-8 bytes. Decode them as the
+  // Unicode replacement character; the evidence identity remains bound to the
+  // exact raw bytes through contentSha256 below.
+  const decoded = new TextDecoder("utf-8").decode(body);
   const inactive = decoded
     .normalize("NFKC")
     .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/giu, " ")

@@ -229,7 +229,11 @@ postgresTest(
         [directProviderRouteId],
       );
 
-      const seedRun = async (label, selectedScoringId = scoringId) => {
+      const seedRun = async (
+        label,
+        selectedScoringId = scoringId,
+        adminProductTier,
+      ) => {
         const requestId = randomUUID();
         const canonicalizationId = randomUUID();
         const canonicalId = randomUUID();
@@ -272,6 +276,7 @@ postgresTest(
           scoringConfigVersionId: selectedScoringId,
           correlationId: randomUUID(),
           deploymentId: "slice3-application-test",
+          adminProductTier,
         });
         assert.equal(admission.disposition, "accepted");
         await pool.query(
@@ -422,6 +427,7 @@ postgresTest(
           };
         },
       };
+      const circuitObservationTimes = [];
       const serviceOptions = {
         pool,
         accountId,
@@ -451,7 +457,12 @@ postgresTest(
           gemini_direct: direct,
           openrouter: new RecordingFakeTransport(new Error("must not run")),
         },
-        circuit: { isRouteAvailable: async () => true },
+        circuit: {
+          isRouteAvailable: async (_routeId, at) => {
+            circuitObservationTimes.push(at);
+            return true;
+          },
+        },
         validateOutput: (body) => body,
         backoff: async () => undefined,
         ledgerTiming: {
@@ -625,6 +636,17 @@ postgresTest(
       assert.deepEqual(secondResult, firstResult);
       assert.equal(firstResult.disposition, "complete");
       assert.equal(firstResult.result.eligibleCandidateIds.length, 1);
+      assert.equal(
+        circuitObservationTimes.includes(execution.capturedAt),
+        true,
+      );
+      assert.equal(
+        circuitObservationTimes.some(
+          (observedAt) =>
+            Date.parse(observedAt) > Date.parse(execution.capturedAt),
+        ),
+        true,
+      );
       const requestBody = direct.requests[0].body;
       assert.match(requestBody, /Identify qualified industrial suppliers/iu);
       assert.doesNotMatch(requestBody, /متن محرمانه|api[_-]?key/iu);
@@ -1425,13 +1447,34 @@ postgresTest(
       const dispatcherSyntheticRunId = await seedRun(
         "combined synthetic dispatcher control",
       );
+      const dispatcherConsultantRunId = await seedRun(
+        "combined Consultant live dispatcher",
+      );
       await pool.query(
         `UPDATE research_run
-            SET research_mode=CASE WHEN run_id=$2 THEN 'qualified_live_research'
-                                   ELSE 'synthetic_reference' END,
-                tier_at_submission='standard'
-          WHERE account_id=$1 AND run_id IN ($2,$3)`,
-        [accountId, dispatcherLiveRunId, dispatcherSyntheticRunId],
+            SET research_mode=CASE WHEN run_id IN ($2,$3) THEN 'qualified_live_research'
+                                   ELSE 'synthetic_reference' END
+          WHERE account_id=$1 AND run_id IN ($2,$3,$4)`,
+        [
+          accountId,
+          dispatcherLiveRunId,
+          dispatcherConsultantRunId,
+          dispatcherSyntheticRunId,
+        ],
+      );
+      await pool.query(
+        `UPDATE research_run
+            SET research_mode='synthetic_reference'
+          WHERE account_id=$1
+            AND run_id NOT IN ($2,$3)
+            AND research_mode='qualified_live_research'
+            AND state IN ('queued','failed_retryable')
+            AND NOT EXISTS (
+              SELECT 1 FROM live_research_terminal t
+               WHERE t.account_id=research_run.account_id
+                 AND t.run_id=research_run.run_id
+            )`,
+        [accountId, dispatcherLiveRunId, dispatcherConsultantRunId],
       );
       let dispatcherDiscoveryCalls = 0;
       let dispatcherProviderCalls = 0;
@@ -1441,9 +1484,14 @@ postgresTest(
         outputSchema: LIVE_RESEARCH_APPROVED_OUTPUT_SCHEMA,
         now: () => new Date("2026-08-15T00:01:00.000Z"),
         serviceFactory: (work, exactPolicyId) => {
-          assert.equal(work.runId, dispatcherLiveRunId);
+          assert.ok(
+            [dispatcherLiveRunId, dispatcherConsultantRunId].includes(
+              work.runId,
+            ),
+          );
           assert.equal(work.accountId, accountId);
           assert.equal(work.userId, userId);
+          assert.equal(work.tier, "consultant");
           assert.equal(exactPolicyId, policyId);
           return new LiveResearchExecutionService({
             ...serviceOptions,
@@ -1510,15 +1558,21 @@ postgresTest(
         },
       });
       assert.deepEqual(
-        await dispatcher.dispatchNext(new AbortController().signal),
-        [dispatcherLiveRunId],
+        (
+          await dispatcher.dispatchNext(new AbortController().signal)
+        ).toSorted(),
+        [dispatcherLiveRunId, dispatcherConsultantRunId].toSorted(),
       );
-      assert.equal(dispatcherDiscoveryCalls, 1);
-      assert.equal(dispatcherProviderCalls, 1);
+      assert.equal(dispatcherDiscoveryCalls, 2);
+      assert.equal(dispatcherProviderCalls, 2);
       const dispatcherStates = await pool.query(
         `SELECT run_id,state,research_mode FROM research_run
-          WHERE run_id IN ($1,$2) ORDER BY run_id`,
-        [dispatcherLiveRunId, dispatcherSyntheticRunId],
+          WHERE run_id IN ($1,$2,$3) ORDER BY run_id`,
+        [
+          dispatcherLiveRunId,
+          dispatcherConsultantRunId,
+          dispatcherSyntheticRunId,
+        ],
       );
       const stateByRun = new Map(
         dispatcherStates.rows.map((row) => [row.run_id, row]),
@@ -1533,6 +1587,18 @@ postgresTest(
         state: "queued",
         research_mode: "synthetic_reference",
       });
+      assert.deepEqual(stateByRun.get(dispatcherConsultantRunId), {
+        run_id: dispatcherConsultantRunId,
+        state: "complete",
+        research_mode: "qualified_live_research",
+      });
+      const consultantProjectionBinding = await pool.query(
+        `SELECT config_id,config_version,soft_cap
+           FROM consultant_result_projection_policy
+          WHERE account_id=$1 AND run_id=$2`,
+        [accountId, dispatcherConsultantRunId],
+      );
+      assert.equal(consultantProjectionBinding.rowCount, 1);
 
       const heldRunId = await seedRun("held reservation lock");
       const heldExecutionId = "EXEC-HELD-LOCK";
@@ -1974,6 +2040,16 @@ postgresTest(
         cost_state: "unknown",
         pricing_state: "unknown",
         amount: null,
+      });
+      const discoveryFailureRun = await pool.query(
+        `SELECT state,state_reason,completed_at IS NOT NULL AS completed
+           FROM research_run WHERE run_id=$1`,
+        [discoveryFailureRunId],
+      );
+      assert.deepEqual(discoveryFailureRun.rows[0], {
+        state: "failed",
+        state_reason: "source_discovery_failed",
+        completed: true,
       });
       const discoveryFailureQuota = await pool.query(
         `SELECT q.entry_kind,q.units,q.reason_code,

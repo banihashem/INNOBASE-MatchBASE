@@ -215,6 +215,10 @@ postgresTest(
 
       assert.equal(
         await migrateDownLatest(isolated),
+        "0011_admin_system_scope_and_run_tier_immutability",
+      );
+      assert.equal(
+        await migrateDownLatest(isolated),
         "0010_p4_live_pipeline_extraction_v2",
       );
       assert.equal(

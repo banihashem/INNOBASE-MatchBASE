@@ -20,9 +20,15 @@ export async function guardFreshRunOutputRead(
   routeClass: "run.status" | "run.result",
 ): Promise<ResultOutputGuard> {
   const run = await client.query<{ state: string }>(
-    `SELECT state
-       FROM research_run
-      WHERE run_id=$1 AND account_id=$2 AND requested_by_user_id=$3
+    `SELECT CASE
+              WHEN r.state='failed_retryable' AND EXISTS (
+                SELECT 1 FROM live_research_terminal t
+                 WHERE t.account_id=r.account_id AND t.run_id=r.run_id
+              ) THEN 'failed'
+              ELSE r.state
+            END AS state
+       FROM research_run r
+      WHERE r.run_id=$1 AND r.account_id=$2 AND r.requested_by_user_id=$3
       FOR SHARE`,
     [runId, context.accountId, context.userId],
   );

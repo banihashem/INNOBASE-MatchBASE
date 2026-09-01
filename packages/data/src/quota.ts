@@ -23,6 +23,12 @@ export interface QuotaAdmissionInput {
   readonly deploymentId: string;
   readonly runId?: string;
   readonly researchMode?: "synthetic_reference" | "qualified_live_research";
+  /**
+   * A server-owned product projection for an operational Admin. This value is
+   * accepted only when the stored subject is Admin with an active super_admin
+   * grant; callers cannot use it to elevate another persisted tier.
+   */
+  readonly adminProductTier?: "consultant";
 }
 
 export type QuotaAdmissionResult =
@@ -49,10 +55,6 @@ interface IdempotencyRow {
   response_body: QuotaAdmissionResult;
 }
 
-interface TierRow {
-  tier: ChargeableTier;
-}
-
 interface QuotaRow {
   used: string;
   next_capacity_at: Date | null;
@@ -67,8 +69,9 @@ async function resolveTier(
   accountId: string,
   userId: string,
   decisionAt: Date,
+  adminProductTier?: "consultant",
 ): Promise<ChargeableTier> {
-  const result = await client.query<TierRow>(
+  const result = await client.query<{ tier: string }>(
     `SELECT tier
        FROM entitlement_grant
       WHERE account_id = $1
@@ -81,10 +84,25 @@ async function resolveTier(
     [accountId, userId, decisionAt],
   );
   const tier = result.rows[0]?.tier;
-  if (!tier || !(tier in ROLLING_QUOTA_LIMITS)) {
+  if (tier && tier in ROLLING_QUOTA_LIMITS) {
+    return tier as ChargeableTier;
+  }
+  if (tier === "admin" && adminProductTier === "consultant") {
+    const authority = await client.query(
+      `SELECT 1
+         FROM admin_role_grant
+        WHERE account_id=$1 AND user_id=$2 AND sub_role='super_admin'
+          AND effective_from <= $3
+          AND (effective_to IS NULL OR effective_to > $3)
+          AND revoked_at IS NULL
+        LIMIT 1`,
+      [accountId, userId, decisionAt],
+    );
+    if (authority.rowCount === 1) return "consultant";
+  }
+  {
     throw new Error("No chargeable persisted entitlement for subject");
   }
-  return tier;
 }
 
 async function quotaState(
@@ -197,6 +215,7 @@ export async function admitRunWithinQuota(
       input.accountId,
       input.userId,
       decisionAt,
+      input.adminProductTier,
     );
     const limit = ROLLING_QUOTA_LIMITS[tier];
     const current = await quotaState(client, input.accountId, decisionAt);
@@ -271,7 +290,7 @@ export async function admitRunWithinQuota(
     await appendAuditEvent(client, {
       accountId: input.accountId,
       actorUserId: input.userId,
-      actorTier: tier,
+      actorTier: input.adminProductTier ? "admin" : tier,
       eventType: "run.queued",
       resourceKind: "research_run",
       resourceId: runId,
@@ -282,6 +301,8 @@ export async function admitRunWithinQuota(
         quotaLimit: limit,
         quotaUsed: current.used + 1,
         researchMode: input.researchMode ?? "synthetic_reference",
+        productTierAtSubmission: tier,
+        adminProductAuthority: input.adminProductTier === "consultant",
       },
     });
     return response;

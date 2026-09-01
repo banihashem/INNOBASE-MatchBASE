@@ -576,6 +576,8 @@ test("completes the reference path using keyboard controls only", async ({
     element.remove();
   });
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Profile" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByLabel("What must be sourced?")).toBeFocused();
   await page.keyboard.type("Keyboard synthetic product");
   await page.keyboard.press("Tab");

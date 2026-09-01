@@ -56,10 +56,14 @@ export async function readAdminUnprojectedResult(
       input.accountId,
       input.actorUserId,
     );
-    const analyst =
+    const disclosureRole =
       authority?.tier === "admin" &&
-      authority.adminSubRoles.includes("analyst");
-    if (!analyst) {
+      (authority.adminSubRoles.includes("super_admin")
+        ? "super_admin"
+        : authority.adminSubRoles.includes("analyst")
+          ? "analyst"
+          : null);
+    if (!disclosureRole) {
       await appendAuditEvent(client, {
         accountId: input.accountId,
         actorUserId: input.actorUserId,
@@ -76,6 +80,7 @@ export async function readAdminUnprojectedResult(
       return { status: 403, reason: "analyst-required" };
     }
     const found = await client.query<{
+      account_id: string;
       run_id: string;
       outcome: string;
       eligible_count: number;
@@ -86,12 +91,12 @@ export async function readAdminUnprojectedResult(
       result_sha256: Buffer;
       assembled_at: Date;
     }>(
-      `SELECT run_id,outcome,eligible_count,considered_count,scarcity,
+      `SELECT account_id,run_id,outcome,eligible_count,considered_count,scarcity,
               limitations_text,complete_result_document,result_sha256,assembled_at
          FROM run_result
-        WHERE account_id=$1 AND run_id=$2
+        WHERE run_id=$2 AND ($3::boolean OR account_id=$1)
         FOR SHARE`,
-      [input.accountId, input.runId],
+      [input.accountId, input.runId, disclosureRole === "super_admin"],
     );
     const row = found.rows[0];
     if (!row) {
@@ -99,7 +104,7 @@ export async function readAdminUnprojectedResult(
         accountId: input.accountId,
         actorUserId: input.actorUserId,
         actorTier: "admin",
-        actorAdminSubRole: "analyst",
+        actorAdminSubRole: disclosureRole,
         eventType: "unprojected.access_denied",
         resourceKind: "research_run",
         resourceId: input.runId,
@@ -112,15 +117,16 @@ export async function readAdminUnprojectedResult(
       });
       return { status: 403, reason: "resource-not-visible" };
     }
+    const { account_id: subjectAccountId, ...releasedRow } = row;
     const body: AdminUnprojectedResultView = {
-      ...row,
+      ...releasedRow,
       result_sha256: row.result_sha256.toString("hex"),
     };
     const disclosureAuditId = await appendAuditEvent(client, {
       accountId: input.accountId,
       actorUserId: input.actorUserId,
       actorTier: "admin",
-      actorAdminSubRole: "analyst",
+      actorAdminSubRole: disclosureRole,
       eventType: "unprojected.accessed",
       resourceKind: "research_run",
       resourceId: input.runId,
@@ -129,7 +135,11 @@ export async function readAdminUnprojectedResult(
       justification: input.justification,
       correlationId: input.correlationId,
       deploymentId: input.deploymentId,
-      detail: { resultSha256: body.result_sha256 },
+      detail: {
+        resultSha256: body.result_sha256,
+        subjectAccountId,
+        crossAccount: subjectAccountId !== input.accountId,
+      },
     });
     return { status: 200, body, disclosureAuditId };
   });

@@ -503,8 +503,12 @@ describePostgres("Slice 2 native live HTTP contract", () => {
         demoStatus: 404,
       },
     ];
-    const deniedSubjects = subjects.filter((item) => item.tier !== "standard");
-    expect(deniedSubjects).toHaveLength(9);
+    const deniedSubjects = subjects.filter(
+      (item) =>
+        item.tier !== "standard" &&
+        !(item.tier === "admin" && item.adminSubRole === "super_admin"),
+    );
+    expect(deniedSubjects).toHaveLength(8);
     for (const denied of deniedSubjects)
       for (const endpoint of endpointMatrix) {
         const response = await call(
@@ -524,6 +528,14 @@ describePostgres("Slice 2 native live HTTP contract", () => {
             status: 403,
           });
       }
+
+    const superAdmin = subjects.find(
+      (item) => item.tier === "admin" && item.adminSubRole === "super_admin",
+    )!;
+    expect(
+      (await call(superAdmin, "/api/v1/domain-packs/resolution", "POST", {}))
+        .status,
+    ).toBe(422);
 
     const standard = subject("standard");
     const demoShaped = await call(standard, "/api/v1/requests", "POST", {

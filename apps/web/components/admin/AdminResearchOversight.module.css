@@ -1,0 +1,127 @@
+.shell {
+  max-width: 92rem;
+  margin: 0 auto;
+  padding: 2rem clamp(1rem, 4vw, 4rem) 5rem;
+}
+
+.header,
+.panel {
+  border: 1px solid var(--border, #cad2cc);
+  background: var(--surface, #fffef8);
+  padding: clamp(1rem, 2.5vw, 2rem);
+}
+
+.header {
+  margin-bottom: 1rem;
+}
+.header h1 {
+  margin: 0.25rem 0;
+}
+.panel + .panel {
+  margin-top: 1rem;
+}
+.eyebrow {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.lede {
+  max-width: 70ch;
+}
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: end;
+}
+.field {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 12rem;
+}
+.field input,
+.field select,
+.field textarea {
+  min-height: 2.75rem;
+  padding: 0.55rem;
+}
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.button {
+  min-height: 2.75rem;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+}
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.tableScroll {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 68rem;
+}
+.table th,
+.table td {
+  border-bottom: 1px solid var(--border, #cad2cc);
+  padding: 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+.summary {
+  max-width: 38ch;
+}
+.status {
+  white-space: nowrap;
+  font-weight: 700;
+}
+.result {
+  margin-top: 1rem;
+  border-left: 0.3rem solid #0c5947;
+  padding: 1rem;
+}
+.result pre {
+  max-height: 34rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.boundary {
+  padding: 0.75rem;
+  background: #eef6f1;
+}
+.error {
+  border-left: 0.3rem solid #a6322b;
+  padding: 1rem;
+  background: #fff1ef;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+@media (max-width: 48rem) {
+  .filters,
+  .actions {
+    display: grid;
+  }
+  .field {
+    min-width: 100%;
+  }
+}

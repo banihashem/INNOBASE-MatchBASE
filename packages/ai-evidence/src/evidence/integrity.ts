@@ -91,6 +91,14 @@ const SOURCE_KINDS = new Set([
   "local_fixture",
   "external_url",
 ]);
+const APPROVED_DIMENSION_SCORE_KEYS = [
+  "category_product_fit",
+  "compliance_certification_fit",
+  "volume_capacity_fit",
+  "price_tier_fit",
+  "positioning_brand_fit",
+  "geographic_reach_fit",
+] as const;
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -112,6 +120,54 @@ function exactKeys(
   ) {
     throw new Error(`${label} contains unknown or missing fields.`);
   }
+}
+
+/**
+ * Repairs one known legacy-schema provider defect without widening the graph:
+ * dimensionScores may be a JSON-encoded closed score object. All other strings,
+ * shapes and fields are left untouched for the normal fail-closed validator.
+ */
+export function normalizeLegacyProviderDimensionScores(
+  value: unknown,
+): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const graph = value as Record<string, unknown>;
+  if (!Array.isArray(graph.candidates)) return value;
+  let changed = false;
+  const candidates = graph.candidates.map((candidateValue) => {
+    if (
+      !candidateValue ||
+      typeof candidateValue !== "object" ||
+      Array.isArray(candidateValue)
+    )
+      return candidateValue;
+    const candidate = candidateValue as Record<string, unknown>;
+    if (typeof candidate.dimensionScores !== "string") return candidateValue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(candidate.dimensionScores);
+    } catch {
+      throw new Error("Legacy dimensionScores JSON is invalid.");
+    }
+    const dimensions = record(parsed, "Legacy dimensionScores");
+    exactKeys(
+      dimensions,
+      APPROVED_DIMENSION_SCORE_KEYS,
+      "Legacy dimensionScores",
+    );
+    if (
+      Object.values(dimensions).some(
+        (score) =>
+          !Number.isInteger(score) ||
+          (score as number) < 0 ||
+          (score as number) > 100,
+      )
+    )
+      throw new Error("Legacy dimensionScores values are invalid.");
+    changed = true;
+    return { ...candidate, dimensionScores: dimensions };
+  });
+  return changed ? { ...graph, candidates } : value;
 }
 
 function decodeEntities(value: string): string {
@@ -252,7 +308,19 @@ function validateClosedEvidenceGraphShape(
       candidate.dimensionScores,
       `Candidate ${index}.dimensionScores`,
     );
-    if (Object.values(dimensions).some((score) => typeof score !== "number")) {
+    exactKeys(
+      dimensions,
+      APPROVED_DIMENSION_SCORE_KEYS,
+      `Candidate ${index}.dimensionScores`,
+    );
+    if (
+      Object.values(dimensions).some(
+        (score) =>
+          !Number.isInteger(score) ||
+          (score as number) < 0 ||
+          (score as number) > 100,
+      )
+    ) {
       throw new Error(`Candidate ${index}.dimensionScores is invalid.`);
     }
     if (

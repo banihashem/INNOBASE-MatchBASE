@@ -37,7 +37,7 @@ function ledgerFor(graph: EvidenceGraphV1): EvidenceLineageLedgerV1 {
       claimId: value.claimId,
       valueId: value.valueId,
       evidenceId: value.evidenceId,
-      dimensionId: "technical",
+      dimensionId: "category_product_fit",
       direction: "supports",
     })),
     identityResolutions: resolveCandidateIdentities({

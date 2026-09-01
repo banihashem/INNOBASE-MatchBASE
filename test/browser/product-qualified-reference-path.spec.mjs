@@ -110,7 +110,7 @@ test("injected qualified-live API, worker, and UI remain truthful and accessible
 
     await expect(
       page.getByText(
-        "Qualified live research — external evidence is fetched and verified for this run",
+        "Controlled web evidence is fetched for this run; external verification requires independent corroboration or authoritative registry evidence",
       ),
     ).toBeVisible();
     await expect(

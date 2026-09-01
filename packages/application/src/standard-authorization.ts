@@ -10,10 +10,18 @@ export async function assertStandardWorkspaceAuthorized(
   pool: ConnectionPool,
   context: RequestContext,
   routeClass: string,
-): Promise<void> {
-  const grant = await pool.query<{ tier: string }>(
-    `SELECT tier
-       FROM entitlement_grant
+): Promise<"standard" | "consultant"> {
+  const grant = await pool.query<{ tier: string; is_super_admin: boolean }>(
+    `SELECT eg.tier,
+            EXISTS (
+              SELECT 1 FROM admin_role_grant arg
+               WHERE arg.account_id=eg.account_id AND arg.user_id=eg.user_id
+                 AND arg.sub_role='super_admin'
+                 AND arg.effective_from <= clock_timestamp()
+                 AND (arg.effective_to IS NULL OR arg.effective_to > clock_timestamp())
+                 AND arg.revoked_at IS NULL
+            ) AS is_super_admin
+       FROM entitlement_grant eg
       WHERE account_id = $1 AND user_id = $2
         AND effective_from <= clock_timestamp()
         AND (effective_to IS NULL OR effective_to > clock_timestamp())
@@ -22,7 +30,16 @@ export async function assertStandardWorkspaceAuthorized(
       LIMIT 1`,
     [context.accountId, context.userId],
   );
-  if (context.tier === "standard" && grant.rows[0]?.tier === "standard") return;
+  const stored = grant.rows[0];
+  if (context.tier === "standard" && stored?.tier === "standard")
+    return "standard";
+  if (
+    context.tier === "admin" &&
+    context.adminSubRoles.includes("super_admin") &&
+    stored?.tier === "admin" &&
+    stored.is_super_admin
+  )
+    return "consultant";
   await inTransaction(pool, (client) =>
     appendAuditEvent(client, {
       accountId: context.accountId,

@@ -30,18 +30,21 @@ function config(
 }
 
 describe("server-owned live research admission", () => {
-  it("admits only Demo after the closed worker-credential marker is verified", () => {
+  it("admits Demo and Consultant-depth execution after the closed worker-credential marker is verified", () => {
     const admission = loadServerOwnedResearchAdmission(config(true));
     expect(admission.decide("demo")).toMatchObject({
       id: "qualified_live_research",
       liveQualified: true,
     });
-    for (const tier of ["standard", "consultant", "admin"] as const) {
+    expect(admission.decide("standard")).toMatchObject({
+      id: "synthetic_reference",
+      liveQualified: false,
+    });
+    for (const tier of ["consultant", "admin"] as const)
       expect(admission.decide(tier)).toMatchObject({
-        id: "synthetic_reference",
-        liveQualified: false,
+        id: "qualified_live_research",
+        liveQualified: true,
       });
-    }
   });
 
   it.each([false, undefined])(

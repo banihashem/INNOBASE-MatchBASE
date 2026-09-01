@@ -9,12 +9,14 @@ import {
   AdminAuditApplication,
   AdminEntitlementsApplication,
   AdminRunsApplication,
+  AdminResearchApplication,
   AdminUnprojectedApplication,
   ArtifactDownloadApplication,
   ApplicationFault,
   ConsultantResultApplication,
   MatchBaseApplication,
   StandardWorkspaceApplication,
+  UserProfileApplication,
   assertSlice1EndpointAuthorized,
   type CanonicalRevisionInput,
   type IntakeInput,
@@ -49,9 +51,11 @@ import {
 import { handleAdminEntitlementsRoute } from "./admin-entitlements-route-core";
 import { handleAdminAuditRoute } from "./admin-audit-route-core";
 import { handleAdminRunsRoute } from "./admin-runs-route-core";
+import { handleAdminResearchRoute } from "./admin-research-route-core";
 import { handleAdminUnprojectedRoute } from "./admin-unprojected-route-core";
 import { handleArtifactDownloadRoute } from "./artifact-download-route-core";
 import { handleConsultantRoute } from "./consultant-route-core";
+import { handleUserProfileRoute } from "./user-profile-route-core";
 import { handleGoogleRiscRoute } from "./google-risc-route-core";
 import {
   handleStandardRoute,
@@ -81,9 +85,11 @@ interface Services {
   adminEntitlementsApplication: AdminEntitlementsApplication;
   adminAuditApplication: AdminAuditApplication;
   adminRunsApplication: AdminRunsApplication;
+  adminResearchApplication: AdminResearchApplication;
   adminUnprojectedApplication: AdminUnprojectedApplication;
   artifactDownloadApplication: ArtifactDownloadApplication;
   consultantResultApplication: ConsultantResultApplication;
+  userProfileApplication: UserProfileApplication;
   googleProvider?: ReturnType<typeof createGoogleOidcAdapter>;
   googleRiscVerifier?: ReturnType<typeof createGoogleRiscVerifier>;
 }
@@ -220,6 +226,7 @@ function services(): Services {
           audiences: [config.googleClientId],
         })
       : undefined;
+  const researchAdmission = loadServerOwnedResearchAdmission(config);
   singleton = {
     config,
     pool,
@@ -228,7 +235,7 @@ function services(): Services {
       canonicalizer,
       canonicalizationBudgetMs: 20_000,
       privacyKey: config.digestKey,
-      researchAdmission: loadServerOwnedResearchAdmission(config),
+      researchAdmission,
       consultantProjectionConfig:
         config.consultantProjectionConfig ??
         DEFAULT_CONSULTANT_PROJECTION_CONFIG,
@@ -236,6 +243,7 @@ function services(): Services {
     standardApplication: new StandardWorkspaceApplication({
       pool,
       privacyKey: config.digestKey,
+      researchAdmission,
       consultantProjectionConfig:
         config.consultantProjectionConfig ??
         DEFAULT_CONSULTANT_PROJECTION_CONFIG,
@@ -243,12 +251,17 @@ function services(): Services {
     adminEntitlementsApplication: new AdminEntitlementsApplication(pool),
     adminAuditApplication: new AdminAuditApplication(pool, config.digestKey),
     adminRunsApplication: new AdminRunsApplication(pool, config.digestKey),
+    adminResearchApplication: new AdminResearchApplication(
+      pool,
+      config.digestKey,
+    ),
     adminUnprojectedApplication: new AdminUnprojectedApplication(pool),
     artifactDownloadApplication: new ArtifactDownloadApplication(
       pool,
       artifactObjectReader,
     ),
     consultantResultApplication: new ConsultantResultApplication(pool),
+    userProfileApplication: new UserProfileApplication(pool),
     ...(googleProvider ? { googleProvider } : {}),
     ...(googleRiscVerifier ? { googleRiscVerifier } : {}),
   };
@@ -1187,6 +1200,38 @@ export async function handleRoute(request: Request): Promise<Response> {
         session.requestContext.userId,
       );
       return json(current.config, correlationId, body);
+    }
+    const userProfile = await handleUserProfileRoute({
+      method: request.method,
+      pathname: path,
+      searchParams: url.searchParams,
+      context: session.requestContext,
+      application: current.userProfileApplication,
+    });
+    if (userProfile) {
+      return json(
+        current.config,
+        correlationId,
+        userProfile.body,
+        userProfile.status,
+        userProfile.headers,
+      );
+    }
+    const adminResearch = await handleAdminResearchRoute({
+      method: request.method,
+      pathname: path,
+      searchParams: url.searchParams,
+      context: session.requestContext,
+      application: current.adminResearchApplication,
+    });
+    if (adminResearch) {
+      return json(
+        current.config,
+        correlationId,
+        adminResearch.body,
+        adminResearch.status,
+        adminResearch.headers,
+      );
     }
     const adminEntitlements = await handleAdminEntitlementsRoute({
       method: request.method,

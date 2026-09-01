@@ -20,6 +20,15 @@ export function AdminWorkspace({
           <span>MatchBASE</span>
         </a>
         <nav aria-label="Admin operations">
+          <a className="nav-button" href="/admin/product">
+            Product research
+          </a>
+          <a className="nav-button" href="/admin/profile">
+            My results
+          </a>
+          <a className="nav-button" href="/admin/research">
+            All research
+          </a>
           <a className="nav-button" href="/admin/entitlements">
             Entitlements
           </a>
@@ -42,9 +51,9 @@ export function AdminWorkspace({
           <p className="eyebrow">Admin operations</p>
           <h1 id="admin-workspace-title">Operational control workspace</h1>
           <p className="lede">
-            Administrative access is isolated from product research. The Admin
-            tier does not grant Standard runs, Consultant results, or product
-            execution capacity.
+            Administrative authority and product execution remain distinct.
+            Super-admin may use the governed product workspace without changing
+            the stored Admin entitlement or inheriting authority from the UI.
           </p>
 
           <div className="admin-boundary" role="note">
@@ -56,6 +65,44 @@ export function AdminWorkspace({
           </div>
 
           <div className="admin-operations-grid">
+            <article className="admin-operation-card">
+              <p className="eyebrow">Product execution</p>
+              <h2>Admin research workspace</h2>
+              <p>
+                Submit owner-bound product research without changing the Admin
+                entitlement. The server re-verifies Super-admin authority and
+                records new runs at Consultant disclosure depth.
+              </p>
+              <a className="primary-action" href="/admin/product">
+                Start product research
+              </a>
+            </article>
+
+            <article className="admin-operation-card">
+              <p className="eyebrow">Personal profile</p>
+              <h2>My research results</h2>
+              <p>
+                Review research submitted by this Admin identity and open the
+                projection fixed when each run was created.
+              </p>
+              <a className="secondary-action" href="/admin/profile">
+                Open my results
+              </a>
+            </article>
+
+            <article className="admin-operation-card">
+              <p className="eyebrow">System oversight</p>
+              <h2>All user research</h2>
+              <p>
+                Inspect bounded request summaries and run outcomes across all
+                accounts. Inventory and complete-result access require recorded
+                operational purposes.
+              </p>
+              <a className="secondary-action" href="/admin/research">
+                Open research inventory
+              </a>
+            </article>
+
             <article className="admin-operation-card">
               <p className="eyebrow">Identity governance</p>
               <h2>Entitlement management</h2>

@@ -37,13 +37,19 @@ export async function workspaceJson<T>(
     };
   }
   const body = (await response.json().catch(() => ({}))) as T & {
+    detail?: string;
+    correlation_id?: string;
     error?: { detail?: string; correlation_id?: string };
   };
   if (!response.ok) {
     throw new WorkspaceRequestError(
-      body.error?.detail ?? "The workspace request could not be completed.",
+      body.detail ??
+        body.error?.detail ??
+        "The workspace request could not be completed.",
       response.status,
-      body.error?.correlation_id ?? response.headers.get("MB-Correlation-Id"),
+      body.correlation_id ??
+        body.error?.correlation_id ??
+        response.headers.get("MB-Correlation-Id"),
     );
   }
   return {

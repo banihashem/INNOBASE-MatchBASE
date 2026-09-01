@@ -7,8 +7,10 @@ import {
   type QualifiedLiveWorkItem,
 } from "./live-research-worker.js";
 import {
+  ProviderTransportFailure,
   validateResearchRoutePolicy,
   type LiveResearchCircuitPolicy,
+  type ProviderAccounting,
   type ProviderTransport,
   type TransportRequest,
   type TransportResponse,
@@ -355,40 +357,28 @@ const OPENROUTER_ROUTER_MODELS = new Set([
 
 function auditedOpenRouterRoute(
   value: unknown,
-): Readonly<{ provider: "Google Vertex" | "Google"; model: string }> {
+): Readonly<{ provider: "Google Vertex"; model: string }> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("OpenRouter routing metadata is invalid.");
   const routing = value as Record<string, unknown>;
   if (
-    !hasOnlyKeys(
-      routing,
-      new Set([
-        "requested",
-        "strategy",
-        "attempt",
-        "endpoints",
-        "attempts",
-        "pipeline",
-        "region",
-        "summary",
-        "is_byok",
-        "params",
-      ]),
-    ) ||
     routing.requested !== "google/gemini-3.6-flash" ||
     routing.strategy !== "direct" ||
     routing.attempt !== 1 ||
     ("is_byok" in routing && routing.is_byok !== false) ||
     (routing.pipeline !== undefined &&
-      (!Array.isArray(routing.pipeline) || routing.pipeline.length !== 0))
+      (!Array.isArray(routing.pipeline) ||
+        routing.pipeline.length > 64 ||
+        routing.pipeline.some(
+          (stage) =>
+            !stage || typeof stage !== "object" || Array.isArray(stage),
+        )))
   )
     throw new Error("OpenRouter routing metadata is invalid.");
   const endpoints = routing.endpoints;
   if (!endpoints || typeof endpoints !== "object" || Array.isArray(endpoints))
     throw new Error("OpenRouter routing metadata is invalid.");
   const endpointRecord = endpoints as Record<string, unknown>;
-  if (!hasOnlyKeys(endpointRecord, new Set(["total", "available"])))
-    throw new Error("OpenRouter routing metadata is invalid.");
   const available = endpointRecord.available;
   if (
     !Array.isArray(available) ||
@@ -404,35 +394,35 @@ function auditedOpenRouterRoute(
       throw new Error("OpenRouter routing metadata is invalid.");
     const candidate = entry as Record<string, unknown>;
     if (
-      !hasOnlyKeys(candidate, new Set(["provider", "model", "selected"])) ||
-      !["Google Vertex", "Google"].includes(String(candidate.provider)) ||
+      candidate.provider !== "Google Vertex" ||
       !OPENROUTER_ROUTER_MODELS.has(String(candidate.model)) ||
       typeof candidate.selected !== "boolean"
     )
       throw new Error("OpenRouter routing metadata is invalid.");
     return candidate as {
-      provider: "Google Vertex" | "Google";
+      provider: "Google Vertex";
       model: string;
       selected: boolean;
     };
   });
   const selected = candidates.filter((candidate) => candidate.selected);
-  const attempts = routing.attempts ?? [];
-  if (!Array.isArray(attempts) || attempts.length > 1 || selected.length !== 1)
+  const attempts = routing.attempts;
+  if (
+    !Array.isArray(attempts) ||
+    attempts.length !== 1 ||
+    selected.length !== 1
+  )
     throw new Error("OpenRouter routing metadata is invalid.");
-  if (attempts.length === 1) {
-    const attempt = attempts[0];
-    if (!attempt || typeof attempt !== "object" || Array.isArray(attempt))
-      throw new Error("OpenRouter routing metadata is invalid.");
-    const record = attempt as Record<string, unknown>;
-    if (
-      !hasOnlyKeys(record, new Set(["provider", "model", "status"])) ||
-      record.provider !== "Google Vertex" ||
-      !OPENROUTER_ROUTER_MODELS.has(String(record.model)) ||
-      record.status !== 200
-    )
-      throw new Error("OpenRouter routing metadata is invalid.");
-  }
+  const attempt = attempts[0];
+  if (!attempt || typeof attempt !== "object" || Array.isArray(attempt))
+    throw new Error("OpenRouter routing metadata is invalid.");
+  const record = attempt as Record<string, unknown>;
+  if (
+    record.provider !== selected[0]!.provider ||
+    record.model !== selected[0]!.model ||
+    record.status !== 200
+  )
+    throw new Error("OpenRouter routing metadata is invalid.");
   return Object.freeze({
     provider: selected[0]!.provider,
     model: selected[0]!.model,
@@ -447,6 +437,18 @@ export class EnvironmentProviderTransport implements ProviderTransport {
     private readonly pricingVersion: string,
     private readonly accountingUnit: "request" | "search",
   ) {}
+
+  private conservativeAccounting(): ProviderAccounting {
+    return Object.freeze({
+      state: "estimated",
+      quantity: 1,
+      unit: this.accountingUnit,
+      amount: this.conservativeCost,
+      currency: "USD",
+      pricingVersion: this.pricingVersion,
+      measurement: "estimated",
+    });
+  }
 
   async send(request: TransportRequest): Promise<TransportResponse> {
     const url = new URL(request.url);
@@ -471,21 +473,44 @@ export class EnvironmentProviderTransport implements ProviderTransport {
         url.pathname !== "/api/v1/chat/completions")
     )
       throw new Error("Provider request escaped its qualified endpoint.");
-    const response = await fetch(url, {
-      method: "POST",
-      redirect: "error",
-      signal: request.signal,
-      headers: {
-        ...request.headers,
-        ...(this.provider === "gemini_direct"
-          ? { "x-goog-api-key": this.secret }
-          : {
-              Authorization: `Bearer ${this.secret}`,
-              "X-OpenRouter-Metadata": "enabled",
-            }),
-      },
-      body: request.body,
-    });
+    let response: Response | undefined;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        redirect: "error",
+        signal: request.signal,
+        headers: {
+          ...request.headers,
+          ...(this.provider === "gemini_direct"
+            ? { "x-goog-api-key": this.secret }
+            : {
+                Authorization: `Bearer ${this.secret}`,
+                "X-OpenRouter-Metadata": "enabled",
+              }),
+        },
+        body: request.body,
+      });
+      return await this.readProviderResponse(url, response);
+    } catch (error) {
+      if (request.signal.aborted || error instanceof ProviderTransportFailure)
+        throw error;
+      const cause =
+        error instanceof Error ? error : new Error("Provider failure.");
+      throw new ProviderTransportFailure(
+        cause.message,
+        {
+          ...(response ? { status: response.status } : {}),
+          accounting: this.conservativeAccounting(),
+        },
+        { cause },
+      );
+    }
+  }
+
+  private async readProviderResponse(
+    url: URL,
+    response: Response,
+  ): Promise<TransportResponse> {
     const envelope = await readBoundedProviderJson(response);
     let openRouterMetadata: Record<string, unknown> | null = null;
     if (this.provider === "openrouter" && response.ok) {
@@ -539,9 +564,7 @@ export class EnvironmentProviderTransport implements ProviderTransport {
     const servedProvider =
       this.provider === "gemini_direct"
         ? "google"
-        : ["Google Vertex", "Google"].includes(
-              String(openRouterMetadata?.provider_name),
-            )
+        : openRouterMetadata?.provider_name === "Google Vertex"
           ? "google-vertex"
           : null;
     return {

@@ -41,7 +41,13 @@ export type {
 };
 
 export type StandardScreen =
-  "requests" | "intake" | "canonical" | "running" | "result" | "help";
+  | "requests"
+  | "profile"
+  | "intake"
+  | "canonical"
+  | "running"
+  | "result"
+  | "help";
 
 export const SYNTHETIC_NOTICE =
   "Synthetic evaluation data — not a sourcing result";

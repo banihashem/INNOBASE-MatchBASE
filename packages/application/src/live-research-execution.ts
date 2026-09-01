@@ -5,6 +5,7 @@ import {
   executeQualifiedResearch,
   resolveCandidateIdentities,
   resolveActiveResearchRoute,
+  normalizeLegacyProviderDimensionScores,
   validateResearchRoutePolicy,
   validateEvidenceGraph,
   validateEvidenceLineageLedger,
@@ -110,6 +111,356 @@ function authoritativeSmeWeightValidation(input: {
 const sha = (value: string | Uint8Array): Buffer =>
   createHash("sha256").update(value).digest();
 const json = (value: unknown): string => JSON.stringify(value);
+
+const NON_ENGLISH_CANONICAL_SCRIPT =
+  /\p{Script=Arabic}|\p{Script=Cyrillic}|\p{Script=Han}|\p{Script=Hebrew}/u;
+
+function canonicalAdmissionRecord(
+  value: unknown,
+  label: string,
+): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error(`${label} is invalid.`);
+  return value as Record<string, unknown>;
+}
+
+function canonicalAdmissionText(
+  value: unknown,
+  label: string,
+  maximum = 2_000,
+): string {
+  if (
+    typeof value !== "string" ||
+    !value ||
+    value.length > maximum ||
+    value !== value.normalize("NFC") ||
+    value !== value.replace(/\s+/gu, " ").trim() ||
+    NON_ENGLISH_CANONICAL_SCRIPT.test(value)
+  )
+    throw new Error(`${label} is invalid.`);
+  return value;
+}
+
+function exactCanonicalAdmissionKeys(
+  value: Record<string, unknown>,
+  expected: readonly string[],
+  label: string,
+): void {
+  const keys = Object.keys(value).sort((left, right) =>
+    left.localeCompare(right, "en"),
+  );
+  const canonical = [...expected].sort((left, right) =>
+    left.localeCompare(right, "en"),
+  );
+  if (
+    keys.length !== canonical.length ||
+    keys.some((key, index) => key !== canonical[index])
+  )
+    throw new Error(`${label} contains unsupported fields.`);
+}
+
+function structuredProviderValue(
+  value: unknown,
+  label: string,
+): Readonly<{ value: string; unit?: string }> | null {
+  const typed = canonicalAdmissionRecord(value, label);
+  const state = typed.value_state;
+  if (
+    ![
+      "provided",
+      "explicitly_unknown",
+      "empty",
+      "not_applicable",
+      "not_asked",
+    ].includes(String(state))
+  )
+    throw new Error(`${label} value state is invalid.`);
+  if (state !== "provided") {
+    exactCanonicalAdmissionKeys(typed, ["value_state"], label);
+    return null;
+  }
+  const allowed = ["value_state", "value", "unit", "raw_expression"];
+  if (Object.keys(typed).some((key) => !allowed.includes(key)))
+    throw new Error(`${label} contains unsupported fields.`);
+  const canonicalValue = canonicalAdmissionText(typed.value, `${label}.value`);
+  const unit =
+    typed.unit === undefined
+      ? undefined
+      : canonicalAdmissionText(typed.unit, `${label}.unit`, 100);
+  if (
+    typed.raw_expression !== undefined &&
+    typeof typed.raw_expression !== "string"
+  )
+    throw new Error(`${label}.raw_expression is invalid.`);
+  return Object.freeze({
+    value: canonicalValue,
+    ...(unit === undefined ? {} : { unit }),
+  });
+}
+
+/** Derives only confirmed canonical facts; raw source material is excluded. */
+export function liveProviderRequestFromCanonicalDocument(
+  value: unknown,
+): string {
+  const document = canonicalAdmissionRecord(value, "Canonical document");
+  if (document.schema_version === "canonical-request.v1") {
+    if (
+      Object.keys(document).some(
+        (key) => !["schema_version", "canonical_text", "fields"].includes(key),
+      ) ||
+      (document.fields !== undefined && !Array.isArray(document.fields))
+    )
+      throw new Error("Legacy canonical document contains unsupported fields.");
+    return canonicalAdmissionText(
+      document.canonical_text,
+      "Legacy canonical text",
+      12_000,
+    );
+  }
+  if (document.schema_version !== "structured-standard-request.v1")
+    throw new Error("Canonical document schema is unsupported.");
+  exactCanonicalAdmissionKeys(
+    document,
+    [
+      "schema_version",
+      "request_id",
+      "canonical_version_id",
+      "version",
+      "source_language",
+      "canonical_language",
+      "domain_pack",
+      "fields",
+      "hard_constraints",
+      "exclusions",
+      "conditional_requirements",
+      "contradictions",
+      "readiness",
+      "created_at",
+    ],
+    "Structured canonical document",
+  );
+  if (document.canonical_language !== "en")
+    throw new Error("Structured canonical document is not canonical English.");
+  const domainPack = canonicalAdmissionRecord(
+    document.domain_pack,
+    "Structured domain pack",
+  );
+  exactCanonicalAdmissionKeys(
+    domainPack,
+    ["registry_version", "pack_version", "category_id"],
+    "Structured domain pack",
+  );
+  const categoryId = canonicalAdmissionText(
+    domainPack.category_id,
+    "Structured category",
+    200,
+  );
+  if (!Array.isArray(document.fields) || document.fields.length > 64)
+    throw new Error("Structured canonical fields are invalid.");
+  const fields = document.fields.flatMap((candidate, index) => {
+    const field = canonicalAdmissionRecord(
+      candidate,
+      `Structured field ${index}`,
+    );
+    exactCanonicalAdmissionKeys(
+      field,
+      [
+        "field_id",
+        "macro_parameter",
+        "typed_value",
+        "translated",
+        "confidence",
+      ],
+      `Structured field ${index}`,
+    );
+    const typed = structuredProviderValue(
+      field.typed_value,
+      `Structured field ${index}`,
+    );
+    if (!typed) return [];
+    return [
+      Object.freeze({
+        field_id: canonicalAdmissionText(
+          field.field_id,
+          `Structured field ${index}.field_id`,
+          200,
+        ),
+        value: typed.value,
+        ...(typed.unit === undefined ? {} : { unit: typed.unit }),
+      }),
+    ];
+  });
+  if (
+    !Array.isArray(document.hard_constraints) ||
+    document.hard_constraints.length > 64
+  )
+    throw new Error("Structured hard constraints are invalid.");
+  const hardConstraints = document.hard_constraints.map((candidate, index) => {
+    const constraint = canonicalAdmissionRecord(
+      candidate,
+      `Structured constraint ${index}`,
+    );
+    const allowed = [
+      "constraint_id",
+      "field_id",
+      "operator",
+      "target",
+      "relaxability",
+      "tolerance",
+      "direction",
+    ];
+    if (Object.keys(constraint).some((key) => !allowed.includes(key)))
+      throw new Error(
+        `Structured constraint ${index} contains unsupported fields.`,
+      );
+    const target = structuredProviderValue(
+      constraint.target,
+      `Structured constraint ${index}.target`,
+    );
+    if (!target)
+      throw new Error(
+        `Structured constraint ${index} has no canonical target.`,
+      );
+    return Object.freeze({
+      constraint_id: canonicalAdmissionText(
+        constraint.constraint_id,
+        `Structured constraint ${index}.constraint_id`,
+        200,
+      ),
+      field_id: canonicalAdmissionText(
+        constraint.field_id,
+        `Structured constraint ${index}.field_id`,
+        200,
+      ),
+      operator: canonicalAdmissionText(
+        constraint.operator,
+        `Structured constraint ${index}.operator`,
+        40,
+      ),
+      value: target.value,
+      ...(target.unit === undefined ? {} : { unit: target.unit }),
+      relaxability: canonicalAdmissionText(
+        constraint.relaxability,
+        `Structured constraint ${index}.relaxability`,
+        40,
+      ),
+      ...(constraint.tolerance === undefined
+        ? {}
+        : {
+            tolerance: canonicalAdmissionText(
+              constraint.tolerance,
+              `Structured constraint ${index}.tolerance`,
+              100,
+            ),
+          }),
+      ...(constraint.direction === undefined
+        ? {}
+        : {
+            direction: canonicalAdmissionText(
+              constraint.direction,
+              `Structured constraint ${index}.direction`,
+              100,
+            ),
+          }),
+    });
+  });
+  if (!Array.isArray(document.exclusions) || document.exclusions.length > 64)
+    throw new Error("Structured exclusions are invalid.");
+  const exclusions = document.exclusions.map((candidate, index) => {
+    const exclusion = canonicalAdmissionRecord(
+      candidate,
+      `Structured exclusion ${index}`,
+    );
+    exactCanonicalAdmissionKeys(
+      exclusion,
+      ["exclusion_id", "field_id", "canonical_english_value"],
+      `Structured exclusion ${index}`,
+    );
+    return Object.freeze({
+      exclusion_id: canonicalAdmissionText(
+        exclusion.exclusion_id,
+        `Structured exclusion ${index}.exclusion_id`,
+        200,
+      ),
+      field_id: canonicalAdmissionText(
+        exclusion.field_id,
+        `Structured exclusion ${index}.field_id`,
+        200,
+      ),
+      value: canonicalAdmissionText(
+        exclusion.canonical_english_value,
+        `Structured exclusion ${index}.value`,
+      ),
+    });
+  });
+  if (
+    !Array.isArray(document.conditional_requirements) ||
+    document.conditional_requirements.length > 32
+  )
+    throw new Error("Structured conditional requirements are invalid.");
+  const conditionals = document.conditional_requirements.map(
+    (candidate, index) => {
+      const conditional = canonicalAdmissionRecord(
+        candidate,
+        `Structured conditional ${index}`,
+      );
+      exactCanonicalAdmissionKeys(
+        conditional,
+        [
+          "requirement_id",
+          "canonical_english_condition",
+          "canonical_english_result",
+          "requirement_level",
+          "source_validation",
+        ],
+        `Structured conditional ${index}`,
+      );
+      return Object.freeze({
+        requirement_id: canonicalAdmissionText(
+          conditional.requirement_id,
+          `Structured conditional ${index}.requirement_id`,
+          200,
+        ),
+        condition: canonicalAdmissionText(
+          conditional.canonical_english_condition,
+          `Structured conditional ${index}.condition`,
+        ),
+        result: canonicalAdmissionText(
+          conditional.canonical_english_result,
+          `Structured conditional ${index}.result`,
+        ),
+        requirement_level: canonicalAdmissionText(
+          conditional.requirement_level,
+          `Structured conditional ${index}.requirement_level`,
+          40,
+        ),
+      });
+    },
+  );
+  const providerRequest = JSON.stringify({
+    schema_version: "live-provider-request.v1",
+    category_id: categoryId,
+    fields: fields.sort((left, right) =>
+      left.field_id.localeCompare(right.field_id, "en"),
+    ),
+    hard_constraints: hardConstraints.sort((left, right) =>
+      left.constraint_id.localeCompare(right.constraint_id, "en"),
+    ),
+    exclusions: exclusions.sort((left, right) =>
+      left.exclusion_id.localeCompare(right.exclusion_id, "en"),
+    ),
+    conditional_requirements: conditionals.sort((left, right) =>
+      left.requirement_id.localeCompare(right.requirement_id, "en"),
+    ),
+  });
+  if (
+    providerRequest.length > 12_000 ||
+    !/[A-Za-z]/u.test(providerRequest) ||
+    NON_ENGLISH_CANONICAL_SCRIPT.test(providerRequest)
+  )
+    throw new Error("Structured live provider request is invalid.");
+  return providerRequest;
+}
 
 async function inSerializableTransaction<T>(
   pool: ConnectionPool,
@@ -1311,11 +1662,9 @@ export class PostgresLiveResearchAtomicLedger {
       const runState =
         record.disposition === "complete"
           ? "complete"
-          : record.disposition === "failed_retryable"
-            ? "failed_retryable"
-            : record.disposition === "cancelled"
-              ? "cancelled"
-              : "failed";
+          : record.disposition === "cancelled"
+            ? "cancelled"
+            : "failed";
       const runUpdated = await client.query(
         `UPDATE research_run
             SET state=$4,state_reason=$5,
@@ -2225,7 +2574,7 @@ export class LiveResearchExecutionService {
     const routePolicyCanonicalSha256 =
       canonicalResearchRoutePolicySha256(validatedPolicy);
     const admission = await this.options.pool.query<{
-      canonical_text: string;
+      canonical_document: unknown;
       research_route_policy_id: string;
       route_policy_version: string;
       route_policy_content_sha256: Buffer | null;
@@ -2239,7 +2588,7 @@ export class LiveResearchExecutionService {
       scoring_sme_approval_ref: string | null;
       scoring_released_at: Date;
     }>(
-      `SELECT v.canonical_document->>'canonical_text' canonical_text,
+      `SELECT v.canonical_document,
               rp.research_route_policy_id,rp.policy_version route_policy_version,
               rp.content_sha256 route_policy_content_sha256,
               mp.model_policy_version_id,mp.version model_policy_version,
@@ -2272,9 +2621,8 @@ export class LiveResearchExecutionService {
       ],
     );
     const admitted = admission.rows[0];
-    const canonicalEnglishRequest = admitted?.canonical_text;
     if (
-      !canonicalEnglishRequest ||
+      !admitted ||
       !admitted.research_route_policy_id ||
       !admitted.route_policy_version ||
       !admitted.route_policy_content_sha256 ||
@@ -2288,6 +2636,9 @@ export class LiveResearchExecutionService {
       throw new Error(
         "Confirmed version-pinned live research admission is unavailable.",
       );
+    const canonicalEnglishRequest = liveProviderRequestFromCanonicalDocument(
+      admitted.canonical_document,
+    );
     const pipelineIdentity = createLiveResearchPipelineIdentity({
       outputSchema: input.outputSchema,
       researchRoutePolicyId: admitted.research_route_policy_id,
@@ -2589,7 +2940,7 @@ export class LiveResearchExecutionService {
             input.executionId,
           );
           const sealed = sealUntrustedSource(fetched.body, fetched.contentType);
-          const excerpt = sealed.normalizedText.slice(0, 4000).trim();
+          const excerpt = sealed.normalizedText.slice(0, 600).trim();
           if (!excerpt)
             throw new Error("Fetched evidence produced no safe excerpt.");
           if (!persistedSource.binding)
@@ -2672,14 +3023,24 @@ export class LiveResearchExecutionService {
             await ledger.commitTerminal(token, generation, record),
         },
         circuit: {
-          isRouteAvailable: async (routeId, at) => {
+          isRouteAvailable: async (routeId, _at) => {
             await heartbeat.assertOwned();
-            return await this.options.circuit.isRouteAvailable(routeId, at);
+            // Route health is operational state, not an immutable fact of the
+            // request capture time. Source discovery may close a half-open
+            // circuit during this execution; reusing capturedAt here would
+            // hide that success and incorrectly skip the direct generation
+            // route in the same run.
+            return await this.options.circuit.isRouteAvailable(
+              routeId,
+              new Date().toISOString(),
+            );
           },
         },
         validateOutput: (body) => {
           const graph = bindServerOwnedLiveEvidenceGraph(
-            this.options.validateOutput(body),
+            normalizeLegacyProviderDimensionScores(
+              this.options.validateOutput(body),
+            ) as EvidenceGraphV1,
             sourceBindings,
             { runId: input.runId, capturedAt: input.capturedAt },
           );
@@ -2817,7 +3178,7 @@ export class LiveResearchExecutionService {
       if (!acceptedFetchAttemptId)
         throw new Error("Secure fetch omitted a final accepted attempt.");
       const sealed = sealUntrustedSource(fetched.body, fetched.contentType);
-      const excerpt = sealed.normalizedText.slice(0, 4000).trim();
+      const excerpt = sealed.normalizedText.slice(0, 600).trim();
       const sourceDocumentId = randomUUID();
       const evidenceItemId = randomUUID();
       await client.query(

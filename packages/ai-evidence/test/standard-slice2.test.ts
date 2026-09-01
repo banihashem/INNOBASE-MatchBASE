@@ -137,6 +137,53 @@ test("canonicalizes the closed EN/FA/AR/ES structured fixtures source-free", () 
   );
 });
 
+test("canonicalizes arbitrary already-English structured intake without a fixture", () => {
+  const field = canonicalizeStandardFieldValue(
+    "  Industrial automation control system PLC S7-1500  ",
+    "en",
+  );
+  assert.deepEqual(field, {
+    canonical_english: "Industrial automation control system PLC S7-1500",
+    translated: false,
+    confidence: 1,
+    confidence_marker: "high",
+    protected_tokens: field.protected_tokens,
+  });
+  assert.equal(
+    canonicalizeStandardConstraintComparand(
+      "Compatible with existing packaging lines",
+      "en",
+    ).canonical_english,
+    "Compatible with existing packaging lines",
+  );
+  assert.equal(
+    canonicalizeStandardExclusion("Exclude unsupported PLC families", "en")
+      .canonical_english,
+    "Exclude unsupported PLC families",
+  );
+  assert.equal(
+    canonicalizeStandardCondition("If remote monitoring is enabled", "en")
+      .canonical_english,
+    "If remote monitoring is enabled",
+  );
+  assert.equal(
+    canonicalizeStandardRequiredResult("Encrypted telemetry is required", "en")
+      .canonical_english,
+    "Encrypted telemetry is required",
+  );
+  assert.throws(
+    () => canonicalizeStandardFieldValue("سامانه اتوماسیون صنعتی سفارشی", "fa"),
+    /Unsupported structured canonicalization fixture/u,
+  );
+  assert.deepEqual(
+    canonicalizeStandardFieldValue(
+      "Siemens S7-1200 CPU 1214C DC/DC/DC controller",
+      "en",
+    ).protected_tokens,
+    ["S7-1200", "CPU", "DC", "DC", "DC"],
+  );
+});
+
 test("server registry matches the committed 32-field domain-invariant pack", async () => {
   const fixture = JSON.parse(
     await readFile(
@@ -980,6 +1027,25 @@ test("recursively denies personal data outside redactable evidence excerpts", ()
         nested: [{ value: "sales@example.invalid Jane Mary Smith" }],
       }),
     /PII release membrane/iu,
+  );
+});
+
+test("keeps a redacted evidence extract inside the closed 600-character boundary", () => {
+  const graph = buildStandardSyntheticEvidenceGraph("RUN-PII-BOUND", "one");
+  const evidence = graph.evidence[0]!;
+  evidence.extract = `${"verified industrial evidence. ".repeat(40).slice(0, 580)} Jane Mary Smith`;
+  evidence.content_sha256 = standardContentSha256(evidence.extract);
+  const prepared = prepareStandardCompleteResultForPersistence(
+    graph,
+    projectionContext(),
+  );
+  assert.equal(prepared.persistence_graph.evidence[0]!.extract.length, 600);
+  assert.match(
+    prepared.persistence_graph.evidence[0]!.extract,
+    /personal data withheld/iu,
+  );
+  assert.doesNotThrow(() =>
+    validateStandardEvidenceGraph(prepared.persistence_graph),
   );
 });
 

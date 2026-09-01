@@ -94,6 +94,30 @@ test("preserves the server polling cadence on a private 304", async () => {
   });
 });
 
+test("surfaces the current top-level runtime fault detail and correlation", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            detail: "Structured canonicalisation fixture is unavailable.",
+            correlation_id: "runtime-correlation-1",
+          }),
+          {
+            status: 422,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+    ),
+  );
+  await expect(workspaceJson("/api/v1/requests")).rejects.toMatchObject({
+    message: "Structured canonicalisation fixture is unavailable.",
+    status: 422,
+    correlationId: "runtime-correlation-1",
+  });
+});
+
 test("associates the missing Standard source error and focuses its field", async () => {
   render(
     <StructuredIntake
@@ -115,6 +139,87 @@ test("associates the missing Standard source error and focuses its field", async
     "aria-describedby",
     "standard-source-hint standard-intake-error",
   );
+});
+
+test("retains transient source text when canonical request submission fails", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/resolution"))
+        return new Response(
+          JSON.stringify({
+            schema_version: "domain-pack-resolution.v1",
+            category_id: "synthetic_industrial_components",
+            confidence: 1,
+            confidence_threshold: 0.8,
+            activation_state: "confirmed",
+            registry_version: "2026-08-15.1",
+            pack_version: "2026-08-15.1",
+            activation_token: "signed-activation-token",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      if (url.includes("/api/v1/domain-packs/"))
+        return new Response(
+          JSON.stringify({
+            schema_version: "domain-pack.v1",
+            registry_version: "2026-08-15.1",
+            pack_version: "2026-08-15.1",
+            category_id: "synthetic_industrial_components",
+            category_label: "Synthetic Industrial Components",
+            macro_parameters: ["product_specification"],
+            core_fields: [
+              {
+                field_id: "FLD-CORE-PS-01",
+                macro_parameter: "product_specification",
+                label: "product_category",
+                description: "Product category.",
+                kind: "text",
+                requirement: "required",
+                allowed_units: [],
+                allowed_values: [],
+              },
+            ],
+            domain_fields: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      expect(init?.method).toBe("POST");
+      return new Response(
+        JSON.stringify({ error: { detail: "Canonicalization unavailable." } }),
+        { status: 422, headers: { "Content-Type": "application/json" } },
+      );
+    }),
+  );
+  render(
+    <StructuredIntake
+      session={session}
+      onCanonical={() => undefined}
+      onCancel={() => undefined}
+    />,
+  );
+  const source = screen.getByLabelText("Source-language input");
+  fireEvent.change(source, {
+    target: { value: "Industrial automation controller" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Resolve product category" }),
+  );
+  await screen.findByRole("button", { name: "Prepare canonical English" });
+  fireEvent.change(screen.getByLabelText(/product_category required/u), {
+    target: { value: "provided" },
+  });
+  fireEvent.change(screen.getByLabelText("product_category value"), {
+    target: { value: "Industrial automation controller" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Prepare canonical English" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Canonicalization unavailable.",
+  );
+  expect(source).toHaveValue("Industrial automation controller");
 });
 
 test("adds multiple independently editable constraints, exclusions, and conditional requirements", async () => {

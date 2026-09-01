@@ -23,8 +23,9 @@ export function loadServerOwnedResearchAdmission(config: WebConfig) {
       gemini_direct: config.liveResearchCredentialsVerified === true,
       openrouter: config.liveResearchCredentialsVerified === true,
     },
-    // Standard projections remain synthetic until a distinct live disclosure
-    // contract exists. This allowlist is server-owned and never request-derived.
-    eligibleTiers: ["demo"],
+    // Standard remains synthetic. Consultant and stored Super-admin product
+    // execution use the qualified live pipeline and their existing closed
+    // disclosure contracts. This allowlist is server-owned.
+    eligibleTiers: ["demo", "consultant", "admin"],
   });
 }

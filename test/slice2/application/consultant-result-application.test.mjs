@@ -169,6 +169,8 @@ test("lists only owner-bound Consultant runs and audits before response", async 
     call.text.includes("result_document_available"),
   );
   assert.deepEqual(historyRead.values, [context.accountId, context.userId]);
+  assert.match(historyRead.text, /LEFT JOIN live_research_terminal/iu);
+  assert.match(historyRead.text, /THEN 'failed' ELSE rr\.state/iu);
   assert.ok(
     fixture.calls.some(
       (call) =>
@@ -177,6 +179,26 @@ test("lists only owner-bound Consultant runs and audits before response", async 
     ),
   );
   assert.equal(fixture.calls.at(-1).text, "COMMIT");
+});
+
+test("projects a terminal live failure as failed rather than running", async () => {
+  const fixture = repository({
+    historyRows: [
+      {
+        run_id: runId,
+        request_id: "00000000-0000-4000-8000-000000000138",
+        state: "failed",
+        queued_at: new Date("2026-09-01T00:00:00.000Z"),
+        started_at: new Date("2026-09-01T00:01:00.000Z"),
+        completed_at: new Date("2026-09-01T00:02:00.000Z"),
+        result_document_available: false,
+      },
+    ],
+  });
+  const history = await fixture.application.listRuns(context);
+  assert.equal(history.items[0].state, "failed");
+  assert.equal(history.items[0].outcome, "failed");
+  assert.equal(history.items[0].result_available, false);
 });
 
 test("persists the projection decision and serving audit in one transaction", async () => {
@@ -224,6 +246,11 @@ test("persists the projection decision and serving audit in one transaction", as
       call.text.includes("INSERT INTO projection_serving"),
     ),
   );
+  const serving = fixture.calls.find((call) =>
+    call.text.includes("INSERT INTO projection_serving"),
+  );
+  assert.equal(serving.values[3], "consultant");
+  assert.match(serving.text, /resource_id,run_id/iu);
   assert.equal(fixture.calls.at(-1).text, "COMMIT");
 });
 

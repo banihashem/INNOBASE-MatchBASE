@@ -127,6 +127,7 @@ function projectedStatus(
 function projectCitation(
   evidence: StandardEvidenceItemV1,
   status: StandardVerificationStatus,
+  provenance: StandardCandidateProjectionV1["citations"][number]["provenance"] = evidence.provenance,
 ): StandardCandidateProjectionV1["citations"][number] {
   return {
     evidence_id: evidence.evidence_id,
@@ -142,7 +143,7 @@ function projectCitation(
     access_state: evidence.access_state,
     extract: evidence.extract,
     content_sha256: evidence.content_sha256,
-    provenance: evidence.provenance,
+    provenance,
   } as StandardCandidateProjectionV1["citations"][number];
 }
 
@@ -151,6 +152,7 @@ function projectAllEligibleCandidates(
   now: Date,
   softCap: number,
   orderedCandidateIds?: readonly string[],
+  trustedLiveEvidenceIds?: ReadonlySet<string>,
 ): StandardCandidateProjectionV1[] {
   const graph = sanitizeStandardEvidenceGraphForRelease(source).graph;
   const evidenceById = new Map(
@@ -207,7 +209,13 @@ function projectAllEligibleCandidates(
       const status = readStatuses.get(evidenceId);
       if (!evidence || !status)
         throw new Error("Candidate citation is missing.");
-      return projectCitation(evidence, status);
+      return projectCitation(
+        evidence,
+        status,
+        trustedLiveEvidenceIds?.has(evidence.evidence_id)
+          ? "live_secure_fetch"
+          : evidence.provenance,
+      );
     });
     const primaryClaim = claimById.get(candidate.rationale_claim_ids[0]!);
     if (!primaryClaim) throw new Error("Candidate rationale claim is missing.");
@@ -461,6 +469,7 @@ function rankEligibleCandidatesV2(source: StandardEvidenceGraphV1) {
 
 export function buildConsultantResultProjectionV2(input: {
   readonly completeResult: StandardEvidenceGraphV1;
+  readonly trustedLiveEvidenceIds?: ReadonlySet<string>;
   readonly projectionAsOf: Date;
   readonly hardConstraints: readonly StandardHardConstraintV1[];
   readonly softCap: number;
@@ -493,6 +502,7 @@ export function buildConsultantResultProjectionV2(input: {
     input.projectionAsOf,
     input.softCap,
     displayed.map((entry) => entry.candidate.candidate_id),
+    input.trustedLiveEvidenceIds,
   );
   if (candidates.length !== landscape.displayed_count)
     throw new Error("Consultant candidate projection count drifted.");
@@ -530,6 +540,9 @@ export function buildConsultantResultProjectionV2(input: {
             evidence.verification_status,
         ),
         accessed_at: new Date(evidence.accessed_at).toISOString(),
+        provenance: input.trustedLiveEvidenceIds?.has(evidence.evidence_id)
+          ? ("live_secure_fetch" as const)
+          : evidence.provenance,
         ...("exact_url" in evidence
           ? { publisher_domain: new URL(evidence.exact_url).hostname }
           : {}),
@@ -796,7 +809,11 @@ export class ConsultantResultApplication {
         completed_at: Date | null;
         result_document_available: boolean;
       }>(
-        `SELECT rr.run_id,v.request_id,rr.state,rr.queued_at,rr.started_at,rr.completed_at,
+        `SELECT rr.run_id,v.request_id,
+                CASE WHEN rr.state='failed_retryable' AND lt.live_research_terminal_id IS NOT NULL
+                     THEN 'failed' ELSE rr.state END AS state,
+                rr.queued_at,rr.started_at,
+                COALESCE(rr.completed_at,lt.completed_at) AS completed_at,
                 (rs.complete_result_document IS NOT NULL) AS result_document_available
            FROM research_run rr
            JOIN canonical_request_version v
@@ -804,6 +821,8 @@ export class ConsultantResultApplication {
             AND v.canonical_request_version_id=rr.canonical_request_version_id
            LEFT JOIN run_result rs
              ON rs.account_id=rr.account_id AND rs.run_id=rr.run_id
+           LEFT JOIN live_research_terminal lt
+             ON lt.account_id=rr.account_id AND lt.run_id=rr.run_id
           WHERE rr.account_id=$1 AND rr.requested_by_user_id=$2
           ORDER BY rr.queued_at DESC,rr.run_id DESC`,
         [context.accountId, context.userId],
@@ -1022,12 +1041,28 @@ export class ConsultantResultApplication {
             : standardEvidenceGraphFromStoredCompleteResult(
                 row.complete_result_document,
               );
+        const trustedLiveEvidenceIds =
+          (row.complete_result_document as Record<string, unknown>)
+            .schema_version === "complete-result-foundation.v2"
+            ? new Set(
+                (
+                  row.complete_result_document as CompleteResultFoundationV2
+                ).evidence
+                  .filter(
+                    (evidence) => evidence.provenance === "live_secure_fetch",
+                  )
+                  .map((evidence) => evidence.evidence_id),
+              )
+            : undefined;
         const policy = await readConsultantProjectionPolicy(client, {
           accountId: context.accountId,
           runId,
         });
         const body = buildConsultantResultProjectionV2({
           completeResult: graph,
+          ...(trustedLiveEvidenceIds === undefined
+            ? {}
+            : { trustedLiveEvidenceIds }),
           projectionAsOf: row.projection_as_of,
           hardConstraints: (
             row.canonical_document as StructuredStandardRequestV1
@@ -1130,14 +1165,14 @@ export class ConsultantResultApplication {
       await client.query(
         `INSERT INTO projection_serving
            (projection_serving_id,account_id,subject_user_id,tier,resource_kind,
-            resource_id,projection_version_id,fields_released,item_count,
+            resource_id,run_id,projection_version_id,fields_released,item_count,
             served_at,request_correlation_id)
-         VALUES($1,$2,$3,$4,'research_run',$5,$6,$7,$8,clock_timestamp(),$9)`,
+         VALUES($1,$2,$3,$4,'research_run',$5,$5,$6,$7,$8,clock_timestamp(),$9)`,
         [
           randomUUID(),
           context.accountId,
           context.userId,
-          context.tier,
+          result.projectionTier,
           runId,
           versionId,
           fields,

@@ -1,0 +1,109 @@
+{
+  "schemaVersion": "research-route-policy.v1",
+  "policyVersion": "slice3-routes.2026-09-01.staging-qualified-v3",
+  "capabilityPolicyVersion": "slice3-capabilities.v1",
+  "environment": "staging",
+  "evaluatedAt": "2026-08-31T22:15:00.000Z",
+  "liveActivation": "enabled",
+  "routes": [
+    {
+      "routeId": "RT-GEMINI-DIRECT-3.6-FLASH-S3-V1",
+      "adapterId": "gemini_direct",
+      "adapterVersion": "slice3-adapter.v2",
+      "path": "gemini_direct",
+      "providerId": "google",
+      "requestedModelId": "gemini-3.6-flash",
+      "expectedServedModelId": "gemini-3.6-flash",
+      "enabled": true,
+      "liveQualified": true,
+      "fallbackPosition": 0,
+      "capabilities": [
+        "query_planning",
+        "web_search_grounding",
+        "retrieval",
+        "structured_extraction",
+        "advisory_synthesis"
+      ],
+      "parameterPolicy": {
+        "policyVersion": "slice3-parameters.v3",
+        "searchMode": "provider_native_web_search",
+        "structuredOutput": "json_schema",
+        "requireParameters": true,
+        "allowFallbacks": false,
+        "maxOutputTokens": 8192,
+        "timeoutMs": 60000,
+        "maxAttempts": 1,
+        "backoffMs": 0
+      },
+      "dataHandling": {
+        "evidenceVersion": "slice3-provider-evidence.2026-08-30.staging-live-qualified-v1",
+        "evidenceRefs": [
+          "https://ai.google.dev/gemini-api/docs/latest-model",
+          "https://ai.google.dev/gemini-api/docs/models",
+          "https://ai.google.dev/gemini-api/docs/zdr",
+          "https://ai.google.dev/gemini-api/docs/pricing"
+        ],
+        "evidenceAccessedAt": "2026-08-30T17:01:58.179Z",
+        "evidenceExpiresAt": "2026-09-06T17:01:58.179Z",
+        "paidPath": "verified",
+        "retentionTrainingPosture": "verified_no_training"
+      },
+      "costPolicy": {
+        "pricingState": "known",
+        "pricingVersion": "gemini-3.6-conservative-upper.2026-08-16",
+        "currency": "USD",
+        "accountingMode": "conservative_estimate"
+      }
+    },
+    {
+      "routeId": "RT-OPENROUTER-GOOGLE-GEMINI-3.6-FLASH-S3-V1",
+      "adapterId": "openrouter",
+      "adapterVersion": "slice3-adapter.v2",
+      "path": "openrouter",
+      "providerId": "google-vertex",
+      "requestedModelId": "google/gemini-3.6-flash",
+      "expectedServedModelId": "google/gemini-3.6-flash",
+      "enabled": true,
+      "liveQualified": true,
+      "fallbackPosition": 1,
+      "capabilities": [
+        "query_planning",
+        "web_search_grounding",
+        "retrieval",
+        "structured_extraction",
+        "advisory_synthesis"
+      ],
+      "parameterPolicy": {
+        "policyVersion": "slice3-parameters.v3",
+        "searchMode": "external_sanitized_evidence",
+        "structuredOutput": "json_schema",
+        "requireParameters": true,
+        "allowFallbacks": false,
+        "maxOutputTokens": 8192,
+        "timeoutMs": 30000,
+        "maxAttempts": 1,
+        "backoffMs": 0
+      },
+      "dataHandling": {
+        "evidenceVersion": "slice3-provider-evidence.2026-08-30.staging-live-qualified-v1",
+        "evidenceRefs": [
+          "https://openrouter.ai/google/gemini-3.6-flash",
+          "https://openrouter.ai/docs/guides/routing/provider-selection",
+          "https://openrouter.ai/docs/guides/features/zdr",
+          "https://openrouter.ai/docs/guides/features/sovereign-ai",
+          "https://openrouter.ai/docs/cookbook/administration/usage-accounting"
+        ],
+        "evidenceAccessedAt": "2026-08-30T17:01:58.179Z",
+        "evidenceExpiresAt": "2026-09-06T17:01:58.179Z",
+        "paidPath": "verified",
+        "retentionTrainingPosture": "verified_zdr"
+      },
+      "costPolicy": {
+        "pricingState": "known",
+        "pricingVersion": "gemini-3.6-conservative-upper.2026-08-16",
+        "currency": "USD",
+        "accountingMode": "provider_reported"
+      }
+    }
+  ]
+}

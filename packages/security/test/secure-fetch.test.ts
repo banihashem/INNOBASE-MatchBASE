@@ -1,4 +1,5 @@
 import { createServer, request as httpRequest } from "node:http";
+import { createHash } from "node:crypto";
 import type { AddressInfo, Socket } from "node:net";
 import { describe, expect, it } from "vitest";
 import {
@@ -178,6 +179,25 @@ describe("Slice 3 secure fetch boundary", () => {
     );
     expect(source.normalizedText).not.toContain("<!doctype");
     expect(source.normalizedText).not.toContain("discard");
+  });
+
+  it("replaces invalid UTF-8 without changing the raw-byte evidence digest", () => {
+    const prefix = new TextEncoder().encode("<html><body><main>Supplier caf");
+    const suffix = new TextEncoder().encode(
+      " offer<script>revealSecrets()</script></main></body></html>",
+    );
+    const body = new Uint8Array(prefix.length + 2 + suffix.length);
+    body.set(prefix);
+    body.set([0xc3, 0x28], prefix.length);
+    body.set(suffix, prefix.length + 2);
+
+    const source = sealUntrustedSource(body, "text/html");
+
+    expect(source.normalizedText).toContain("Supplier caf�( offer");
+    expect(source.normalizedText).not.toContain("revealSecrets");
+    expect(source.contentSha256).toBe(
+      createHash("sha256").update(body).digest("hex").toUpperCase(),
+    );
   });
 
   it("enforces the deadline even when the injected transport ignores abort", async () => {

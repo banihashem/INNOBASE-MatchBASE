@@ -652,10 +652,11 @@ function assertSourceFact(value: unknown): Record<string, unknown> {
   )
     throw new Error("Consultant source fact retrieval timestamp is invalid.");
   if (
-    !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)?$/u.test(
+    item.published_or_updated !== "not stated by source" &&
+    (!/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)?$/u.test(
       String(item.published_or_updated),
     ) ||
-    Number.isNaN(Date.parse(String(item.published_or_updated)))
+      Number.isNaN(Date.parse(String(item.published_or_updated))))
   )
     throw new Error("Consultant source fact publication timestamp is invalid.");
   if (String(item.extract).length > 2_000)

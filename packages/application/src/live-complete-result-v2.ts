@@ -8,6 +8,10 @@ import {
 // barrel. The explicit internal subpath remains package-safe after deployment.
 import { sealTrustedLiveFetchLedgerV2 } from "@matchbase/ai-evidence/internal/complete-result-foundation-v2";
 import {
+  assertStandardPiiReleaseSafe,
+  standardPiiFindings,
+} from "@matchbase/ai-evidence/standard";
+import {
   STANDARD_DIMENSIONS,
   type CompleteResultEvidenceV2,
   type CompleteResultFoundationV2,
@@ -20,6 +24,7 @@ import type { LiveSourceBindingRecord } from "./live-source-binding.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 
 const IDENTITY_RESOLUTION_CONSTRAINT = "identity_resolution";
+const PERSONAL_DATA_WITHHELD = "[personal data withheld]";
 
 export interface SmeWeightValidationV2 {
   readonly validation_record_id: string;
@@ -67,6 +72,44 @@ function providerVerificationStatus(
   if (value === "synthetic")
     throw new Error("Live provider output cannot use synthetic verification.");
   return value;
+}
+
+function providerClaimVerificationStatus(
+  claim: EvidenceGraphV1["claims"][number],
+): StandardVerificationStatus {
+  const status = providerVerificationStatus(claim.verificationStatus);
+  // A linked, decision-bearing live claim is still only a source claim. Some
+  // providers use `unknown` to mean "not externally verified"; normalize that
+  // narrow shape to `claimed` without minting verification or changing source
+  // lineage. Stale and conflicting claims remain fail-closed.
+  return status === "unknown" &&
+    claim.decisionBearing &&
+    claim.evidenceIds.length > 0
+    ? "claimed"
+    : status;
+}
+
+function sanitizedProviderText(value: string): string {
+  try {
+    assertStandardPiiReleaseSafe(value);
+    return value;
+  } catch {
+    let sanitized = value;
+    const findings = standardPiiFindings(value) as readonly {
+      start: number;
+      end: number;
+    }[];
+    for (const finding of [...findings].sort(
+      (left, right) => right.start - left.start,
+    ))
+      sanitized = `${sanitized.slice(0, finding.start)}${PERSONAL_DATA_WITHHELD}${sanitized.slice(finding.end)}`;
+    try {
+      assertStandardPiiReleaseSafe(sanitized);
+      return sanitized.trim() || PERSONAL_DATA_WITHHELD;
+    } catch {
+      return PERSONAL_DATA_WITHHELD;
+    }
+  }
 }
 
 function evidenceConfidence(
@@ -163,31 +206,33 @@ export function buildOperationalLiveCompleteResultV2(input: {
     const remainsEligible = eligible.has(candidate.candidateId);
     return {
       candidate_id: candidate.candidateId,
-      display_name: candidate.displayName,
+      display_name: sanitizedProviderText(candidate.displayName),
       country_code: candidate.countryCode,
-      rationale_extended: candidate.rationaleShort,
+      rationale_extended: sanitizedProviderText(candidate.rationaleShort),
       rationale_claim_ids: [...candidate.rationaleClaimIds],
       mandatory_constraints_satisfied: remainsEligible,
       failed_constraint_ids: remainsEligible
         ? []
         : candidate.failedConstraintIds.length > 0
-          ? [...candidate.failedConstraintIds]
+          ? candidate.failedConstraintIds.map(sanitizedProviderText)
           : [IDENTITY_RESOLUTION_CONSTRAINT],
       dimensions: dimensions(candidate, confidence),
       verification_status: providerVerificationStatus(
         candidate.verificationStatus,
       ),
       evidence_confidence: confidence,
-      deterministic_tie_breaker: candidate.deterministicRankKey,
+      deterministic_tie_breaker: sanitizedProviderText(
+        candidate.deterministicRankKey,
+      ),
     };
   });
   const claims = input.graph.claims.map((claim) => ({
     claim_id: claim.claimId,
     candidate_id: claim.candidateId,
-    text: claim.text,
+    text: sanitizedProviderText(claim.text),
     decision_bearing: claim.decisionBearing,
     high_risk: false,
-    verification_status: providerVerificationStatus(claim.verificationStatus),
+    verification_status: providerClaimVerificationStatus(claim),
     evidence_confidence: claim.evidenceConfidence,
     evidence_ids: [...claim.evidenceIds],
     corroboration: {
@@ -237,10 +282,6 @@ export function buildOperationalLiveCompleteResultV2(input: {
         "Fetched source was not used by the provider result.",
     } as const satisfies CompleteResultEvidenceV2;
   });
-  const eliminated = new Map<string, number>();
-  for (const candidate of candidates)
-    for (const constraintId of candidate.failed_constraint_ids)
-      eliminated.set(constraintId, (eliminated.get(constraintId) ?? 0) + 1);
   const source: CompleteResultFoundationV2Source = {
     schema_version: "standard-evidence-graph.v1",
     run_id: input.graph.runId,
@@ -249,13 +290,15 @@ export function buildOperationalLiveCompleteResultV2(input: {
     evidence,
     evidenced_values: [],
     eligible_candidate_ids: [...input.eligibleCandidateIds],
-    gate_evaluations: [...eliminated.entries()]
-      .sort(([left], [right]) => left.localeCompare(right, "en"))
-      .map(([constraintId, eliminatedCount]) => ({
-        gate_id: constraintId,
-        label: constraintId,
-        eliminated_count: eliminatedCount,
-      })),
+    gate_evaluations: [
+      {
+        gate_id: "mandatory_constraints",
+        label: "Mandatory constraints",
+        eliminated_count: candidates.filter(
+          (candidate) => !candidate.mandatory_constraints_satisfied,
+        ).length,
+      },
+    ],
     unknown_count: 0,
     not_asked_count: 0,
     gate_evaluation_completed_at: input.graph.gateEvaluationCompletedAt,

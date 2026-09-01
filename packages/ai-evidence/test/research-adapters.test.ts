@@ -92,6 +92,50 @@ test("Gemini adapter generates only from fetched evidence and snapshots exact se
     body.contents[0]?.parts[0]?.text ?? "",
     /must remain in candidates/u,
   );
+  assert.match(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /Set the top-level evidence field exactly to the empty array \[\]\./u,
+  );
+  assert.match(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /Every claim evidenceIds value must exactly equal a supplied sourceId/u,
+  );
+  assert.match(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /compatibilityScore as a JSON integer.*mandatoryConstraintsSatisfied as a JSON boolean/u,
+  );
+  assert.match(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /stale, conflicting, and unknown claims must set decisionBearing false/u,
+  );
+  assert.match(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /Do not include personal names, personal email addresses, personal phone numbers/u,
+  );
+  assert.match(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /rationaleClaimIds, citations, failedConstraintIds, claim evidenceIds, and eligibleCandidateIds as JSON arrays of strings/u,
+  );
+  assert.match(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /dimensionScores to a closed object containing exactly these six integer keys.*category_product_fit.*geographic_reach_fit/u,
+  );
+  assert.match(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /Return dimensionScores as a JSON object value, never as a quoted or JSON-encoded string/u,
+  );
+  assert.match(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /Never echo or reproduce supplied canonicalUrl, publisherDomain, retrievedAt, contentSha256, excerpt/u,
+  );
+  assert.doesNotMatch(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /Include every supplied document exactly once in evidence/u,
+  );
+  assert.doesNotMatch(
+    body.contents[0]?.parts[0]?.text ?? "",
+    /copy evidenceId from sourceId/u,
+  );
   assert.equal(body.tools, undefined);
   assert.equal(body.generationConfig.responseMimeType, "application/json");
   assert.deepEqual(body.generationConfig.thinkingConfig, {
@@ -184,6 +228,18 @@ test("OpenRouter adapter serializes one explicit provider and disables broker fa
   assert.match(
     body.messages[0]?.content,
     /Canonical request: Identify qualified industrial suppliers for the canonical requirements\./u,
+  );
+  assert.match(
+    body.messages[0]?.content,
+    /Set the top-level evidence field exactly to the empty array \[\]\./u,
+  );
+  assert.match(
+    body.messages[0]?.content,
+    /Each candidate citation must be a supplied sourceId already referenced by one of that candidate's rationale claims/u,
+  );
+  assert.match(
+    body.messages[0]?.content,
+    /Do not quote supplied excerpts in claim text or rationale text/u,
   );
   assert.deepEqual(JSON.parse(body.messages[1]?.content ?? "null"), {
     kind: "untrusted_sanitized_evidence",

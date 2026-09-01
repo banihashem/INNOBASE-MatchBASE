@@ -145,10 +145,47 @@ postgresTest(
             canonicalId,
             requestId,
             accountId,
-            JSON.stringify({
-              schema_version: "combined-worker-canonical.v1",
-              canonical_text: `Identify qualified industrial suppliers for ${label}.`,
-            }),
+            JSON.stringify(
+              researchMode === "qualified_live_research"
+                ? {
+                    schema_version: "structured-standard-request.v1",
+                    request_id: requestId,
+                    canonical_version_id: canonicalId,
+                    version: 1,
+                    source_language: "en",
+                    canonical_language: "en",
+                    domain_pack: {
+                      registry_version: "registry.v1",
+                      pack_version: "pack.v1",
+                      category_id: "synthetic_industrial_components",
+                    },
+                    fields: [
+                      {
+                        field_id: "product_need",
+                        macro_parameter: "product_specification",
+                        typed_value: {
+                          value_state: "provided",
+                          value: `Identify qualified industrial suppliers for ${label}.`,
+                          raw_expression:
+                            "transient source must remain excluded",
+                        },
+                        translated: false,
+                        confidence: 1,
+                      },
+                    ],
+                    hard_constraints: [],
+                    exclusions: [],
+                    conditional_requirements: [],
+                    contradictions: [],
+                    readiness: "ready",
+                    created_at: "2026-09-01T00:00:00.000Z",
+                  }
+                : {
+                    schema_version: "canonical-request.v1",
+                    canonical_text: `Identify qualified industrial suppliers for ${label}.`,
+                    fields: [],
+                  },
+            ),
             userId,
           ],
         );
@@ -182,8 +219,8 @@ postgresTest(
         "synthetic_reference",
       );
       const live = await seed(
-        "standard",
-        "standard qualified live",
+        "consultant",
+        "consultant qualified live",
         "qualified_live_research",
       );
 

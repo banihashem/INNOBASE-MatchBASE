@@ -30,6 +30,34 @@ export interface ProviderTransport {
   send(request: TransportRequest): Promise<TransportResponse>;
 }
 
+/**
+ * A transport can fail after a provider request was dispatched but before a
+ * usable response body or served identity was recovered.  In that case the
+ * provider's exact charge may be unavailable, while a governed conservative
+ * estimate is still sufficient to close the cost ledger truthfully.
+ */
+export class ProviderTransportFailure extends Error {
+  readonly status: number | undefined;
+  readonly servedIdentity: TransportResponse["servedIdentity"];
+  readonly accounting: ProviderAccounting;
+
+  constructor(
+    message: string,
+    details: Readonly<{
+      status?: number;
+      servedIdentity?: TransportResponse["servedIdentity"];
+      accounting: ProviderAccounting;
+    }>,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "ProviderTransportFailure";
+    this.status = details.status;
+    this.servedIdentity = details.servedIdentity;
+    this.accounting = details.accounting;
+  }
+}
+
 export interface ProviderAttemptOutcome {
   capabilityId: "CAP-SEARCH" | "CAP-STRUCTURED-GENERATION";
   routeId: string;
@@ -211,12 +239,27 @@ export async function executeProviderRequest(input: {
       lastError =
         error instanceof Error ? error : new Error("Provider failure.");
       const timedOut = controller.signal.aborted && !input.signal.aborted;
+      const closedFailure =
+        error instanceof ProviderTransportFailure ? error : undefined;
+      const closedFailureResponse = closedFailure
+        ? {
+            status: closedFailure.status ?? 0,
+            body: Object.freeze({ provider_error: true }),
+            ...(closedFailure.servedIdentity
+              ? { servedIdentity: closedFailure.servedIdentity }
+              : {}),
+            accounting: closedFailure.accounting,
+          }
+        : undefined;
       await observe(
         input.signal.aborted
           ? "cancelled"
           : timedOut
             ? "timeout"
             : "provider_error",
+        closedFailure?.status,
+        closedFailure?.servedIdentity,
+        closedFailureResponse,
       );
       if (input.signal.aborted) throw lastError;
       continue;

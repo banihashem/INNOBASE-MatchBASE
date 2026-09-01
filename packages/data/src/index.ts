@@ -9,6 +9,7 @@ export * from "./authorization.js";
 export * from "./consultant-projection.js";
 export * from "./admin-entitlements.js";
 export * from "./admin-runs.js";
+export * from "./admin-research.js";
 export * from "./database.js";
 export * from "./leases.js";
 export * from "./migrations.js";

@@ -251,7 +251,7 @@ export async function executeQualifiedResearch<TResult>(input: {
       let result: TResult;
       try {
         result = input.validateOutput(response.body);
-      } catch {
+      } catch (error) {
         records.push({
           snapshot: response.routeSnapshot,
           attempts,
@@ -259,7 +259,9 @@ export async function executeQualifiedResearch<TResult>(input: {
         });
         const terminal = await commit("failed", "schema_violation", null);
         throw terminalError(
-          "Live research output schema validation failed.",
+          `Live research output schema validation failed: ${
+            error instanceof Error ? error.message : "unknown validation fault"
+          }`,
           terminal,
         );
       }

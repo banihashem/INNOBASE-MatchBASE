@@ -392,8 +392,6 @@ export function StructuredIntake({
       setConditionals([]);
       onCanonical(body);
     } catch (reason) {
-      setSourceText("");
-      setConditionals([]);
       fail(
         reason instanceof Error ? reason.message : "Canonicalization failed.",
       );

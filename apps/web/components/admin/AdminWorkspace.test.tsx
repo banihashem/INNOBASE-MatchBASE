@@ -28,7 +28,7 @@ const jsdomAxeOptions = {
 
 afterEach(() => vi.unstubAllGlobals());
 
-test("routes Admin identity to operational tools without product-tier inheritance", async () => {
+test("routes Super-admin to governed product and operational tools without changing entitlement", async () => {
   const fetchMock = vi.fn(
     async () =>
       new Response(JSON.stringify(adminSession), {
@@ -46,8 +46,18 @@ test("routes Admin identity to operational tools without product-tier inheritanc
     }),
   ).toBeVisible();
   expect(
-    screen.getByText(/does not grant Standard runs, Consultant results/),
+    screen.getByText(/without changing the stored Admin entitlement/),
   ).toBeVisible();
+  expect(
+    screen.getByRole("link", { name: "Start product research" }),
+  ).toHaveAttribute("href", "/admin/product");
+  expect(screen.getByRole("link", { name: "Open my results" })).toHaveAttribute(
+    "href",
+    "/admin/profile",
+  );
+  expect(
+    screen.getByRole("link", { name: "Open research inventory" }),
+  ).toHaveAttribute("href", "/admin/research");
   expect(
     screen.getByRole("link", { name: "Open entitlement manager" }),
   ).toHaveAttribute("href", "/admin/entitlements");
@@ -56,7 +66,6 @@ test("routes Admin identity to operational tools without product-tier inheritanc
   ).toHaveAttribute("href", "/admin/requests");
   expect(screen.getByText("super_admin")).toBeVisible();
   expect(screen.queryByText(/unlimited research/iu)).not.toBeInTheDocument();
-  expect(screen.queryByText(/sourcing runs/iu)).not.toBeInTheDocument();
   expect(fetchMock).toHaveBeenCalledTimes(1);
   expect((await axe.run(document, jsdomAxeOptions)).violations).toEqual([]);
 });

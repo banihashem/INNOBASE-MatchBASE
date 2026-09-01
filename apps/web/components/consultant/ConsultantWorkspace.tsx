@@ -8,6 +8,7 @@ import {
   parseConsultantRunHistoryV1,
   parseStandardResultProjectionV1,
 } from "@matchbase/contracts";
+import { UserProfile } from "../profile/UserProfile";
 import type { WorkspaceSession } from "../standard/types";
 import { workspaceJson } from "../standard/api";
 import {
@@ -27,15 +28,22 @@ type RunItem = {
 type ViewState =
   | { state: "loading" }
   | { state: "runs"; items: RunItem[] }
+  | { state: "profile" }
   | { state: "result"; result: ConsultantVisibleResult }
   | { state: "error"; message: string };
 
 export function ConsultantWorkspace({
   initialSession,
+  workspaceBadge = "Consultant",
+  initialView = "runs",
 }: {
   initialSession: WorkspaceSession;
+  workspaceBadge?: string;
+  initialView?: "runs" | "profile";
 }) {
-  const [view, setView] = useState<ViewState>({ state: "loading" });
+  const [view, setView] = useState<ViewState>(
+    initialView === "profile" ? { state: "profile" } : { state: "loading" },
+  );
   const headingRef = useRef<HTMLHeadingElement>(null);
   const moveFocusAfterLoad = useRef(false);
 
@@ -54,8 +62,9 @@ export function ConsultantWorkspace({
     }
   }, []);
 
-  useEffect(() => void loadRuns(), [loadRuns]);
-
+  useEffect(() => {
+    if (initialView === "runs") void loadRuns();
+  }, [initialView, loadRuns]);
   useEffect(() => {
     if (view.state === "loading" || !moveFocusAfterLoad.current) return;
     moveFocusAfterLoad.current = false;
@@ -66,9 +75,11 @@ export function ConsultantWorkspace({
     moveFocusAfterLoad.current = true;
     setView({ state: "loading" });
     try {
-      const response = await workspaceJson<unknown>(
-        `/api/v1/runs/${encodeURIComponent(runId)}/result`,
-      );
+      const resultPath =
+        initialSession.tier === "admin"
+          ? `/api/v1/consultant/runs/${encodeURIComponent(runId)}/result`
+          : `/api/v1/runs/${encodeURIComponent(runId)}/result`;
+      const response = await workspaceJson<unknown>(resultPath);
       const body = response.body;
       if (
         body === null ||
@@ -106,11 +117,29 @@ export function ConsultantWorkspace({
           <span className="brand-mark">M</span>
           <span>MatchBASE</span>
         </a>
+        <nav aria-label="Primary navigation">
+          <button
+            className={
+              view.state === "runs" ? "nav-button active" : "nav-button"
+            }
+            onClick={() => void loadRuns(true)}
+          >
+            Runs
+          </button>
+          <button
+            className={
+              view.state === "profile" ? "nav-button active" : "nav-button"
+            }
+            onClick={() => setView({ state: "profile" })}
+          >
+            Profile
+          </button>
+        </nav>
         <div className="identity">
           <span>
             <bdi dir="auto">{initialSession.display_name}</bdi>
           </span>
-          <span className="tier-badge">Consultant</span>
+          <span className="tier-badge">{workspaceBadge}</span>
         </div>
       </header>
       <main className="main standard-main" id="main-content">
@@ -132,6 +161,12 @@ export function ConsultantWorkspace({
               Retry
             </button>
           </section>
+        ) : null}
+        {view.state === "profile" ? (
+          <UserProfile
+            tier="consultant"
+            displayName={initialSession.display_name}
+          />
         ) : null}
         {view.state === "runs" ? (
           <section
@@ -189,6 +224,8 @@ export function ConsultantWorkspace({
                             >
                               Open result
                             </button>
+                          ) : item.outcome === "failed" ? (
+                            "Research failed — no result was generated"
                           ) : (
                             "Result not available"
                           )}

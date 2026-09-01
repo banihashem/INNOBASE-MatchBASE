@@ -10,9 +10,17 @@ export async function assertConsultantWorkspaceAuthorized(
   context: RequestContext,
   routeClass: string,
 ): Promise<void> {
-  const grant = await pool.query<{ tier: string }>(
-    `SELECT tier
-       FROM entitlement_grant
+  const grant = await pool.query<{ tier: string; is_super_admin: boolean }>(
+    `SELECT eg.tier,
+            EXISTS (
+              SELECT 1 FROM admin_role_grant arg
+               WHERE arg.account_id=eg.account_id AND arg.user_id=eg.user_id
+                 AND arg.sub_role='super_admin'
+                 AND arg.effective_from <= clock_timestamp()
+                 AND (arg.effective_to IS NULL OR arg.effective_to > clock_timestamp())
+                 AND arg.revoked_at IS NULL
+            ) AS is_super_admin
+       FROM entitlement_grant eg
       WHERE account_id=$1 AND user_id=$2
         AND effective_from <= clock_timestamp()
         AND (effective_to IS NULL OR effective_to > clock_timestamp())
@@ -22,6 +30,13 @@ export async function assertConsultantWorkspaceAuthorized(
     [context.accountId, context.userId],
   );
   if (context.tier === "consultant" && grant.rows[0]?.tier === "consultant")
+    return;
+  if (
+    context.tier === "admin" &&
+    context.adminSubRoles.includes("super_admin") &&
+    grant.rows[0]?.tier === "admin" &&
+    grant.rows[0].is_super_admin
+  )
     return;
   await inTransaction(pool, (client) =>
     appendAuditEvent(client, {

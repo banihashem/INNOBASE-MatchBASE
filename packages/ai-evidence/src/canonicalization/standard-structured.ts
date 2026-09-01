@@ -204,18 +204,19 @@ export function canonicalizeStandardStructuredText(
       entry.language === input.source_language &&
       normalized(entry.source) === source,
   );
-  if (!fixture) {
+  if (!fixture && input.source_language !== "en") {
     throw new Error("Unsupported structured canonicalization fixture.");
   }
-  const canonicalEnglish = normalized(fixture.canonicalEnglish);
+  const canonicalEnglish = normalized(fixture?.canonicalEnglish ?? source);
   validateFormalEnglish(canonicalEnglish);
   const protectedSpans = extractPersistableProtectedSpans(source);
   validateProtectedSpans(canonicalEnglish, protectedSpans);
+  const confidence = fixture?.confidence ?? 1;
   return {
     canonical_english: canonicalEnglish,
-    translated: input.source_language !== "en",
-    confidence: fixture.confidence,
-    confidence_marker: fixture.confidence < 0.8 ? "low" : "high",
+    translated: fixture ? input.source_language !== "en" : false,
+    confidence,
+    confidence_marker: confidence < 0.8 ? "low" : "high",
     protected_tokens: protectedSpans.map((span) => span.canonicalValue),
   };
 }

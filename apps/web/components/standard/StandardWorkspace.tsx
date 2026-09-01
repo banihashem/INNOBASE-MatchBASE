@@ -9,6 +9,7 @@ import { StandardResult } from "./StandardResult";
 import { StructuredIntake } from "./StructuredIntake";
 import { SyntheticNotice } from "./SyntheticNotice";
 import { workspaceJson } from "./api";
+import { UserProfile } from "../profile/UserProfile";
 import type {
   StandardResultProjectionV1,
   StandardRequestDetailV1,
@@ -19,10 +20,14 @@ import type {
 
 export function StandardWorkspace({
   initialSession,
+  workspaceBadge = "Standard",
 }: {
   initialSession: WorkspaceSession;
+  workspaceBadge?: string;
 }) {
   const [session, setSession] = useState(initialSession);
+  const adminProductMode = initialSession.tier === "admin";
+  const qualifiedLive = session.research_mode.live_qualified;
   const [screen, setScreen] = useState<StandardScreen>("requests");
   const [canonical, setCanonical] =
     useState<StructuredStandardRequestV1 | null>(null);
@@ -88,6 +93,14 @@ export function StandardWorkspace({
             Requests
           </button>
           <button
+            className={
+              screen === "profile" ? "nav-button active" : "nav-button"
+            }
+            onClick={() => transition("profile")}
+          >
+            Profile
+          </button>
+          <button
             className={screen === "help" ? "nav-button active" : "nav-button"}
             onClick={() => transition("help")}
           >
@@ -98,7 +111,7 @@ export function StandardWorkspace({
           <span>
             <bdi dir="auto">{session.display_name}</bdi>
           </span>
-          <span className="tier-badge">Standard</span>
+          <span className="tier-badge">{workspaceBadge}</span>
         </div>
       </header>
       <main className="main standard-main" id="main-content" ref={mainRef}>
@@ -138,12 +151,20 @@ export function StandardWorkspace({
         ) : null}
         {screen === "requests" ? (
           <RequestHistory
+            qualifiedLive={qualifiedLive}
             onNewRequest={() => transition("intake")}
             onOpenRequest={(id) => void reopenRequest(id)}
             onOpenRun={(id) => {
               setRunId(id);
               transition("running");
             }}
+          />
+        ) : null}
+        {screen === "profile" ? (
+          <UserProfile
+            tier={adminProductMode ? "consultant" : "standard"}
+            displayName={session.display_name}
+            onNewRequest={() => transition("intake")}
           />
         ) : null}
         {screen === "intake" ? (
@@ -180,9 +201,10 @@ export function StandardWorkspace({
             }}
             onTerminal={() => {
               void refreshSession();
-              transition("requests");
+              transition(adminProductMode ? "profile" : "requests");
             }}
             onAnnouncement={setWorkspaceAnnouncement}
+            deferResultToProfile={adminProductMode}
           />
         ) : null}
         {screen === "result" && result ? (
@@ -195,22 +217,45 @@ export function StandardWorkspace({
         {screen === "help" ? (
           <section className="standard-section">
             <p className="eyebrow">Help</p>
-            <h1 tabIndex={-1}>How this synthetic workspace behaves</h1>
+            <h1 tabIndex={-1}>
+              {qualifiedLive
+                ? "How this qualified live workspace behaves"
+                : "How this synthetic workspace behaves"}
+            </h1>
             <p>
               Canonical English is confirmed before research. Scores are
               deterministic compatibility measures, not probabilities or
               guarantees.
             </p>
-            <p>
-              No live provider, web research, attachment, export, PDF, share,
-              re-score or re-research feature is enabled.
-            </p>
+            {qualifiedLive ? (
+              <p>
+                Controlled web retrieval and the qualified provider routes are
+                active. A successful fetch is not external verification;
+                verification requires independent corroboration or authoritative
+                registry evidence. Attachment, share, re-score and re-research
+                controls are not enabled here. Consultant-depth results remain
+                in the profile.
+              </p>
+            ) : (
+              <p>
+                No live provider, web research, attachment, export, PDF, share,
+                re-score or re-research feature is enabled.
+              </p>
+            )}
           </section>
         ) : null}
       </main>
       <footer>
-        <span>Standard structured request workspace</span>
-        <span>Local/test synthetic routes only</span>
+        <span>
+          {adminProductMode
+            ? "Super-admin structured request workspace"
+            : "Standard structured request workspace"}
+        </span>
+        <span>
+          {qualifiedLive
+            ? "Staging qualified live route"
+            : "Synthetic reference route"}
+        </span>
       </footer>
     </>
   );

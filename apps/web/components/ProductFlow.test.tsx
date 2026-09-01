@@ -78,7 +78,7 @@ test("renders the server-assigned qualified-live mode without provider topology"
   );
   expect(
     screen.getByText(
-      "Qualified live research — external evidence is fetched and verified for this run",
+      "Controlled web evidence is fetched for this run; external verification requires independent corroboration or authoritative registry evidence",
     ),
   ).toBeVisible();
   expect(screen.queryByText(SYNTHETIC_NOTICE)).not.toBeInTheDocument();
@@ -115,7 +115,7 @@ test("renders the server-owned qualified-live boundary before authentication", (
   expect(screen.queryByText(SYNTHETIC_NOTICE)).not.toBeInTheDocument();
   expect(
     screen.queryByText(
-      /external evidence is fetched and verified for this run/iu,
+      /external verification requires independent corroboration/iu,
     ),
   ).not.toBeInTheDocument();
 });

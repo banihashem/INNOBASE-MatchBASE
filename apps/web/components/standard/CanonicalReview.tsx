@@ -381,7 +381,11 @@ export function CanonicalReview({
           onClick={() => void confirmAndRun()}
           disabled={busy}
         >
-          {busy ? "Confirming…" : "Confirm and start synthetic research"}
+          {busy
+            ? "Confirming…"
+            : session.research_mode.live_qualified
+              ? "Confirm and start qualified live research"
+              : "Confirm and start synthetic research"}
         </button>
       </div>
     </section>

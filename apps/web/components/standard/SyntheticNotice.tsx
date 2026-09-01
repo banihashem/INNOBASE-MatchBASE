@@ -13,7 +13,11 @@ export function SyntheticNotice({
           ? "synthetic-banner qualified-live-banner"
           : "synthetic-banner"
       }
-      aria-label="Synthetic data notice"
+      aria-label={
+        qualifiedLive
+          ? "Qualified live research notice"
+          : "Synthetic data notice"
+      }
       data-testid="standard-synthetic-warning"
     >
       <span aria-hidden="true">●</span>
@@ -21,7 +25,7 @@ export function SyntheticNotice({
       <span aria-hidden="true"> · </span>
       <span>
         {qualifiedLive
-          ? "Qualified live research — external evidence is fetched and verified for this run"
+          ? "Controlled web evidence is fetched for this run; external verification requires independent corroboration or authoritative registry evidence"
           : SYNTHETIC_NOTICE}
       </span>
     </aside>

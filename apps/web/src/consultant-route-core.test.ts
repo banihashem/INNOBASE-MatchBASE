@@ -373,4 +373,36 @@ describe("Consultant result route", () => {
       }),
     ).resolves.toBeNull();
   });
+
+  it("uses an Admin-specific result path and does not intercept the Standard product result", async () => {
+    const getResult = vi.fn(async () => ({
+      projectionTier: "consultant" as const,
+      body: consultantBody,
+    }));
+    const adminContext = {
+      ...context,
+      tier: "admin" as const,
+      adminSubRoles: ["super_admin" as const],
+    };
+    await expect(
+      handleConsultantRoute({
+        method: "GET",
+        pathname: "/api/v1/runs/00000000-0000-4000-8000-000000000137/result",
+        context: adminContext,
+        application: { getResult } as never,
+      }),
+    ).resolves.toBeNull();
+    const response = await handleConsultantRoute({
+      method: "GET",
+      pathname:
+        "/api/v1/consultant/runs/00000000-0000-4000-8000-000000000137/result",
+      context: adminContext,
+      application: { getResult } as never,
+    });
+    expect(response?.status).toBe(200);
+    expect(getResult).toHaveBeenCalledWith(
+      adminContext,
+      "00000000-0000-4000-8000-000000000137",
+    );
+  });
 });

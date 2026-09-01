@@ -2,9 +2,67 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertNoRestrictedProviderMaterial,
+  normalizeLegacyProviderDimensionScores,
   validateEvidenceGraph,
 } from "../src/evidence/integrity.js";
 import { buildSyntheticEvidenceGraph } from "../src/research/synthetic-fixtures.js";
+
+test("normalizes only a closed legacy JSON-encoded dimension score object", () => {
+  const graph = structuredClone(
+    buildSyntheticEvidenceGraph("RUN-LEGACY-DIMENSIONS", "one"),
+  ) as unknown as Record<string, unknown>;
+  const candidate = (graph.candidates as Array<Record<string, unknown>>)[0]!;
+  candidate.dimensionScores = JSON.stringify(candidate.dimensionScores);
+  const normalized = normalizeLegacyProviderDimensionScores(graph);
+  assert.notEqual(normalized, graph);
+  assert.doesNotThrow(() => validateEvidenceGraph(normalized));
+  assert.equal(typeof candidate.dimensionScores, "string");
+});
+
+test("legacy dimension score normalization rejects widening and non-integers", () => {
+  for (const dimensions of [
+    {
+      category_product_fit: 80,
+      compliance_certification_fit: 80,
+      volume_capacity_fit: 80,
+      price_tier_fit: 80,
+      positioning_brand_fit: 80,
+      geographic_reach_fit: 80,
+      extra: 80,
+    },
+    {
+      category_product_fit: 80.5,
+      compliance_certification_fit: 80,
+      volume_capacity_fit: 80,
+      price_tier_fit: 80,
+      positioning_brand_fit: 80,
+      geographic_reach_fit: 80,
+    },
+  ]) {
+    const graph = structuredClone(
+      buildSyntheticEvidenceGraph("RUN-REJECT-LEGACY-DIMENSIONS", "one"),
+    ) as unknown as Record<string, unknown>;
+    const candidate = (graph.candidates as Array<Record<string, unknown>>)[0]!;
+    candidate.dimensionScores = JSON.stringify(dimensions);
+    assert.throws(
+      () => normalizeLegacyProviderDimensionScores(graph),
+      /unknown|missing|invalid/iu,
+    );
+  }
+});
+
+test("EvidenceGraph validator enforces exact approved integer dimension keys", () => {
+  const unknown = structuredClone(
+    buildSyntheticEvidenceGraph("RUN-DIMENSION-KEYS", "one"),
+  );
+  (unknown.candidates[0]!.dimensionScores as Record<string, number>).extra = 1;
+  assert.throws(() => validateEvidenceGraph(unknown), /unknown|missing/iu);
+  const fractional = structuredClone(
+    buildSyntheticEvidenceGraph("RUN-DIMENSION-INTEGER", "one"),
+  );
+  fractional.candidates[0]!.dimensionScores.category_product_fit = 1.5;
+  assert.throws(() => validateEvidenceGraph(fractional), /invalid/iu);
+});
 
 test("provider EvidenceGraph rejects unknown fields at every closed level", () => {
   const mutations: Array<(graph: Record<string, unknown>) => void> = [

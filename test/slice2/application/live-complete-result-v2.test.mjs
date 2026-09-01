@@ -194,6 +194,57 @@ test("server-derived source identity fills empty provider display claims without
   });
 });
 
+test("linked provider unknown is normalized only to an unverified source claim", () => {
+  const input = fixture();
+  input.graph.claims[0].verificationStatus = "unknown";
+  const result = buildOperationalLiveCompleteResultV2({
+    graph: input.graph,
+    eligibleCandidateIds: [input.candidateId],
+    sourceBindings: input.sourceBindings,
+    qualificationMode: "synthetic_qualification",
+  });
+  assert.equal(result.foundation.claims[0].verification_status, "claimed");
+  assert.deepEqual(result.foundation.evidence[0].external_verification_basis, {
+    kind: "not_externally_verified",
+  });
+});
+
+test("provider-authored personal data is withheld before live result persistence", () => {
+  const input = fixture();
+  input.graph.candidates[0].displayName = "Jane Mary Smith Trading";
+  input.graph.candidates[0].rationaleShort =
+    "John Q. Public supplied a decision-bearing statement.";
+  input.graph.claims[0].text = "Contact Dr. Samir A. Haddad.";
+  const result = buildOperationalLiveCompleteResultV2({
+    graph: input.graph,
+    eligibleCandidateIds: [input.candidateId],
+    sourceBindings: input.sourceBindings,
+    qualificationMode: "synthetic_qualification",
+  });
+  assert.doesNotMatch(JSON.stringify(result.foundation), /Jane|John|Samir/iu);
+  assert.match(JSON.stringify(result.foundation), /personal data withheld/iu);
+});
+
+test("operational producer emits the aggregate mandatory gate required by projections", () => {
+  const input = fixture();
+  const eliminatedId = randomUUID();
+  input.graph.candidates[0].mandatoryConstraintsSatisfied = false;
+  input.graph.candidates[0].failedConstraintIds = [eliminatedId];
+  const result = buildOperationalLiveCompleteResultV2({
+    graph: input.graph,
+    eligibleCandidateIds: [],
+    sourceBindings: input.sourceBindings,
+    qualificationMode: "synthetic_qualification",
+  });
+  assert.deepEqual(result.foundation.gate_evaluations, [
+    {
+      gate_id: "mandatory_constraints",
+      label: "Mandatory constraints",
+      eliminated_count: 1,
+    },
+  ]);
+});
+
 test("operational producer rejects provider verification forgery", () => {
   const input = fixture();
   input.graph.candidates[0].verificationStatus = "externally_verified";

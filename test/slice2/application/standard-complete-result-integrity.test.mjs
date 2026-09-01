@@ -28,9 +28,14 @@ function foundation() {
   };
 }
 
-function repositoryForMissingDigest(resultSha256) {
+function repositoryForMissingDigest(
+  resultSha256,
+  tierAtSubmission = "standard",
+) {
   const row = {
     state: "complete",
+    tier_at_submission: tierAtSubmission,
+    research_mode: "qualified_live_research",
     complete_result_document: {
       schema_version: "complete-result-foundation.v1",
       run_id: runId,
@@ -150,3 +155,14 @@ for (const [label, missingDigest] of [
       /integrity digest is invalid/iu,
     );
   });
+
+test("a Standard result route never down-projects a Consultant-tier run", async () => {
+  const application = repositoryForMissingDigest(
+    Buffer.alloc(32),
+    "consultant",
+  );
+  await assert.rejects(
+    application.getResult(context, runId, false),
+    (error) => error.status === 403 && error.code === "MB-403-NOT-VISIBLE",
+  );
+});

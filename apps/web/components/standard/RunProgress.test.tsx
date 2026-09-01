@@ -264,3 +264,49 @@ test("treats a terminal result disclosure failure as blocking", async () => {
   fireEvent.click(returnButton);
   expect(onTerminal).toHaveBeenCalledTimes(1);
 });
+
+test("moves a Super-admin terminal Consultant result to the profile without down-projecting it", async () => {
+  const onTerminal = vi.fn();
+  const onAnnouncement = vi.fn();
+  const fetchMock = vi.fn(async () =>
+    Response.json({
+      ...run("running", 100),
+      state: "complete",
+      phase: "completed",
+      phase_label: "Complete",
+      terminal: true,
+      result_available: true,
+      outcome: "matched",
+      scarcity: "none",
+      poll_after_ms: undefined,
+    }),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  render(
+    <RunProgress
+      session={{
+        ...session,
+        tier: "admin",
+        research_mode: {
+          id: "qualified_live_research",
+          label: "Qualified live research",
+          live_qualified: true,
+        },
+      }}
+      runId="run-1"
+      onResult={vi.fn()}
+      onTerminal={onTerminal}
+      onAnnouncement={onAnnouncement}
+      deferResultToProfile
+    />,
+  );
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(onTerminal).toHaveBeenCalledTimes(1);
+  expect(onAnnouncement).toHaveBeenCalledWith(
+    expect.stringMatching(/Consultant result/iu),
+  );
+});

@@ -344,9 +344,14 @@ export function standardPiiFindings(value: string): Span[] {
 
 function redact(value: string, spans: readonly Span[]): string {
   let result = value;
+  const withheld = "[personal data withheld]";
   for (const span of [...spans].sort((left, right) => right.start - left.start))
-    result = `${result.slice(0, span.start)}[personal data withheld]${result.slice(span.end)}`;
-  return result;
+    result = `${result.slice(0, span.start)}${withheld}${result.slice(span.end)}`;
+  if (result.length <= 600) return result;
+  const intersectingToken = result.lastIndexOf(withheld, 599);
+  if (intersectingToken >= 0 && intersectingToken + withheld.length > 600)
+    return `${result.slice(0, 600 - withheld.length).trimEnd()}${withheld}`;
+  return result.slice(0, 600);
 }
 
 export function assertStandardPiiReleaseSafe(value: unknown): void {

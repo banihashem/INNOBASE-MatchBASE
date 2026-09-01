@@ -26,7 +26,11 @@ function clientFor(state, { rejectAudit = false } = {}) {
     release() {},
     async query(text, values = []) {
       statements.push({ text, values });
-      if (/SELECT state\s+FROM research_run/u.test(text))
+      if (
+        /FROM research_run r/u.test(text) &&
+        /live_research_terminal/u.test(text) &&
+        /FOR SHARE/u.test(text)
+      )
         return {
           rows: state === null ? [] : [{ state }],
           rowCount: state ? 1 : 0,

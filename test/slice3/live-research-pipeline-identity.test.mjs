@@ -259,7 +259,7 @@ test("live evidence excerpts remain bounded for the qualified output contract", 
     "utf8",
   );
   assert.equal(
-    (executionSource.match(/sealed\.normalizedText\.slice\(0, 4000\)/g) ?? [])
+    (executionSource.match(/sealed\.normalizedText\.slice\(0, 600\)/g) ?? [])
       .length,
     2,
   );

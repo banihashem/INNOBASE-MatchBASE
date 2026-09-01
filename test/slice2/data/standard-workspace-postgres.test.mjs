@@ -225,7 +225,7 @@ postgresTest(
       await installFoundationOnly(pool);
       const foundationCatalog = await catalogSnapshot(pool);
       assert.deepEqual(await getMigrationStatus(pool), {
-        latestMigrationId: "0010_p4_live_pipeline_extraction_v2",
+        latestMigrationId: "0011_admin_system_scope_and_run_tier_immutability",
         appliedMigrationIds: ["0001_slice_1_foundation"],
         pendingMigrationIds: [
           "0002_slice_2_standard_workspace",
@@ -237,6 +237,7 @@ postgresTest(
           "0008_p4_google_risc_receiver",
           "0009_p4_google_risc_retention",
           "0010_p4_live_pipeline_extraction_v2",
+          "0011_admin_system_scope_and_run_tier_immutability",
         ],
         unknownMigrationIds: [],
         ready: false,
@@ -246,6 +247,31 @@ postgresTest(
       assert.equal(await migrateUp(pool), false);
 
       const ids = await seedStandardOwner(pool);
+
+      await t.test("keeps the submitted run tier immutable", async () => {
+        const immutableIds = await seedStandardOwner(pool);
+        const admitted = await admitRunWithinQuota(
+          pool,
+          admissionInput(immutableIds, "immutable-submitted-tier"),
+        );
+        assert.equal(admitted.disposition, "accepted");
+        await assert.rejects(
+          pool.query(
+            "UPDATE research_run SET tier_at_submission='consultant' WHERE run_id=$1",
+            [admitted.runId],
+          ),
+          /tier_at_submission is immutable/u,
+        );
+        const stored = await pool.query(
+          "SELECT tier_at_submission FROM research_run WHERE run_id=$1",
+          [admitted.runId],
+        );
+        assert.equal(stored.rows[0].tier_at_submission, "standard");
+        await pool.query(
+          "UPDATE research_run SET state='cancelled',cancelled_at=clock_timestamp() WHERE run_id=$1",
+          [admitted.runId],
+        );
+      });
 
       await t.test(
         "requires explicit confirmation below the versioned category threshold",
@@ -649,6 +675,10 @@ postgresTest(
         },
       );
 
+      assert.equal(
+        await migrateDownLatest(pool),
+        "0011_admin_system_scope_and_run_tier_immutability",
+      );
       assert.equal(
         await migrateDownLatest(pool),
         "0010_p4_live_pipeline_extraction_v2",

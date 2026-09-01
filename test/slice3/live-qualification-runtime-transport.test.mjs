@@ -34,7 +34,13 @@ function completion(overrides = {}) {
           },
         ],
       },
-      attempts: [],
+      attempts: [
+        {
+          provider: "Google Vertex",
+          model: "google/gemini-3.6-flash",
+          status: 200,
+        },
+      ],
       pipeline: [],
     },
     ...overrides,
@@ -92,7 +98,7 @@ test("production OpenRouter transport reconciles in-band POST metadata without f
   }
 });
 
-test("production OpenRouter transport rejects unknown routing topology without a secondary GET", async () => {
+test("production OpenRouter transport accepts additive metadata and an opaque bounded pipeline without a secondary GET", async () => {
   const originalFetch = globalThis.fetch;
   let calls = 0;
   globalThis.fetch = async () => {
@@ -102,7 +108,63 @@ test("production OpenRouter transport rejects unknown routing topology without a
       completion({
         openrouter_metadata: {
           ...base.openrouter_metadata,
-          unknown_topology: true,
+          future_optional_field: { version: 2 },
+          endpoints: {
+            ...base.openrouter_metadata.endpoints,
+            future_endpoint_summary: "additive",
+            available: base.openrouter_metadata.endpoints.available.map(
+              (candidate) => ({ ...candidate, future_latency_ms: 12 }),
+            ),
+          },
+          attempts: base.openrouter_metadata.attempts.map((attempt) => ({
+            ...attempt,
+            future_trace: "opaque",
+          })),
+          pipeline: [
+            { type: "future_stage", version: 1, opaque: { enabled: true } },
+          ],
+        },
+      }),
+      { "x-generation-id": "generation-runtime-id" },
+    );
+  };
+  try {
+    const transport = new EnvironmentProviderTransport(
+      "openrouter",
+      "test-secret",
+      0.1,
+      "test-pricing",
+      "request",
+    );
+    const result = await transport.send({
+      url: "https://openrouter.ai/api/v1/chat/completions",
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+      signal: new AbortController().signal,
+    });
+    assert.deepEqual(result.servedIdentity, {
+      providerId: "google-vertex",
+      modelId: "google/gemini-3.6-flash",
+    });
+    assert.equal(result.accounting?.state, "priced");
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("production OpenRouter transport requires one successful attempt matching the selected route", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    const base = completion();
+    return jsonResponse(
+      completion({
+        openrouter_metadata: {
+          ...base.openrouter_metadata,
+          attempts: [],
         },
       }),
       { "x-generation-id": "generation-runtime-id" },
@@ -152,6 +214,101 @@ test("production OpenRouter transport rejects in-band metadata identity drift wi
               },
             ],
           },
+        },
+      }),
+      { "x-generation-id": "generation-runtime-id" },
+    );
+  };
+  try {
+    const transport = new EnvironmentProviderTransport(
+      "openrouter",
+      "test-secret",
+      0.1,
+      "test-pricing",
+      "request",
+    );
+    await assert.rejects(
+      transport.send({
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+        signal: new AbortController().signal,
+      }),
+      /routing metadata is invalid/iu,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("production OpenRouter transport rejects a selected non-Vertex Google provider", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    const base = completion();
+    return jsonResponse(
+      completion({
+        openrouter_metadata: {
+          ...base.openrouter_metadata,
+          endpoints: {
+            total: 1,
+            available: [
+              {
+                provider: "Google",
+                model: "google/gemini-3.6-flash",
+                selected: true,
+              },
+            ],
+          },
+        },
+      }),
+      { "x-generation-id": "generation-runtime-id" },
+    );
+  };
+  try {
+    const transport = new EnvironmentProviderTransport(
+      "openrouter",
+      "test-secret",
+      0.1,
+      "test-pricing",
+      "request",
+    );
+    await assert.rejects(
+      transport.send({
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+        signal: new AbortController().signal,
+      }),
+      /routing metadata is invalid/iu,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("production OpenRouter transport rejects selected and attempted model drift", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    const base = completion();
+    return jsonResponse(
+      completion({
+        openrouter_metadata: {
+          ...base.openrouter_metadata,
+          attempts: [
+            {
+              provider: "Google Vertex",
+              model: "google/gemini-3.6-flash-20260721",
+              status: 200,
+            },
+          ],
         },
       }),
       { "x-generation-id": "generation-runtime-id" },

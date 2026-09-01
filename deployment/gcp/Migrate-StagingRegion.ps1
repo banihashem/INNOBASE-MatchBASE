@@ -67,6 +67,9 @@ $SourceWebImageName = $WebSourceImageDigest.Split("@", 2)[0].Split("/")[-1]
 $SourceWorkerImageName = $WorkerSourceImageDigest.Split("@", 2)[0].Split("/")[-1]
 $WebSha256 = $WebSourceImageDigest.Split("@", 2)[1]
 $WorkerSha256 = $WorkerSourceImageDigest.Split("@", 2)[1]
+$WebMigrationTag = "migration-ew2-$($WebSha256.Split(':', 2)[1].Substring(0, 16))"
+$WorkerMigrationTag = "migration-ew2-$($WorkerSha256.Split(':', 2)[1].Substring(0, 16))"
+$MaintenanceMigrationTag = "migration-ew2-$($MaintenanceBaseSha256.Split(':', 2)[1].Substring(0, 16))"
 $TargetRepositoryRoot = "$TargetRegion-docker.pkg.dev/$ProjectId/$($migration.TargetArtifactRepository)"
 $TargetWebImageDigest = "$TargetRepositoryRoot/$SourceWebImageName@$WebSha256"
 $TargetWorkerImageDigest = "$TargetRepositoryRoot/$SourceWorkerImageName@$WorkerSha256"
@@ -705,15 +708,15 @@ if (Test-Checkpoint -Name "RegionalFoundation") {
       throw "EU same-project log sink identity, destination, filter, or no-writer contract drifted."
     }
     if (-not (Test-GcloudResource -Arguments @("artifacts", "docker", "images", "describe", $TargetWebImageDigest, "--project=$ProjectId"))) {
-      & $PinnedGcraneExecutable cp $WebSourceImageDigest "$TargetRepositoryRoot/${SourceWebImageName}:migration-ew2"
+      & $PinnedGcraneExecutable cp $WebSourceImageDigest "$TargetRepositoryRoot/${SourceWebImageName}:$WebMigrationTag"
       if ($LASTEXITCODE -ne 0) { throw "gcrane failed to copy the web digest." }
     }
     if (-not (Test-GcloudResource -Arguments @("artifacts", "docker", "images", "describe", $TargetWorkerImageDigest, "--project=$ProjectId"))) {
-      & $PinnedGcraneExecutable cp $WorkerSourceImageDigest "$TargetRepositoryRoot/${SourceWorkerImageName}:migration-ew2"
+      & $PinnedGcraneExecutable cp $WorkerSourceImageDigest "$TargetRepositoryRoot/${SourceWorkerImageName}:$WorkerMigrationTag"
       if ($LASTEXITCODE -ne 0) { throw "gcrane failed to copy the worker digest." }
     }
     if (-not (Test-GcloudResource -Arguments @("artifacts", "docker", "images", "describe", $TargetMaintenanceImageDigest, "--project=$ProjectId"))) {
-      & $PinnedGcraneExecutable cp $MaintenanceBaseImageDigest "$TargetRepositoryRoot/maintenance-node-base:migration-ew2"
+      & $PinnedGcraneExecutable cp $MaintenanceBaseImageDigest "$TargetRepositoryRoot/maintenance-node-base:$MaintenanceMigrationTag"
       if ($LASTEXITCODE -ne 0) { throw "gcrane failed to copy the maintenance base digest." }
     }
     Assert-ResourceExists -Arguments @("artifacts", "docker", "images", "describe", $TargetWebImageDigest, "--project=$ProjectId") -Description "EU web image digest"
@@ -724,9 +727,9 @@ if (Test-Checkpoint -Name "RegionalFoundation") {
     Complete-MigrationCheckpoint -Ledger $MigrationLedger -Evidence $GovernedEvidence
   } else {
     Write-MigrationGcloudPlan -Arguments $repositoryCreate
-    Write-ExternalPlan -Executable "gcrane" -Arguments @("cp", $WebSourceImageDigest, "$TargetRepositoryRoot/${SourceWebImageName}:migration-ew2")
-    Write-ExternalPlan -Executable "gcrane" -Arguments @("cp", $WorkerSourceImageDigest, "$TargetRepositoryRoot/${SourceWorkerImageName}:migration-ew2")
-    Write-ExternalPlan -Executable "gcrane" -Arguments @("cp", $MaintenanceBaseImageDigest, "$TargetRepositoryRoot/maintenance-node-base:migration-ew2")
+    Write-ExternalPlan -Executable "gcrane" -Arguments @("cp", $WebSourceImageDigest, "$TargetRepositoryRoot/${SourceWebImageName}:$WebMigrationTag")
+    Write-ExternalPlan -Executable "gcrane" -Arguments @("cp", $WorkerSourceImageDigest, "$TargetRepositoryRoot/${SourceWorkerImageName}:$WorkerMigrationTag")
+    Write-ExternalPlan -Executable "gcrane" -Arguments @("cp", $MaintenanceBaseImageDigest, "$TargetRepositoryRoot/maintenance-node-base:$MaintenanceMigrationTag")
     Write-MigrationGcloudPlan -Arguments $bucketCreate
     Write-MigrationGcloudPlan -Arguments $bucketUpdate
     foreach ($secret in $SecretNames) {

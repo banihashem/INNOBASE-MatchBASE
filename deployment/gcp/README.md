@@ -107,6 +107,9 @@ Apply exactly one checkpoint only after its preceding evidence gates pass:
 `RegionalFoundation` Apply accepts only the governed Windows x86_64 `gcrane`
 v0.22.0 executable (SHA-256
 `094281bd4c98e1dbf805350f3f59a152244324fb86a4b4b908c741d012a9615d`).
+Every cross-region copy uses an immutable destination tag derived from the first
+16 hexadecimal characters of the source digest. A fixed migration tag is never
+overwritten when a successor candidate is published.
 The regional sink writes to a log bucket in the same Google Cloud project. That
 closed configuration has no writer identity and requires no destination IAM
 grant. Custom writer identities and the removed `--unique-writer-identity` flag

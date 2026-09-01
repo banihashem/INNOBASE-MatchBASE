@@ -185,6 +185,10 @@ test("foundation plans regional metadata and immutable digest copies without sec
   );
   assert.match(result.stdout, /gcrane cp [^\r\n]+@sha256:[a-f0-9]{64}/u);
   assert.equal((result.stdout.match(/gcrane cp /gu) ?? []).length, 3);
+  assert.equal(
+    (result.stdout.match(/:migration-ew2-[a-f0-9]{16}/gu) ?? []).length,
+    3,
+  );
   assert.match(
     result.stdout,
     /storage rsync gs:\/\/innobase-matchbase-stg-artifacts[\s\S]*gs:\/\/innobase-matchbase-stg-eu-artifacts/u,

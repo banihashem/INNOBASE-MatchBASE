@@ -86,7 +86,9 @@ written with a generation-match precondition:
 Each database checkpoint gives its fresh backup a unique governed description,
 then rediscovers exactly one numeric backup ID by that exact description. Apply
 accepts the backup only when Cloud SQL reports `SUCCESSFUL` and location `eu`;
-progress output from the backup-create command is never parsed as identity.
+progress output from the backup-create command is never parsed as identity. The
+PowerShell parser uses a dedicated record variable and never the automatic
+`$Matches` variable.
 
 Generate the complete plan:
 

@@ -157,6 +157,12 @@ test("database checkpoints always plan a fresh backup and restore", () => {
   }
 });
 
+test("backup discovery never reuses PowerShell's automatic Matches variable", async () => {
+  const source = await read("../../deployment/gcp/Migrate-StagingRegion.ps1");
+  assert.doesNotMatch(source, /\$matches\s*=/iu);
+  assert.match(source, /\$backupRecords\s*=/u);
+});
+
 test("foundation plans regional metadata and immutable digest copies without secret values", async () => {
   const source = await read("../../deployment/gcp/Migrate-StagingRegion.ps1");
   const result = runPowerShell("-Checkpoint", "RegionalFoundation");

@@ -595,13 +595,13 @@ function New-FreshBackupAndRestore {
     return
   }
   $null = Invoke-MigrationGcloud -Arguments $backupArguments
-  $matches = @((Invoke-MigrationGcloud -Arguments $discoveryArguments | ConvertFrom-Json -DateKind String))
-  if ($matches.Count -ne 1 -or [string]$matches[0].id -cnotmatch '^[1-9][0-9]*$' -or
-      [string]$matches[0].description -cne $backupDescription -or [string]$matches[0].status -cne "SUCCESSFUL" -or
-      [string]$matches[0].location -cne "eu") {
+  $backupRecords = @((Invoke-MigrationGcloud -Arguments $discoveryArguments | ConvertFrom-Json -DateKind String))
+  if ($backupRecords.Count -ne 1 -or [string]$backupRecords[0].id -cnotmatch '^[1-9][0-9]*$' -or
+      [string]$backupRecords[0].description -cne $backupDescription -or [string]$backupRecords[0].status -cne "SUCCESSFUL" -or
+      [string]$backupRecords[0].location -cne "eu") {
     throw "Fresh Cloud SQL backup discovery did not return one exact successful European backup."
   }
-  $backupId = [string]$matches[0].id
+  $backupId = [string]$backupRecords[0].id
   $restoreArguments = @($restoreTemplate | ForEach-Object { if ($_ -ceq "<FRESH_BACKUP_ID>") { $backupId } else { $_ } })
   $null = Invoke-MigrationGcloud -Arguments $restoreArguments
   return $backupId

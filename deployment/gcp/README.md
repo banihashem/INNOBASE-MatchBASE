@@ -77,6 +77,9 @@ written with a generation-match precondition:
 - `Preflight` anchors the ledger in the current artifact bucket;
 - `RegionalFoundation` copies predecessor evidence and moves the canonical
   ledger to the EU artifact bucket;
+- if the full artifact copy already placed the predecessor ledger in the EU
+  bucket, promotion first proves exact byte equality and then uses that live
+  generation as the write precondition;
 - every later checkpoint reads, verifies, and extends the EU ledger;
 - `Cutover` re-downloads every predecessor evidence object and verifies its hash.
 

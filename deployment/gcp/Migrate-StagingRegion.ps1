@@ -462,7 +462,24 @@ function Complete-MigrationCheckpoint {
   $Ledger.Document.entries = @($entries + $entry)
   $json = $Ledger.Document | ConvertTo-Json -Depth 20
   Set-Content -LiteralPath $Ledger.WorkPath -Value $json -Encoding utf8NoBOM
-  $expectedGeneration = if ($storeUri -ceq $Ledger.LoadUri) { [string]$Ledger.Generation } else { "0" }
+  $expectedGeneration = if ($storeUri -ceq $Ledger.LoadUri) {
+    [string]$Ledger.Generation
+  } elseif (Test-GcloudResource -Arguments @("storage", "objects", "describe", $storeUri)) {
+    # RegionalFoundation copies the complete versioned source bucket before it
+    # promotes the canonical ledger. Replace only the exact copied predecessor,
+    # using its live generation as the optimistic-concurrency precondition.
+    $targetGeneration = Invoke-MigrationGcloud -Arguments @("storage", "objects", "describe", $storeUri, "--format=value(generation)")
+    if ($targetGeneration -cnotmatch '^[1-9][0-9]*$') { throw "Copied target ledger generation is invalid." }
+    $targetWork = Join-Path ([System.IO.Path]::GetTempPath()) "matchbase-target-ledger-$([guid]::NewGuid().ToString('N')).json"
+    try {
+      $null = Invoke-MigrationGcloud -Arguments @("storage", "cp", $storeUri, $targetWork, "--quiet")
+      $targetRaw = Get-Content -LiteralPath $targetWork -Raw
+      if ((Get-Sha256Text -Text $targetRaw) -cne (Get-Sha256Text -Text ([string]$Ledger.Raw))) { throw "Copied target ledger does not equal the exact predecessor bytes." }
+    } finally { Remove-Item -LiteralPath $targetWork -Force -ErrorAction SilentlyContinue }
+    [string]$targetGeneration
+  } else {
+    "0"
+  }
   $null = Invoke-MigrationGcloud -Arguments @("storage", "cp", $Ledger.WorkPath, $storeUri, "--if-generation-match=$expectedGeneration", "--quiet")
   Remove-Item -LiteralPath $Ledger.WorkPath -Force -ErrorAction SilentlyContinue
 }

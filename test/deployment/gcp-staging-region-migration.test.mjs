@@ -281,6 +281,11 @@ test("durable ledger is ordered, hash-chained, evidence-bound, and generation-co
   assert.match(source, /previous_entry_sha256/u);
   assert.match(source, /entry_sha256/u);
   assert.match(source, /evidence_sha256/u);
+  assert.match(
+    source,
+    /Copied target ledger does not equal the exact predecessor bytes/u,
+  );
+  assert.match(source, /--if-generation-match=\$expectedGeneration/u);
   assert.match(source, /--if-generation-match=\$expectedGeneration/u);
   assert.match(source, /Assert-CheckpointPredecessors/u);
   assert.match(

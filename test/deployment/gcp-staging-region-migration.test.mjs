@@ -704,8 +704,11 @@ test("canary edge plan closes Armor, TLS, Cloudflare DNS/header and preserves ma
   assert.equal(
     (result.stdout.match(/security-policies rules create 20\d\d/gu) ?? [])
       .length,
-    15,
+    1,
   );
+  assert.match(edge, /canaryIpExpression/u);
+  assert.match(edge, /security-policies","rules","delete"/u);
+  assert.match(producer, /armor_rule_count=1/u);
   assert.match(
     result.stdout,
     /--domains=matchbase-staging\.innobase\.app,matchbase-staging-eu-canary\.innobase\.app/u,

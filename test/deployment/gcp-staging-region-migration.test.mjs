@@ -750,6 +750,7 @@ test("EU acceptance binds closed origins, live service identity, exact result, a
   assert.match(producer, /hashedCloudRunPattern/u);
   assert.match(producer, /run\.googleapis\.com\/urls/u);
   assert.match(producer, /cloudRunOrigin -cnotin \$declaredCloudRunUrls/u);
+  assert.match(producer, /PSObject\.Properties\['value'\]/u);
   assert.match(validator, /result\.run_id !== runId/u);
   assert.match(validator, /connectOverCDP/u);
   assert.match(validator, /\/auth\/google\/start/u);

@@ -108,7 +108,13 @@ if ($Checkpoint -in @("Canary", "Cutover")) {
   $targetWorker = (($captures | Where-Object id -eq "target-worker").stdout | ConvertFrom-Json)
   $cloudRunOrigin = ([uri][string]$targetWeb.status.url).GetLeftPart([UriPartial]::Authority)
   $expectedWebService = if ($Checkpoint -in @("Canary", "Cutover")) { [string]$migration.CanaryWebService } else { [string]$migration.TargetWebService }
-  if ([string]$targetWeb.metadata.name -cne $expectedWebService -or $cloudRunOrigin -cnotmatch '^https://matchbase-staging-web(?:-canary-ew2)?-[a-z0-9-]+\.europe-west2\.run\.app$') { throw "Live EU Cloud Run service URL is outside the closed checkpoint target identity." }
+  $escapedWebService = [regex]::Escape($expectedWebService)
+  $regionalCloudRunPattern = "^https://$escapedWebService-[0-9]+\.$([regex]::Escape($targetRegion))\.run\.app$"
+  $hashedCloudRunPattern = "^https://$escapedWebService-[a-z0-9]+-[a-z]{2}\.a\.run\.app$"
+  $declaredCloudRunUrls = @(([string]$targetWeb.metadata.annotations.'run.googleapis.com/urls' | ConvertFrom-Json) | ForEach-Object { ([uri][string]$_).GetLeftPart([UriPartial]::Authority) })
+  $hasRegionalIdentity = @($declaredCloudRunUrls | Where-Object { $_ -cmatch $regionalCloudRunPattern }).Count -eq 1
+  $allDeclaredIdentitiesClosed = $declaredCloudRunUrls.Count -ge 1 -and @($declaredCloudRunUrls | Where-Object { $_ -cnotmatch $regionalCloudRunPattern -and $_ -cnotmatch $hashedCloudRunPattern }).Count -eq 0
+  if ([string]$targetWeb.metadata.name -cne $expectedWebService -or $cloudRunOrigin -cnotin $declaredCloudRunUrls -or -not $hasRegionalIdentity -or -not $allDeclaredIdentitiesClosed) { throw "Live EU Cloud Run service URL is outside the closed checkpoint target identity." }
   $publicCanaryOrigin = "https://$($migration.CanaryHostname)"
   if ($publicCanaryOrigin -cne "https://matchbase-staging-eu-canary.innobase.app") { throw "Public EU canary origin is outside the closed staging-eu target." }
   $armorCapture = Invoke-ReadOnlyCapture -Id "canary-cloud-armor" -Arguments @("compute", "security-policies", "describe", [string]$migration.SecurityPolicy, "--project=$project", "--format=json")

@@ -7,6 +7,7 @@ import {
   assessCredentialGate,
   executeCredentialGate,
 } from "../../scripts/qualify-slice3-openrouter-credential-successor-v3.mjs";
+import { materializeQualificationPredecessor } from "./fixtures/staging-qualification-ledgers.mjs";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/key";
 
@@ -48,8 +49,13 @@ async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "matchbase-credential-v3-"));
   const paths = {
     credentialPath: join(root, "APIKeys.md"),
+    predecessorStateRoot: join(root, "predecessor"),
     stateRoot: join(root, "state"),
   };
+  await materializeQualificationPredecessor(
+    paths.predecessorStateRoot,
+    "v6-4FA7336D74F38010CBEE9D66",
+  );
   await writeFile(
     paths.credentialPath,
     "MATCHBASE_GEMINI_API_KEY=direct-test-secret\nMATCHBASE_OPENROUTER_API_KEY=openrouter-test-secret\n",

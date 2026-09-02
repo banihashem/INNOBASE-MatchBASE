@@ -7,6 +7,7 @@ import {
   assessSuccessor,
   executeSuccessor,
 } from "../../scripts/qualify-slice3-staging-successor-v2.mjs";
+import { materializeQualificationPredecessor } from "./fixtures/staging-qualification-ledgers.mjs";
 
 const routerEnvelope = {
   id: "openrouter-successor-test-id",
@@ -95,11 +96,16 @@ async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "matchbase-successor-v2-"));
   const paths = {
     credentialPath: join(root, "APIKeys.md"),
+    predecessorStateRoot: join(root, "predecessor"),
     stateRoot: join(root, "state"),
     evidencePath: join(root, "evidence.json"),
     policyPath: join(root, "policy.json"),
     manifestPath: join(root, "manifest.json"),
   };
+  await materializeQualificationPredecessor(
+    paths.predecessorStateRoot,
+    "v6-40CB8BEE95ABACB012107300",
+  );
   await writeFile(
     paths.credentialPath,
     "MATCHBASE_GEMINI_API_KEY=direct-test-secret\nMATCHBASE_OPENROUTER_API_KEY=openrouter-test-secret\n",

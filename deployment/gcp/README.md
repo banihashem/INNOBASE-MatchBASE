@@ -199,7 +199,9 @@ The Canary uses the distinct `staging-eu-canary` deployment target and
 `MATCHBASE_ORIGIN=https://matchbase-staging-eu-canary.innobase.app` and
 `GOOGLE_REDIRECT_URI=https://matchbase-staging-eu-canary.innobase.app/auth/google/callback`.
 The web runtime allowlist binds that target to the Canary origin and the EU
-artifact bucket; an unknown or cross-boundary target still exits fail-closed.
+artifact bucket. The container entrypoint independently accepts only that same
+named Canary target inside Staging; an unknown or cross-boundary target still
+exits fail-closed.
 The same redirect URI must be registered on the Google OAuth client before
 Canary evidence can pass; the genuine Google callback is the authoritative
 machine proof of that prerequisite. The main `staging-eu` target retains

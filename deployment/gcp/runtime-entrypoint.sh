@@ -13,7 +13,7 @@ case "${deployment_target}" in
       exit 78
     fi
     ;;
-  staging-eu)
+  staging-eu|staging-eu-canary)
     if [ "${MATCHBASE_DEPLOYMENT_ENVIRONMENT}" != "staging" ]; then
       echo "EU Staging runtime target is outside Staging." >&2
       exit 78

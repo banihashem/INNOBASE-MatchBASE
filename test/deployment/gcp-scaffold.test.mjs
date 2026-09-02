@@ -225,6 +225,7 @@ test("runtime entrypoint rejects non-production image and route-policy identity 
   assert.match(entrypoint, /MATCHBASE_ENVIRONMENT:-.*production/u);
   assert.match(entrypoint, /MATCHBASE_DEPLOYMENT_ENVIRONMENT/u);
   assert.match(entrypoint, /MATCHBASE_DEPLOYMENT_TARGET/u);
+  assert.match(entrypoint, /staging-eu\|staging-eu-canary/u);
   assert.match(entrypoint, /MATCHBASE_IMAGE_DIGEST/u);
   assert.match(entrypoint, /MATCHBASE_ROUTE_POLICY_SHA256/u);
   assert.match(entrypoint, /web\|worker/u);

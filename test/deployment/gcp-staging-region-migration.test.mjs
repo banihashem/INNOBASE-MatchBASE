@@ -689,6 +689,9 @@ test("canary edge plan closes Armor, TLS, Cloudflare DNS/header and preserves ma
   const route = await read(
     "../../deployment/gcp/Prepare-StagingCanaryRoute.ps1",
   );
+  const migration = await read(
+    "../../deployment/gcp/Migrate-StagingRegion.ps1",
+  );
   const result = spawnSync(
     "pwsh",
     [
@@ -717,6 +720,9 @@ test("canary edge plan closes Armor, TLS, Cloudflare DNS/header and preserves ma
   assert.match(route, /main route changed/u);
   assert.match(route, /PSObject\.Properties\['hostRules'\]/u);
   assert.match(route, /PSObject\.Properties\['pathMatchers'\]/u);
+  assert.match(route, /--new-hosts=\$\(\$m\.CanaryHostname\)/u);
+  assert.match(route, /unexpectedMatcherHosts/u);
+  assert.match(migration, /--new-hosts=\$\(\$migration\.CanaryHostname\)/u);
   assert.match(
     result.stdout,
     /--domains=matchbase-staging\.innobase\.app,matchbase-staging-eu-canary\.innobase\.app/u,

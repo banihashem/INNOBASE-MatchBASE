@@ -728,7 +728,9 @@ test("ledger hash chain rejects cross-candidate substitution", async () => {
 
 test("EU acceptance binds closed origins, live service identity, exact result, and PDF bytes", async () => {
   const common = await read("../../deployment/gcp/Common.ps1");
-  const migration = await read("../../deployment/gcp/Migrate-StagingRegion.ps1");
+  const migration = await read(
+    "../../deployment/gcp/Migrate-StagingRegion.ps1",
+  );
   const producer = await read(
     "../../deployment/gcp/New-StagingRegionEvidence.ps1",
   );

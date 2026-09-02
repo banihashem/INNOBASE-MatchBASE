@@ -101,6 +101,35 @@ export class DatabaseConsultantReportModelBuilder implements ConsultantReportMod
       throw new Error(
         "Consultant report requires at least one evidence record.",
       );
+    const completeResultClaims = row.complete_result_document.claims;
+    if (!Array.isArray(completeResultClaims))
+      throw new Error("Consultant report claim risk lineage is invalid.");
+    const completeResultClaimById = new Map<
+      string,
+      Readonly<Record<string, unknown>>
+    >();
+    for (const claim of completeResultClaims) {
+      if (
+        claim === null ||
+        typeof claim !== "object" ||
+        Array.isArray(claim) ||
+        typeof claim.claim_id !== "string" ||
+        completeResultClaimById.has(claim.claim_id)
+      )
+        throw new Error("Consultant report claim risk lineage is invalid.");
+      completeResultClaimById.set(claim.claim_id, claim);
+    }
+    const reportClaimRisk = (claim: Readonly<Record<string, unknown>>) => {
+      const sourceClaim = completeResultClaimById.get(String(claim.claim_id));
+      if (
+        !sourceClaim ||
+        typeof sourceClaim.high_risk !== "boolean" ||
+        typeof sourceClaim.decision_bearing !== "boolean" ||
+        sourceClaim.decision_bearing !== claim.decision_bearing
+      )
+        throw new Error("Consultant report claim risk lineage is invalid.");
+      return sourceClaim.high_risk;
+    };
     const display = (value: unknown) =>
       typeof value === "string" || typeof value === "number"
         ? String(value)
@@ -316,7 +345,7 @@ export class DatabaseConsultantReportModelBuilder implements ConsultantReportMod
               claim.decision_bearing === true
                 ? ("eligibility" as const)
                 : ("context" as const),
-            high_risk: claim.decision_bearing === true,
+            high_risk: reportClaimRisk(claim),
             section_ids: Object.freeze([
               "SEC-09" as const,
               "SEC-11.2" as const,

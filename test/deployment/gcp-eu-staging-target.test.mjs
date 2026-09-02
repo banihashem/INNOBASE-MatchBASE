@@ -13,7 +13,7 @@ const deployPath = fileURLToPath(
 );
 const policyPath = fileURLToPath(
   new URL(
-    "../../config/slice3/research-route-policy.staging.v3.json",
+    "../../config/slice3/research-route-policy.staging.v4.json",
     import.meta.url,
   ),
 );

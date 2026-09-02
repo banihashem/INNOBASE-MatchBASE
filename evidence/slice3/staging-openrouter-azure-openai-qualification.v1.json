@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "matchbase.staging-openrouter-route-qualification/v1",
+  "environment": "staging",
+  "syntheticOnly": true,
+  "rawProviderPayloadPersisted": false,
+  "credentialsDisclosed": false,
+  "route": {
+    "path": "openrouter",
+    "requestedProviderId": "azure",
+    "servedProviderName": "Azure",
+    "requestedModelId": "openai/gpt-5.4-mini",
+    "servedRouterModelId": "openai/gpt-5.4-mini-20260317",
+    "requestLevelZdr": true,
+    "dataCollection": "deny",
+    "requireParameters": true,
+    "allowFallbacks": false,
+    "providerOnly": ["azure"],
+    "providerOrder": ["azure"]
+  },
+  "liveCatalogObservation": {
+    "endpoint": "https://openrouter.ai/api/v1/endpoints/zdr",
+    "httpStatus": 200,
+    "modelId": "openai/gpt-5.4-mini",
+    "providerName": "Azure",
+    "providerTag": "azure",
+    "status": 0,
+    "responseFormatSupported": true,
+    "structuredOutputsSupported": true
+  },
+  "billableSyntheticProbes": [
+    {
+      "httpStatus": 200,
+      "elapsedMs": 4332,
+      "finishReason": "stop",
+      "inputTokens": 2635,
+      "outputTokens": 632,
+      "costUsd": 0.00482025,
+      "evidenceGraphValidation": "passed"
+    },
+    {
+      "httpStatus": 200,
+      "elapsedMs": 12785,
+      "finishReason": "stop",
+      "inputTokens": 2635,
+      "outputTokens": 2256,
+      "costUsd": 0.01057305,
+      "evidenceGraphValidation": "passed"
+    }
+  ],
+  "terminalDisposition": "PASS",
+  "recordedAt": "2026-09-02T14:45:00.000Z",
+  "officialEvidenceRefs": [
+    "https://openrouter.ai/openai/gpt-5.4-mini",
+    "https://openrouter.ai/docs/guides/features/structured-outputs",
+    "https://openrouter.ai/docs/guides/routing/provider-selection",
+    "https://openrouter.ai/docs/guides/features/zdr",
+    "https://openrouter.ai/docs/api/api-reference/endpoints/list-endpoints-zdr"
+  ]
+}

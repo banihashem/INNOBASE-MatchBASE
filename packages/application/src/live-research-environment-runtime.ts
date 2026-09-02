@@ -350,19 +350,40 @@ function hasOnlyKeys(
   return Object.keys(value).every((key) => allowed.has(key));
 }
 
-const OPENROUTER_ROUTER_MODELS = new Set([
-  "google/gemini-3.6-flash",
-  "google/gemini-3.6-flash-20260721",
-]);
+const OPENROUTER_ROUTE_IDENTITIES = Object.freeze({
+  "google/gemini-3.6-flash": Object.freeze({
+    providerNames: new Set(["Google", "Google Vertex"]),
+    servedProviderId: "google-vertex",
+    routerModels: new Set([
+      "google/gemini-3.6-flash",
+      "google/gemini-3.6-flash-20260721",
+    ]),
+  }),
+  "openai/gpt-5.4-mini": Object.freeze({
+    providerNames: new Set(["Azure"]),
+    servedProviderId: "azure",
+    routerModels: new Set([
+      "openai/gpt-5.4-mini",
+      "openai/gpt-5.4-mini-20260317",
+    ]),
+  }),
+} as const);
 
-function auditedOpenRouterRoute(
-  value: unknown,
-): Readonly<{ provider: "Google" | "Google Vertex"; model: string }> {
+function auditedOpenRouterRoute(value: unknown): Readonly<{
+  provider: string;
+  model: string;
+  requestedModel: keyof typeof OPENROUTER_ROUTE_IDENTITIES;
+  servedProviderId: "google-vertex" | "azure";
+}> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("OpenRouter routing metadata is invalid.");
   const routing = value as Record<string, unknown>;
+  const requestedModel = String(
+    routing.requested,
+  ) as keyof typeof OPENROUTER_ROUTE_IDENTITIES;
+  const identity = OPENROUTER_ROUTE_IDENTITIES[requestedModel];
   if (
-    routing.requested !== "google/gemini-3.6-flash" ||
+    !identity ||
     routing.strategy !== "direct" ||
     routing.attempt !== 1 ||
     ("is_byok" in routing && routing.is_byok !== false) ||
@@ -394,14 +415,13 @@ function auditedOpenRouterRoute(
       throw new Error("OpenRouter routing metadata is invalid.");
     const candidate = entry as Record<string, unknown>;
     if (
-      (candidate.provider !== "Google" &&
-        candidate.provider !== "Google Vertex") ||
-      !OPENROUTER_ROUTER_MODELS.has(String(candidate.model)) ||
+      !identity.providerNames.has(String(candidate.provider)) ||
+      !identity.routerModels.has(String(candidate.model)) ||
       typeof candidate.selected !== "boolean"
     )
       throw new Error("OpenRouter routing metadata is invalid.");
     return candidate as {
-      provider: "Google" | "Google Vertex";
+      provider: string;
       model: string;
       selected: boolean;
     };
@@ -429,6 +449,8 @@ function auditedOpenRouterRoute(
   return Object.freeze({
     provider: selected[0]!.provider,
     model: selected[0]!.model,
+    requestedModel,
+    servedProviderId: identity.servedProviderId,
   });
 }
 
@@ -535,7 +557,7 @@ export class EnvironmentProviderTransport implements ProviderTransport {
       const completionTokens = usage?.completion_tokens;
       const totalCost = Number(usage?.cost);
       if (
-        envelope.model !== "google/gemini-3.6-flash" ||
+        envelope.model !== selectedRoute.requestedModel ||
         typeof finishReason !== "string" ||
         !Number.isSafeInteger(promptTokens) ||
         Number(promptTokens) < 0 ||
@@ -548,6 +570,8 @@ export class EnvironmentProviderTransport implements ProviderTransport {
       openRouterMetadata = {
         id: generationId,
         provider_name: selectedRoute.provider,
+        served_provider_id: selectedRoute.servedProviderId,
+        requested_model: selectedRoute.requestedModel,
         model: selectedRoute.model,
         finish_reason: finishReason,
         tokens_prompt: promptTokens,
@@ -567,10 +591,7 @@ export class EnvironmentProviderTransport implements ProviderTransport {
     const servedProvider =
       this.provider === "gemini_direct"
         ? "google"
-        : openRouterMetadata?.provider_name === "Google" ||
-            openRouterMetadata?.provider_name === "Google Vertex"
-          ? "google-vertex"
-          : null;
+        : openRouterMetadata?.served_provider_id;
     return {
       status: response.status,
       body: response.ok

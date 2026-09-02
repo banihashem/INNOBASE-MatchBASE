@@ -10,7 +10,7 @@ steps:
       - --build-arg
       - DEPLOYMENT_ENVIRONMENT=staging
       - --build-arg
-      - ROUTE_POLICY_PATH=config/slice3/research-route-policy.staging.v3.json
+      - ROUTE_POLICY_PATH=config/slice3/research-route-policy.staging.v4.json
       - --build-arg
       - ROUTE_POLICY_SHA256=${_ROUTE_POLICY_SHA256}
       - --tag
@@ -27,7 +27,7 @@ steps:
       - --build-arg
       - DEPLOYMENT_ENVIRONMENT=staging
       - --build-arg
-      - ROUTE_POLICY_PATH=config/slice3/research-route-policy.staging.v3.json
+      - ROUTE_POLICY_PATH=config/slice3/research-route-policy.staging.v4.json
       - --build-arg
       - ROUTE_POLICY_SHA256=${_ROUTE_POLICY_SHA256}
       - --tag

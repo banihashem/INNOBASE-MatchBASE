@@ -29,7 +29,7 @@ test("governed Staging Cloud Build binds exact Git material, images and provenan
   assert.equal(
     (
       config.match(
-        /ROUTE_POLICY_PATH=config\/slice3\/research-route-policy\.staging\.v3\.json/gu,
+        /ROUTE_POLICY_PATH=config\/slice3\/research-route-policy\.staging\.v4\.json/gu,
       ) ?? []
     ).length,
     2,
@@ -101,6 +101,6 @@ test("governed Staging Cloud Build binds exact Git material, images and provenan
   assert.match(publisher, /extra or missing binding/u);
   assert.match(
     publisher,
-    /b752d2d42a63aaad11f3b89f67bad64861ce767f633bee8190549df23a6f4155/u,
+    /aa6b7e3e1c720fdc6c30ef7ebfa4fcc0e60fd4dbb41d73cee33f511b0adbddec/u,
   );
 });

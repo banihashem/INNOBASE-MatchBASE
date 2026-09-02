@@ -281,9 +281,15 @@ class QualifiedOpenRouterAdapter {
           ],
           response_format: {
             type: "json_schema",
-            json_schema: requestInput.outputSchema,
+            json_schema: {
+              name: "matchbase_evidence_graph_v1",
+              strict: false,
+              schema: requestInput.outputSchema,
+            },
           },
-          max_tokens: route.parameterPolicy.maxOutputTokens,
+          ...(route.requestedModelId === "openai/gpt-5.4-mini"
+            ? { max_completion_tokens: route.parameterPolicy.maxOutputTokens }
+            : { max_tokens: route.parameterPolicy.maxOutputTokens }),
         }),
         signal: attemptSignal,
       }),

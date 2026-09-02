@@ -206,6 +206,9 @@ test("OpenRouter adapter serializes one explicit provider and disables broker fa
     temperature?: unknown;
     top_p?: unknown;
     top_k?: unknown;
+    max_tokens?: unknown;
+    max_completion_tokens?: unknown;
+    response_format?: unknown;
   };
   assert.equal(body.model, "google/gemini-2.5-flash");
   assert.deepEqual(body.provider, {
@@ -220,6 +223,16 @@ test("OpenRouter adapter serializes one explicit provider and disables broker fa
   assert.equal(body.top_p, undefined);
   assert.equal(body.top_k, undefined);
   assert.equal(body.plugins, undefined);
+  assert.equal(body.max_tokens, 2048);
+  assert.equal(body.max_completion_tokens, undefined);
+  assert.deepEqual(body.response_format, {
+    type: "json_schema",
+    json_schema: {
+      name: "matchbase_evidence_graph_v1",
+      strict: false,
+      schema: request().outputSchema,
+    },
+  });
   assert.equal(body.messages[0]?.role, "user");
   assert.match(
     body.messages[0]?.content,
@@ -389,6 +402,53 @@ test("both adapters fail attempts closed when served identity is missing or alte
   assert.equal(outcomes[1]?.servedProviderId, "other-provider");
   assert.equal(outcomes[1]?.servedModelId, "google/gemini-2.5-flash");
   assert.equal(outcomes[1]?.requestedModelId, "google/gemini-2.5-flash");
+});
+
+test("OpenRouter adapter uses the OpenAI completion-token parameter on the qualified Azure route", async () => {
+  const policy = qualifiedPolicy();
+  const openrouter = policy.routes[1]!;
+  const azurePolicy = {
+    ...policy,
+    routes: [
+      policy.routes[0]!,
+      {
+        ...openrouter,
+        routeId: "RT-OPENROUTER-AZURE-OPENAI-S3-V1",
+        providerId: "azure",
+        requestedModelId: "openai/gpt-5.4-mini",
+        expectedServedModelId: "openai/gpt-5.4-mini",
+      },
+    ],
+  };
+  const transport = new RecordingFakeTransport({
+    status: 200,
+    body: { candidates: [] },
+    servedIdentity: {
+      providerId: "azure",
+      modelId: "openai/gpt-5.4-mini",
+    },
+    accounting: {
+      state: "priced",
+      quantity: 1,
+      unit: "request",
+      amount: 0.01,
+      currency: "USD",
+      pricingVersion: "openrouter-openai-test.v1",
+      measurement: "measured",
+    },
+  });
+  await createQualifiedOpenRouterAdapter({
+    policy: azurePolicy,
+    routeId: "RT-OPENROUTER-AZURE-OPENAI-S3-V1",
+    activatedAt,
+    transport,
+    onAttempt: () => undefined,
+  }).generateStructured(request(), execution, new AbortController().signal);
+  const body = JSON.parse(transport.requests[0]?.body ?? "null");
+  assert.equal(body.max_completion_tokens, 2048);
+  assert.equal(body.max_tokens, undefined);
+  assert.deepEqual(body.provider.only, ["azure"]);
+  assert.deepEqual(body.provider.order, ["azure"]);
 });
 
 test("qualified adapters reject missing or noncanonical English before transport", async () => {

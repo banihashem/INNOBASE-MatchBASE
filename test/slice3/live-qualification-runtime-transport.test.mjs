@@ -41,6 +41,108 @@ function completion(overrides = {}) {
   };
 }
 
+function azureCompletion(overrides = {}) {
+  return completion({
+    model: "openai/gpt-5.4-mini",
+    openrouter_metadata: {
+      requested: "openai/gpt-5.4-mini",
+      strategy: "direct",
+      attempt: 1,
+      endpoints: {
+        total: 1,
+        available: [
+          {
+            provider: "Azure",
+            model: "openai/gpt-5.4-mini-20260317",
+            selected: true,
+          },
+        ],
+      },
+      pipeline: [],
+      is_byok: false,
+    },
+    ...overrides,
+  });
+}
+
+test("production OpenRouter transport accepts only the qualified Azure OpenAI identity", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    jsonResponse(azureCompletion(), {
+      "x-generation-id": "generation-runtime-id",
+    });
+  try {
+    const transport = new EnvironmentProviderTransport(
+      "openrouter",
+      "test-secret",
+      0.1,
+      "test-pricing",
+      "request",
+    );
+    const result = await transport.send({
+      url: "https://openrouter.ai/api/v1/chat/completions",
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+      signal: new AbortController().signal,
+    });
+    assert.deepEqual(result.servedIdentity, {
+      providerId: "azure",
+      modelId: "openai/gpt-5.4-mini",
+    });
+    assert.equal(result.accounting?.state, "priced");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("production OpenRouter transport rejects an OpenAI provider on the Azure-only route", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    const base = azureCompletion();
+    return jsonResponse(
+      azureCompletion({
+        openrouter_metadata: {
+          ...base.openrouter_metadata,
+          endpoints: {
+            total: 1,
+            available: [
+              {
+                provider: "OpenAI",
+                model: "openai/gpt-5.4-mini-20260317",
+                selected: true,
+              },
+            ],
+          },
+          is_byok: true,
+        },
+      }),
+      { "x-generation-id": "generation-runtime-id" },
+    );
+  };
+  try {
+    const transport = new EnvironmentProviderTransport(
+      "openrouter",
+      "test-secret",
+      0.1,
+      "test-pricing",
+      "request",
+    );
+    await assert.rejects(
+      transport.send({
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+        signal: new AbortController().signal,
+      }),
+      /routing metadata is invalid/iu,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("production OpenRouter transport reconciles in-band POST metadata without fallback", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];

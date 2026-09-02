@@ -218,8 +218,10 @@ Canary routing adds only the closed canary host rule/path matcher and verifies
 that the main Staging URL-map default service did not change.
 Before producing Canary evidence, run `Configure-StagingCanaryEdge.ps1` in plan
 mode and then Apply with the exact project confirmation. It reserves Cloud Armor
-priorities `2000..2014` for the closed Cloudflare IPv4 list and exact Canary
-Host while preserving original priorities `1000..1014` and default deny. It
+priorities `2000` and `2001` for two bounded expressions covering the closed
+Cloudflare IPv4 list, exact Canary Host, and admission header while preserving
+original priorities `1000..1014` and default deny. The two-rule layout stays
+inside the project rule quota and the provider expression-count limit. It
 creates Certificate Manager DNS authorizations for both exact hostnames. Their
 CNAMEs remain DNS-only in Cloudflare while the application A remains proxied.
 After authorization, a dual-SAN certificate and exact main/Canary certificate
@@ -241,9 +243,11 @@ creates or reconciles the proxied A record to the governed global IPv4, and
 refuses to proceed unless the zone already uses Full (strict). A proxied A
 record supplies Cloudflare public IPv4 and IPv6 edge answers; evidence requires
 both public A and AAAA resolution even though the origin connection is bound to
-the governed IPv4. Canary OAuth acceptance is blocked until Cloud Armor rules,
-certificate `ACTIVE`/SANs, HTTPS proxy attachment, proxied DNS, A/AAAA answers,
-Full strict, and the redacted admission-value hash all pass independently.
+the governed IPv4. The 2026-09-02 edge application completed: Cloud Armor rules,
+certificate `ACTIVE`/SANs, certificate-map proxy attachment, proxied DNS,
+A/AAAA answers, Full strict, exact-host route isolation, and the rotated
+admission secret are operational. These facts satisfy the edge prerequisite;
+they do not by themselves satisfy authenticated Canary acceptance.
 The candidate Ready condition and exact revision are derived from the live
 Cloud Run service. OAuth callback, canonicalization, run creation, terminal
 result, and PDF timestamps must all follow candidate readiness. The producer

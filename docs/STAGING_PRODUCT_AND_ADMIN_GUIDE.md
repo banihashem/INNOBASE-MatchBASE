@@ -3,6 +3,8 @@
 ## Environment
 
 - Public entry point: `https://matchbase-staging.innobase.app/`
+- Isolated Europe Canary:
+  `https://matchbase-staging-eu-canary.innobase.app/`
 - Environment: isolated Staging only
 - Authentication: Google OAuth
 - Research route: server-assigned; the UI must display either `Synthetic reference` or `Qualified live research`
@@ -100,6 +102,13 @@ ordering, and exact served-provider/model identity.
 For an ordinary user, use the workspace `Profile` control and repeat steps 4–8.
 If the profile has more than 50 requests or runs, use `Load more history` until
 no continuation remains.
+
+During the governed Europe migration, run the same sequence on the isolated
+Canary hostname before changing the public main route. A Canary pass must bind
+the Google-authenticated browser journey, exact agricultural request, terminal
+structured result, Consultant PDF, database lineage, provider cost, direct
+origin denial, target-region revision identities, and append-only signed
+evidence. A public landing-page response alone is not Canary acceptance.
 
 ## Failure handling
 
@@ -203,3 +212,32 @@ Absent configuration remains fail-closed.
   sign-in because the existing browser session returned `/api/v1/me` HTTP
   `401`.
 - Production was not mutated.
+
+## 2026-09-02 Europe Staging migration checkpoint
+
+- Application candidate:
+  `dbefc73403a2077d3c09876ecf9db7b51c34e37a`.
+- Governed migration control-plane candidate:
+  `a0da3b9d676813e69f05f7c276c0db1f5e402882`, published to
+  `origin/main`.
+- Connected-repository Cloud Build:
+  `c5e46468-b14d-4cce-9895-33d1f0f3d09c`, `SUCCESS`.
+- Web digest in source and Europe:
+  `sha256:45a9cb9848cab20ba0a1b5d08a3d8c10ed944e68c3159b136ad5c4b753c4f4ad`.
+- Worker digest in source and Europe:
+  `sha256:a1fefec5774b855712bb177a03ac8c33d1e1f0dbead047b86a59368dc5cb75f2`.
+- Source revisions: web `matchbase-staging-web-00051-l9q`; worker pool
+  `matchbase-staging-worker-00062-zxc`.
+- Europe revisions: main web `matchbase-staging-web-00002-cw9`; isolated
+  Canary web `matchbase-staging-web-canary-ew2-00004-jqf`; worker pool
+  `matchbase-staging-worker-00004-w6h`.
+- The dual-SAN Certificate Manager certificate is active. The URL map contains
+  only the exact Canary host rule and retains the source backend as the default.
+- The origin-admission secret was rotated, installed as new Secret Manager
+  versions in both regions, applied to the exact Cloudflare Canary transform
+  rule, and consumed by fresh Cloud Run revisions. Do not use the retired local
+  credential value.
+- Migration ledger checkpoints `Preflight`, `RegionalFoundation`, and
+  `DatabaseRehearsal` passed in order. `Canary` is next.
+- Europe residency and public cutover are not yet claimed. Production remains
+  untouched.

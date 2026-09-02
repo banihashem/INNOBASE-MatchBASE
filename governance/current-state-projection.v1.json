@@ -1,12 +1,23 @@
 {
   "schemaVersion": 1,
-  "projectionId": "MATCHBASE-CURRENT-STATE-2026-09-01-P5",
-  "observedAt": "2026-09-01T18:00:00+04:00",
+  "projectionId": "MATCHBASE-CURRENT-STATE-2026-09-02-P5-EU-MIGRATION",
+  "observedAt": "2026-09-02T08:12:29+04:00",
   "precedence": "ADDITIVE_CURRENT_STATE_OVERLAY",
   "historicalRecordsRemainImmutable": true,
   "repository": {
     "name": "banihashem/INNOBASE-MatchBASE",
     "branch": "main",
+    "migrationControlPlaneCandidate": {
+      "sourceCommit": "a0da3b9d676813e69f05f7c276c0db1f5e402882",
+      "publication": "PUSHED_TO_ORIGIN_MAIN",
+      "scope": "Governed Staging region-migration control plane; application image identity remains separately bound"
+    },
+    "deployedApplicationCandidate": {
+      "sourceCommit": "dbefc73403a2077d3c09876ecf9db7b51c34e37a",
+      "buildId": "c5e46468-b14d-4cce-9895-33d1f0f3d09c",
+      "buildStatus": "SUCCESS_CONNECTED_REPOSITORY",
+      "publication": "PUSHED_TO_ORIGIN_MAIN_AND_DEPLOYED_TO_SOURCE_AND_TARGET_STAGING"
+    },
     "deployedPredecessor": {
       "sourceCommit": "1224b4c485a9f3533a15e1d50b606f7aa53c2d23",
       "status": "HISTORICAL_DEPLOYED_PREDECESSOR"
@@ -77,8 +88,8 @@
         "status": "FAILURE",
         "disposition": "HISTORICAL_RETAINED"
       },
-      "currentPatch": "PUBLISHED_AND_DEPLOYED",
-      "nextState": "AUTHENTICATED_EXACT_REQUEST_AND_PDF_LIVE_ACCEPTANCE_PENDING"
+      "currentPatch": "HISTORICAL_SUCCESSOR_RETAINED",
+      "nextState": "EU_CANARY_AUTHENTICATED_EXACT_REQUEST_AND_PDF_ACCEPTANCE_PENDING"
     },
     "deploymentAdmission": {
       "role2Disposition": "PASS_REPOSITORY_REMEDIATION_ONLY",
@@ -87,20 +98,41 @@
       "mainRegion": "VALIDATE_DIRECT_IMAGE_PROVENANCE",
       "euRegion": "VALIDATE_EXACT_LIVE_TARGET_IDENTITY_AND_DETERMINISTIC_SAME_NAME_SAME_DIGEST_ME_CENTRAL1_SOURCE_PROVENANCE",
       "buildB68Images": "DUAL_PROVENANCE_VALIDATED_BUT_NOT_EXACT_BUILD_RECORD_ADMITTED_OR_DEPLOYABLE",
-      "currentPatch": "PUBLISHED_AND_DEPLOYED",
-      "remaining": "AUTHENTICATED_EXACT_REQUEST_AND_PDF_LIVE_ACCEPTANCE_PENDING"
+      "currentPatch": "EU_MIGRATION_CANDIDATE_PUBLISHED_AND_DEPLOYED_TO_BOTH_STAGING_REGIONS",
+      "remaining": "SIGNED_CANARY_ACCEPTANCE_THEN_MAINTENANCE_FINAL_RESTORE_AND_CUTOVER"
     }
   },
   "staging": {
-    "status": "SUCCESSOR_DEPLOYED_AUTHENTICATED_LIVE_ACCEPTANCE_PENDING",
+    "status": "EU_MIGRATION_CHECKPOINT_3_DATABASE_REHEARSAL_PASS_CANARY_PENDING",
     "project": "innobase-matchbase-stg",
     "region": "me-central1",
     "publicOrigin": "https://matchbase-staging.innobase.app",
-    "webRevision": "matchbase-staging-web-00036-g4l",
-    "webImage": "sha256:088f3a29fadc0bc9caedfd7f93fd19767a3d6d434fc3a0d333d09b20029ae071",
+    "webRevision": "matchbase-staging-web-00051-l9q",
+    "webImage": "sha256:45a9cb9848cab20ba0a1b5d08a3d8c10ed944e68c3159b136ad5c4b753c4f4ad",
     "webTrafficPercent": 100,
-    "workerRevision": "matchbase-staging-worker-00048-f4t",
-    "workerImage": "sha256:9f0422c70e09bf24f654d8c4e7af4241ef8dd5305af862b62e04e8d134da4816",
+    "workerRevision": "matchbase-staging-worker-00062-zxc",
+    "workerImage": "sha256:a1fefec5774b855712bb177a03ac8c33d1e1f0dbead047b86a59368dc5cb75f2",
+    "europeTarget": {
+      "region": "europe-west2",
+      "canaryOrigin": "https://matchbase-staging-eu-canary.innobase.app",
+      "webRevision": "matchbase-staging-web-00002-cw9",
+      "canaryWebRevision": "matchbase-staging-web-canary-ew2-00004-jqf",
+      "webImage": "sha256:45a9cb9848cab20ba0a1b5d08a3d8c10ed944e68c3159b136ad5c4b753c4f4ad",
+      "workerRevision": "matchbase-staging-worker-00004-w6h",
+      "workerImage": "sha256:a1fefec5774b855712bb177a03ac8c33d1e1f0dbead047b86a59368dc5cb75f2",
+      "routeIsolation": "EXACT_CANARY_HOST_ONLY_NO_WILDCARD",
+      "edgeCertificate": "ACTIVE_DUAL_SAN_CERTIFICATE_MAP",
+      "originAdmission": "ROTATED_SECRET_MANAGER_AUTHORITY_AND_DEPLOYED_CLOUDFLARE_RULE",
+      "databaseMigrationLedger": {
+        "schema": "matchbase-staging-region-migration-ledger.v1",
+        "passedCheckpoints": [
+          "Preflight",
+          "RegionalFoundation",
+          "DatabaseRehearsal"
+        ],
+        "nextCheckpoint": "Canary"
+      }
+    },
     "routePolicy": "slice3-routes.2026-09-01.staging-qualified-v3",
     "routePolicySha256": "B752D2D42A63AAAD11F3B89F67BAD64861CE767F633BEE8190549DF23A6F4155",
     "schemaHead": "0013_domain_pack_v2_and_legacy_annotation",
@@ -121,8 +153,8 @@
     "productionStatus": "UNTOUCHED",
     "deploymentRelationship": "PUBLISHED_SOURCE_EQUALS_SUCCESSFULLY_BUILT_AND_DEPLOYED_SUCCESSOR",
     "publicAcceptance": "PASS_QUALIFIED_LIVE_RESEARCH_LANDING_PAGE",
-    "authenticatedAcceptance": "PENDING_FRESH_GOOGLE_SIGN_IN_EXISTING_SESSION_API_ME_HTTP_401",
-    "processingResidency": "NONCONFORMING_STAGING_ME_CENTRAL1_VS_OWNER_EUROPE_REQUIREMENT"
+    "authenticatedAcceptance": "SOURCE_PREDECESSOR_ACCEPTANCE_RETAINED_EU_CANARY_FRESH_GOOGLE_SIGN_IN_PENDING",
+    "processingResidency": "MIGRATION_IN_PROGRESS_SOURCE_REMAINS_ME_CENTRAL1_UNTIL_SIGNED_CUTOVER"
   },
   "capabilities": [
     {
@@ -155,13 +187,13 @@
       "id": "P5-GATE-STAGING",
       "name": "P5 Staging operational evidence",
       "status": "ACTIVE",
-      "summary": "Successor revisions, schema head 0013 and PDF runtime are deployed; authenticated exact-request/PDF acceptance awaits fresh sign-in."
+      "summary": "The exact application candidate is deployed in both Staging regions; signed EU Canary exact-request/PDF acceptance is the next checkpoint."
     },
     {
       "id": "P5-GATE-UX",
       "name": "P5 identity, profile and oversight UX",
       "status": "ACTIVE",
-      "summary": "Revision 00036 public acceptance passed; authenticated UX and PDF acceptance awaits fresh sign-in."
+      "summary": "The isolated EU Canary landing page and origin-admission boundary passed; authenticated UX and PDF acceptance awaits a fresh Google sign-in."
     },
     {
       "id": "P5-GATE-CONTROL-PLANE",
@@ -173,13 +205,13 @@
       "id": "ROADMAP-P5-HARDENING",
       "name": "Roadmap P5 evaluation and hardening",
       "status": "BLOCKED",
-      "summary": "Blocked only by authenticated exact-request/PDF live acceptance, Europe residency, and SME validation plus separate production authorization."
+      "summary": "Blocked by signed EU Canary acceptance, remaining governed cutover checkpoints, and SME validation plus separate production authorization."
     },
     {
       "id": "ROADMAP-P6-PILOT",
       "name": "Roadmap P6 pilot admission",
       "status": "BLOCKED",
-      "summary": "Pilot and production remain blocked by authenticated live acceptance, Europe residency, SME validation and separate production authorization."
+      "summary": "Pilot and production remain blocked by EU Canary acceptance, completed Staging cutover, SME validation and separate production authorization."
     }
   ],
   "currentBacklog": [
@@ -199,8 +231,9 @@
     {
       "id": "P5-HARDENING-REGION",
       "title": "Converge Staging processing and persistent storage on the owner-authorized Europe boundary",
-      "status": "OPEN",
-      "owner": "Platform, Security and Privacy"
+      "status": "IN_PROGRESS_CHECKPOINT_3_OF_7_PASS",
+      "owner": "Platform, Security and Privacy",
+      "summary": "Preflight, RegionalFoundation and DatabaseRehearsal are append-only signed ledger entries; Canary is next."
     },
     {
       "id": "P5-SME-PRODUCTION-WEIGHTS",
@@ -270,8 +303,8 @@
     "slices": ["SLICE-0", "SLICE-1"]
   },
   "knownBlockers": [
-    "Authenticated exact-request, terminal result and PDF live acceptance await a fresh Google sign-in because the existing browser session returned /api/v1/me HTTP 401.",
-    "Staging remains in me-central1 and does not satisfy the owner-authorized Europe processing and persistent-storage boundary.",
+    "EU Canary authenticated exact-request, terminal result and PDF acceptance await a fresh Google sign-in and signed evidence capture.",
+    "The public main origin still routes to me-central1 until Canary, Maintenance, FinalRestore and Cutover checkpoints pass; Europe target runtime and database rehearsal are ready but do not yet constitute residency convergence.",
     "Production scoring weights require documented SME validation.",
     "Production release requires separate authorization and production remains untouched."
   ],

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-01T18:00:00+04:00",
+  "updatedAt": "2026-09-02T08:12:29+04:00",
   "currentProjectionRef": "governance/current-state-projection.v1.json",
   "builds": [
     {
@@ -26,11 +26,17 @@
     },
     {
       "id": "BUILD-P5-STAGING-WEB-00036",
-      "status": "ACTIVE",
-      "summary": "Published successor 1236a782 is deployed as web revision matchbase-staging-web-00036-g4l. Public acceptance passed; authenticated exact-request/PDF acceptance awaits fresh sign-in. Production is untouched.",
+      "status": "HISTORICAL_SUPERSEDED",
+      "summary": "Published successor 1236a782 was deployed as web revision matchbase-staging-web-00036-g4l and remains historical acceptance evidence. It was superseded by the dual-region Staging migration candidate. Production is untouched.",
       "evidenceRefs": [
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_UX_CORRECTIVE_LOOP_2026-09-01.md"
       ]
+    },
+    {
+      "id": "BUILD-P5-EU-MIGRATION-C5E46468",
+      "status": "ACTIVE_CANARY_PENDING",
+      "summary": "Connected-repository build c5e46468-b14d-4cce-9895-33d1f0f3d09c built exact application commit dbefc734 and published the web and worker digests now running in both Staging regions. Signed authenticated EU Canary acceptance is pending.",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"]
     },
     {
       "id": "BUILD-P5-PRIVATE-SOURCE-2DC5254A",
@@ -201,9 +207,16 @@
     },
     {
       "id": "PROV-P5-STAGING-SUCCESSOR",
-      "status": "PASS",
+      "status": "HISTORICAL_SUPERSEDED",
       "source": "https://github.com/banihashem/INNOBASE-MatchBASE/commit/1236a78203f62ff32f7db8b7519c724aa620b8bf",
       "note": "Published source, successful build and current Staging web/worker revisions are bound to the same governed successor identity.",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"]
+    },
+    {
+      "id": "PROV-P5-EU-MIGRATION-CANDIDATE",
+      "status": "PASS_DEPLOYED_CANARY_PENDING",
+      "source": "https://github.com/banihashem/INNOBASE-MatchBASE/commit/dbefc73403a2077d3c09876ecf9db7b51c34e37a",
+      "note": "Exact connected-repository application source and immutable web/worker digests are deployed in me-central1 and europe-west2. The separately published migration control-plane candidate is recorded in the current-state projection. Three ordered migration-ledger checkpoints passed; Canary is next.",
       "evidenceRefs": ["governance/current-state-projection.v1.json"]
     },
     {
@@ -220,7 +233,7 @@
     {
       "id": "ARTIFACT-DEPLOY-P5-STAGING-WEB",
       "title": "Current P5 Staging web successor revision 00036",
-      "status": "ACTIVE",
+      "status": "HISTORICAL_SUPERSEDED",
       "target": "innobase-matchbase-stg / me-central1",
       "revision": "matchbase-staging-web-00036-g4l",
       "image": "sha256:088f3a29fadc0bc9caedfd7f93fd19767a3d6d434fc3a0d333d09b20029ae071",
@@ -234,7 +247,7 @@
     {
       "id": "ARTIFACT-DEPLOY-P5-STAGING-WORKER",
       "title": "Current P5 Staging worker successor revision 00048",
-      "status": "ACTIVE",
+      "status": "HISTORICAL_SUPERSEDED",
       "target": "innobase-matchbase-stg / me-central1",
       "revision": "matchbase-staging-worker-00048-f4t",
       "image": "sha256:9f0422c70e09bf24f654d8c4e7af4241ef8dd5305af862b62e04e8d134da4816",
@@ -244,6 +257,32 @@
       "evidenceRefs": [
         "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\P5_STAGING_PROFILE_ADMIN_EXECUTION_RECORD_2026-09-01.md"
       ]
+    },
+    {
+      "id": "ARTIFACT-DEPLOY-P5-EU-MIGRATION-WEB",
+      "title": "Dual-region Staging web migration candidate",
+      "status": "ACTIVE_CANARY_PENDING",
+      "target": "innobase-matchbase-stg / me-central1 + europe-west2 isolated Canary",
+      "sourceRevision": "matchbase-staging-web-00051-l9q",
+      "targetRevision": "matchbase-staging-web-00002-cw9",
+      "canaryRevision": "matchbase-staging-web-canary-ew2-00004-jqf",
+      "image": "sha256:45a9cb9848cab20ba0a1b5d08a3d8c10ed944e68c3159b136ad5c4b753c4f4ad",
+      "production": "UNTOUCHED",
+      "relationship": "EXACT_DIGEST_EQUALITY_EDGE_READY_SIGNED_CANARY_PENDING",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"]
+    },
+    {
+      "id": "ARTIFACT-DEPLOY-P5-EU-MIGRATION-WORKER",
+      "title": "Dual-region Staging worker migration candidate",
+      "status": "ACTIVE_CANARY_PENDING",
+      "target": "innobase-matchbase-stg / me-central1 + europe-west2",
+      "sourceRevision": "matchbase-staging-worker-00062-zxc",
+      "targetRevision": "matchbase-staging-worker-00004-w6h",
+      "image": "sha256:a1fefec5774b855712bb177a03ac8c33d1e1f0dbead047b86a59368dc5cb75f2",
+      "migrationHead": "0013_domain_pack_v2_and_legacy_annotation",
+      "production": "UNTOUCHED",
+      "relationship": "EXACT_DIGEST_EQUALITY_DATABASE_REHEARSAL_PASS_CANARY_PENDING",
+      "evidenceRefs": ["governance/current-state-projection.v1.json"]
     }
   ]
 }

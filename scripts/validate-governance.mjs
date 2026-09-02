@@ -50,14 +50,34 @@ if (
     "6d0b0a4f-ce12-452d-bf2b-441599bfb66b" ||
   currentState.repository.cloudBuildLinkedSource.lastBuild.sourceRevision !==
     "1236a78203f62ff32f7db8b7519c724aa620b8bf" ||
-  currentState.staging.webRevision !== "matchbase-staging-web-00036-g4l" ||
+  currentState.repository.migrationControlPlaneCandidate.sourceCommit !==
+    "a0da3b9d676813e69f05f7c276c0db1f5e402882" ||
+  currentState.repository.deployedApplicationCandidate.sourceCommit !==
+    "dbefc73403a2077d3c09876ecf9db7b51c34e37a" ||
+  currentState.repository.deployedApplicationCandidate.buildId !==
+    "c5e46468-b14d-4cce-9895-33d1f0f3d09c" ||
+  currentState.staging.webRevision !== "matchbase-staging-web-00051-l9q" ||
   currentState.staging.workerRevision !==
-    "matchbase-staging-worker-00048-f4t" ||
+    "matchbase-staging-worker-00062-zxc" ||
+  currentState.staging.europeTarget.region !== "europe-west2" ||
+  currentState.staging.europeTarget.webRevision !==
+    "matchbase-staging-web-00002-cw9" ||
+  currentState.staging.europeTarget.canaryWebRevision !==
+    "matchbase-staging-web-canary-ew2-00004-jqf" ||
+  currentState.staging.europeTarget.workerRevision !==
+    "matchbase-staging-worker-00004-w6h" ||
+  currentState.staging.europeTarget.routeIsolation !==
+    "EXACT_CANARY_HOST_ONLY_NO_WILDCARD" ||
+  currentState.staging.europeTarget.databaseMigrationLedger.nextCheckpoint !==
+    "Canary" ||
+  currentState.staging.europeTarget.databaseMigrationLedger.passedCheckpoints.join(
+    ",",
+  ) !== "Preflight,RegionalFoundation,DatabaseRehearsal" ||
   currentState.staging.schemaHead !==
     "0013_domain_pack_v2_and_legacy_annotation" ||
   currentState.staging.productionStatus !== "UNTOUCHED" ||
   currentState.staging.status !==
-    "SUCCESSOR_DEPLOYED_AUTHENTICATED_LIVE_ACCEPTANCE_PENDING" ||
+    "EU_MIGRATION_CHECKPOINT_3_DATABASE_REHEARSAL_PASS_CANARY_PENDING" ||
   currentState.staging.pdfRuntime.status !== "ENABLED"
 ) {
   throw new Error("Current-state projection identity is invalid.");

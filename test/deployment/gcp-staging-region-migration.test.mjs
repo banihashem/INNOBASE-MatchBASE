@@ -438,10 +438,7 @@ test("source retirement requires full versioned artifact reconciliation and pers
   assert.match(migration, /Convert-StorageLsInventory/u);
   assert.match(migration, /\.metadata\.crc32c|metadata\.crc32c/u);
   assert.match(producer, /persisted_artifact_uris/u);
-  assert.match(
-    producer,
-    /json_agg\(storage_uri ORDER BY storage_uri\)/u,
-  );
+  assert.match(producer, /json_agg\(storage_uri ORDER BY storage_uri\)/u);
   assert.match(producer, /<QUERY_ON_STDIN>/u);
   assert.match(migration, /Assert-ArtifactInventoryReconciled/u);
   assert.match(

@@ -7,7 +7,12 @@ if (!connectionString?.startsWith("postgres")) {
 }
 let query = "";
 for await (const chunk of process.stdin) query += chunk;
-if (!/^\s*SELECT\b/iu.test(query) || /\b(?:INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE|GRANT|REVOKE|COPY)\b/iu.test(query)) {
+if (
+  !/^\s*SELECT\b/iu.test(query) ||
+  /\b(?:INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE|GRANT|REVOKE|COPY)\b/iu.test(
+    query,
+  )
+) {
   throw new Error("Only one closed read-only SELECT is accepted.");
 }
 const client = new pg.Client({ connectionString });
@@ -19,10 +24,14 @@ try {
     throw new Error("Closed evidence query must return one scalar row.");
   }
   const value = result.rows[0][0];
-  process.stdout.write(typeof value === "string" ? value : JSON.stringify(value));
+  process.stdout.write(
+    typeof value === "string" ? value : JSON.stringify(value),
+  );
   await client.query("COMMIT");
 } catch (error) {
-  try { await client.query("ROLLBACK"); } catch {}
+  try {
+    await client.query("ROLLBACK");
+  } catch {}
   throw error;
 } finally {
   await client.end();

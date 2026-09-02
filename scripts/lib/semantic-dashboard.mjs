@@ -462,31 +462,38 @@ export function buildSemanticViews(documents) {
       ? [
           {
             id: "EXT-CURRENT-GITHUB",
-            title: "Deployed predecessor source",
+            title: "Published application and control-plane identities",
             status: "PASS",
-            summary: `${currentState.repository.name} deployed predecessor source is ${currentState.repository.deployedPredecessor.sourceCommit}. Current source state is projected separately.`,
+            summary: `${currentState.repository.name} application candidate ${currentState.repository.deployedApplicationCandidate?.sourceCommit ?? currentState.repository.deployedPredecessor.sourceCommit}; migration control-plane candidate ${currentState.repository.migrationControlPlaneCandidate?.sourceCommit ?? "not recorded"}; historical predecessor retained separately.`,
             sourceCommit:
+              currentState.repository.deployedApplicationCandidate
+                ?.sourceCommit ??
               currentState.repository.deployedPredecessor.sourceCommit,
             evidenceRefs: currentState.evidenceRefs,
             _sourceRef: documents.currentState.sourceRef,
           },
           {
             id: "EXT-CURRENT-WORKTREE-CANDIDATE",
-            title: "Current remediation source transition",
-            status: "ACTIVE",
-            summary: `State ${documents.worktreeCandidate.kind}; HEAD ${documents.worktreeCandidate.baseCommit}; origin/main ${documents.worktreeCandidate.originMain}; deployed ${!documents.worktreeCandidate.dirty && documents.worktreeCandidate.baseCommit === currentState.repository.deployedPredecessor.sourceCommit}; identity ${documents.worktreeCandidate.sha256}.`,
-            ...documents.worktreeCandidate,
-            deployed:
+            title: "Current control-plane source",
+            status:
               !documents.worktreeCandidate.dirty &&
               documents.worktreeCandidate.baseCommit ===
-                currentState.repository.deployedPredecessor.sourceCommit,
+                documents.worktreeCandidate.originMain
+                ? "PASS"
+                : "ACTIVE",
+            summary: `State ${documents.worktreeCandidate.kind}; HEAD ${documents.worktreeCandidate.baseCommit}; origin/main ${documents.worktreeCandidate.originMain}; published source match ${!documents.worktreeCandidate.dirty && documents.worktreeCandidate.baseCommit === documents.worktreeCandidate.originMain}; identity ${documents.worktreeCandidate.sha256}.`,
+            ...documents.worktreeCandidate,
+            deployed:
+              documents.worktreeCandidate.baseCommit ===
+              currentState.repository.deployedApplicationCandidate
+                ?.sourceCommit,
             _sourceRef: documents.currentState.sourceRef,
           },
           {
             id: "EXT-CURRENT-GCP-STAGING",
             title: "Current Google Cloud Staging",
             status: "ACTIVE",
-            summary: `${currentState.staging.project} in ${currentState.staging.region}; deployed predecessor web ${currentState.staging.webRevision}; current remediation pending deployment; Europe residency requirement unmet.`,
+            summary: `${currentState.staging.project}; source ${currentState.staging.region} web ${currentState.staging.webRevision}; Europe ${currentState.staging.europeTarget?.region ?? "not recorded"} main ${currentState.staging.europeTarget?.webRevision ?? "not recorded"}, Canary ${currentState.staging.europeTarget?.canaryWebRevision ?? "not recorded"}; ${currentState.staging.processingResidency}.`,
             project: currentState.staging.project,
             region: currentState.staging.region,
             webRevision: currentState.staging.webRevision,
@@ -498,7 +505,7 @@ export function buildSemanticViews(documents) {
             id: "EXT-CURRENT-CLOUDFLARE-STAGING",
             title: "Current Staging edge origin",
             status: "ACTIVE",
-            summary: `${currentState.staging.publicOrigin}; deployed predecessor route policy ${currentState.staging.routePolicy}; current remediation pending deployment.`,
+            summary: `${currentState.staging.publicOrigin}; isolated Canary ${currentState.staging.europeTarget?.canaryOrigin ?? "not recorded"}; route isolation ${currentState.staging.europeTarget?.routeIsolation ?? "not recorded"}; certificate ${currentState.staging.europeTarget?.edgeCertificate ?? "not recorded"}.`,
             origin: currentState.staging.publicOrigin,
             routePolicy: currentState.staging.routePolicy,
             evidenceRefs: currentState.evidenceRefs,
@@ -508,7 +515,7 @@ export function buildSemanticViews(documents) {
             id: "EXT-CURRENT-DEPLOYMENT",
             title: "Current P5 Staging deployment",
             status: "BLOCKED",
-            summary: `Deployed predecessor revision ${currentState.staging.webRevision} serves ${currentState.staging.webTrafficPercent} percent; the runtime-derived current remediation source is not bound to a successor deployment; Staging status ${currentState.staging.status}; production ${currentState.staging.productionStatus}.`,
+            summary: `Source revision ${currentState.staging.webRevision} serves the main route; exact-digest Europe candidate and isolated Canary are Ready; migration ${currentState.staging.europeTarget?.databaseMigrationLedger?.passedCheckpoints?.join(" -> ") ?? "not recorded"}; next ${currentState.staging.europeTarget?.databaseMigrationLedger?.nextCheckpoint ?? "not recorded"}; production ${currentState.staging.productionStatus}.`,
             webRevision: currentState.staging.webRevision,
             trafficPercent: currentState.staging.webTrafficPercent,
             migrationHead: currentState.staging.schemaHead,

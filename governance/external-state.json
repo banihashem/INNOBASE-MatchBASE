@@ -59,7 +59,7 @@
   "historicalObservation": true,
   "currentProjectionRef": "governance/current-state-projection.v1.json",
   "currentProjection": {
-    "observedAt": "2026-09-01T18:00:00+04:00",
+    "observedAt": "2026-09-02T08:12:29+04:00",
     "github": {
       "repository": "banihashem/INNOBASE-MatchBASE",
       "branch": "main",
@@ -70,9 +70,10 @@
       "cloudBuildRepositoryResource": "projects/innobase-matchbase-stg/locations/me-central1/connections/matchbase-github/repositories/matchbase",
       "githubAppScope": "SELECTED_REPOSITORIES_INCLUDES_MATCHBASE_NOT_ALL_REPOSITORIES",
       "deployedPredecessorSourceCommit": "1224b4c485a9f3533a15e1d50b606f7aa53c2d23",
-      "deployedSuccessorSourceCommit": "1236a78203f62ff32f7db8b7519c724aa620b8bf",
-      "status": "PUBLISHED_SUCCESSOR_DEPLOYED",
-      "relationship": "HISTORICAL_PREDECESSOR_RETAINED;_PUBLISHED_SUCCESSOR_IS_CURRENT"
+      "deployedSuccessorSourceCommit": "dbefc73403a2077d3c09876ecf9db7b51c34e37a",
+      "migrationControlPlaneCandidate": "a0da3b9d676813e69f05f7c276c0db1f5e402882",
+      "status": "PUBLISHED_DUAL_REGION_STAGING_CANDIDATE_DEPLOYED",
+      "relationship": "HISTORICAL_PREDECESSOR_RETAINED;_APPLICATION_CANDIDATE_AND_CONTROL_PLANE_IDENTITIES_SEPARATELY_BOUND"
     },
     "gcp": {
       "project": "innobase-matchbase-stg",
@@ -118,18 +119,25 @@
         "arrayCountPatchTests": "PUBLISHED"
       },
       "failedImmediatePredecessorBuild": "fe5c0b5b-2bcb-40e6-8304-76850d226336",
-      "readiness": "SUCCESSOR_DEPLOYED_AUTHENTICATED_ACCEPTANCE_PENDING",
+      "readiness": "EU_MIGRATION_CHECKPOINT_3_PASS_CANARY_PENDING",
       "production": "UNTOUCHED"
     },
     "cloudflare": {
       "zone": "innobase.app",
       "origin": "https://matchbase-staging.innobase.app",
-      "readiness": "PUBLIC_ACCEPTANCE_PASS_AUTHENTICATED_ACCEPTANCE_PENDING"
+      "canaryOrigin": "https://matchbase-staging-eu-canary.innobase.app",
+      "readiness": "DUAL_SAN_EDGE_AND_EXACT_CANARY_ROUTE_PASS_AUTHENTICATED_ACCEPTANCE_PENDING"
     },
     "deployment": {
-      "status": "SUCCESSOR_DEPLOYED_AUTHENTICATED_ACCEPTANCE_PENDING",
-      "webRevision": "matchbase-staging-web-00036-g4l",
-      "workerRevision": "matchbase-staging-worker-00048-f4t",
+      "status": "EU_MIGRATION_CHECKPOINT_3_PASS_CANARY_PENDING",
+      "webRevision": "matchbase-staging-web-00051-l9q",
+      "workerRevision": "matchbase-staging-worker-00062-zxc",
+      "europeWebRevision": "matchbase-staging-web-00002-cw9",
+      "europeCanaryWebRevision": "matchbase-staging-web-canary-ew2-00004-jqf",
+      "europeWorkerRevision": "matchbase-staging-worker-00004-w6h",
+      "webDigest": "sha256:45a9cb9848cab20ba0a1b5d08a3d8c10ed944e68c3159b136ad5c4b753c4f4ad",
+      "workerDigest": "sha256:a1fefec5774b855712bb177a03ac8c33d1e1f0dbead047b86a59368dc5cb75f2",
+      "migrationLedger": "PREFLIGHT_REGIONALFOUNDATION_DATABASEREHEARSAL_PASS_CANARY_NEXT",
       "migrationHead": "0013_domain_pack_v2_and_legacy_annotation",
       "verifiedBackup": "1788284251034_SUCCESSFUL",
       "pdfRuntime": "ENABLED_EXACT_DIGEST_BOUND",

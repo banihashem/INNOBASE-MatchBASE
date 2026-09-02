@@ -538,6 +538,9 @@ export function buildConsultantResultProjectionV2(input: {
     ],
   });
   const eligibleRanking = ranked.map(rankedReference);
+  const consultantReferencedEvidenceIds = new Set(
+    eligibleRanking.flatMap((entry) => entry.evidence_ids),
+  );
   const readStatuses = standardEvidenceReadStatuses(
     graph,
     input.projectionAsOf,
@@ -565,10 +568,17 @@ export function buildConsultantResultProjectionV2(input: {
               verification_disposition: "excluded" as const,
               exclusion_reason: evidence.exclusion_reason,
             }
-          : {
-              ...common,
-              verification_disposition: "accepted" as const,
-            }
+          : !consultantReferencedEvidenceIds.has(evidence.evidence_id)
+            ? {
+                ...common,
+                verification_disposition: "excluded" as const,
+                exclusion_reason:
+                  "Source fact is not referenced by an eligible Consultant candidate.",
+              }
+            : {
+                ...common,
+                verification_disposition: "accepted" as const,
+              }
       ) as ConsultantSourceFactV2;
     },
   );

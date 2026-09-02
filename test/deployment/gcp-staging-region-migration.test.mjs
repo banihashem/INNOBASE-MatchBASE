@@ -728,6 +728,7 @@ test("ledger hash chain rejects cross-candidate substitution", async () => {
 
 test("EU acceptance binds closed origins, live service identity, exact result, and PDF bytes", async () => {
   const common = await read("../../deployment/gcp/Common.ps1");
+  const migration = await read("../../deployment/gcp/Migrate-StagingRegion.ps1");
   const producer = await read(
     "../../deployment/gcp/New-StagingRegionEvidence.ps1",
   );
@@ -751,6 +752,9 @@ test("EU acceptance binds closed origins, live service identity, exact result, a
   assert.match(producer, /run\.googleapis\.com\/urls/u);
   assert.match(producer, /cloudRunOrigin -cnotin \$declaredCloudRunUrls/u);
   assert.match(producer, /PSObject\.Properties\['value'\]/u);
+  assert.match(validator, /terminalRun\.state !== "completed"/u);
+  assert.match(producer, /scripts\/validate-staging-eu-acceptance\.mjs/u);
+  assert.match(migration, /scripts\/validate-staging-eu-acceptance\.mjs/u);
   assert.match(validator, /result\.run_id !== runId/u);
   assert.match(validator, /connectOverCDP/u);
   assert.match(validator, /\/auth\/google\/start/u);

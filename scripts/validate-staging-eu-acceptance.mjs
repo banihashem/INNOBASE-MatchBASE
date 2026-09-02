@@ -450,7 +450,7 @@ try {
   if (
     !terminalRun?.terminal ||
     !terminalRun.result_available ||
-    !["complete", "no_responsible_match"].includes(terminalRun.state)
+    terminalRun.state !== "completed"
   )
     throw new Error(
       "The exact agricultural run did not reach a result-bearing terminal state.",

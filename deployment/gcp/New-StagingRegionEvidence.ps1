@@ -56,7 +56,10 @@ if ($account -cnotmatch '^[^\s@]+@[^\s@]+$') { throw "Active gcloud account is m
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..") -ErrorAction Stop).Path
 $headCommit = (& git -C $repoRoot rev-parse HEAD 2>&1 | Out-String).Trim()
 $worktreeState = (& git -C $repoRoot status --porcelain=v1 --untracked-files=all 2>&1 | Out-String)
-if ($LASTEXITCODE -ne 0 -or $headCommit -cne $CandidateCommit -or -not [string]::IsNullOrWhiteSpace($worktreeState)) { throw "Evidence production requires exact candidate HEAD and a clean tracked/untracked worktree." }
+$allowedControlPlanePaths=@("deployment/gcp/Common.ps1","deployment/gcp/Configure-StagingCanaryEdge.ps1","deployment/gcp/Migrate-StagingRegion.ps1","deployment/gcp/New-StagingRegionEvidence.ps1","test/deployment/gcp-eu-staging-target.test.mjs","test/deployment/gcp-staging-region-migration.test.mjs")
+if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace($worktreeState)) { throw "Evidence production requires a clean tracked/untracked worktree." }
+& git -C $repoRoot merge-base --is-ancestor $CandidateCommit $headCommit 2>$null;if($LASTEXITCODE-ne0){throw "The image candidate commit must be an ancestor of the evidence control-plane commit."}
+$controlPlaneDeltaPaths=@(& git -C $repoRoot diff --name-only "$CandidateCommit..$headCommit" 2>&1|Where-Object{-not[string]::IsNullOrWhiteSpace($_)}|Sort-Object);if($LASTEXITCODE-ne0-or@($controlPlaneDeltaPaths|Where-Object{$_-cnotin$allowedControlPlanePaths}).Count){throw "Only the closed staging migration control-plane paths may differ from the image candidate."}
 $captures = @(
   (Invoke-ReadOnlyCapture -Id "project" -Arguments @("projects", "describe", $project, "--format=json(projectId,lifecycleState,parent)")),
   (Invoke-ReadOnlyCapture -Id "source-web" -Arguments @("run", "services", "describe", "matchbase-staging-web", "--project=$project", "--region=$sourceRegion", "--format=json")),
@@ -224,6 +227,7 @@ $document = [ordered]@{
   captured_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
   principal = [ordered]@{ active_account = $account; active_project = $activeProject }
   tools = [ordered]@{ gcloud = [string]$gcloudVersion."Google Cloud SDK"; powershell = $PSVersionTable.PSVersion.ToString() }
+  control_plane = [ordered]@{ commit = $headCommit; candidate_is_ancestor = $true; delta_paths = $controlPlaneDeltaPaths }
   candidate = [ordered]@{ commit = $CandidateCommit; web_source_image_digest = $WebSourceImageDigest; worker_source_image_digest = $WorkerSourceImageDigest; web_build_provenance_sha256 = $webProvenance.stdout_sha256; worker_build_provenance_sha256 = $workerProvenance.stdout_sha256; web_provenance_binding = $webProvenanceBinding; worker_provenance_binding = $workerProvenanceBinding }
   predecessor_ledger = $ledgerBinding
   facts = $facts

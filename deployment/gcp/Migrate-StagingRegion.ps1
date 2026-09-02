@@ -202,10 +202,13 @@ function Get-GovernedEvidence {
   $activeProject = (Invoke-MigrationGcloud -Arguments @("config", "get-value", "project") | Out-String).Trim()
   if ($evidence.principal.active_account -cne $activeAccount -or $evidence.principal.active_project -cne $ProjectId -or $activeProject -cne $ProjectId) { throw "Evidence principal no longer matches the active gcloud identity." }
   if ($evidence.candidate.web_source_image_digest -cne $WebSourceImageDigest -or $evidence.candidate.worker_source_image_digest -cne $WorkerSourceImageDigest) { throw "Evidence candidate image digests do not match Apply arguments." }
-  $candidateCommit = (& git -C (Join-Path $PSScriptRoot "..\..") rev-parse HEAD 2>&1 | Out-String).Trim()
-  if ($LASTEXITCODE -ne 0 -or $evidence.candidate.commit -cne $candidateCommit) { throw "Evidence candidate commit does not match the checked-out repository HEAD." }
-  $worktreeState = (& git -C (Join-Path $PSScriptRoot "..\..") status --porcelain=v1 --untracked-files=all 2>&1 | Out-String)
+  $repoRoot=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..") -ErrorAction Stop).Path
+  $controlPlaneCommit = (& git -C $repoRoot rev-parse HEAD 2>&1 | Out-String).Trim();$candidateCommit=[string]$evidence.candidate.commit
+  $worktreeState = (& git -C $repoRoot status --porcelain=v1 --untracked-files=all 2>&1 | Out-String)
   if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace($worktreeState)) { throw "Apply requires a clean tracked and untracked worktree." }
+  if($evidence.control_plane.commit-cne$controlPlaneCommit-or-not$evidence.control_plane.candidate_is_ancestor){throw "Evidence control-plane commit does not match the checked-out repository HEAD."}
+  & git -C $repoRoot merge-base --is-ancestor $candidateCommit $controlPlaneCommit 2>$null;if($LASTEXITCODE-ne0){throw "The evidence image candidate is not an ancestor of the checked-out control plane."}
+  $allowedControlPlanePaths=@("deployment/gcp/Common.ps1","deployment/gcp/Configure-StagingCanaryEdge.ps1","deployment/gcp/Migrate-StagingRegion.ps1","deployment/gcp/New-StagingRegionEvidence.ps1","test/deployment/gcp-eu-staging-target.test.mjs","test/deployment/gcp-staging-region-migration.test.mjs");$actualDelta=@(& git -C $repoRoot diff --name-only "$candidateCommit..$controlPlaneCommit" 2>&1|Where-Object{-not[string]::IsNullOrWhiteSpace($_)}|Sort-Object);$signedDelta=@($evidence.control_plane.delta_paths|Sort-Object);if($LASTEXITCODE-ne0-or@($actualDelta|Where-Object{$_-cnotin$allowedControlPlanePaths}).Count-or($actualDelta-join",")-cne($signedDelta-join",")){throw "Signed control-plane delta is outside the closed path set or does not match HEAD."}
   foreach ($result in @($evidence.raw_results)) {
     if ([string]$result.stdout_sha256 -cne (Get-Sha256Text -Text ([string]$result.stdout))) { throw "Evidence raw-result hash is invalid for '$($result.id)'." }
   }

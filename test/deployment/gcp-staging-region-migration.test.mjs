@@ -848,6 +848,10 @@ test("candidate evidence rejects dirty worktrees and unprovenanced image substit
     "../../deployment/gcp/Migrate-StagingRegion.ps1",
   );
   assert.match(producer, /status --porcelain=v1 --untracked-files=all/u);
+  assert.match(producer, /merge-base --is-ancestor/u);
+  assert.match(producer, /allowedControlPlanePaths/u);
+  assert.match(producer, /candidate_is_ancestor = \$true/u);
+  assert.match(migration, /Signed control-plane delta is outside/u);
   assert.match(producer, /--show-provenance/u);
   assert.match(producer, /candidate-web-build-provenance/u);
   assert.match(producer, /candidate-worker-build-provenance/u);

@@ -805,7 +805,7 @@ if (Test-Checkpoint -Name "DatabaseRehearsal") {
 
 if (Test-Checkpoint -Name "Canary") {
   Write-CheckpointHeader -Name "Canary" -Purpose "Verify governed EU runtime deployments, create unattached EU application and real maintenance paths, and retain the current public route."
-  Write-Output "Prerequisite: apply Configure-StagingCanaryEdge.ps1, then produce signed Canary evidence proving the consolidated closed Armor rule at priority 2000, dual-host ACTIVE certificate, HTTPS proxy attachment, proxied DNS with public A/AAAA, Full strict, and redacted origin-admission transform identity."
+  Write-Output "Prerequisite: apply Configure-StagingCanaryEdge.ps1, then produce signed Canary evidence proving the two closed Armor rules at priorities 2000-2001, dual-host ACTIVE certificate, HTTPS proxy attachment, proxied DNS with public A/AAAA, Full strict, and redacted origin-admission transform identity."
   $canaryNegCreate = @("compute", "network-endpoint-groups", "create", [string]$migration.CanaryNetworkEndpointGroup, "--project=$ProjectId", "--region=$TargetRegion", "--network-endpoint-type=serverless", "--cloud-run-service=$($migration.CanaryWebService)", "--quiet")
   $canaryBackendCreate = @("compute", "backend-services", "create", [string]$migration.CanaryBackendService, "--project=$ProjectId", "--global", "--load-balancing-scheme=EXTERNAL_MANAGED", "--protocol=HTTP", "--timeout=30s", "--quiet")
   $canaryBackendAdd = @("compute", "backend-services", "add-backend", [string]$migration.CanaryBackendService, "--project=$ProjectId", "--global", "--network-endpoint-group=$($migration.CanaryNetworkEndpointGroup)", "--network-endpoint-group-region=$TargetRegion", "--quiet")

@@ -63,6 +63,7 @@ import {
   requestRequiresDatedCurrentStockEvidence,
   type SmeWeightValidationV2,
 } from "./live-complete-result-v2.js";
+import { liveResearchRunTerminalState } from "./live-research-terminal-state.js";
 import { standardCompleteResultDocumentSha256 } from "./standard-workspace.js";
 import { isTransientDatabaseConnectionFailure } from "./worker-runtime.js";
 
@@ -1690,16 +1691,26 @@ export class PostgresLiveResearchAtomicLedger {
             : null,
         ],
       );
-      const runState =
+      const persistedOutcome =
         record.disposition === "complete"
-          ? "complete"
-          : record.disposition === "cancelled"
-            ? "cancelled"
-            : "failed";
+          ? await client.query<{
+              outcome: "candidates" | "scarcity" | "no_responsible_match";
+            }>(
+              `SELECT outcome FROM run_result
+                WHERE account_id=$1 AND run_id=$2`,
+              [this.options.accountId, record.runId],
+            )
+          : null;
+      if (persistedOutcome !== null && persistedOutcome.rowCount !== 1)
+        throw new Error("Complete live result persistence is unavailable.");
+      const runState = liveResearchRunTerminalState(
+        record.disposition,
+        persistedOutcome?.rows[0]?.outcome ?? null,
+      );
       const runUpdated = await client.query(
         `UPDATE research_run
             SET state=$4,state_reason=$5,
-                completed_at=CASE WHEN $4 IN ('complete','failed','cancelled')
+                completed_at=CASE WHEN $4 IN ('complete','no_responsible_match','failed','cancelled')
                                   THEN $6::timestamptz ELSE NULL END,
                 cancelled_at=CASE WHEN $4='cancelled' THEN $6::timestamptz ELSE NULL END
           WHERE account_id=$1 AND run_id=$2

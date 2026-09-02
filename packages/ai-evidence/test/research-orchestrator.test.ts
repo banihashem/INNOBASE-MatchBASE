@@ -373,29 +373,89 @@ test("circuit-open primary route falls through without fabricating an attempt", 
   assert.equal(direct.requests.length, 0);
 });
 
-test("invalid result schema fails terminally without synthetic substitution", async () => {
+test("invalid primary result schema falls through once to the closed priced route", async () => {
   const ledger = new MemoryLedger();
+  const direct = new RecordingFakeTransport({
+    status: 200,
+    body: { candidates: ["A"], dimensionScores: "{" },
+    servedIdentity: {
+      providerId: "google",
+      modelId: "gemini-2.5-flash",
+    },
+    accounting,
+  });
+  const openrouter = new RecordingFakeTransport({
+    status: 200,
+    body: { candidates: ["A"] },
+    servedIdentity: {
+      providerId: "google",
+      modelId: "google/gemini-2.5-flash",
+    },
+    accounting,
+  });
+
+  const result = await executeQualifiedResearch({
+    ...base(ledger),
+    transports: { gemini_direct: direct, openrouter },
+    validateOutput: (body) => {
+      if ((body as { dimensionScores?: unknown }).dimensionScores === "{") {
+        throw new Error("Legacy dimensionScores JSON is invalid.");
+      }
+      return validateOutput(body);
+    },
+  });
+
+  assert.equal(result.disposition, "complete");
+  assert.equal(result.routes.length, 2);
+  assert.equal(result.routes[0]?.failureCode, "schema_violation");
+  assert.equal(result.routes[0]?.snapshot.servedProviderId, "google");
+  assert.equal(result.routes[0]?.snapshot.servedModelId, "gemini-2.5-flash");
+  assert.equal(result.routes[0]?.attempts[0]?.costState, "estimated");
+  assert.equal(result.routes[0]?.attempts[0]?.costAmount, accounting.amount);
+  assert.equal(result.routes[1]?.failureCode, null);
+  assert.deepEqual(result.result, { candidates: ["A"] });
+  assert.equal(direct.requests.length, 1);
+  assert.equal(openrouter.requests.length, 1);
+  assert.equal(ledger.commits, 1);
+});
+
+test("invalid result schema on every closed route fails without substitution", async () => {
+  const ledger = new MemoryLedger();
+  const direct = new RecordingFakeTransport({
+    status: 200,
+    body: { candidates: ["A", "B", "C", "D"] },
+    servedIdentity: {
+      providerId: "google",
+      modelId: "gemini-2.5-flash",
+    },
+    accounting,
+  });
+  const openrouter = new RecordingFakeTransport({
+    status: 200,
+    body: { candidates: ["A", "B", "C", "D"] },
+    servedIdentity: {
+      providerId: "google",
+      modelId: "google/gemini-2.5-flash",
+    },
+    accounting,
+  });
+
   await assert.rejects(
     executeQualifiedResearch({
       ...base(ledger),
-      transports: {
-        gemini_direct: new RecordingFakeTransport({
-          status: 200,
-          body: { candidates: ["A", "B", "C", "D"] },
-          servedIdentity: {
-            providerId: "google",
-            modelId: "gemini-2.5-flash",
-          },
-          accounting,
-        }),
-        openrouter: new RecordingFakeTransport(new Error("must not run")),
-      },
+      transports: { gemini_direct: direct, openrouter },
     }),
     /schema validation failed/iu,
   );
-  assert.equal(
-    ledger.records.get("EXEC-S3-001")?.reasonCode,
-    "schema_violation",
+  const terminal = ledger.records.get("EXEC-S3-001");
+  assert.equal(terminal?.reasonCode, "schema_violation");
+  assert.equal(terminal?.routes.length, 2);
+  assert.deepEqual(
+    terminal?.routes.map((route) => route.failureCode),
+    ["schema_violation", "schema_violation"],
   );
+  assert.equal(terminal?.result, null);
+  assert.equal(direct.requests.length, 1);
+  assert.equal(openrouter.requests.length, 1);
   assert.equal(ledger.commits, 1);
 });

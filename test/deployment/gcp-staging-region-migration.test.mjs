@@ -16,6 +16,9 @@ const evidenceProducerPath = fileURLToPath(
     import.meta.url,
   ),
 );
+const euAcceptanceValidatorPath = fileURLToPath(
+  new URL("../../scripts/validate-staging-eu-acceptance.mjs", import.meta.url),
+);
 const read = async (path) =>
   await readFile(new URL(path, import.meta.url), "utf8");
 
@@ -797,6 +800,59 @@ test("EU acceptance binds closed origins, live service identity, exact result, a
   assert.match(
     producer,
     /\$acceptance\.admin_inventory\.requester_user_id -cne \[string\]\$acceptance\.oauth_subject_user_id/u,
+  );
+});
+
+test("EU acceptance collector resolves the pinned browser runtime before validating inputs", () => {
+  const result = spawnSync(process.execPath, [euAcceptanceValidatorPath], {
+    encoding: "utf8",
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /--origin is required\./u);
+  assert.doesNotMatch(
+    result.stderr,
+    /ERR_MODULE_NOT_FOUND|Cannot find package ['"]playwright['"]/u,
+  );
+});
+
+test("EU acceptance requests and completes a fresh run-bound PDF before validating its grant", async () => {
+  const producer = await read(
+    "../../deployment/gcp/New-StagingRegionEvidence.ps1",
+  );
+  const validator = await read(
+    "../../scripts/validate-staging-eu-acceptance.mjs",
+  );
+
+  assert.match(producer, /'run_created_at',r\.queued_at/u);
+  assert.doesNotMatch(producer, /'run_created_at',r\.created_at/u);
+  assert.match(
+    validator,
+    /page\.request\.post\([\s\S]+`\/api\/v1\/runs\/\$\{runId\}\/artifacts`/u,
+  );
+  assert.match(validator, /"X-CSRF-Token": me\.csrf_token/u);
+  assert.match(
+    validator,
+    /"Idempotency-Key": `eu-canary-acceptance-pdf-\$\{runId\}`/u,
+  );
+  assert.match(validator, /reportRequest\.state !== "queued"/u);
+  assert.match(
+    validator,
+    /`\/api\/v1\/runs\/\$\{runId\}\/artifacts\/\$\{reportRequest\.job_id\}`/u,
+  );
+  assert.match(validator, /reportStatus\.state === "completed"/u);
+  assert.match(validator, /reportStatus\.state === "failed"/u);
+  assert.match(
+    validator,
+    /profileRun\.artifact_download\.artifact_version_id !==\s+reportRequest\.artifact_version_id/u,
+  );
+  assert.ok(
+    validator.indexOf("Fresh Consultant result") <
+      validator.indexOf("Fresh Consultant PDF request"),
+  );
+  assert.ok(
+    validator.indexOf("Fresh Consultant PDF generation timed out") <
+      validator.indexOf("Owner profile PDF grant"),
   );
 });
 

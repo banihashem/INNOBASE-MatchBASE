@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
-import { chromium } from "playwright";
+import { chromium } from "@playwright/test";
 
 const EXACT_AGRICULTURAL_REQUEST =
   "Procurement request for three containers of high-quality Iranian Ahmad Aghaei pistachios. The shipment must be routed via Dubai for distribution in the African market. The supplier should have at least one container currently available in stock.";
@@ -458,14 +458,14 @@ try {
 
   let profile;
   let profileRun;
-  const artifactDeadline = Date.now() + 900_000;
-  while (Date.now() < artifactDeadline) {
+  const profileDeadline = Date.now() + 180_000;
+  while (Date.now() < profileDeadline) {
     const profileResponse = await page.request.get(
       new URL("/api/v1/profile/history", origin).href,
     );
     profile = await requireJson(profileResponse, "Owner profile history");
     profileRun = profile?.runs?.find((item) => item.run_id === runId);
-    if (profileRun?.links?.result && profileRun?.artifact_download) break;
+    if (profileRun?.links?.result) break;
     await sleep(5_000);
   }
   const profileRequest = profile?.requests?.find(
@@ -475,12 +475,11 @@ try {
     profile?.current_tier !== "consultant" ||
     !profileRun?.links?.result ||
     profileRun.result_projection !== "consultant" ||
-    !profileRun.artifact_download ||
     !profileRequest ||
     !/Ahmad Aghaei pistachios/iu.test(profileRequest.canonical_summary ?? "")
   )
     throw new Error(
-      "The owner profile does not expose the fresh immutable Consultant agricultural result and PDF.",
+      "The owner profile does not expose the fresh immutable Consultant agricultural result.",
     );
 
   const resultApi = await page.request.get(
@@ -504,6 +503,79 @@ try {
       result.landscape.eligible_count !== 0)
   )
     throw new Error("Result contract is not bound to the fresh run.");
+
+  const reportRequestResponse = await page.request.post(
+    new URL(`/api/v1/runs/${runId}/artifacts`, origin).href,
+    {
+      headers: {
+        Accept: "application/json",
+        "X-CSRF-Token": me.csrf_token,
+        "Idempotency-Key": `eu-canary-acceptance-pdf-${runId}`,
+      },
+    },
+  );
+  const reportRequest = await requireJson(
+    reportRequestResponse,
+    "Fresh Consultant PDF request",
+  );
+  if (
+    reportRequest.run_id !== runId ||
+    !UUID_PATTERN.test(reportRequest.job_id ?? "") ||
+    !UUID_PATTERN.test(reportRequest.artifact_version_id ?? "") ||
+    !Number.isSafeInteger(reportRequest.version) ||
+    reportRequest.version < 1 ||
+    reportRequest.state !== "queued"
+  )
+    throw new Error("Fresh Consultant PDF request acknowledgement is invalid.");
+
+  let reportStatus = reportRequest;
+  const reportDeadline = Date.now() + 900_000;
+  while (Date.now() < reportDeadline) {
+    const reportStatusResponse = await page.request.get(
+      new URL(`/api/v1/runs/${runId}/artifacts/${reportRequest.job_id}`, origin)
+        .href,
+    );
+    reportStatus = await requireJson(
+      reportStatusResponse,
+      "Fresh Consultant PDF status",
+    );
+    if (
+      reportStatus.run_id !== runId ||
+      reportStatus.job_id !== reportRequest.job_id ||
+      reportStatus.artifact_version_id !== reportRequest.artifact_version_id ||
+      reportStatus.version !== reportRequest.version
+    )
+      throw new Error("Fresh Consultant PDF status identity drifted.");
+    if (reportStatus.state === "completed") break;
+    if (reportStatus.state === "failed")
+      throw new Error("Fresh Consultant PDF generation failed.");
+    if (!["queued", "claimed"].includes(reportStatus.state))
+      throw new Error("Fresh Consultant PDF status is invalid.");
+    await sleep(1_000);
+  }
+  if (reportStatus.state !== "completed")
+    throw new Error("Fresh Consultant PDF generation timed out.");
+
+  const artifactDeadline = Date.now() + 180_000;
+  while (Date.now() < artifactDeadline) {
+    const profileResponse = await page.request.get(
+      new URL("/api/v1/profile/history", origin).href,
+    );
+    profile = await requireJson(profileResponse, "Owner profile PDF grant");
+    profileRun = profile?.runs?.find((item) => item.run_id === runId);
+    if (profileRun?.artifact_download) break;
+    await sleep(5_000);
+  }
+  if (
+    profileRun?.artifact_download?.run_id !== runId ||
+    profileRun.artifact_download.artifact_version_id !==
+      reportRequest.artifact_version_id ||
+    profileRun.artifact_download.version !== reportRequest.version ||
+    !profileRun.artifact_download.href
+  )
+    throw new Error(
+      "The owner profile does not expose the fresh run-bound Consultant PDF.",
+    );
 
   const purpose =
     "Governed EU Canary acceptance: verify the fresh owner-bound run is present in Super-admin inventory.";

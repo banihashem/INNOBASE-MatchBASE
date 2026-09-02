@@ -257,6 +257,7 @@ export async function executeQualifiedResearch<TResult>(input: {
           attempts,
           failureCode: "schema_violation",
         });
+        if (routeDefinition !== routes.at(-1)) continue;
         const terminal = await commit("failed", "schema_violation", null);
         throw terminalError(
           `Live research output schema validation failed: ${

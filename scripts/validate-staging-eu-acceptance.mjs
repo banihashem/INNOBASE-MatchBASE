@@ -511,6 +511,7 @@ try {
     {
       headers: {
         Accept: "application/json",
+        Origin: origin.origin,
         "X-CSRF-Token": me.csrf_token,
         "Idempotency-Key": `eu-canary-acceptance-pdf-${runId}`,
       },

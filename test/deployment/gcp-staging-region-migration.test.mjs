@@ -715,6 +715,8 @@ test("canary edge plan closes Armor, TLS, Cloudflare DNS/header and preserves ma
   assert.match(route, /matchbase-staging-eu-canary/u);
   assert.match(route, /Canary URL-map ownership collision/u);
   assert.match(route, /main route changed/u);
+  assert.match(route, /PSObject\.Properties\['hostRules'\]/u);
+  assert.match(route, /PSObject\.Properties\['pathMatchers'\]/u);
   assert.match(
     result.stdout,
     /--domains=matchbase-staging\.innobase\.app,matchbase-staging-eu-canary\.innobase\.app/u,

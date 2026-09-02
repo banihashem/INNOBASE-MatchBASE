@@ -450,7 +450,8 @@ try {
   if (
     !terminalRun?.terminal ||
     !terminalRun.result_available ||
-    terminalRun.state !== "completed"
+    terminalRun.state !== "completed" ||
+    !["matched", "no_responsible_match"].includes(terminalRun.outcome)
   )
     throw new Error(
       "The exact agricultural run did not reach a result-bearing terminal state.",
@@ -498,8 +499,9 @@ try {
     !Number.isSafeInteger(result.landscape.eligible_count) ||
     !Number.isSafeInteger(result.landscape.displayed_count) ||
     result.landscape.eligible_count < result.landscape.displayed_count ||
-    (terminalRun.state === "complete" && result.landscape.eligible_count < 1) ||
-    (terminalRun.state === "no_responsible_match" &&
+    (terminalRun.outcome === "matched" &&
+      result.landscape.eligible_count < 1) ||
+    (terminalRun.outcome === "no_responsible_match" &&
       result.landscape.eligible_count !== 0)
   )
     throw new Error("Result contract is not bound to the fresh run.");

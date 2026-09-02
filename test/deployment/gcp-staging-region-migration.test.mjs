@@ -753,6 +753,8 @@ test("EU acceptance binds closed origins, live service identity, exact result, a
   assert.match(producer, /cloudRunOrigin -cnotin \$declaredCloudRunUrls/u);
   assert.match(producer, /PSObject\.Properties\['value'\]/u);
   assert.match(validator, /terminalRun\.state !== "completed"/u);
+  assert.match(validator, /terminalRun\.outcome === "matched"/u);
+  assert.match(validator, /terminalRun\.outcome === "no_responsible_match"/u);
   assert.match(producer, /scripts\/validate-staging-eu-acceptance\.mjs/u);
   assert.match(migration, /scripts\/validate-staging-eu-acceptance\.mjs/u);
   assert.match(validator, /result\.run_id !== runId/u);

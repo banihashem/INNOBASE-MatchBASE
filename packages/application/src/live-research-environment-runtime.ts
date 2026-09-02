@@ -357,7 +357,7 @@ const OPENROUTER_ROUTER_MODELS = new Set([
 
 function auditedOpenRouterRoute(
   value: unknown,
-): Readonly<{ provider: "Google Vertex"; model: string }> {
+): Readonly<{ provider: "Google" | "Google Vertex"; model: string }> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("OpenRouter routing metadata is invalid.");
   const routing = value as Record<string, unknown>;
@@ -394,13 +394,14 @@ function auditedOpenRouterRoute(
       throw new Error("OpenRouter routing metadata is invalid.");
     const candidate = entry as Record<string, unknown>;
     if (
-      candidate.provider !== "Google Vertex" ||
+      (candidate.provider !== "Google" &&
+        candidate.provider !== "Google Vertex") ||
       !OPENROUTER_ROUTER_MODELS.has(String(candidate.model)) ||
       typeof candidate.selected !== "boolean"
     )
       throw new Error("OpenRouter routing metadata is invalid.");
     return candidate as {
-      provider: "Google Vertex";
+      provider: "Google" | "Google Vertex";
       model: string;
       selected: boolean;
     };
@@ -408,21 +409,23 @@ function auditedOpenRouterRoute(
   const selected = candidates.filter((candidate) => candidate.selected);
   const attempts = routing.attempts;
   if (
-    !Array.isArray(attempts) ||
-    attempts.length !== 1 ||
+    (attempts !== undefined && !Array.isArray(attempts)) ||
+    (Array.isArray(attempts) && attempts.length > 1) ||
     selected.length !== 1
   )
     throw new Error("OpenRouter routing metadata is invalid.");
-  const attempt = attempts[0];
-  if (!attempt || typeof attempt !== "object" || Array.isArray(attempt))
-    throw new Error("OpenRouter routing metadata is invalid.");
-  const record = attempt as Record<string, unknown>;
-  if (
-    record.provider !== selected[0]!.provider ||
-    record.model !== selected[0]!.model ||
-    record.status !== 200
-  )
-    throw new Error("OpenRouter routing metadata is invalid.");
+  if (Array.isArray(attempts) && attempts.length === 1) {
+    const attempt = attempts[0];
+    if (!attempt || typeof attempt !== "object" || Array.isArray(attempt))
+      throw new Error("OpenRouter routing metadata is invalid.");
+    const record = attempt as Record<string, unknown>;
+    if (
+      record.provider !== selected[0]!.provider ||
+      record.model !== selected[0]!.model ||
+      record.status !== 200
+    )
+      throw new Error("OpenRouter routing metadata is invalid.");
+  }
   return Object.freeze({
     provider: selected[0]!.provider,
     model: selected[0]!.model,
@@ -564,7 +567,8 @@ export class EnvironmentProviderTransport implements ProviderTransport {
     const servedProvider =
       this.provider === "gemini_direct"
         ? "google"
-        : openRouterMetadata?.provider_name === "Google Vertex"
+        : openRouterMetadata?.provider_name === "Google" ||
+            openRouterMetadata?.provider_name === "Google Vertex"
           ? "google-vertex"
           : null;
     return {

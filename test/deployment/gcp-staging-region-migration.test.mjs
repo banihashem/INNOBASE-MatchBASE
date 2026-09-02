@@ -917,6 +917,11 @@ test("canary edge plan closes Armor, TLS, Cloudflare DNS/header and preserves ma
   );
   assert.match(
     edge,
+    /PSObject\.Properties\['sslCertificates'\]/u,
+    "an absent optional sslCertificates list must be treated as empty under StrictMode",
+  );
+  assert.match(
+    edge,
     /HTTPS proxy has unrelated classic certificate attachments/u,
   );
   assert.match(edge, /Certificate-map entry collision/u);

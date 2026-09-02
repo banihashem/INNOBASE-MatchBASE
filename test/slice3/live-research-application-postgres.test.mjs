@@ -228,6 +228,17 @@ postgresTest(
          VALUES($1,'CAP-SEARCH'),($1,'CAP-STRUCTURED-GENERATION')`,
         [directProviderRouteId],
       );
+      const openRouterProviderRouteId = randomUUID();
+      await pool.query(
+        `INSERT INTO provider_route(provider_route_id,route_id,capability,provider,model_id,environment,route_kind,data_handling_posture,timeout_ms,max_attempts,retry_policy,config_version,enabled)
+         VALUES($1,$2,'CAP-STRUCTURED-GENERATION','openrouter','google/gemini-2.5-flash','test','real_data','zdr_verified',1000,1,'{}','slice3-routes.v1',true)`,
+        [openRouterProviderRouteId, policy.routes[1].routeId],
+      );
+      await pool.query(
+        `INSERT INTO provider_route_capability(provider_route_id,capability)
+         VALUES($1,'CAP-SEARCH'),($1,'CAP-STRUCTURED-GENERATION')`,
+        [openRouterProviderRouteId],
+      );
 
       const seedRun = async (
         label,
@@ -390,6 +401,23 @@ postgresTest(
           };
         },
       };
+      const openRouter = new RecordingFakeTransport({
+        status: 200,
+        body: {},
+        servedIdentity: {
+          providerId: "google",
+          modelId: "google/gemini-2.5-flash",
+        },
+        accounting: {
+          state: "estimated",
+          quantity: 1,
+          unit: "request",
+          amount: 0.001,
+          currency: "USD",
+          pricingVersion: "slice3-pricing.v1",
+          measurement: "estimated",
+        },
+      });
       const sourceDiscoveryTransport = {
         async send(request) {
           discoveryCalls += 1;
@@ -455,7 +483,7 @@ postgresTest(
         ),
         providerTransports: {
           gemini_direct: direct,
-          openrouter: new RecordingFakeTransport(new Error("must not run")),
+          openrouter: openRouter,
         },
         circuit: {
           isRouteAvailable: async (_routeId, at) => {
@@ -2437,6 +2465,7 @@ postgresTest(
       );
       providerRunId = forgedVerificationRunId;
       forgeExternalVerification = true;
+      const openRouterRequestsBeforeForged = openRouter.requests.length;
       await assert.rejects(
         service.execute({
           ...execution,
@@ -2446,6 +2475,45 @@ postgresTest(
         }),
         /provider output cannot assert externally_verified|output schema validation failed/iu,
       );
+      assert.equal(
+        openRouter.requests.length,
+        openRouterRequestsBeforeForged + 1,
+      );
+      const forgedFallbackRequest = openRouter.requests.at(-1);
+      assert.equal(
+        forgedFallbackRequest.url,
+        "https://openrouter.ai/api/v1/chat/completions",
+      );
+      const forgedFallbackBody = JSON.parse(forgedFallbackRequest.body);
+      assert.equal(forgedFallbackBody.model, "google/gemini-2.5-flash");
+      assert.deepEqual(forgedFallbackBody.provider, {
+        zdr: true,
+        data_collection: "deny",
+        only: ["google"],
+        order: ["google"],
+        require_parameters: true,
+        allow_fallbacks: false,
+      });
+      const forgedRouteLedger = await pool.query(
+        `SELECT t.disposition,t.reason_code,
+                array_agg(pc.provider ORDER BY pc.route_id) providers,
+                array_agg(pc.route_id ORDER BY pc.route_id) route_ids,
+                bool_and(ca.outcome='ok') transport_attempts_succeeded
+           FROM live_research_terminal t
+           JOIN provider_call pc ON pc.account_id=t.account_id AND pc.run_id=t.run_id
+           JOIN capability_attempt ca
+             ON ca.capability_attempt_id=pc.capability_attempt_id
+          WHERE t.run_id=$1 AND ca.capability='CAP-STRUCTURED-GENERATION'
+          GROUP BY t.disposition,t.reason_code`,
+        [forgedVerificationRunId],
+      );
+      assert.deepEqual(forgedRouteLedger.rows[0], {
+        disposition: "failed",
+        reason_code: "schema_violation",
+        providers: ["gemini_direct", "openrouter"],
+        route_ids: ["RT-GEMINI-DIRECT-S3-V1", "RT-OPENROUTER-GOOGLE-S3-V1"],
+        transport_attempts_succeeded: true,
+      });
       assert.equal(
         (
           await pool.query(

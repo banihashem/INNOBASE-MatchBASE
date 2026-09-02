@@ -56,6 +56,10 @@ function deployPlan(overrides = {}) {
     `-RoutePolicyPath ${quote(policyPath)}`,
     `-WebSecretVersionRef ${array(selectedWebSecrets)}`,
     `-WorkerSecretVersionRef ${array(workerSecrets)}`,
+    `-PdfTemplateSha256 ${quote("1".repeat(64))}`,
+    `-PdfFontSha256 ${quote("2".repeat(64))}`,
+    `-PdfToolchainSha256 ${quote("3".repeat(64))}`,
+    `-PdfAllowedAttestationSha256 ${quote("4".repeat(64))}`,
     "-WebMaxInstances 2",
     "-WorkerInstances 1",
   ].join(" ");
@@ -83,6 +87,17 @@ test("Common exposes one exact closed EU Staging runtime target", () => {
     target.SecretNameMap.MATCHBASE_OPENROUTER_API_KEY,
     "matchbase-openrouter-api-key-ew2",
   );
+
+  const migrationCommand = `. '${commonPath.replaceAll("'", "''")}'; Get-MatchBaseStagingRegionMigration | ConvertTo-Json -Depth 5 -Compress`;
+  const migrationResult = spawnSync(
+    "pwsh",
+    ["-NoProfile", "-Command", migrationCommand],
+    { encoding: "utf8" },
+  );
+  assert.equal(migrationResult.status, 0, migrationResult.stderr);
+  const migration = JSON.parse(migrationResult.stdout.trim());
+  assert.equal(migration.HttpsProxyName, "matchbase-staging-https");
+  assert.equal(migration.CertificateName, "matchbase-staging-cert-v2");
 });
 
 test("EU Staging deploy plan binds region, database, bucket, identity, and secret map", () => {

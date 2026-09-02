@@ -20,6 +20,7 @@ param(
   [string]$EvidencePath = "",
   [string]$EvidenceSignaturePath = "",
   [ValidatePattern('^projects/innobase-matchbase-stg/locations/europe-west2/keyRings/[a-z0-9_-]+/cryptoKeys/[a-z0-9_-]+/cryptoKeyVersions/[1-9][0-9]*$')][string]$EvidenceKmsKeyVersion = "",
+  [ValidatePattern('^$|^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$')][string]$LedgerTrackId = "",
   [string]$GcranePath = "",
   [string]$PreviousEuWebRevision = "",
   [string]$PreviousEuWorkerImageDigest = "",
@@ -47,8 +48,18 @@ $LedgerSchemaVersion = "matchbase-staging-region-migration-ledger.v1"
 $EvidenceSchemaVersion = "matchbase-staging-region-checkpoint-evidence.v1"
 $PinnedGcraneVersion = "0.22.0"
 $PinnedGcraneExecutableSha256 = "094281bd4c98e1dbf805350f3f59a152244324fb86a4b4b908c741d012a9615d"
-$SourceLedgerUri = "gs://$($migration.SourceArtifactBucket)/migration-governance/staging-region-migration-ledger.v1.json"
-$TargetLedgerUri = "gs://$($migration.TargetArtifactBucket)/migration-governance/staging-region-migration-ledger.v1.json"
+$LedgerObject = if ([string]::IsNullOrEmpty($LedgerTrackId)) {
+  "migration-governance/staging-region-migration-ledger.v1.json"
+} else {
+  "migration-governance/tracks/$LedgerTrackId/staging-region-migration-ledger.v1.json"
+}
+$EvidenceObjectPrefix = if ([string]::IsNullOrEmpty($LedgerTrackId)) {
+  "migration-governance/evidence"
+} else {
+  "migration-governance/tracks/$LedgerTrackId/evidence"
+}
+$SourceLedgerUri = "gs://$($migration.SourceArtifactBucket)/$LedgerObject"
+$TargetLedgerUri = "gs://$($migration.TargetArtifactBucket)/$LedgerObject"
 $MaintenanceBaseSha256 = $MaintenanceBaseImageDigest.Split("@", 2)[1]
 $TargetMaintenanceImageDigest = "$TargetRegion-docker.pkg.dev/$ProjectId/$($migration.TargetArtifactRepository)/maintenance-node-base@$MaintenanceBaseSha256"
 $ForwardCheckpointOrder = @("Preflight", "RegionalFoundation", "DatabaseRehearsal", "Canary", "Maintenance", "FinalRestore", "Cutover", "SourceRetirement")
@@ -184,6 +195,7 @@ function Get-GovernedEvidence {
       $evidence.project_id -cne $ProjectId -or
       $evidence.source_region -cne $SourceRegion -or
       $evidence.target_region -cne $TargetRegion -or
+      [string]$evidence.ledger_track_id -cne $LedgerTrackId -or
       $evidence.outcome -cne "PASS") {
     throw "Checkpoint evidence identity or outcome is invalid."
   }
@@ -263,24 +275,44 @@ function Assert-ZeroFreezeEvidence {
   }
 }
 
-function Assert-LiveDatabaseMigrationHead {
+function Invoke-ClosedDatabaseScalarQuery {
+  param(
+    [Parameter(Mandatory)][string]$Query,
+    [Parameter(Mandatory)][string]$FailureMessage
+  )
+  if ([string]::IsNullOrWhiteSpace($env:MATCHBASE_EVIDENCE_DATABASE_URL)) {
+    throw "$FailureMessage MATCHBASE_EVIDENCE_DATABASE_URL is required and is never recorded."
+  }
   $psql = Get-Command psql -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($null -eq $psql -or [string]::IsNullOrWhiteSpace($env:MATCHBASE_EVIDENCE_DATABASE_URL)) { throw "Live database verification requires psql and MATCHBASE_EVIDENCE_DATABASE_URL." }
+  if ($null -ne $psql) {
+    $raw = (& $psql.Source $env:MATCHBASE_EVIDENCE_DATABASE_URL --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 --command=$Query 2>&1 | Out-String).Trim()
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) { throw $FailureMessage }
+    return $raw
+  }
+  $node = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($null -eq $node) { throw "$FailureMessage Neither psql nor Node.js is available for the closed database query." }
+  $helper = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "run-closed-database-query.mjs") -ErrorAction Stop).Path
+  $raw = ($Query | & $node.Source $helper 2>&1 | Out-String).Trim()
+  $exitCode = $LASTEXITCODE
+  if ($exitCode -ne 0) { throw $FailureMessage }
+  return $raw
+}
+
+function Assert-LiveDatabaseMigrationHead {
   $query = "SELECT migration_id FROM matchbase_schema_migration ORDER BY applied_at DESC, migration_id DESC LIMIT 1;"
-  $head = (& $psql.Source $env:MATCHBASE_EVIDENCE_DATABASE_URL --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 --command=$query 2>&1 | Out-String).Trim()
-  if ($LASTEXITCODE -ne 0 -or $head -cne $ExpectedMigrationHead) { throw "Live database migration head verification failed." }
+  $head = Invoke-ClosedDatabaseScalarQuery -Query $query -FailureMessage "Live database migration head verification failed."
+  if ($head -cne $ExpectedMigrationHead) { throw "Live database migration head verification failed." }
 }
 
 function Assert-NoEuWritesSinceCutover {
   param([Parameter(Mandatory)][object]$Ledger)
   $cutover = @($Ledger.Document.entries | Where-Object checkpoint -eq "Cutover")
   if ($cutover.Count -ne 1 -or [string]$cutover[0].occurred_at_utc -cnotmatch '^20[0-9]{2}-') { throw "Pre-write rollback requires one valid Cutover ledger timestamp." }
-  $psql = Get-Command psql -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($null -eq $psql -or [string]::IsNullOrWhiteSpace($env:MATCHBASE_EVIDENCE_DATABASE_URL)) { throw "EU write verification requires psql and MATCHBASE_EVIDENCE_DATABASE_URL." }
   $timestamp = [datetimeoffset]::Parse([string]$cutover[0].occurred_at_utc).ToUniversalTime().ToString("o")
   $query = "SELECT count(*) FROM research_run WHERE created_at >= '$timestamp'::timestamptz;"
-  $count = (& $psql.Source $env:MATCHBASE_EVIDENCE_DATABASE_URL --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 --command=$query 2>&1 | Out-String).Trim()
-  if ($LASTEXITCODE -ne 0 -or $count -cne "0") { throw "Pre-write rollback is prohibited because EU writes exist or cannot be disproved." }
+  $count = Invoke-ClosedDatabaseScalarQuery -Query $query -FailureMessage "Pre-write rollback is prohibited because EU writes exist or cannot be disproved."
+  if ($count -cne "0") { throw "Pre-write rollback is prohibited because EU writes exist or cannot be disproved." }
 }
 
 function Assert-CutoverEvidence {
@@ -341,6 +373,7 @@ function Get-EmptyLedger {
     project_id = $ProjectId
     source_region = $SourceRegion
     target_region = $TargetRegion
+    ledger_track_id = $LedgerTrackId
     entries = @()
   }
 }
@@ -360,7 +393,8 @@ function Get-MigrationLedger {
   # tokens as strings so validation is independent of the operator time zone.
   $document = $ledgerRaw | ConvertFrom-Json -DateKind String
   if ($document.schema_version -cne $LedgerSchemaVersion -or $document.project_id -cne $ProjectId -or
-      $document.source_region -cne $SourceRegion -or $document.target_region -cne $TargetRegion) {
+      $document.source_region -cne $SourceRegion -or $document.target_region -cne $TargetRegion -or
+      [string]$document.ledger_track_id -cne $LedgerTrackId) {
     throw "Durable ledger identity is invalid."
   }
   $previous = "0" * 64
@@ -437,7 +471,7 @@ function Complete-MigrationCheckpoint {
   $entries = @($Ledger.Document.entries)
   $sequence = $entries.Count + 1
   $previous = if ($entries.Count -eq 0) { "0" * 64 } else { [string]$entries[-1].entry_sha256 }
-  $evidenceObject = "migration-governance/evidence/{0:D2}-{1}-{2}.json" -f $sequence, $Checkpoint.ToLowerInvariant(), $Evidence.Sha256
+  $evidenceObject = "$EvidenceObjectPrefix/{0:D2}-{1}-{2}.json" -f $sequence, $Checkpoint.ToLowerInvariant(), $Evidence.Sha256
   $evidenceUri = "gs://$storeBucket/$evidenceObject"
   $null = Invoke-MigrationGcloud -Arguments @("storage", "cp", $Evidence.Path, $evidenceUri, "--if-generation-match=0", "--quiet")
   $occurredAt = ([datetimeoffset]$Evidence.Document.captured_at_utc).ToUniversalTime().ToString("o")
@@ -560,6 +594,11 @@ function Copy-AllSourceArtifactGenerations {
   foreach ($item in $inventory) {
     $name = ([string]$item.name).Replace("gs://$($migration.SourceArtifactBucket)/", "")
     if ([string]::IsNullOrWhiteSpace($name) -or [string]$item.generation -cnotmatch '^[1-9][0-9]*$') { throw "Source artifact inventory contains an invalid object identity." }
+    if (-not [string]::IsNullOrEmpty($LedgerTrackId) -and
+        $name.StartsWith("migration-governance/", [StringComparison]::Ordinal) -and
+        -not $name.StartsWith("migration-governance/tracks/$LedgerTrackId/", [StringComparison]::Ordinal)) {
+      continue
+    }
     $sourceVersion = "gs://$($migration.SourceArtifactBucket)/$name#$($item.generation)"
     $targetObject = "gs://$($migration.TargetArtifactBucket)/$name"
     $null = Invoke-MigrationGcloud -Arguments @("storage", "cp", $sourceVersion, $targetObject, "--quiet")
@@ -670,6 +709,7 @@ Write-Output "MatchBASE Staging regional migration"
 Write-Output "Mode: $(if ($Apply) { 'APPLY' } else { 'PLAN ONLY' })"
 Write-Output "Project: $ProjectId"
 Write-Output "Route: $SourceRegion -> $TargetRegion"
+Write-Output "Ledger track: $(if ([string]::IsNullOrEmpty($LedgerTrackId)) { 'canonical' } else { $LedgerTrackId })"
 Write-Output "Residual boundary: global _Required logging, global edge termination, and provider geography are not resolved by this scaffold."
 Write-Output "Source resources are never deleted outside the separately gated SourceRetirement checkpoint."
 
@@ -707,6 +747,9 @@ if (Test-Checkpoint -Name "RegionalFoundation") {
   # and requires no destination IAM grant. The removed CLI flag and custom
   # writer identities must not be reintroduced for this closed destination.
   $logSinkCreate = @("logging", "sinks", "create", [string]$migration.TargetLogSink, $logDestination, "--project=$ProjectId", "--log-filter=$logFilter", "--quiet")
+  $artifactRsyncArguments = @("storage", "rsync", "gs://$($migration.SourceArtifactBucket)", "gs://$($migration.TargetArtifactBucket)", "--recursive", "--checksums-only")
+  if (-not [string]::IsNullOrEmpty($LedgerTrackId)) { $artifactRsyncArguments += "--exclude=^migration-governance/" }
+  $artifactRsyncArguments += "--quiet"
 
   if ($Apply) {
     if (-not (Test-GcloudResource -Arguments @("artifacts", "repositories", "describe", [string]$migration.TargetArtifactRepository, "--project=$ProjectId", "--location=$TargetRegion"))) {
@@ -748,7 +791,7 @@ if (Test-Checkpoint -Name "RegionalFoundation") {
     Assert-ResourceExists -Arguments @("artifacts", "docker", "images", "describe", $TargetWorkerImageDigest, "--project=$ProjectId") -Description "EU worker image digest"
     Assert-ResourceExists -Arguments @("artifacts", "docker", "images", "describe", $TargetMaintenanceImageDigest, "--project=$ProjectId") -Description "EU maintenance base digest"
     Copy-AllSourceArtifactGenerations
-    $null = Invoke-MigrationGcloud -Arguments @("storage", "rsync", "gs://$($migration.SourceArtifactBucket)", "gs://$($migration.TargetArtifactBucket)", "--recursive", "--checksums-only", "--quiet")
+    $null = Invoke-MigrationGcloud -Arguments $artifactRsyncArguments
     Complete-MigrationCheckpoint -Ledger $MigrationLedger -Evidence $GovernedEvidence
   } else {
     Write-MigrationGcloudPlan -Arguments $repositoryCreate
@@ -763,8 +806,12 @@ if (Test-Checkpoint -Name "RegionalFoundation") {
     Write-MigrationGcloudPlan -Arguments $logBucketCreate
     Write-MigrationGcloudPlan -Arguments $logSinkCreate
     Write-MigrationGcloudPlan -Arguments @("storage", "ls", "gs://$($migration.SourceArtifactBucket)/**", "--all-versions", "--json")
-    Write-Output "For every source object generation in ascending generation order: gcloud storage cp gs://$($migration.SourceArtifactBucket)/<OBJECT>#<GENERATION> gs://$($migration.TargetArtifactBucket)/<OBJECT> --quiet"
-    Write-MigrationGcloudPlan -Arguments @("storage", "rsync", "gs://$($migration.SourceArtifactBucket)", "gs://$($migration.TargetArtifactBucket)", "--recursive", "--checksums-only", "--quiet")
+    if ([string]::IsNullOrEmpty($LedgerTrackId)) {
+      Write-Output "For every source object generation in ascending generation order: gcloud storage cp gs://$($migration.SourceArtifactBucket)/<OBJECT>#<GENERATION> gs://$($migration.TargetArtifactBucket)/<OBJECT> --quiet"
+    } else {
+      Write-Output "For every non-governance source generation and every migration-governance/tracks/$LedgerTrackId/ generation in ascending order: copy the exact generation to the same target object; all other governance tracks remain untouched."
+    }
+    Write-MigrationGcloudPlan -Arguments $artifactRsyncArguments
     Write-Output "Verify the same-project EU log-bucket sink has no writer identity; no destination IAM grant is required."
   }
 }

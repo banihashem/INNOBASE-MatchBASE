@@ -1,5 +1,8 @@
 import type { DemoProjectionV1 } from "./result-projection.js";
-import type { StandardResultProjectionV1 } from "./standard-projection.js";
+import {
+  STANDARD_DISCLOSURE_PROJECTION_VERSION,
+  type StandardResultProjectionV1,
+} from "./standard-projection.js";
 import {
   CONSULTANT_RESULT_PROJECTION_SCHEMA_VERSION,
   CONSULTANT_RESULT_PROJECTION_VERSION,
@@ -108,7 +111,7 @@ export function parseStandardResultProjectionV1(
   );
   if (
     projection.schema_version !== "standard-result-projection.v1" ||
-    projection.projection_version !== 4
+    projection.projection_version !== STANDARD_DISCLOSURE_PROJECTION_VERSION
   )
     throw new Error("Standard result projection discriminator is invalid.");
   const candidateCount = array(

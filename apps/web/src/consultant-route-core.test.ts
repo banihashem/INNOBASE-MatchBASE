@@ -183,7 +183,7 @@ const standardBody = {
     ),
   ),
   schema_version: "standard-result-projection.v1" as const,
-  projection_version: 4 as const,
+  projection_version: 5 as const,
 };
 
 const demoBody = {

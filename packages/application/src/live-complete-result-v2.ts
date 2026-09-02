@@ -30,11 +30,48 @@ const PERSONAL_DATA_WITHHELD = "[personal data withheld]";
 export function requestRequiresDatedCurrentStockEvidence(
   canonicalEnglishRequest: string,
 ): boolean {
+  try {
+    const request = JSON.parse(canonicalEnglishRequest) as unknown;
+    if (
+      request &&
+      typeof request === "object" &&
+      !Array.isArray(request) &&
+      (request as Record<string, unknown>).schema_version ===
+        "live-provider-request.v1"
+    ) {
+      const hardConstraints = (request as Record<string, unknown>)[
+        "hard_constraints"
+      ];
+      return (
+        Array.isArray(hardConstraints) &&
+        hardConstraints.some(
+          (candidate) =>
+            candidate !== null &&
+            typeof candidate === "object" &&
+            !Array.isArray(candidate) &&
+            (candidate as Record<string, unknown>).field_id ===
+              "current_stock" &&
+            (candidate as Record<string, unknown>).relaxability ===
+              "non_relaxable",
+        )
+      );
+    }
+  } catch {
+    // Legacy canonical-request.v1 text is handled by the closed mandatory-word
+    // fallback below. Mere stock preference wording must not become a hard gate.
+  }
+  const currentStock =
+    "(?:current(?:ly)?\\s+(?:available\\s+)?(?:stock|inventory)|(?:stock|inventory)\\s+(?:currently\\s+)?available|available\\s+in\\s+stock)";
+  const mandatory = "(?:must|shall|required?|mandatory)";
   return (
-    /"field_id":"current_stock"/u.test(canonicalEnglishRequest) ||
-    /\b(?:current(?:ly)?\s+(?:available\s+)?(?:stock|inventory)|(?:stock|inventory)\s+(?:currently\s+)?available|available\s+in\s+stock)\b/iu.test(
-      canonicalEnglishRequest,
-    )
+    new RegExp(
+      `\\b${mandatory}\\b[^.!?\\n]{0,160}\\b${currentStock}\\b`,
+      "iu",
+    ).test(canonicalEnglishRequest) ||
+    new RegExp(
+      `\\b${currentStock}\\b[^.!?\\n]{0,160}\\b${mandatory}\\b`,
+      "iu",
+    ).test(canonicalEnglishRequest)
   );
 }
 

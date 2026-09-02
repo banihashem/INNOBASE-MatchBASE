@@ -285,7 +285,7 @@ export function standardDisclosureProjectionRegistryRelease(): {
   readonly contentSha256: Buffer;
 } {
   const definition = stableJson({
-    schema_version: "standard-disclosure-projection.v4",
+    schema_version: "standard-disclosure-projection.v5",
     version: STANDARD_PROJECTION_VERSION,
     tier: "standard",
     resources: PROJECTION_FIELDS,

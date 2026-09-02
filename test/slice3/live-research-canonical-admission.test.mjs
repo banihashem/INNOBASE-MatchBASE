@@ -166,7 +166,10 @@ test("exact Ahmad Aghaei v2 canonical request reaches research without a buyer-s
   };
   const providerRequest = liveProviderRequestFromCanonicalDocument(canonical);
   const admitted = JSON.parse(providerRequest);
-  assert.equal(requestRequiresDatedCurrentStockEvidence(providerRequest), true);
+  assert.equal(
+    requestRequiresDatedCurrentStockEvidence(providerRequest),
+    false,
+  );
   assert.equal(admitted.category_id, "food_agricultural_commodities");
   assert.deepEqual(
     Object.fromEntries(admitted.fields.map((item) => [item.field_id, item])),
@@ -199,6 +202,39 @@ test("exact Ahmad Aghaei v2 canonical request reaches research without a buyer-s
   assert.doesNotMatch(
     JSON.stringify(admitted),
     /currently available in stock/u,
+  );
+});
+
+test("dated current-stock evidence is required only for a non-relaxable stock constraint", () => {
+  const request = JSON.stringify({
+    schema_version: "live-provider-request.v1",
+    category_id: "food_agricultural_commodities",
+    fields: [{ field_id: "current_stock", value: "1", unit: "container" }],
+    hard_constraints: [
+      {
+        constraint_id: "stock-required",
+        field_id: "current_stock",
+        operator: "at_least",
+        value: "1",
+        unit: "container",
+        relaxability: "non_relaxable",
+      },
+    ],
+    exclusions: [],
+    conditional_requirements: [],
+  });
+  assert.equal(requestRequiresDatedCurrentStockEvidence(request), true);
+  assert.equal(
+    requestRequiresDatedCurrentStockEvidence(
+      "The supplier should have at least one container currently available in stock.",
+    ),
+    false,
+  );
+  assert.equal(
+    requestRequiresDatedCurrentStockEvidence(
+      "The supplier must have inventory currently available.",
+    ),
+    true,
   );
 });
 

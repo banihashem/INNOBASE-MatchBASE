@@ -6,6 +6,7 @@ param(
   [Parameter(Mandatory)][ValidatePattern('^me-central1-docker\.pkg\.dev/innobase-matchbase-stg/matchbase/.+@sha256:[a-f0-9]{64}$')][string]$WorkerSourceImageDigest,
   [Parameter(Mandatory)][ValidatePattern('^projects/innobase-matchbase-stg/locations/europe-west2/keyRings/[a-z0-9_-]+/cryptoKeys/[a-z0-9_-]+/cryptoKeyVersions/[1-9][0-9]*$')][string]$KmsKeyVersion,
   [Parameter(Mandatory)][string]$OutputPath,
+  [ValidatePattern('^$|^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$')][string]$LedgerTrackId = "",
   [string]$PredecessorLedgerUri = ""
 )
 
@@ -15,6 +16,13 @@ $migration = Get-MatchBaseStagingRegionMigration
 $project = "innobase-matchbase-stg"
 $sourceRegion = "me-central1"
 $targetRegion = "europe-west2"
+$ledgerObject = if ([string]::IsNullOrEmpty($LedgerTrackId)) {
+  "migration-governance/staging-region-migration-ledger.v1.json"
+} else {
+  "migration-governance/tracks/$LedgerTrackId/staging-region-migration-ledger.v1.json"
+}
+$sourceLedgerUri = "gs://$($migration.SourceArtifactBucket)/$ledgerObject"
+$targetLedgerUri = "gs://$($migration.TargetArtifactBucket)/$ledgerObject"
 $facts = [ordered]@{}
 
 function Invoke-ReadOnlyCapture {
@@ -144,10 +152,47 @@ if ($Checkpoint -in @("Canary", "Cutover")) {
   if ($LASTEXITCODE -ne 0) { throw "Closed EU acceptance collector failed." }
   $acceptance = $acceptanceRaw | ConvertFrom-Json
   if ($acceptance.schema_version -cne "matchbase-eu-staging-acceptance.v2") { throw "EU acceptance collector schema is invalid." }
-  foreach ($name in @("oauth", "complete_research", "pdf", "origin_denial")) { if ($acceptance.acceptance.$name -cne "PASS") { throw "EU acceptance '$name' did not pass." } }
+  foreach ($name in @("oauth", "complete_research", "pdf", "profile_admin", "origin_denial", "responsive_browser", "latency")) { if ($acceptance.acceptance.$name -cne "PASS") { throw "EU acceptance '$name' did not pass." } }
   $acceptanceHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($acceptanceRaw))).ToLowerInvariant()
   $acceptanceRunId = [string]$acceptance.run_id
   if ($acceptance.public_canary_origin -cne $publicCanaryOrigin -or $acceptance.direct_cloud_run_origin -cne $cloudRunOrigin -or $acceptance.candidate_revision -cne $candidateRevision -or $acceptance.candidate_ready_at -cne ([datetimeoffset]$candidateReadyAt).ToUniversalTime().ToString("o") -or $acceptanceRunId -cnotmatch '^[0-9a-f-]{36}$' -or $acceptance.oauth_state_sha256 -cnotmatch '^[a-f0-9]{64}$' -or $acceptance.artifact_sha256 -cnotmatch '^[a-f0-9]{64}$' -or [int64]$acceptance.artifact_byte_size -lt 1024) { throw "EU acceptance output is not bound to the closed canary, ready candidate, OAuth transaction, fresh run, and verified PDF bytes." }
+  $approvedAgriculturalRequest = "Procurement request for three containers of high-quality Iranian Ahmad Aghaei pistachios. The shipment must be routed via Dubai for distribution in the African market. The supplier should have at least one container currently available in stock."
+  $approvedAgriculturalRequestSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($approvedAgriculturalRequest))).ToLowerInvariant()
+  $responsiveChecks = @($acceptance.responsive_checks)
+  $latencySamples = @($acceptance.latency.samples)
+  $mandatoryConstraintFields = @($acceptance.request_contract.mandatory_constraint_field_ids)
+  $preferenceFields = @($acceptance.request_contract.preference_field_ids)
+  $responsivePaths = @($responsiveChecks | ForEach-Object { [string]$_.path } | Sort-Object -Unique)
+  $responsiveWidths = @($responsiveChecks | ForEach-Object { [int]$_.width } | Sort-Object -Unique)
+  $latencyPaths = @($latencySamples | ForEach-Object { [string]$_.path } | Sort-Object -Unique)
+  if (
+    $acceptance.request_contract.id -cne "approved-ahmad-aghaei-pistachio-request.v1" -or
+    $acceptance.request_contract.source_sha256 -cne $approvedAgriculturalRequestSha256 -or
+    $acceptance.request_contract.domain_pack_category_id -cne "food_agricultural_commodities" -or
+    $mandatoryConstraintFields.Count -ne 1 -or $mandatoryConstraintFields[0] -cne "routing_via" -or
+    $preferenceFields.Count -ne 1 -or $preferenceFields[0] -cne "current_stock" -or
+    $acceptance.profile.schema_version -notin @("user-profile-history.v1", "user-profile-history.v2") -or
+    $acceptance.profile.run_id -cne $acceptanceRunId -or
+    $acceptance.profile.current_tier -cne "consultant" -or
+    $acceptance.profile.result_projection -cne "consultant" -or
+    $acceptance.admin_inventory.schema_version -notin @("admin-research-inventory.v1", "admin-research-inventory.v2") -or
+    $acceptance.admin_inventory.run_id -cne $acceptanceRunId -or
+    [string]$acceptance.admin_inventory.requester_user_id -cne [string]$acceptance.oauth_subject_user_id -or
+    $acceptance.admin_inventory.source_text_released -isnot [bool] -or
+    $acceptance.admin_inventory.source_text_released -ne $false -or
+    $acceptance.admin_inventory.complete_result_released -isnot [bool] -or
+    $acceptance.admin_inventory.complete_result_released -ne $false -or
+    $responsiveChecks.Count -ne 6 -or
+    ($responsivePaths -join ",") -cne "/admin/profile,/admin/research" -or
+    ($responsiveWidths -join ",") -cne "320,390,1440" -or
+    @($responsiveChecks | Where-Object { [int]$_.offender_count -ne 0 -or [int]$_.document_width -gt ([int]$_.viewport_width + 1) }).Count -ne 0 -or
+    [int]$acceptance.latency.sample_count -ne 10 -or
+    $latencySamples.Count -ne 10 -or
+    ($latencyPaths -join ",") -cne "/api/v1/health,/api/v1/me" -or
+    [double]$acceptance.latency.maximum_interactive_p95_ms -ne 5000 -or
+    [double]$acceptance.latency.interactive_p95_ms -lt 0 -or
+    [double]$acceptance.latency.interactive_p95_ms -gt [double]$acceptance.latency.maximum_interactive_p95_ms
+  ) { throw "EU acceptance request, profile/Admin, responsive-browser, or measured latency evidence is invalid." }
   $oauthStateSha256 = [string]$acceptance.oauth_state_sha256
   $oauthBindingQuery = "SELECT json_build_object('state_sha256',encode(state_hash,'hex'),'nonce_hash_bytes',octet_length(nonce_hash),'pkce_hash_bytes',octet_length(pkce_verifier_hash),'redirect_uri',redirect_uri,'environment',environment,'simulator',simulator,'created_at',created_at,'consumed_at',consumed_at) FROM oauth_transaction WHERE state_hash=decode('$oauthStateSha256','hex');"
   $oauthBindingCapture = Invoke-DatabaseFactCapture -Id "oauth-state-nonce-pkce-consumption" -Query $oauthBindingQuery
@@ -194,7 +239,12 @@ if ($Checkpoint -ceq "SourceRetirement") {
 $ledgerBinding = $null
 if ($Checkpoint -cne "Preflight" -and [string]::IsNullOrWhiteSpace($PredecessorLedgerUri)) { throw "Every non-Preflight checkpoint requires -PredecessorLedgerUri." }
 if (-not [string]::IsNullOrWhiteSpace($PredecessorLedgerUri)) {
-  if ($PredecessorLedgerUri -cnotmatch '^gs://innobase-matchbase-stg(?:-eu)?-artifacts/migration-governance/staging-region-migration-ledger\.v1\.json$') { throw "Predecessor ledger URI is outside the closed map." }
+  $expectedPredecessorLedgerUri = if ($Checkpoint -ceq "RegionalFoundation") { $sourceLedgerUri } else { $targetLedgerUri }
+  if ($Checkpoint -ceq "Preflight") {
+    if ($PredecessorLedgerUri -cne $sourceLedgerUri -and $PredecessorLedgerUri -cne $targetLedgerUri) { throw "Predecessor ledger URI is outside the selected track." }
+  } elseif ($PredecessorLedgerUri -cne $expectedPredecessorLedgerUri) {
+    throw "Predecessor ledger URI is outside the selected track."
+  }
   $ledgerCapture = Invoke-ReadOnlyCapture -Id "predecessor-ledger-metadata" -Arguments @("storage", "objects", "describe", $PredecessorLedgerUri, "--format=json(name,generation,size,crc32c,md5Hash,updateTime)")
   $captures += $ledgerCapture
   $ledgerWork = Join-Path ([IO.Path]::GetTempPath()) "matchbase-evidence-ledger-$([guid]::NewGuid().ToString('N')).json"
@@ -215,6 +265,7 @@ $document = [ordered]@{
   project_id = $project
   source_region = $sourceRegion
   target_region = $targetRegion
+  ledger_track_id = $LedgerTrackId
   outcome = "PASS"
   captured_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
   principal = [ordered]@{ active_account = $account; active_project = $activeProject }

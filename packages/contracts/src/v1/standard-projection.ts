@@ -21,10 +21,9 @@ export const STANDARD_REQUEST_DETAIL_SCHEMA_VERSION =
   "standard-request-detail.v1" as const;
 export const STANDARD_REQUEST_VERSION_HISTORY_SCHEMA_VERSION =
   "standard-request-version-history.v1" as const;
-// Version 4 adds the closed, deterministic scarcity-analysis disclosure while
-// preserving the immutable body, cursor, registry, serving-ledger, and audit
-// identity boundary introduced by version 3.
-export const STANDARD_DISCLOSURE_PROJECTION_VERSION = 4 as const;
+// Version 5 adds the Domain Pack disclosure fields without rewriting the
+// immutable version 4 registry release.
+export const STANDARD_DISCLOSURE_PROJECTION_VERSION = 5 as const;
 
 export interface StandardCitationProjectionV1 {
   evidence_id: string;

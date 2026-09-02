@@ -20,7 +20,7 @@ function run(state: "queued" | "running", progress: number) {
   return {
     schema_version: "standard-run-projection.v1",
     synthetic_warning: "Synthetic evaluation data — not a sourcing result",
-    projection_version: 4,
+    projection_version: 5,
     run_id: "run-1",
     request_id: "request-1",
     canonical_request_version: 1,

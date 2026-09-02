@@ -257,7 +257,7 @@ async function installStandardAccessibilityApi(page) {
   const queuedRun = {
     schema_version: "standard-run-projection.v1",
     synthetic_warning: "Synthetic evaluation data — not a sourcing result",
-    projection_version: 4,
+    projection_version: 5,
     run_id: "run-matrix",
     request_id: canonical.request_id,
     canonical_request_version: 1,
@@ -280,7 +280,7 @@ async function installStandardAccessibilityApi(page) {
     run_id: "run-matrix",
     outcome: "no_responsible_match",
     scarcity: "zero",
-    projection_version: 4,
+    projection_version: 5,
     synthetic_warning: "Synthetic evaluation data — not a sourcing result",
     gate_eliminations: [],
     scarcity_analysis: {

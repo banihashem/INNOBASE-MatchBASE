@@ -437,7 +437,7 @@ const result: StandardResultProjectionV1 = {
   run_id: "run-fixture",
   outcome: "matched",
   scarcity: "limited",
-  projection_version: 4,
+  projection_version: 5,
   synthetic_warning: "Synthetic evaluation data — not a sourcing result",
   gate_eliminations: [
     { gate_id: "gate-1", label: "Hard constraints", eliminated_count: 2 },

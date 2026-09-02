@@ -15,6 +15,7 @@ import {
   CONSULTANT_RESULT_PROJECTION_SCHEMA_VERSION,
   CONSULTANT_RESULT_PROJECTION_VERSION,
 } from "./v1/consultant-projection.js";
+import { STANDARD_DISCLOSURE_PROJECTION_VERSION } from "./v1/standard-projection.js";
 import {
   CONSULTANT_DOMAIN_PACK_ID,
   CONSULTANT_AGRICULTURAL_DOMAIN_PACK_ID,
@@ -1709,7 +1710,10 @@ export function generateContractSchemas(): JsonSchema {
     scarcity: string(["pending", "none", "limited", "zero", "not_applicable"]),
     limitations_notice: string(),
     links: projectionLinks,
-    projection_version: { type: "integer", enum: [4] },
+    projection_version: {
+      type: "integer",
+      enum: [STANDARD_DISCLOSURE_PROJECTION_VERSION],
+    },
   };
   const runStateRequired = [
     "run_id",
@@ -2442,7 +2446,10 @@ export function generateContractSchemas(): JsonSchema {
           scarcity_analysis: scarcityAnalysis,
           limitations,
           synthetic_warning: string(),
-          projection_version: { type: "integer", enum: [4] },
+          projection_version: {
+            type: "integer",
+            enum: [STANDARD_DISCLOSURE_PROJECTION_VERSION],
+          },
         },
       ),
       consultantResultProjection: closedObject(
@@ -2717,7 +2724,10 @@ export function generateContractSchemas(): JsonSchema {
           items: { type: "array", items: requestHistoryItem },
           next_cursor: string(),
           synthetic_warning: string(),
-          projection_version: { type: "integer", enum: [4] },
+          projection_version: {
+            type: "integer",
+            enum: [STANDARD_DISCLOSURE_PROJECTION_VERSION],
+          },
         },
       ),
       standardRequestDetail: closedObject(
@@ -2750,7 +2760,10 @@ export function generateContractSchemas(): JsonSchema {
             runs: string(),
           }),
           synthetic_warning: string(),
-          projection_version: { type: "integer", enum: [4] },
+          projection_version: {
+            type: "integer",
+            enum: [STANDARD_DISCLOSURE_PROJECTION_VERSION],
+          },
         },
       ),
       standardRequestDetailV2: closedObject(
@@ -2783,7 +2796,10 @@ export function generateContractSchemas(): JsonSchema {
             runs: string(),
           }),
           synthetic_warning: string(),
-          projection_version: { type: "integer", enum: [4] },
+          projection_version: {
+            type: "integer",
+            enum: [STANDARD_DISCLOSURE_PROJECTION_VERSION],
+          },
         },
       ),
       standardRequestVersionHistory: closedObject(
@@ -2804,7 +2820,10 @@ export function generateContractSchemas(): JsonSchema {
           },
           next_cursor: string(),
           synthetic_warning: string(),
-          projection_version: { type: "integer", enum: [4] },
+          projection_version: {
+            type: "integer",
+            enum: [STANDARD_DISCLOSURE_PROJECTION_VERSION],
+          },
         },
       ),
       standardRunHistory: closedObject(
@@ -2814,7 +2833,10 @@ export function generateContractSchemas(): JsonSchema {
           items: { type: "array", items: runHistoryItem },
           next_cursor: string(),
           synthetic_warning: string(),
-          projection_version: { type: "integer", enum: [4] },
+          projection_version: {
+            type: "integer",
+            enum: [STANDARD_DISCLOSURE_PROJECTION_VERSION],
+          },
         },
       ),
       costEvent: closedObject(

@@ -372,7 +372,7 @@ postgresTest(
         ["run_result", result],
       ];
       for (const [kind, body] of surfaces) {
-        assert.equal(body.projection_version, 4, kind);
+        assert.equal(body.projection_version, 5, kind);
         const ledger = await pool.query(
           `SELECT pv.version,pv.definition,pv.content_sha256,p.fields_released,
                   p.projection_version_id AS serving_projection_version_id,
@@ -393,12 +393,12 @@ postgresTest(
           ],
         );
         const row = ledger.rows[0];
-        assert.equal(row.version, 4, `${kind} registry version`);
+        assert.equal(row.version, 5, `${kind} registry version`);
         assert.equal(
           row.definition.schema_version,
-          "standard-disclosure-projection.v4",
+          "standard-disclosure-projection.v5",
         );
-        assert.equal(row.definition.version, 4);
+        assert.equal(row.definition.version, 5);
         assert.ok(row.definition.resources[kind]);
         assert.ok(
           row.content_sha256.equals(digest(stableJson(row.definition))),
@@ -408,7 +408,7 @@ postgresTest(
           standardReleasedFieldPaths(body),
           `${kind} released fields`,
         );
-        assert.equal(row.detail.projectionVersion, 4, `${kind} audit detail`);
+        assert.equal(row.detail.projectionVersion, 5, `${kind} audit detail`);
         if (kind === "run_result")
           assert.match(
             row.detail.projectionAsOf,
@@ -426,8 +426,8 @@ postgresTest(
       const cursorPayload = JSON.parse(
         Buffer.from(encoded, "base64url").toString("utf8"),
       );
-      assert.equal(cursorPayload.projection, 4);
-      cursorPayload.projection = 3;
+      assert.equal(cursorPayload.projection, 5);
+      cursorPayload.projection = 4;
       const staleEncoded = Buffer.from(JSON.stringify(cursorPayload)).toString(
         "base64url",
       );
@@ -485,7 +485,7 @@ postgresTest(
       assert.deepEqual(notModified.rows[0].fields_released, []);
       assert.equal(notModified.rows[0].detail.notModified, true);
       assert.equal(notModified.rows[0].detail.bodyReleased, false);
-      assert.equal(notModified.rows[0].detail.projectionVersion, 4);
+      assert.equal(notModified.rows[0].detail.projectionVersion, 5);
 
       for (const personCanary of [
         "Jane Mary Smith",
@@ -562,7 +562,7 @@ postgresTest(
           true,
         );
         const result = await app.getResult(ctx, submitted.run_id);
-        assert.equal(result.projection_version, 4, scenario);
+        assert.equal(result.projection_version, 5, scenario);
         assert.equal(
           result.candidates.length,
           expectedCandidateCounts[scenario],
@@ -686,7 +686,75 @@ postgresTest(
 );
 
 postgresTest(
-  "fails closed on stale or same-number different Standard projection registries",
+  "preserves an immutable Standard v4 registry while registering v5 independently",
+  async () => {
+    const pool = createPool({ connectionString: databaseUrl, max: 2 });
+    try {
+      await migrateDown(pool).catch(() => false);
+      await migrateUp(pool);
+      const ids = await seedOwner(pool);
+      const ctx = context(ids);
+      const app = new StandardWorkspaceApplication({ pool, privacyKey });
+      const legacyProjectionVersionId = randomUUID();
+      const legacyDefinition = {
+        schema_version: "standard-disclosure-projection.v4",
+        version: 4,
+        tier: "standard",
+        resources: { immutable_legacy_v4: [] },
+      };
+      const legacyDefinitionHash = digest(stableJson(legacyDefinition));
+      await pool.query(
+        `INSERT INTO projection_version
+           (projection_version_id,version,definition,content_sha256,released_at)
+         VALUES($1,4,$2::jsonb,$3,clock_timestamp())`,
+        [
+          legacyProjectionVersionId,
+          JSON.stringify(legacyDefinition),
+          legacyDefinitionHash,
+        ],
+      );
+      const body = await app.listRequests(ctx);
+      assert.equal(body.projection_version, 5);
+      const versions = await pool.query(
+        `SELECT projection_version_id,version,definition,content_sha256
+           FROM projection_version
+          WHERE version IN (4,5)
+          ORDER BY version`,
+      );
+      assert.equal(versions.rows.length, 2);
+      const legacy = versions.rows[0];
+      assert.equal(legacy.projection_version_id, legacyProjectionVersionId);
+      assert.equal(legacy.version, 4);
+      assert.deepEqual(legacy.definition, legacyDefinition);
+      assert.ok(legacy.content_sha256.equals(legacyDefinitionHash));
+      const current = versions.rows[1];
+      assert.equal(current.version, 5);
+      assert.equal(
+        current.definition.schema_version,
+        "standard-disclosure-projection.v5",
+      );
+      assert.equal(current.definition.version, 5);
+      assert.ok(
+        current.content_sha256.equals(digest(stableJson(current.definition))),
+      );
+      assert.equal(
+        (
+          await pool.query(
+            `SELECT count(*)::int AS count FROM audit_event
+              WHERE event_type='projection.served'`,
+          )
+        ).rows[0].count,
+        1,
+      );
+    } finally {
+      await migrateDown(pool).catch(() => false);
+      await pool.end();
+    }
+  },
+);
+
+postgresTest(
+  "fails closed on a same-number different Standard v5 projection registry",
   async () => {
     const pool = createPool({ connectionString: databaseUrl, max: 2 });
     try {
@@ -698,16 +766,16 @@ postgresTest(
       await pool.query(
         `INSERT INTO projection_version
            (projection_version_id,version,definition,content_sha256,released_at)
-         VALUES($1,4,$2::jsonb,$3,clock_timestamp())`,
+         VALUES($1,5,$2::jsonb,$3,clock_timestamp())`,
         [
           randomUUID(),
           JSON.stringify({
-            schema_version: "standard-disclosure-projection.v4",
-            version: 4,
+            schema_version: "standard-disclosure-projection.v5",
+            version: 5,
             tier: "standard",
             resources: { same_shape_different_identity: [] },
           }),
-          digest("forged-standard-projection-v4"),
+          digest("forged-standard-projection-v5"),
         ],
       );
       await assert.rejects(

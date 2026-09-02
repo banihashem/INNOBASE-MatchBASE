@@ -79,12 +79,12 @@ function legacyResultRow(overrides = {}) {
   };
 }
 
-test("serves immutable v3 zero-result rows through a truthful v4 scarcity projection", async () => {
+test("serves immutable v3 zero-result rows through a truthful v5 scarcity projection", async () => {
   const application = applicationFor(legacyResultRow());
 
   const result = await application.getResult(context, runId, false);
 
-  assert.equal(result.projection_version, 4);
+  assert.equal(result.projection_version, 5);
   assert.equal(result.scarcity, "zero");
   assert.deepEqual(result.scarcity_analysis, {
     reducing_constraints: [],

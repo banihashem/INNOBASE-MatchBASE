@@ -49,19 +49,40 @@ const FAMILY_NAMES = new Set([
 const NAME_PARTICLES = new Set(["al", "bin", "da", "de", "del", "van", "von"]);
 const NAME_TITLES = new Set(["dr", "mr", "mrs", "ms", "prof", "دكتر", "السيد"]);
 const ORGANIZATION_WORDS = new Set([
+  "agriculture",
+  "agricultural",
   "company",
+  "cooperative",
   "components",
+  "corporation",
   "corpus",
   "evidence",
+  "export",
+  "exporter",
+  "exporters",
+  "exports",
   "fixture",
+  "foods",
   "group",
   "industries",
+  "limited",
+  "llc",
+  "ltd",
   "manufacturer",
   "manufacturing",
   "matchbase",
+  "nuts",
+  "pistachio",
+  "pistachios",
+  "producer",
+  "producers",
+  "processing",
   "repository",
   "standard",
+  "supplier",
+  "suppliers",
   "synthetic",
+  "trading",
 ]);
 const CONFUSABLES: Readonly<Record<string, string>> = {
   Α: "A",
@@ -197,6 +218,19 @@ function isTitleCase(value: string): boolean {
   );
 }
 
+function isGovernedCultivarSpan(
+  value: string,
+  start: number,
+  end: number,
+  parts: readonly string[],
+): boolean {
+  if (parts.join(" ") !== "ahmad aghaei") return false;
+  return (
+    /^\s+(?:pistachio(?:s)?|cultivar|variety)\b/iu.test(value.slice(end)) ||
+    /\b(?:pistachio(?:s)?|cultivar|variety)\s+$/iu.test(value.slice(0, start))
+  );
+}
+
 function directPersonSpans(value: string): Span[] {
   if (
     FORMAT_CONTROL.test(value) ||
@@ -281,7 +315,13 @@ function directPersonSpans(value: string): Span[] {
             (isTitleCase(token.raw) ||
               token.parts.every((part) => NAME_PARTICLES.has(part))),
         );
-      if (knownName || ambiguousTitleCaseName) {
+      const governedCultivar = isGovernedCultivarSpan(
+        value,
+        window[0]!.start,
+        window.at(-1)!.end,
+        parts,
+      );
+      if ((knownName || ambiguousTitleCaseName) && !governedCultivar) {
         spans.push({ start: window[0]!.start, end: window.at(-1)!.end });
         break;
       }

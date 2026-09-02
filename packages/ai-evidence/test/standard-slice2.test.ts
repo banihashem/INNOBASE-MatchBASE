@@ -1143,6 +1143,30 @@ test("recursively denies personal data outside redactable evidence excerpts", ()
   );
 });
 
+test("permits governed cultivar and organization names without weakening person denial", () => {
+  for (const value of [
+    "Ahmad Aghaei pistachios",
+    "Ahmad Aghaei cultivar",
+    "Rafsanjan Pistachio Producers Cooperative",
+    "Pars Agricultural Export Company",
+  ]) {
+    assert.deepEqual(standardPiiFindings(value), [], value);
+    assert.doesNotThrow(() => assertStandardPiiReleaseSafe({ value }), value);
+  }
+  for (const value of [
+    "Ahmad Aghaei",
+    "Contact Ahmad Aghaei, pistachio supplier.",
+    "Jane Mary Smith",
+  ]) {
+    assert.ok(standardPiiFindings(value).length > 0, value);
+    assert.throws(
+      () => assertStandardPiiReleaseSafe({ value }),
+      /PII release membrane/iu,
+      value,
+    );
+  }
+});
+
 test("keeps a redacted evidence extract inside the closed 600-character boundary", () => {
   const graph = buildStandardSyntheticEvidenceGraph("RUN-PII-BOUND", "one");
   const evidence = graph.evidence[0]!;

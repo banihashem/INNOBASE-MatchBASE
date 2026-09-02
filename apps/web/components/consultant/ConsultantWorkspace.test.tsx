@@ -453,7 +453,7 @@ test("parses immutable historical Demo and Standard results at the client bounda
       ),
     ),
     schema_version: "standard-result-projection.v1",
-    projection_version: 4,
+    projection_version: 5,
   };
   const demoResult = {
     schema_version: "demo-projection.v1",

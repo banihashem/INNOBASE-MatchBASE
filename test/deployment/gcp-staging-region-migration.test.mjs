@@ -80,6 +80,84 @@ test("the migration defaults to a complete plan and makes no cloud call", () => 
   );
 });
 
+test("migration ledger tracks are closed, isolated, and canonical by default", async () => {
+  const source = await read("../../deployment/gcp/Migrate-StagingRegion.ps1");
+  const producer = await read(
+    "../../deployment/gcp/New-StagingRegionEvidence.ps1",
+  );
+  const canonical = runPowerShell("-Checkpoint", "Preflight");
+  const isolated = runPowerShell(
+    "-Checkpoint",
+    "Preflight",
+    "-LedgerTrackId",
+    "candidate-2b859650",
+  );
+  const invalid = runPowerShell(
+    "-Checkpoint",
+    "Preflight",
+    "-LedgerTrackId",
+    "../candidate",
+  );
+  const canonicalFoundation = runPowerShell(
+    "-Checkpoint",
+    "RegionalFoundation",
+  );
+  const isolatedFoundation = runPowerShell(
+    "-Checkpoint",
+    "RegionalFoundation",
+    "-LedgerTrackId",
+    "candidate-2b859650",
+  );
+
+  assert.equal(canonical.status, 0, canonical.stderr);
+  assert.match(canonical.stdout, /Ledger track: canonical/u);
+  assert.equal(isolated.status, 0, isolated.stderr);
+  assert.match(isolated.stdout, /Ledger track: candidate-2b859650/u);
+  assert.notEqual(invalid.status, 0);
+  assert.match(invalid.stderr, /Cannot validate argument.*LedgerTrackId/su);
+  assert.doesNotMatch(
+    canonicalFoundation.stdout,
+    /--exclude=\^migration-governance\//u,
+  );
+  assert.match(
+    isolatedFoundation.stdout,
+    /--exclude=\^migration-governance\//u,
+  );
+  assert.match(
+    source,
+    /migration-governance\/tracks\/\$LedgerTrackId\/staging-region-migration-ledger\.v1\.json/u,
+  );
+  assert.match(
+    source,
+    /migration-governance\/tracks\/\$LedgerTrackId\/evidence/u,
+  );
+  assert.match(
+    source,
+    /\[string\]\$evidence\.ledger_track_id -cne \$LedgerTrackId/u,
+  );
+  assert.match(
+    source,
+    /\[string\]\$document\.ledger_track_id -cne \$LedgerTrackId/u,
+  );
+  assert.match(
+    source,
+    /-not \$name\.StartsWith\("migration-governance\/tracks\/\$LedgerTrackId\/"/u,
+  );
+  assert.match(
+    producer,
+    /migration-governance\/tracks\/\$LedgerTrackId\/staging-region-migration-ledger\.v1\.json/u,
+  );
+  assert.match(
+    producer,
+    /\$Checkpoint -ceq "RegionalFoundation"[\s\S]*\$sourceLedgerUri[\s\S]*\$targetLedgerUri/u,
+  );
+  assert.match(
+    producer,
+    /Predecessor ledger URI is outside the selected track\./u,
+  );
+  assert.match(producer, /ledger_track_id = \$LedgerTrackId/u);
+});
+
 test("apply is fail-closed on project, residual, checkpoint, and machine evidence", () => {
   const wrongProject = runPowerShell(
     "-Checkpoint",
@@ -324,6 +402,37 @@ test("post-write rollback coordinates EU web, worker, and database while source 
   assert.match(source, /Assert-SourceWorkerQuiesced/u);
   assert.match(source, /Assert-NoEuWritesSinceCutover/u);
   assert.match(source, /This path is prohibited after any EU write/u);
+});
+
+test("live database gates retain psql and fall back to the closed Node scalar query", async () => {
+  const source = await read("../../deployment/gcp/Migrate-StagingRegion.ps1");
+  const helper = await read(
+    "../../deployment/gcp/run-closed-database-query.mjs",
+  );
+  assert.match(source, /function Invoke-ClosedDatabaseScalarQuery/u);
+  assert.match(
+    source,
+    /Get-Command psql -CommandType Application -ErrorAction SilentlyContinue/u,
+  );
+  assert.match(
+    source,
+    /Get-Command node -CommandType Application -ErrorAction SilentlyContinue/u,
+  );
+  assert.match(source, /run-closed-database-query\.mjs/u);
+  assert.match(source, /\$Query \| & \$node\.Source \$helper 2>&1/u);
+  assert.doesNotMatch(
+    source,
+    /& \$node\.Source \$helper\s+\$env:MATCHBASE_EVIDENCE_DATABASE_URL/u,
+  );
+  assert.equal(
+    (source.match(/Invoke-ClosedDatabaseScalarQuery -Query \$query/gu) ?? [])
+      .length,
+    2,
+  );
+  assert.match(helper, /BEGIN READ ONLY/u);
+  assert.match(helper, /result\.rows\.length !== 1/u);
+  assert.match(helper, /result\.rows\[0\]\.length !== 1/u);
+  assert.match(helper, /Only one closed read-only SELECT is accepted/u);
 });
 
 test("source retirement is separately gated and plans only exact source targets after EU recovery", async () => {
@@ -640,8 +749,55 @@ test("EU acceptance binds closed origins, live service identity, exact result, a
   assert.match(validator, /candidateReadyAt/u);
   assert.match(validator, /%PDF-/u);
   assert.match(validator, /artifact_sha256/u);
+  assert.match(
+    validator,
+    /Procurement request for three containers of high-quality Iranian Ahmad Aghaei pistachios\. The shipment must be routed via Dubai for distribution in the African market\. The supplier should have at least one container currently available in stock\./u,
+  );
+  assert.doesNotMatch(validator, /MX900/u);
+  assert.match(validator, /\/admin\/product/u);
+  assert.match(validator, /\/api\/v1\/profile\/history/u);
+  assert.match(validator, /\/api\/v1\/admin\/research/u);
+  assert.match(validator, /name: "Hard constraint 1"/u);
+  assert.match(validator, /selectOption\(\{ label: "Required route" \}\)/u);
+  assert.match(validator, /constraint\.field_id === "current_stock"/u);
+  assert.match(validator, /mandatory_constraint_field_ids: \["routing_via"\]/u);
+  assert.match(validator, /preference_field_ids: \["current_stock"\]/u);
+  assert.match(validator, /profile_admin: "PASS"/u);
+  assert.match(validator, /responsive_browser: "PASS"/u);
+  assert.match(validator, /latency: "PASS"/u);
+  assert.match(validator, /MAX_INTERACTIVE_P95_MS = 5_000/u);
+  assert.match(validator, /result\.document_width > result\.viewport_width/u);
+  assert.match(validator, /percentile95/u);
+  assert.match(
+    validator,
+    /privacy_boundary\?\.source_text_released !== false/u,
+  );
+  assert.match(validator, /me\.admin_sub_roles\.includes\("super_admin"\)/u);
+  for (const name of [
+    "oauth",
+    "complete_research",
+    "pdf",
+    "profile_admin",
+    "origin_denial",
+    "responsive_browser",
+    "latency",
+  ])
+    assert.match(producer, new RegExp(`"${name}"`, "u"));
   assert.match(producer, /artifact-grant-run-result-binding/u);
   assert.match(producer, /stored hash, and stored size/u);
+  assert.match(
+    producer,
+    /\$mandatoryConstraintFields\[0\] -cne "routing_via"/u,
+  );
+  assert.match(producer, /\$preferenceFields\[0\] -cne "current_stock"/u);
+  assert.match(
+    producer,
+    /\$acceptance\.profile\.result_projection -cne "consultant"/u,
+  );
+  assert.match(
+    producer,
+    /\$acceptance\.admin_inventory\.requester_user_id -cne \[string\]\$acceptance\.oauth_subject_user_id/u,
+  );
 });
 
 test("canary OAuth identity is isolated from main Staging deployment and routing", async () => {

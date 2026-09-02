@@ -83,6 +83,28 @@ written with a generation-match precondition:
 - every later checkpoint reads, verifies, and extends the EU ledger;
 - `Cutover` re-downloads every predecessor evidence object and verifies its hash.
 
+The empty `-LedgerTrackId` value preserves the canonical object
+`migration-governance/staging-region-migration-ledger.v1.json`. When a new
+candidate must start at `Preflight` while a prior candidate ledger remains
+immutable and addressable, pass the same explicit lower-case track identifier
+to both the evidence producer and every migration checkpoint. A track ID is
+limited to 1-63 lower-case alphanumeric or hyphen characters, must begin and end
+with an alphanumeric character, and selects these distinct objects:
+
+- source ledger:
+  `gs://innobase-matchbase-stg-artifacts/migration-governance/tracks/<TRACK_ID>/staging-region-migration-ledger.v1.json`;
+- target ledger:
+  `gs://innobase-matchbase-stg-eu-artifacts/migration-governance/tracks/<TRACK_ID>/staging-region-migration-ledger.v1.json`;
+- checkpoint evidence:
+  `migration-governance/tracks/<TRACK_ID>/evidence/` in the active ledger
+  bucket.
+
+Track rollover never copies, rewrites, aliases, or deletes the canonical ledger
+or any other track. Signed evidence carries the exact track ID. Apply rejects a
+track mismatch, a predecessor URI from another track, and a ledger document
+whose bound track differs. After selecting a track, do not change it within the
+checkpoint chain.
+
 Each database checkpoint gives its fresh backup a unique governed description,
 then rediscovers exactly one numeric backup ID by that exact description. Apply
 accepts the backup only when Cloud SQL reports `SUCCESSFUL` and location `eu`;
@@ -154,11 +176,26 @@ Generate one evidence envelope without exposing key material:
 ```powershell
 ./deployment/gcp/New-StagingRegionEvidence.ps1 `
   -Checkpoint Preflight `
+  -LedgerTrackId candidate-<SHORT_COMMIT> `
   -CandidateCommit <EXACT_40_CHARACTER_GIT_COMMIT> `
   -WebSourceImageDigest <EXACT_SOURCE_WEB_DIGEST> `
   -WorkerSourceImageDigest <EXACT_SOURCE_WORKER_DIGEST> `
   -KmsKeyVersion projects/innobase-matchbase-stg/locations/europe-west2/keyRings/<KEY_RING>/cryptoKeys/<KEY>/cryptoKeyVersions/<VERSION> `
   -OutputPath C:\governed-evidence\preflight.json
+```
+
+Apply the matching checkpoint with the identical track ID:
+
+```powershell
+./deployment/gcp/Migrate-StagingRegion.ps1 `
+  -Checkpoint Preflight `
+  -LedgerTrackId candidate-<SHORT_COMMIT> `
+  -Apply `
+  -ConfirmProjectId innobase-matchbase-stg `
+  -ResidualRiskAcknowledgement I_ACKNOWLEDGE_GLOBAL_REQUIRED_EDGE_PROVIDER_LIMITATIONS `
+  -EvidencePath C:\governed-evidence\preflight.json `
+  -EvidenceSignaturePath C:\governed-evidence\preflight.json.sig `
+  -EvidenceKmsKeyVersion projects/innobase-matchbase-stg/locations/europe-west2/keyRings/<KEY_RING>/cryptoKeys/<KEY>/cryptoKeyVersions/<VERSION>
 ```
 
 Pass both `-EvidenceSignaturePath <evidence>.sig` and the exact

@@ -7506,7 +7506,7 @@
         },
         "projection_version": {
           "type": "integer",
-          "enum": [4]
+          "enum": [5]
         }
       }
     },
@@ -12836,7 +12836,7 @@
         },
         "projection_version": {
           "type": "integer",
-          "enum": [4]
+          "enum": [5]
         },
         "synthetic_warning": {
           "type": "string"
@@ -12994,7 +12994,7 @@
         },
         "projection_version": {
           "type": "integer",
-          "enum": [4]
+          "enum": [5]
         }
       }
     },
@@ -13067,7 +13067,7 @@
         },
         "projection_version": {
           "type": "integer",
-          "enum": [4]
+          "enum": [5]
         }
       }
     },
@@ -13140,7 +13140,7 @@
         },
         "projection_version": {
           "type": "integer",
-          "enum": [4]
+          "enum": [5]
         }
       }
     },
@@ -13195,7 +13195,7 @@
         },
         "projection_version": {
           "type": "integer",
-          "enum": [4]
+          "enum": [5]
         }
       }
     },
@@ -13324,7 +13324,7 @@
               },
               "projection_version": {
                 "type": "integer",
-                "enum": [4]
+                "enum": [5]
               }
             },
             "oneOf": [
@@ -13391,7 +13391,7 @@
         },
         "projection_version": {
           "type": "integer",
-          "enum": [4]
+          "enum": [5]
         }
       }
     },

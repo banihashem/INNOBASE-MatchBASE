@@ -146,11 +146,11 @@ test("separates transient conditional input from canonical review metadata", () 
     const schema = schemas[name] as {
       properties: { projection_version: { enum: number[] } };
     };
-    assert.deepEqual(schema.properties.projection_version.enum, [4], name);
+    assert.deepEqual(schema.properties.projection_version.enum, [5], name);
     assert.equal(
-      schema.properties.projection_version.enum.includes(3),
+      schema.properties.projection_version.enum.includes(4),
       false,
-      `${name} must reject disclosure projection v3`,
+      `${name} must reject immutable disclosure projection v4`,
     );
   }
   const demo = schemas.demoProjection as {

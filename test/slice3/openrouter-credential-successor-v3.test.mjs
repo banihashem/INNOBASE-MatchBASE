@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -7,7 +7,10 @@ import {
   assessCredentialGate,
   executeCredentialGate,
 } from "../../scripts/qualify-slice3-openrouter-credential-successor-v3.mjs";
-import { materializeQualificationPredecessor } from "./fixtures/staging-qualification-ledgers.mjs";
+import {
+  materializeQualificationPredecessor,
+  removeQualificationFixture,
+} from "./fixtures/staging-qualification-ledgers.mjs";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/key";
 
@@ -78,7 +81,7 @@ test("credential successor is one-GET, zero-model, zero-cost, and predecessor-bo
       "667F420151D3737063973C8E8C4A61E46981463A43553660CD92B6537EF8027F",
     );
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeQualificationFixture(root, paths.stateRoot);
   }
 });
 
@@ -112,7 +115,7 @@ test("paid usable key passes without persisting key or account fields", async ()
     assert.equal(serialized.includes("openrouter-test-secret"), false);
     assert.equal(serialized.includes("must-not-persist"), false);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeQualificationFixture(root, paths.stateRoot);
   }
 });
 
@@ -129,6 +132,6 @@ test("unpaid key is a terminal sanitized capability blocker", async () => {
     assert.equal(result.providerModelPosts, 0);
     assert.equal(result.billableCalls, 0);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeQualificationFixture(root, paths.stateRoot);
   }
 });

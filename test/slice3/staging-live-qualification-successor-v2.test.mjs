@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -7,7 +7,10 @@ import {
   assessSuccessor,
   executeSuccessor,
 } from "../../scripts/qualify-slice3-staging-successor-v2.mjs";
-import { materializeQualificationPredecessor } from "./fixtures/staging-qualification-ledgers.mjs";
+import {
+  materializeQualificationPredecessor,
+  removeQualificationFixture,
+} from "./fixtures/staging-qualification-ledgers.mjs";
 
 const routerEnvelope = {
   id: "openrouter-successor-test-id",
@@ -188,7 +191,7 @@ test("successor preflight binds the terminal V1 ledger and remaining owner ceili
     assert.ok(result.cumulativeWorstCaseCostUsd < 100);
     assert.equal(result.credentialValuesInspected, false);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeQualificationFixture(root, paths.stateRoot);
   }
 });
 
@@ -213,7 +216,7 @@ test("successor uses exactly one call per route and creates staging-only policy 
     assert.ok(policy.routes.every((route) => route.enabled));
     assert.ok(policy.routes.every((route) => route.liveQualified));
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeQualificationFixture(root, paths.stateRoot);
   }
 });
 
@@ -238,6 +241,6 @@ test("successor still exercises the explicit OpenRouter route when direct ground
     await assert.rejects(readFile(paths.policyPath), /ENOENT/u);
     assert.equal(JSON.stringify(result).includes("test-secret"), false);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeQualificationFixture(root, paths.stateRoot);
   }
 });

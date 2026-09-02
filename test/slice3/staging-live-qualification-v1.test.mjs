@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -9,6 +9,7 @@ import {
   executeStagingLiveQualification,
   verifyStagingLiveQualificationArtifacts,
 } from "../../scripts/lib/slice3-staging-live-qualification-v1.mjs";
+import { removeQualificationFixture } from "./fixtures/staging-qualification-ledgers.mjs";
 
 const productionPolicy = JSON.parse(
   await readFile(
@@ -197,7 +198,7 @@ test("preflight is zero-call, synthetic-only, bounded, and source-bound", async 
     assert.equal(result.externalHttpCalls, 0);
     assert.match(result.sourceBinding.authorizationSha256, /^[A-F0-9]{64}$/u);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeQualificationFixture(root, paths.stateRoot);
   }
 });
 
@@ -239,7 +240,7 @@ test("success executes exactly two model posts and emits verified staging-only a
     assert.equal(verified.billableCalls, 2);
     assert.equal(verified.syntheticOnly, true);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeQualificationFixture(root, paths.stateRoot);
   }
 });
 
@@ -262,7 +263,7 @@ test("a direct-route failure is terminal and cannot generate a staging policy", 
     assert.equal(restarted.disposition, "BLOCKED_PREREQUISITE");
     assert.ok(restarted.blockers.includes("ONE_USE_SESSION_ALREADY_EXISTS"));
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeQualificationFixture(root, paths.stateRoot);
   }
 });
 

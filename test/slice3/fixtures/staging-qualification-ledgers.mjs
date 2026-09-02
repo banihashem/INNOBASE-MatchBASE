@@ -1,5 +1,14 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  readdir,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, join, relative, resolve } from "node:path";
 
 const LEDGERS = Object.freeze({
   "v6-40CB8BEE95ABACB012107300": Object.freeze({
@@ -190,4 +199,35 @@ export async function materializeQualificationPredecessor(
     ),
   );
   return directory;
+}
+
+export async function removeQualificationFixture(root, stateRoot) {
+  const [rootReal, tempReal] = await Promise.all([
+    realpath(root),
+    realpath(tmpdir()),
+  ]);
+  const rel = relative(tempReal, rootReal);
+  if (
+    !rel ||
+    rel.startsWith("..") ||
+    resolve(tempReal, rel) !== rootReal ||
+    !basename(rootReal).startsWith("matchbase-")
+  ) {
+    throw new Error("Refusing to remove a fixture outside the temporary root.");
+  }
+  let entries = [];
+  try {
+    entries = await readdir(stateRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  for (const entry of entries) {
+    const path = join(stateRoot, entry.name);
+    const item = await lstat(path);
+    if (item.isSymbolicLink()) {
+      throw new Error("Refusing to clean a linked qualification fixture.");
+    }
+    if (item.isDirectory()) await chmod(path, 0o755);
+  }
+  await rm(rootReal, { recursive: true, force: true });
 }

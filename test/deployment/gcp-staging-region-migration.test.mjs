@@ -807,7 +807,7 @@ test("certificate poll handles provisioning, failure, timeout, and gates proxy a
     [
       "-NoProfile",
       "-Command",
-      `. '${common}'; $script:i=0; Wait-CertificateManagerActive -TimeoutSeconds 5 -IntervalSeconds 1 -Describe { $script:i++; [pscustomobject]@{managed=[pscustomobject]@{state=$(if($script:i -eq 1){'PROVISIONING'}else{'ACTIVE'})}} } -Sleep { param($s) } | Out-Null`,
+      `. '${common}'; $script:i=0; $result=@(Wait-CertificateManagerActive -TimeoutSeconds 5 -IntervalSeconds 1 -Describe { $script:i++; [pscustomobject]@{managed=[pscustomobject]@{state=$(if($script:i -eq 1){'PROVISIONING'}else{'ACTIVE'})}} } -Sleep { param($s) }); if($result.Count -ne 1 -or $result[0].managed.state -cne 'ACTIVE'){throw 'Wait result stream was contaminated.'}`,
     ],
     { encoding: "utf8" },
   );

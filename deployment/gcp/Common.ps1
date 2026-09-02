@@ -130,7 +130,7 @@ function Wait-CertificateManagerActive {
     $certificate = & $Describe
     $state = [string]$certificate.managed.state
     $now = & $Clock
-    Write-Output ("Certificate Manager state={0} observed_at_utc={1}" -f $state,$now.ToString("o"))
+    Write-Host ("Certificate Manager state={0} observed_at_utc={1}" -f $state,$now.ToString("o"))
     if ($state -ceq "ACTIVE") { return $certificate }
     if ($state -ceq "FAILED") {
       $issue = [string]$certificate.managed.provisioningIssue.reason

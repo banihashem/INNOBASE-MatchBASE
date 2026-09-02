@@ -716,6 +716,8 @@ test("canary edge plan closes Armor, TLS, Cloudflare DNS/header and preserves ma
   assert.match(result.stdout, /certificate-manager dns-authorizations create/u);
   assert.match(result.stdout, /certificate-manager maps entries create/u);
   assert.match(result.stdout, /--certificate-map=/u);
+  assert.match(edge, /--certificate-map=\$\(\$m\.CertificateMap\)/u);
+  assert.doesNotMatch(edge, /certificatemanager\.googleapis\.com\)\/projects/u);
   assert.match(result.stdout, /application A proxied/u);
   assert.match(result.stdout, /public A\/AAAA/u);
   assert.match(result.stdout, /SSL=strict/u);

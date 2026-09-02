@@ -727,6 +727,11 @@ test("canary edge plan closes Armor, TLS, Cloudflare DNS/header and preserves ma
   assert.match(edge, /Existing Cloudflare authorization CNAME drift/u);
   assert.doesNotMatch(edge, /Invoke-RestMethod\s+(?:Get|Post|Put)\s+/u);
   assert.match(edge, /Invoke-RestMethod -Method Get -Uri/u);
+  for (const script of [edge, producer]) {
+    assert.match(script, /\.kind-ceq"zone"/u);
+    assert.match(script, /\.phase-ceq"http_request_late_transform"/u);
+    assert.doesNotMatch(script, /rulesets\?phase=/u);
+  }
   assert.match(edge, /HTTPS proxy has an unrelated certificate map/u);
   assert.match(
     edge,

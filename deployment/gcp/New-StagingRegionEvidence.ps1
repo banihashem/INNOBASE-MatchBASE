@@ -120,7 +120,7 @@ if ($Checkpoint -in @("Canary", "Cutover")) {
   $dns=(Invoke-RestMethod -Method Get -Uri "$cfApi/dns_records?type=A&name=$($migration.CanaryHostname)" -Headers $cfHeaders).result
   $explicitAAAA=(Invoke-RestMethod -Method Get -Uri "$cfApi/dns_records?type=AAAA&name=$($migration.CanaryHostname)" -Headers $cfHeaders).result
   $ssl=(Invoke-RestMethod -Method Get -Uri "$cfApi/settings/ssl" -Headers $cfHeaders).result
-  $rulesets=(Invoke-RestMethod -Method Get -Uri "$cfApi/rulesets?phase=http_request_late_transform" -Headers $cfHeaders).result
+  $rulesets=@((Invoke-RestMethod -Method Get -Uri "$cfApi/rulesets" -Headers $cfHeaders).result|Where-Object{$_.kind-ceq"zone"-and$_.phase-ceq"http_request_late_transform"})
   foreach($auth in @($mainAuth,$canaryAuth)){ $rr=$auth.dnsResourceRecord;$authDns=(Invoke-RestMethod -Method Get -Uri "$cfApi/dns_records?type=CNAME&name=$($rr.name.TrimEnd('.'))" -Headers $cfHeaders).result;if($authDns.Count-ne 1-or $authDns[0].proxied-or $authDns[0].content.TrimEnd('.')-cne $rr.data.TrimEnd('.')){throw "Certificate Manager DNS authorization CNAME evidence failed."} }
   if($explicitAAAA.Count-ne 0-or$dns.Count-ne 1-or-not $dns[0].proxied-or $dns[0].content-cne [string]$address.address-or $ssl.value-cne "strict"-or $rulesets.Count-ne 1){throw "Cloudflare canary proxied A, explicit-AAAA prohibition, or Full strict evidence failed."}
   $ruleset=(Invoke-RestMethod -Method Get -Uri "$cfApi/rulesets/$($rulesets[0].id)" -Headers $cfHeaders).result

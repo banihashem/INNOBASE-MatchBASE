@@ -686,6 +686,9 @@ test("canary edge plan closes Armor, TLS, Cloudflare DNS/header and preserves ma
   const producer = await read(
     "../../deployment/gcp/New-StagingRegionEvidence.ps1",
   );
+  const route = await read(
+    "../../deployment/gcp/Prepare-StagingCanaryRoute.ps1",
+  );
   const result = spawnSync(
     "pwsh",
     [
@@ -709,6 +712,9 @@ test("canary edge plan closes Armor, TLS, Cloudflare DNS/header and preserves ma
   assert.match(edge, /canaryExpressions/u);
   assert.match(edge, /security-policies","rules","delete"/u);
   assert.match(producer, /armor_rule_count=2/u);
+  assert.match(route, /matchbase-staging-eu-canary/u);
+  assert.match(route, /Canary URL-map ownership collision/u);
+  assert.match(route, /main route changed/u);
   assert.match(
     result.stdout,
     /--domains=matchbase-staging\.innobase\.app,matchbase-staging-eu-canary\.innobase\.app/u,
@@ -717,6 +723,7 @@ test("canary edge plan closes Armor, TLS, Cloudflare DNS/header and preserves ma
   assert.match(result.stdout, /certificate-manager maps entries create/u);
   assert.match(result.stdout, /--certificate-map=/u);
   assert.match(edge, /--certificate-map=\$\(\$m\.CertificateMap\)/u);
+  assert.match(edge, /--clear-ssl-certificates/u);
   assert.doesNotMatch(edge, /certificatemanager\.googleapis\.com\)\/projects/u);
   assert.match(result.stdout, /application A proxied/u);
   assert.match(result.stdout, /public A\/AAAA/u);

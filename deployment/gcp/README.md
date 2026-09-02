@@ -191,6 +191,12 @@ downloads only the uniquely run-bound PDF exposed by the profile. Cost is indepe
 Recent `europe-west2` application logs are independently queried through gcloud.
 No free-form fact document is accepted.
 
+Before Canary evidence, apply `Configure-StagingCanaryEdge.ps1` and then
+`Prepare-StagingCanaryRoute.ps1 -Apply -ConfirmProjectId innobase-matchbase-stg`.
+The route preparer admits only the exact `matchbase-staging-web-canary-ew2`
+service through its dedicated NEG/backend and host rule. It verifies that the
+main Staging default route and all non-canary host/path rules remain unchanged.
+
 The EU acceptance origin is never caller-selected. The public origin is the
 closed `matchbase-staging-eu-canary.innobase.app` target; the direct origin,
 service UID and generation come from the live `europe-west2` Cloud Run service.

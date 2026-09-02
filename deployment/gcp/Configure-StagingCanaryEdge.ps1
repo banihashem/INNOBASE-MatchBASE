@@ -13,6 +13,7 @@ Write-GcloudPlan -Arguments @("certificate-manager","maps","create",[string]$m.C
 Write-GcloudPlan -Arguments @("certificate-manager","maps","entries","create",[string]$m.MainCertificateMapEntry,"--project=$project","--location=global","--map=$($m.CertificateMap)","--hostname=$main","--certificates=$($m.CanaryCertificateName)")
 Write-GcloudPlan -Arguments @("certificate-manager","maps","entries","create",[string]$m.CanaryCertificateMapEntry,"--project=$project","--location=global","--map=$($m.CertificateMap)","--hostname=$canary","--certificates=$($m.CanaryCertificateName)")
 Write-GcloudPlan -Arguments @("compute","target-https-proxies","update",[string]$m.HttpsProxyName,"--project=$project","--global","--certificate-map=$($m.CertificateMap)")
+Write-GcloudPlan -Arguments @("compute","target-https-proxies","update",[string]$m.HttpsProxyName,"--project=$project","--global","--clear-ssl-certificates")
 if(-not $Apply){Write-Output "PLAN COMPLETE — no GCP or Cloudflare state was changed.";return}
 Assert-ApplyConfirmation -Apply $true -ExpectedProjectId $project -ConfirmProjectId $ConfirmProjectId
 if([string]::IsNullOrWhiteSpace($env:CLOUDFLARE_API_TOKEN)-or[string]::IsNullOrWhiteSpace($env:MATCHBASE_CANARY_ORIGIN_ADMISSION_KEY)-or[string]::IsNullOrWhiteSpace($CloudflareZoneId)){throw "Apply requires in-memory Cloudflare credentials/key and exact zone ID."}
@@ -39,4 +40,5 @@ foreach($entry in @(@($m.MainCertificateMapEntry,$main),@($m.CanaryCertificateMa
 $cert=Wait-CertificateManagerActive -TimeoutSeconds $CertificateTimeoutSeconds -IntervalSeconds $CertificatePollIntervalSeconds -Describe { Invoke-Gcloud -Arguments @("certificate-manager","certificates","describe",[string]$m.CanaryCertificateName,"--project=$project","--location=global","--format=json")|ConvertFrom-Json }
 Assert-ExactDomainSet -Actual @($cert.managed.domains) -Expected @($main,$canary) -Description "Active Certificate Manager certificate"
 Invoke-Gcloud -Arguments @("compute","target-https-proxies","update",[string]$m.HttpsProxyName,"--project=$project","--global","--certificate-map=$($m.CertificateMap)")|Out-Null
-Write-Output "APPLY COMPLETE — DNS authorization stayed DNS-only; application A stayed proxied; unrelated attachments were not detached."
+if(@($proxy.sslCertificates).Count-eq1){Invoke-Gcloud -Arguments @("compute","target-https-proxies","update",[string]$m.HttpsProxyName,"--project=$project","--global","--clear-ssl-certificates")|Out-Null}
+Write-Output "APPLY COMPLETE — DNS authorization stayed DNS-only; application A stayed proxied; the governed certificate map replaced the known classic attachment."

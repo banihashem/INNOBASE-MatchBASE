@@ -417,6 +417,8 @@ test("checkpoint evidence is produced read-only and bound to same-project KMS pr
   assert.match(producer, /CandidateCommit/u);
   assert.match(producer, /PredecessorLedgerUri/u);
   assert.match(producer, /predecessor-ledger-content/u);
+  assert.match(producer, /run-closed-database-query\.mjs/u);
+  assert.doesNotMatch(producer, /Get-Command psql/u);
   assert.match(migration, /get-public-key/u);
   assert.match(migration, /VerifyData/u);
   assert.match(migration, /EvidenceSignaturePath/u);
@@ -438,9 +440,9 @@ test("source retirement requires full versioned artifact reconciliation and pers
   assert.match(producer, /persisted_artifact_uris/u);
   assert.match(
     producer,
-    /SELECT storage_uri FROM artifact_version WHERE storage_uri IS NOT NULL ORDER BY storage_uri;/u,
+    /json_agg\(storage_uri ORDER BY storage_uri\)/u,
   );
-  assert.match(producer, /<REDACTED_DATABASE_URL>/u);
+  assert.match(producer, /<QUERY_ON_STDIN>/u);
   assert.match(migration, /Assert-ArtifactInventoryReconciled/u);
   assert.match(
     migration,

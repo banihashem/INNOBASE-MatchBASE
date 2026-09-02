@@ -28,13 +28,12 @@ function Invoke-ReadOnlyCapture {
 
 function Invoke-DatabaseFactCapture {
   param([Parameter(Mandatory)][string]$Id, [Parameter(Mandatory)][string]$Query)
-  $psql = Get-Command psql -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($null -eq $psql) { throw "$Checkpoint evidence requires psql for closed database facts." }
   if ([string]::IsNullOrWhiteSpace($env:MATCHBASE_EVIDENCE_DATABASE_URL)) { throw "$Checkpoint evidence requires MATCHBASE_EVIDENCE_DATABASE_URL; its value is never recorded." }
-  $raw = (& $psql.Source $env:MATCHBASE_EVIDENCE_DATABASE_URL --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 --command=$Query 2>&1 | Out-String).Trim()
+  $helper=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "run-closed-database-query.mjs") -ErrorAction Stop).Path
+  $raw = ($Query | & node $helper 2>&1 | Out-String).Trim()
   if ($LASTEXITCODE -ne 0) { throw "Closed database fact query '$Id' failed." }
   $sha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($raw))).ToLowerInvariant()
-  return [ordered]@{ id = $Id; argv = @("psql", "<REDACTED_DATABASE_URL>", "--no-psqlrc", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1", "--command=$Query"); stdout_sha256 = $sha; stdout = $raw }
+  return [ordered]@{ id = $Id; argv = @("node", $helper, "<QUERY_ON_STDIN>"); query_sha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($Query))).ToLowerInvariant(); stdout_sha256 = $sha; stdout = $raw }
 }
 
 function Get-ClosedBuildProvenanceBinding {
@@ -56,7 +55,7 @@ if ($account -cnotmatch '^[^\s@]+@[^\s@]+$') { throw "Active gcloud account is m
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..") -ErrorAction Stop).Path
 $headCommit = (& git -C $repoRoot rev-parse HEAD 2>&1 | Out-String).Trim()
 $worktreeState = (& git -C $repoRoot status --porcelain=v1 --untracked-files=all 2>&1 | Out-String)
-$allowedControlPlanePaths=@("deployment/gcp/Common.ps1","deployment/gcp/Configure-StagingCanaryEdge.ps1","deployment/gcp/Prepare-StagingCanaryRoute.ps1","deployment/gcp/Migrate-StagingRegion.ps1","deployment/gcp/New-StagingRegionEvidence.ps1","deployment/gcp/README.md","test/deployment/gcp-eu-staging-target.test.mjs","test/deployment/gcp-staging-region-migration.test.mjs")
+$allowedControlPlanePaths=@("deployment/gcp/Common.ps1","deployment/gcp/Configure-StagingCanaryEdge.ps1","deployment/gcp/Prepare-StagingCanaryRoute.ps1","deployment/gcp/Migrate-StagingRegion.ps1","deployment/gcp/New-StagingRegionEvidence.ps1","deployment/gcp/run-closed-database-query.mjs","deployment/gcp/README.md","test/deployment/gcp-eu-staging-target.test.mjs","test/deployment/gcp-staging-region-migration.test.mjs")
 if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace($worktreeState)) { throw "Evidence production requires a clean tracked/untracked worktree." }
 & git -C $repoRoot merge-base --is-ancestor $CandidateCommit $headCommit 2>$null;if($LASTEXITCODE-ne0){throw "The image candidate commit must be an ancestor of the evidence control-plane commit."}
 $controlPlaneDeltaPaths=@(& git -C $repoRoot diff --name-only "$CandidateCommit..$headCommit" 2>&1|Where-Object{-not[string]::IsNullOrWhiteSpace($_)}|Sort-Object);if($LASTEXITCODE-ne0-or@($controlPlaneDeltaPaths|Where-Object{$_-cnotin$allowedControlPlanePaths}).Count){throw "Only the closed staging migration control-plane paths may differ from the image candidate."}
@@ -186,17 +185,10 @@ if ($Checkpoint -in @("Canary", "Cutover")) {
 if ($Checkpoint -ceq "SourceRetirement") {
   $captures += Invoke-ReadOnlyCapture -Id "source-object-inventory" -Arguments @("storage", "ls", "gs://innobase-matchbase-stg-artifacts/**", "--all-versions", "--json")
   $captures += Invoke-ReadOnlyCapture -Id "target-object-inventory" -Arguments @("storage", "ls", "gs://innobase-matchbase-stg-eu-artifacts/**", "--all-versions", "--json")
-  $psql = Get-Command psql -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($null -eq $psql) { throw "SourceRetirement evidence requires psql for the read-only persisted artifact URI query." }
-  if ([string]::IsNullOrWhiteSpace($env:MATCHBASE_EVIDENCE_DATABASE_URL)) { throw "SourceRetirement evidence requires MATCHBASE_EVIDENCE_DATABASE_URL; its value is never recorded." }
-  $artifactQuery = "SELECT storage_uri FROM artifact_version WHERE storage_uri IS NOT NULL ORDER BY storage_uri;"
-  $uriRaw = (& $psql.Source $env:MATCHBASE_EVIDENCE_DATABASE_URL --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 --command=$artifactQuery 2>&1 | Out-String).Trim()
-  if ($LASTEXITCODE -ne 0) { throw "Persisted artifact URI query failed." }
-  $uriHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($uriRaw))).ToLowerInvariant()
-  $queryHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($artifactQuery))).ToLowerInvariant()
-  $captures += [ordered]@{ id = "persisted-artifact-uris"; argv = @("psql", "<REDACTED_DATABASE_URL>", "--no-psqlrc", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1", "--command=$artifactQuery"); stdout_sha256 = $uriHash; stdout = $uriRaw }
-  $facts.persisted_artifact_uris = @($uriRaw -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-  $facts.persisted_artifact_uri_query_sha256 = $queryHash
+  $artifactQuery = "SELECT COALESCE(json_agg(storage_uri ORDER BY storage_uri),'[]'::json) FROM artifact_version WHERE storage_uri IS NOT NULL;"
+  $uriCapture=Invoke-DatabaseFactCapture -Id "persisted-artifact-uris" -Query $artifactQuery;$captures+=$uriCapture
+  $facts.persisted_artifact_uris=@($uriCapture.stdout|ConvertFrom-Json)
+  $facts.persisted_artifact_uri_query_sha256=$uriCapture.query_sha256
 }
 
 $ledgerBinding = $null

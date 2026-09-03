@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "matchbase.staging-route-qualification-authorization/v1",
+  "authorizationId": "MB-STG-ROUTE-QUAL-20260902-01",
+  "environment": "staging",
+  "scope": "synthetic_route_qualification_only",
+  "authorizedMaxCalls": 50,
+  "authorizedMaxCostUsd": 100,
+  "realUserDataAuthorized": false,
+  "productionTrafficAuthorized": false,
+  "deploymentAuthorized": true,
+  "credentialDisclosureAuthorized": false,
+  "routeRequirements": {
+    "requestLevelZdr": true,
+    "dataCollection": "deny",
+    "requireParameters": true,
+    "allowFallbacks": false,
+    "closedProviderOrdering": true,
+    "servedIdentityVerification": true
+  },
+  "ownerDecisionDigestBasis": "The owner authorized at least 50 synthetic qualification calls with a cumulative ceiling of USD 100, required governed agent execution, and authorized completion of MatchBASE Staging without production mutation.",
+  "recordedAt": "2026-09-02T15:06:20.339Z"
+}

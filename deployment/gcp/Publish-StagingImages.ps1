@@ -24,7 +24,7 @@ $buildRecordParser = Join-Path $repoRoot "scripts/lib/staging-build-record.mjs"
 $preflightParser = Join-Path $repoRoot "scripts/lib/staging-build-preflight.mjs"
 $policySha = (Get-FileHash -LiteralPath $policyPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $policyId = $policySha.Substring(0, 16)
-if ($policySha -cne "aa6b7e3e1c720fdc6c30ef7ebfa4fcc0e60fd4dbb41d73cee33f511b0adbddec") { throw "Tracked qualified Staging route-policy SHA-256 changed; update the governed build contract and tests first." }
+if ($policySha -cne "0c95528d528d7237c90d7bde792d5700e41878cf7f6f0a12b52d5ff4edb4ee02") { throw "Tracked qualified Staging route-policy SHA-256 changed; update the governed build contract and tests first." }
 if ((& git -C $repoRoot rev-parse HEAD).Trim() -cne $CandidateCommit) { throw "Candidate commit must equal HEAD." }
 if (-not [string]::IsNullOrWhiteSpace((& git -C $repoRoot status --porcelain=v1 --untracked-files=all | Out-String))) { throw "Image publication requires a clean tracked and untracked worktree." }
 $remote = (& git -C $repoRoot remote get-url origin).Trim()

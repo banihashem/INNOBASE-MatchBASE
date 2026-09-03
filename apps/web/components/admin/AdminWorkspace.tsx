@@ -59,6 +59,58 @@ export function AdminWorkspace({
             the stored Admin entitlement or inheriting authority from the UI.
           </p>
 
+          <div
+            className="admin-quick-launcher"
+            style={{
+              display: "flex",
+              gap: "1rem",
+              flexWrap: "wrap",
+              margin: "1.5rem 0 2rem",
+            }}
+          >
+            <a
+              className="primary-action"
+              href="/admin/product"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.875rem 1.5rem",
+                fontSize: "1.05rem",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              🚀 Launch new sourcing research
+            </a>
+            <a
+              className="secondary-action"
+              href="/admin/entitlements"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.875rem 1.25rem",
+                textDecoration: "none",
+              }}
+            >
+              👥 Manage user roles &amp; entitlements
+            </a>
+            <a
+              className="secondary-action"
+              href="#system-configuration"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.875rem 1.25rem",
+                textDecoration: "none",
+              }}
+            >
+              ⚙️ View system configuration
+            </a>
+          </div>
+
           <div className="admin-boundary" role="note">
             <strong>Server-owned authorization boundary</strong>
             <p>
@@ -152,6 +204,93 @@ export function AdminWorkspace({
                 will remain unavailable.
               </p>
             )}
+          </section>
+
+          <section
+            id="system-configuration"
+            className="admin-role-summary"
+            style={{
+              marginTop: "2rem",
+              borderTop: "1px solid var(--line)",
+              paddingTop: "1.5rem",
+            }}
+            aria-labelledby="system-config-title"
+          >
+            <p className="eyebrow">Platform Governance &amp; Infrastructure</p>
+            <h2 id="system-config-title">System Configuration &amp; Health</h2>
+            <p className="lede">
+              Live inspection of model route policies, cloud residency
+              boundaries, and cryptographic qualification status.
+            </p>
+
+            <div
+              className="admin-operations-grid"
+              style={{ marginTop: "1rem" }}
+            >
+              <article className="admin-operation-card">
+                <p className="eyebrow">Model Gateway</p>
+                <h3>Route Policy v4</h3>
+                <p>
+                  <strong>Active Route Policy:</strong>{" "}
+                  <code>slice3-routes.staging-qualified-v4</code>
+                  <br />
+                  <strong>Primary:</strong> Google Gemini 2.5 Pro &amp; Flash
+                  <br />
+                  <strong>Fallback:</strong> OpenRouter Azure OpenAI (KMS
+                  RSA-SHA256 Qualified)
+                </p>
+                <div style={{ marginTop: "0.75rem" }}>
+                  <span
+                    className="tier-badge"
+                    style={{ backgroundColor: "#065f46", color: "#6ee7b7" }}
+                  >
+                    Verified Active
+                  </span>
+                </div>
+              </article>
+
+              <article className="admin-operation-card">
+                <p className="eyebrow">Data Residency</p>
+                <h3>Europe Boundary (europe-west2)</h3>
+                <p>
+                  <strong>Host Region:</strong> London (europe-west2)
+                  <br />
+                  <strong>Edge Protection:</strong> Cloudflare Strict SSL +
+                  Google Cloud Armor
+                  <br />
+                  <strong>Admission:</strong> Server-owned Origin Admission
+                </p>
+                <div style={{ marginTop: "0.75rem" }}>
+                  <span
+                    className="tier-badge"
+                    style={{ backgroundColor: "#065f46", color: "#6ee7b7" }}
+                  >
+                    Governed Residency
+                  </span>
+                </div>
+              </article>
+
+              <article className="admin-operation-card">
+                <p className="eyebrow">Reporting &amp; PDF</p>
+                <h3>Consultant Deliverables</h3>
+                <p>
+                  <strong>Toolchain:</strong> Consultant PDF Generator Runtime
+                  <br />
+                  <strong>Domain Packs:</strong> Food &amp; Agricultural
+                  Commodities (Active)
+                  <br />
+                  <strong>Attestation:</strong> Cryptographic Field Provenance
+                </p>
+                <div style={{ marginTop: "0.75rem" }}>
+                  <span
+                    className="tier-badge"
+                    style={{ backgroundColor: "#065f46", color: "#6ee7b7" }}
+                  >
+                    Operational
+                  </span>
+                </div>
+              </article>
+            </div>
           </section>
         </section>
       </main>

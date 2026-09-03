@@ -95,6 +95,12 @@ export function StandardWorkspace({
             Requests
           </button>
           <button
+            className={screen === "intake" ? "nav-button active" : "nav-button"}
+            onClick={() => transition("intake")}
+          >
+            New Request
+          </button>
+          <button
             className={
               screen === "profile" ? "nav-button active" : "nav-button"
             }

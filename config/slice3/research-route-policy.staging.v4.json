@@ -85,13 +85,13 @@
         "backoffMs": 0
       },
       "dataHandling": {
-        "evidenceVersion": "slice3-provider-evidence.2026-09-02.staging-live-qualified-v2",
+        "evidenceVersion": "slice3-provider-evidence.2026-09-02.staging-live-qualified-v3",
         "evidenceRefs": [
           "https://openrouter.ai/openai/gpt-5.4-mini",
           "https://openrouter.ai/docs/guides/features/structured-outputs",
           "https://openrouter.ai/docs/guides/routing/provider-selection",
           "https://openrouter.ai/docs/guides/features/zdr",
-          "https://openrouter.ai/docs/api/api-reference/endpoints/list-endpoints-zdr",
+          "https://openrouter.ai/api/v1/endpoints/zdr",
           "https://openrouter.ai/docs/cookbook/administration/usage-accounting"
         ],
         "evidenceAccessedAt": "2026-09-02T14:45:00.000Z",

@@ -25,6 +25,10 @@ const forbiddenExtensions = new Set([
 const violations = [];
 const pinnedPublicMaterial = new Map([
   [
+    `evidence${sep}slice3${sep}staging-openrouter-azure-openai-qualification.v2.pub.pem`,
+    "69410D30C7F818E39E9592A0A4FC75D89E358B7C97A391250D9B1F3DF3E3D9CD",
+  ],
+  [
     `config${sep}slice3${sep}role2-v5-tpm-ecdsa-p256-public.pem`,
     "5897804885924CE5499494F9D00471A6B1D918671B6D17F7206C6007AFCDF1E4",
   ],

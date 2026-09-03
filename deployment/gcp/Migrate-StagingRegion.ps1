@@ -28,7 +28,7 @@ param(
   [string]$SourceRetirementAcknowledgement = "",
   [string]$RetirementBackupId = "",
   [ValidateRange(1, 30)][int]$SourceHoldDays = 7,
-  [string]$ExpectedRoutePolicySha256 = "aa6b7e3e1c720fdc6c30ef7ebfa4fcc0e60fd4dbb41d73cee33f511b0adbddec",
+  [string]$ExpectedRoutePolicySha256 = "b752d2d42a63aaad11f3b89f67bad64861ce767f633bee8190549df23a6f4155",
   [string]$WebSourceImageDigest = "me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-web@sha256:088f3a29fadc0bc9caedfd7f93fd19767a3d6d434fc3a0d333d09b20029ae071",
   [string]$WorkerSourceImageDigest = "me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-worker-b752d2d42a63aaad@sha256:9f0422c70e09bf24f654d8c4e7af4241ef8dd5305af862b62e04e8d134da4816",
   [string]$MaintenanceBaseImageDigest = "node:24.14.0-bookworm-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8",
@@ -342,8 +342,8 @@ function Assert-ArtifactInventoryReconciled {
   foreach ($item in $targetObjects) {
     $name = ([string]$item.name).Replace("gs://$($migration.TargetArtifactBucket)/", "")
     $targetByName[$name] = $item
-    $identity = "$name|$($item.size)|$($item.crc32c)"
-    $targetVersions[$identity] = 1 + [int]($targetVersions[$identity] ?? 0)
+    $currentCount = if ($targetVersions.ContainsKey($identity)) { [int]$targetVersions[$identity] } else { 0 }
+    $targetVersions[$identity] = 1 + $currentCount
   }
   foreach ($item in $sourceObjects) {
     $name = ([string]$item.name).Replace("gs://$($migration.SourceArtifactBucket)/", "")

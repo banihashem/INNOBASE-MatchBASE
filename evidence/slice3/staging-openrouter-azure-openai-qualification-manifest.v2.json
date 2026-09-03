@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "matchbase.staging-route-qualification-manifest/v2",
+  "authorizationId": "MB-STG-ROUTE-QUAL-20260902-01",
+  "sessionId": "65ae4e03-f4fe-4356-9a1b-3823cfe35e11",
+  "environment": "staging",
+  "policyVersion": "slice3-routes.2026-09-02.staging-qualified-v4",
+  "policyFileSha256": "0c95528d528d7237c90d7bde792d5700e41878cf7f6f0a12b52d5ff4edb4ee02",
+  "routeId": "RT-OPENROUTER-AZURE-OPENAI-GPT-5.4-MINI-S3-V1",
+  "outputSchemaCanonicalSha256": "c56bb23f7aae6a8e7352d7dbf9563595cd606b4a246339d1a345c842f5553788",
+  "signingKeyVersion": "projects/innobase-matchbase-stg/locations/europe-west2/keyRings/matchbase-staging-evidence/cryptoKeys/checkpoint-signer/cryptoKeyVersions/1",
+  "signatureAlgorithm": "RSA_SIGN_PKCS1_3072_SHA256",
+  "artifacts": {
+    "evidence": {
+      "path": "evidence/slice3/staging-openrouter-azure-openai-qualification.v2.json",
+      "sha256": "d5331bdb076dc64f011cd23df93396cd5ca5f9faa206c8fd733b6cabdb1df2bb"
+    },
+    "evidenceSignature": {
+      "path": "evidence/slice3/staging-openrouter-azure-openai-qualification.v2.sig",
+      "sha256": "6ae9d9ccb9e9a623a105fbe4474ae51b16f84244e0f6b12947e3a7f8beb15944"
+    },
+    "publicKey": {
+      "path": "evidence/slice3/staging-openrouter-azure-openai-qualification.v2.pub.pem",
+      "sha256": "69410d30c7f818e39e9592a0a4fc75d89e358b7c97a391250d9b1f3df3e3d9cd"
+    }
+  },
+  "terminalDisposition": "PASS",
+  "recordedAt": "2026-09-02T15:34:11.596Z"
+}

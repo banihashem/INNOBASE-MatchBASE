@@ -733,6 +733,31 @@ export function AdminEntitlementManager() {
                       ) : null}
                       <div className={styles.actions}>
                         <button
+                          type="button"
+                          className={`${styles.button} ${styles.secondary}`}
+                          onClick={async () => {
+                            try {
+                              const res = await fetch("/api/v1/me", {
+                                headers: { Accept: "application/json" },
+                              });
+                              if (res.ok) {
+                                const data = (await res.json()) as {
+                                  subject?: { user_id?: string };
+                                  user_id?: string;
+                                };
+                                const id =
+                                  data.subject?.user_id || data.user_id;
+                                if (id) {
+                                  updateDraft("subject_user_id", id);
+                                  void loadSubject(id);
+                                }
+                              }
+                            } catch {}
+                          }}
+                        >
+                          Auto-fill current user ID
+                        </button>
+                        <button
                           ref={loadSubjectRef}
                           id="entitlement-load"
                           className={`${styles.button} ${styles.secondary}`}

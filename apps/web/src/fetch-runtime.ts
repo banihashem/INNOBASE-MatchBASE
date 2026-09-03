@@ -122,7 +122,7 @@ function sessionCookieAttributes(config: WebConfig, httpOnly: boolean): string {
 function simulatorTicket(
   config: WebConfig,
   state: string,
-  fixture: "demo" | "standard",
+  fixture: "demo" | "standard" | "admin",
 ): string {
   return createHmac("sha256", config.digestKey)
     .update(`${fixture}\u0000${state}`, "utf8")
@@ -673,7 +673,7 @@ async function simulatorSession(
     emailVerified?: boolean;
     hostedDomain?: string;
     simulator: boolean;
-    tier: "demo" | "standard";
+    tier: "demo" | "standard" | "admin";
   },
 ): Promise<{ handle: string; csrf: string }> {
   const existing = await client.query<{
@@ -705,7 +705,49 @@ async function simulatorSession(
         identity.displayName,
       ],
     );
-    if (identity.tier === "demo") {
+    if (identity.tier === "admin") {
+      const grantorId = randomUUID();
+      await client.query(
+        `INSERT INTO app_user(user_id,account_id,google_sub,email_verified,status)
+         VALUES($1,$2,$3,true,'active')`,
+        [grantorId, accountId, `${identity.subject}:grantor`],
+      );
+      await client.query(
+        `INSERT INTO entitlement_grant
+          (grant_id,account_id,user_id,tier,grant_actor_kind,granted_by_user_id,justification,effective_from)
+         VALUES($1,$2,$3,'admin','user',$4,$5,clock_timestamp())`,
+        [randomUUID(), accountId, userId, grantorId, "admin simulator bootstrap"],
+      );
+      await client.query(
+        `INSERT INTO admin_role_grant
+          (admin_grant_id,account_id,user_id,sub_role,granted_by_user_id,
+           justification,effective_from)
+         VALUES($1,$2,$3,'super_admin',$4,$5,clock_timestamp())`,
+        [randomUUID(), accountId, userId, grantorId, "admin simulator bootstrap"],
+      );
+      await appendAuditEvent(client, {
+        accountId,
+        actorUserId: grantorId,
+        eventType: "entitlement.granted",
+        resourceKind: "app_user",
+        resourceId: userId,
+        outcome: "allow",
+        justification: "admin simulator bootstrap",
+        correlationId,
+        deploymentId: current.config.deploymentId,
+        detail: {
+          actorKind: "synthetic_simulator_bootstrap",
+          entitlementKind: "tier",
+          entitlementValue: "admin",
+          tier: "admin",
+          sub_role: "super_admin",
+          expires_at: null,
+          changed: true,
+          before: { tier: null, admin_sub_roles: [] },
+          after: { tier: "admin", admin_sub_roles: ["super_admin"] },
+        },
+      });
+    } else if (identity.tier === "demo") {
       await ensureBootstrapEntitlement(client, {
         accountId,
         subjectUserId: userId,
@@ -865,7 +907,7 @@ export async function handleRoute(request: Request): Promise<Response> {
         );
       }
       const fixture = url.searchParams.get("fixture") ?? "demo";
-      if (fixture !== "demo" && fixture !== "standard")
+      if (fixture !== "demo" && fixture !== "standard" && fixture !== "admin")
         throw new ApplicationFault(
           404,
           "route-not-found",
@@ -910,7 +952,7 @@ export async function handleRoute(request: Request): Promise<Response> {
       if (
         !current.config.oidcSimulatorEnabled ||
         current.config.environment === "production" ||
-        (fixture !== "demo" && fixture !== "standard") ||
+        (fixture !== "demo" && fixture !== "standard" && fixture !== "admin") ||
         !state ||
         !transactionSecrets ||
         transactionSecrets.state !== state ||
@@ -980,7 +1022,11 @@ export async function handleRoute(request: Request): Promise<Response> {
         return simulatorSession(current, correlationId, client, {
           subject: `simulator-${fixture}-subject-v1:${current.config.deploymentId}`,
           displayName:
-            fixture === "standard" ? "Synthetic Standard" : "Synthetic Demo",
+            fixture === "admin"
+              ? "Synthetic Admin"
+              : fixture === "standard"
+                ? "Synthetic Standard"
+                : "Synthetic Demo",
           email: `${fixture}@example.invalid`,
           emailVerified: true,
           simulator: true,

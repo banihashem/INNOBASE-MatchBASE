@@ -121,6 +121,13 @@ export function RequestHistory({
               ? "Create a request to begin qualified live research."
               : "Create a request to begin a synthetic Standard evaluation."}
           </p>
+          <button
+            className="primary-action"
+            onClick={onNewRequest}
+            style={{ marginTop: "1.25rem" }}
+          >
+            Start new structured request
+          </button>
         </div>
       ) : null}
       {requests && requests.items.length > 0 ? (

@@ -22,10 +22,19 @@ const euAcceptanceValidatorPath = fileURLToPath(
 const read = async (path) =>
   await readFile(new URL(path, import.meta.url), "utf8");
 
+const powershellBinary =
+  process.platform === "win32" && spawnSync("where.exe", ["pwsh"]).status !== 0
+    ? "powershell.exe"
+    : "pwsh";
+
 const runPowerShell = (...arguments_) =>
-  spawnSync("pwsh", ["-NoProfile", "-File", scriptPath, ...arguments_], {
-    encoding: "utf8",
-  });
+  spawnSync(
+    powershellBinary,
+    ["-NoProfile", "-File", scriptPath, ...arguments_],
+    {
+      encoding: "utf8",
+    },
+  );
 
 test("the closed migration map preserves the active source and names the EU target", async () => {
   const common = await read("../../deployment/gcp/Common.ps1");
@@ -117,7 +126,7 @@ test("migration ledger tracks are closed, isolated, and canonical by default", a
   assert.equal(isolated.status, 0, isolated.stderr);
   assert.match(isolated.stdout, /Ledger track: candidate-2b859650/u);
   assert.notEqual(invalid.status, 0);
-  assert.match(invalid.stderr, /Cannot validate argument.*LedgerTrackId/su);
+  assert.match(invalid.stderr, /Cannot validate\s+argument.*LedgerTrackId/su);
   assert.doesNotMatch(
     canonicalFoundation.stdout,
     /--exclude=\^migration-governance\//u,
@@ -687,7 +696,7 @@ test("evidence producer rejects arbitrary asserted facts and uses closed collect
   assert.match(producer, /validate-staging-eu-acceptance\.mjs/u);
   assert.match(producer, /Closed EU acceptance collector failed/u);
   const forgedFacts = spawnSync(
-    "pwsh",
+    powershellBinary,
     [
       "-NoProfile",
       "-File",
@@ -918,7 +927,7 @@ test("canary edge plan closes Armor, TLS, Cloudflare DNS/header and preserves ma
     "../../deployment/gcp/Migrate-StagingRegion.ps1",
   );
   const result = spawnSync(
-    "pwsh",
+    powershellBinary,
     [
       "-NoProfile",
       "-File",
@@ -1020,7 +1029,7 @@ test("exact domain-set helper accepts reordered equality and rejects extras", ()
     new URL("../../deployment/gcp/Common.ps1", import.meta.url),
   );
   const equal = spawnSync(
-    "pwsh",
+    powershellBinary,
     [
       "-NoProfile",
       "-Command",
@@ -1030,7 +1039,7 @@ test("exact domain-set helper accepts reordered equality and rejects extras", ()
   );
   assert.equal(equal.status, 0, equal.stderr);
   const extra = spawnSync(
-    "pwsh",
+    powershellBinary,
     [
       "-NoProfile",
       "-Command",
@@ -1050,7 +1059,7 @@ test("certificate poll handles provisioning, failure, timeout, and gates proxy a
     "../../deployment/gcp/Configure-StagingCanaryEdge.ps1",
   );
   const active = spawnSync(
-    "pwsh",
+    powershellBinary,
     [
       "-NoProfile",
       "-Command",
@@ -1060,7 +1069,7 @@ test("certificate poll handles provisioning, failure, timeout, and gates proxy a
   );
   assert.equal(active.status, 0, active.stderr);
   const failed = spawnSync(
-    "pwsh",
+    powershellBinary,
     [
       "-NoProfile",
       "-Command",
@@ -1071,7 +1080,7 @@ test("certificate poll handles provisioning, failure, timeout, and gates proxy a
   assert.notEqual(failed.status, 0);
   assert.match(failed.stderr, /FAILED.*CAA/u);
   const timed = spawnSync(
-    "pwsh",
+    powershellBinary,
     [
       "-NoProfile",
       "-Command",

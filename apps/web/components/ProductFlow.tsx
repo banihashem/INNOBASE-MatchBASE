@@ -693,6 +693,15 @@ export function ProductFlow({
                 <a className="landing-cta-primary" href={authPath}>
                   Continue with Google
                 </a>
+                {authPath.includes("/simulator/") ? (
+                  <a
+                    className="landing-cta-primary"
+                    href={`${authPath}${authPath.includes("?") ? "&" : "?"}fixture=admin`}
+                    style={{ background: "var(--color-amber-600, #d97706)" }}
+                  >
+                    Sign in as Admin
+                  </a>
+                ) : null}
                 <span className="landing-cta-secondary">
                   {qualifiedLive
                     ? "Live evidence path"

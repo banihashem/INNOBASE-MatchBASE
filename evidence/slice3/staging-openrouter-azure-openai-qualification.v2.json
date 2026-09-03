@@ -1,0 +1,110 @@
+{
+  "schemaVersion": "matchbase.staging-openrouter-route-qualification/v2",
+  "environment": "staging",
+  "authorization": {
+    "authorizationId": "MB-STG-ROUTE-QUAL-20260902-01",
+    "authorizationFileSha256": "a780dcabf631554854b151efd2724a06e5a4a7561d425710ff445d64c28fac78",
+    "sessionId": "65ae4e03-f4fe-4356-9a1b-3823cfe35e11",
+    "syntheticOnly": true,
+    "realUserDataTransmitted": false,
+    "authorizedMaxCalls": 50,
+    "authorizedMaxCostUsd": 100
+  },
+  "policyBinding": {
+    "policyVersion": "slice3-routes.2026-09-02.staging-qualified-v4",
+    "policyFileSha256": "0c95528d528d7237c90d7bde792d5700e41878cf7f6f0a12b52d5ff4edb4ee02",
+    "policyCanonicalSha256": "412a9dce2d1f20dd853d1e376d386e9f8b92c347681f1b321978e6fc0c644ebe",
+    "routeId": "RT-OPENROUTER-AZURE-OPENAI-GPT-5.4-MINI-S3-V1",
+    "requestedProviderId": "azure",
+    "requestedModelId": "openai/gpt-5.4-mini",
+    "outputSchemaCanonicalSha256": "c56bb23f7aae6a8e7352d7dbf9563595cd606b4a246339d1a345c842f5553788",
+    "responseSchemaStrict": false
+  },
+  "requestBinding": {
+    "runnerFileSha256": "70ead25c76e8efd1fba19503bf9822f560c4f778c91795a8623ddc32f7e192ef",
+    "requestBodySha256": "f547492d24fe9d20a66a166731a75966a6589150bee87f88c44dec10e1c4073e",
+    "promptSha256": "c5adad58c7260704f0c105517778d2b6c0529197182653b6fabe447ab02050fd",
+    "sanitizedEvidenceSha256": "273197524c50c56a8a658c593f229608ffc75e3e23af2603e88c723901dc9033",
+    "canonicalRequestSha256": "e4158545e9e7028fbe424fbd658bdfa823cd121a5db8a7714859679e451bdc9f"
+  },
+  "liveCatalogObservation": {
+    "endpoint": "https://openrouter.ai/api/v1/endpoints/zdr",
+    "requestedAt": "2026-09-02T15:34:05.491Z",
+    "observedAt": "2026-09-02T15:34:06.152Z",
+    "httpStatus": 200,
+    "responseSha256": "93a06e478cee1fb6e7407c363f17e2b6962c560f1eaba021864499f4a410526b",
+    "modelId": "openai/gpt-5.4-mini",
+    "providerName": "Azure",
+    "providerTag": "azure",
+    "status": 0,
+    "requiredCapabilities": [
+      "response_format",
+      "structured_outputs",
+      "max_completion_tokens"
+    ]
+  },
+  "providerCall": {
+    "startedAt": "2026-09-02T15:34:06.152Z",
+    "completedAt": "2026-09-02T15:34:11.590Z",
+    "httpStatus": 200,
+    "elapsedMs": 5438,
+    "strategy": "direct",
+    "attempt": 1,
+    "isByok": false,
+    "servedProviderName": "Azure",
+    "servedProviderId": "azure",
+    "requestedModelId": "openai/gpt-5.4-mini",
+    "servedRouterModelId": "openai/gpt-5.4-mini-20260317",
+    "finishReason": "stop",
+    "inputTokens": 1408,
+    "outputTokens": 826,
+    "costUsd": 0.004773,
+    "generationIdSha256": "f6e768fa6f4c26a4ed97af7f2950bbc563d91395b4a0420d9928da32ca8f1113",
+    "responseContentSha256": "53db9dc8118f1cdf0d89b20f3e89fd7cb121c2e30620b7d7f02714f3d76010ad",
+    "routerMetadataSha256": "5911d04c1b1dc684640d168781cd7aebd620ff95631290fa218410aa13cb5179",
+    "evidenceGraphSha256": "e501778acebbfef5c25a5f8702f0e0df4432e83442ab171f8c135f81738bd7f2",
+    "evidenceGraphValidation": "passed"
+  },
+  "accounting": {
+    "pricingVersion": "staging-qualified-pricing.2026-09-02",
+    "accountingMode": "provider_reported",
+    "sessionConsumedCalls": 1,
+    "sessionCostUsd": 0.004773,
+    "supersededSessionCalls": 4,
+    "supersededSessionKnownCostUsd": 0.01900875,
+    "authorizationAggregateObservedCalls": 5,
+    "authorizationAggregateKnownCostUsd": 0.02378175,
+    "authorizationRemainingCalls": 45,
+    "authorizationRemainingKnownCostUsd": 99.97621825,
+    "callsWithinAuthorization": true,
+    "costWithinAuthorization": true
+  },
+  "privacy": {
+    "requestLevelZdr": true,
+    "dataCollection": "deny",
+    "requireParameters": true,
+    "allowFallbacks": false,
+    "providerOnly": ["azure"],
+    "providerOrder": ["azure"],
+    "rawProviderPayloadPersisted": false,
+    "credentialsPersistedOrDisclosed": false
+  },
+  "pricingBundle": {
+    "version": "staging-qualified-pricing.2026-09-02",
+    "directGemini": {
+      "inheritedUnchangedFromPolicyVersion": "slice3-routes.2026-09-01.staging-qualified-v3",
+      "inheritedPolicyFileSha256": "b752d2d42a63aaad11f3b89f67bad64861ce767f633bee8190549df23a6f4155",
+      "accountingMode": "conservative_estimate",
+      "officialPricingRef": "https://ai.google.dev/gemini-api/docs/pricing",
+      "requestCostCeilingUsd": 1,
+      "searchCostCeilingUsd": 1
+    },
+    "openRouterAzure": {
+      "accountingMode": "provider_reported",
+      "providerReportedCostUsd": 0.004773,
+      "usageAccountingRef": "https://openrouter.ai/docs/cookbook/administration/usage-accounting"
+    }
+  },
+  "terminalDisposition": "PASS",
+  "recordedAt": "2026-09-02T15:34:11.596Z"
+}

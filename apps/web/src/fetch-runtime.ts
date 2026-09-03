@@ -591,7 +591,7 @@ async function sessionFor(
         return { kind: "denied", fault };
       }
       await client.query(
-        "UPDATE user_session SET last_used_at = clock_timestamp() WHERE session_id = $1",
+        "UPDATE user_session SET last_used_at = clock_timestamp(), idle_expires_at = clock_timestamp() + interval '30 minutes' WHERE session_id = $1",
         [row.session_id],
       );
       return {

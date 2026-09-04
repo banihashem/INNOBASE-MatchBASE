@@ -24,6 +24,7 @@ import {
   type IntakeInput,
   type RequestContext,
 } from "@matchbase/application";
+import { classifyAndDeriveCanonicalWithLlm } from "@matchbase/ai-evidence";
 import {
   assertUnsafeRequest,
   createGoogleOidcAdapter,
@@ -122,7 +123,7 @@ function sessionCookieAttributes(config: WebConfig, httpOnly: boolean): string {
 function simulatorTicket(
   config: WebConfig,
   state: string,
-  fixture: "demo" | "standard" | "admin",
+  fixture: "demo" | "standard" | "admin" | "consultant",
 ): string {
   return createHmac("sha256", config.digestKey)
     .update(`${fixture}\u0000${state}`, "utf8")
@@ -673,7 +674,7 @@ async function simulatorSession(
     emailVerified?: boolean;
     hostedDomain?: string;
     simulator: boolean;
-    tier: "demo" | "standard" | "admin";
+    tier: "demo" | "standard" | "admin" | "consultant";
   },
 ): Promise<{ handle: string; csrf: string }> {
   const existing = await client.query<{
@@ -712,40 +713,15 @@ async function simulatorSession(
          VALUES($1,$2,$3,true,'active')`,
         [grantorId, accountId, `${identity.subject}:grantor`],
       );
-      await client.query(
-        `INSERT INTO entitlement_grant
-          (grant_id,account_id,user_id,tier,grant_actor_kind,granted_by_user_id,justification,effective_from)
-         VALUES($1,$2,$3,'admin','user',$4,$5,clock_timestamp())`,
-        [randomUUID(), accountId, userId, grantorId, "admin simulator bootstrap"],
-      );
-      await client.query(
-        `INSERT INTO admin_role_grant
-          (admin_grant_id,account_id,user_id,sub_role,granted_by_user_id,
-           justification,effective_from)
-         VALUES($1,$2,$3,'super_admin',$4,$5,clock_timestamp())`,
-        [randomUUID(), accountId, userId, grantorId, "admin simulator bootstrap"],
-      );
-      await appendAuditEvent(client, {
+      await ensureBootstrapEntitlement(client, {
         accountId,
-        actorUserId: grantorId,
-        eventType: "entitlement.granted",
-        resourceKind: "app_user",
-        resourceId: userId,
-        outcome: "allow",
-        justification: "admin simulator bootstrap",
+        subjectUserId: userId,
+        grantorUserId: grantorId,
         correlationId,
         deploymentId: current.config.deploymentId,
-        detail: {
-          actorKind: "synthetic_simulator_bootstrap",
-          entitlementKind: "tier",
-          entitlementValue: "admin",
-          tier: "admin",
-          sub_role: "super_admin",
-          expires_at: null,
-          changed: true,
-          before: { tier: null, admin_sub_roles: [] },
-          after: { tier: "admin", admin_sub_roles: ["super_admin"] },
-        },
+        environment: current.config.environment,
+        justification: "admin simulator bootstrap",
+        tier: "admin",
       });
     } else if (identity.tier === "demo") {
       await ensureBootstrapEntitlement(client, {
@@ -756,6 +732,23 @@ async function simulatorSession(
         environment: current.config.environment,
         justification: "default simulator grant",
         tier: "demo",
+      });
+    } else if (identity.tier === "consultant") {
+      const grantorId = randomUUID();
+      await client.query(
+        `INSERT INTO app_user(user_id,account_id,google_sub,email_verified,status)
+         VALUES($1,$2,$3,true,'active')`,
+        [grantorId, accountId, `${identity.subject}:grantor`],
+      );
+      await ensureBootstrapEntitlement(client, {
+        accountId,
+        subjectUserId: userId,
+        grantorUserId: grantorId,
+        correlationId,
+        deploymentId: current.config.deploymentId,
+        environment: current.config.environment,
+        justification: "signed consultant simulator fixture",
+        tier: "consultant",
       });
     } else {
       const grantorId = randomUUID();
@@ -907,7 +900,12 @@ export async function handleRoute(request: Request): Promise<Response> {
         );
       }
       const fixture = url.searchParams.get("fixture") ?? "demo";
-      if (fixture !== "demo" && fixture !== "standard" && fixture !== "admin")
+      if (
+        fixture !== "demo" &&
+        fixture !== "standard" &&
+        fixture !== "admin" &&
+        fixture !== "consultant"
+      )
         throw new ApplicationFault(
           404,
           "route-not-found",
@@ -952,7 +950,10 @@ export async function handleRoute(request: Request): Promise<Response> {
       if (
         !current.config.oidcSimulatorEnabled ||
         current.config.environment === "production" ||
-        (fixture !== "demo" && fixture !== "standard" && fixture !== "admin") ||
+        (fixture !== "demo" &&
+          fixture !== "standard" &&
+          fixture !== "admin" &&
+          fixture !== "consultant") ||
         !state ||
         !transactionSecrets ||
         transactionSecrets.state !== state ||
@@ -1026,11 +1027,13 @@ export async function handleRoute(request: Request): Promise<Response> {
               ? "Synthetic Admin"
               : fixture === "standard"
                 ? "Synthetic Standard"
-                : "Synthetic Demo",
+                : fixture === "consultant"
+                  ? "Synthetic Consultant"
+                  : "Synthetic Demo",
           email: `${fixture}@example.invalid`,
           emailVerified: true,
           simulator: true,
-          tier: fixture,
+          tier: fixture as "demo" | "standard" | "admin" | "consultant",
         });
       });
       const headers = responseHeaders(current.config, correlationId, {
@@ -1409,11 +1412,10 @@ export async function handleRoute(request: Request): Promise<Response> {
       );
     }
     const standardMutationIntent =
-      session.requestContext.tier === "demo" &&
       isSharedWorkspaceMutation(request.method, path) &&
       isStandardMutationIntent(request.method, path, await readRequestBody());
     if (
-      session.requestContext.tier !== "demo" ||
+      session.requestContext.tier === "standard" ||
       path.startsWith("/api/v1/domain-packs/") ||
       standardMutationIntent
     ) {
@@ -1470,47 +1472,30 @@ export async function handleRoute(request: Request): Promise<Response> {
         new Set(["preferences_context"]),
         "Submitted intake is invalid.",
       );
+      const rawSource = sourceText(input.source_text);
+      const derivedFixture = await deriveCanonicalFixture(
+        rawSource,
+        unknownFields,
+      );
       const result = await current.application.createRequest(
         session.requestContext,
         idempotencyKey!,
         {
-          sourceText: sourceText(input.source_text),
-          fixtureCanonicalText:
-            "Synthetic industrial sourcing request for local evaluation",
-          fixtureCanonicalFields: [
-            {
-              fieldId: "need",
-              path: "product.need",
-              valueState: "provided",
-              languageOrigin: "translated",
-              canonicalValue: "Synthetic industrial sourcing need",
-            },
-            {
-              fieldId: "mandatory_constraints",
-              path: "product.mandatory_constraints",
-              valueState: "provided",
-              languageOrigin: "translated",
-              canonicalValue: "Synthetic mandatory constraints",
-            },
-            {
-              fieldId: "preferences_context",
-              path: "commercial.preferences_context",
-              valueState: unknownFields.includes("preferences_context")
-                ? "explicitly_unknown"
-                : "provided",
-              languageOrigin: "translated",
-              canonicalValue: unknownFields.includes("preferences_context")
-                ? "Unknown"
-                : "Synthetic preferences and context",
-            },
-          ],
+          sourceText: rawSource,
+          fixtureCanonicalText: derivedFixture.fixtureCanonicalText,
+          fixtureCanonicalFields: derivedFixture.fixtureCanonicalFields,
           presentedFields,
         } satisfies IntakeInput,
       );
+      const extendedResult = {
+        ...result,
+        consultant_prose: derivedFixture.consultantProse,
+        deep_research_prompt: derivedFixture.deepResearchPrompt,
+      };
       return json(
         current.config,
         correlationId,
-        result,
+        extendedResult,
         201,
         result.idempotent_replay
           ? { "MB-Idempotent-Replay": "true" }
@@ -1778,4 +1763,31 @@ export async function handleRoute(request: Request): Promise<Response> {
       fault.headers,
     );
   }
+}
+
+async function deriveCanonicalFixture(
+  rawText: string,
+  unknownFields: readonly string[],
+): Promise<{
+  fixtureCanonicalText: string;
+  fixtureCanonicalFields: Array<{
+    fieldId: string;
+    path: string;
+    valueState: "provided" | "explicitly_unknown";
+    languageOrigin: "translated" | "entered_in_english";
+    canonicalValue: string;
+  }>;
+  consultantProse: string;
+  deepResearchPrompt: string;
+}> {
+  const result = await classifyAndDeriveCanonicalWithLlm(
+    rawText,
+    unknownFields,
+  );
+  return {
+    fixtureCanonicalText: result.fixtureCanonicalText,
+    fixtureCanonicalFields: result.fixtureCanonicalFields,
+    consultantProse: result.consultantProse,
+    deepResearchPrompt: result.deepResearchPrompt,
+  };
 }

@@ -4,6 +4,8 @@ export * from "./canonicalization/canonicalizer.js";
 export * from "./canonicalization/gemini-direct.js";
 export * from "./canonicalization/language.js";
 export * from "./canonicalization/protected-spans.js";
+export * from "./canonicalization/query-classifier.js";
+export * from "./canonicalization/llm-canonicalizer.js";
 export * from "./capabilities.js";
 export * from "./complete-result/foundation.js";
 export {
@@ -29,6 +31,7 @@ export * from "./projection/task139-change-review.js";
 export * from "./projection/upgrade-prompt.js";
 export * from "./qualified-research-input.js";
 export * from "./research/synthetic-fixtures.js";
+export * from "./research/multi-loop-engine.js";
 export * from "./research-route-policy.js";
 export * from "./research-orchestrator.js";
 export * from "./route-policy.js";

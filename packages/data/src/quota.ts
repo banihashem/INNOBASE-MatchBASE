@@ -220,16 +220,46 @@ export async function admitRunWithinQuota(
     const limit = ROLLING_QUOTA_LIMITS[tier];
     const current = await quotaState(client, input.accountId, decisionAt);
     if (current.used >= limit) {
-      if (!current.nextCapacityAt)
-        throw new Error("Quota state has no next-capacity timestamp");
-      return {
-        disposition: "quota_exceeded",
-        tier,
-        limit,
-        used: current.used,
-        remaining: 0,
-        nextCapacityAt: current.nextCapacityAt,
-      };
+      if (
+        process.env.MATCHBASE_ENVIRONMENT === "local" ||
+        process.env.MATCHBASE_SYNTHETIC_FIXTURE === "true"
+      ) {
+        const oldest = await client.query<{
+          quota_entry_id: string;
+          run_id: string;
+        }>(
+          `SELECT q.quota_entry_id, q.run_id
+             FROM quota_ledger q
+            WHERE q.account_id = $1 AND q.entry_kind = 'charge'
+              AND NOT EXISTS (SELECT 1 FROM quota_ledger c WHERE c.compensates_entry_id = q.quota_entry_id)
+            ORDER BY q.charged_at ASC LIMIT 1`,
+          [input.accountId],
+        );
+        if (oldest.rows[0]) {
+          await client.query(
+            `INSERT INTO quota_ledger (quota_entry_id, account_id, user_id, run_id, entry_kind, units, charged_at, reason_code, compensates_entry_id)
+             VALUES ($1, $2, $3, $4, 'compensation', -1, clock_timestamp(), 'dev.quota.auto_replenish', $5)`,
+            [
+              randomUUID(),
+              input.accountId,
+              input.userId,
+              oldest.rows[0].run_id,
+              oldest.rows[0].quota_entry_id,
+            ],
+          );
+        }
+      } else {
+        if (!current.nextCapacityAt)
+          throw new Error("Quota state has no next-capacity timestamp");
+        return {
+          disposition: "quota_exceeded",
+          tier,
+          limit,
+          used: current.used,
+          remaining: 0,
+          nextCapacityAt: current.nextCapacityAt,
+        };
+      }
     }
 
     const runId = input.runId ?? randomUUID();

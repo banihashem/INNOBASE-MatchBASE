@@ -1051,7 +1051,6 @@ export function createWebRuntime(
       }
       const standardMutationIntent =
         standardApplication &&
-        session.requestContext.tier === "demo" &&
         isSharedWorkspaceMutation(request.method ?? "GET", path) &&
         isStandardMutationIntent(
           request.method ?? "GET",
@@ -1060,7 +1059,7 @@ export function createWebRuntime(
         );
       if (
         standardApplication &&
-        (session.requestContext.tier !== "demo" ||
+        (session.requestContext.tier === "standard" ||
           path.startsWith("/api/v1/domain-packs/") ||
           standardMutationIntent)
       ) {

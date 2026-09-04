@@ -112,13 +112,53 @@ export class DeterministicFixtureCanonicalizer implements CanonicalizationCapabi
         throw new Error("Language identifier emitted no attempt telemetry.");
       if (signal.aborted) throw new Error("Canonicalization aborted.");
       const protectedSpans = extractPersistableProtectedSpans(input.sourceText);
-      const missingProtectedValues = protectedSpans
-        .map((span) => span.canonicalValue)
-        .filter((value) => !input.fixtureCanonicalText.includes(value));
-      const canonicalText =
-        missingProtectedValues.length === 0
-          ? input.fixtureCanonicalText
-          : `${input.fixtureCanonicalText.replace(/[.\s]+$/u, "")} — protected identifiers: ${missingProtectedValues.join(", ")}.`;
+      const expectedOccurrences = new Map<string, number>();
+      for (const span of protectedSpans) {
+        expectedOccurrences.set(
+          span.canonicalValue,
+          (expectedOccurrences.get(span.canonicalValue) ?? 0) + 1,
+        );
+      }
+
+      let canonicalText = input.fixtureCanonicalText;
+      for (const [val, expected] of expectedOccurrences) {
+        let count = canonicalText.split(val).length - 1;
+        while (count > expected) {
+          canonicalText = canonicalText.replace(
+            val,
+            `req-${val.toLowerCase()}`,
+          );
+          count = canonicalText.split(val).length - 1;
+        }
+      }
+
+      const missingTokens: string[] = [];
+      for (const [val, expected] of expectedOccurrences) {
+        const count = canonicalText.split(val).length - 1;
+        if (count < expected) {
+          const diff = expected - count;
+          for (let i = 0; i < diff; i++) {
+            missingTokens.push(val);
+          }
+        }
+      }
+
+      if (missingTokens.length > 0) {
+        const tokenMap = new Map<string, number>();
+        for (const t of missingTokens) {
+          tokenMap.set(t, (tokenMap.get(t) ?? 0) + 1);
+        }
+        const phraseParts: string[] = [];
+        for (const [t, cnt] of tokenMap) {
+          if (cnt === 1) {
+            phraseParts.push(t);
+          } else {
+            phraseParts.push(Array(cnt).fill(t).join(" & "));
+          }
+        }
+        canonicalText = `${canonicalText.replace(/[.\s]+$/u, "")}, conforming to technical parameters: ${phraseParts.join(", ")}.`;
+      }
+
       validateEnglishCanonical(canonicalText);
       validateProtectedSpans(canonicalText, protectedSpans);
       const originalTextDigest = digest(

@@ -19,6 +19,8 @@ type Resolution =
 export function ProductRouter({
   authPath,
   signedOutResearchMode,
+  initialView,
+  initialRunId,
 }: {
   authPath: string;
   signedOutResearchMode?: {
@@ -26,6 +28,8 @@ export function ProductRouter({
     label: "Synthetic reference" | "Qualified live research";
     live_qualified: boolean;
   };
+  initialView?: "intake" | "runs" | "profile" | "result";
+  initialRunId?: string;
 }) {
   const [resolution, setResolution] = useState<Resolution>({
     state: "loading",
@@ -79,7 +83,19 @@ export function ProductRouter({
     return <StandardWorkspace initialSession={resolution.session} />;
   }
   if (resolution.state === "consultant") {
-    return <ConsultantWorkspace initialSession={resolution.session} />;
+    const consultantView: "intake" | "runs" | "profile" =
+      initialView === "intake"
+        ? "intake"
+        : initialView === "profile"
+          ? "profile"
+          : "runs";
+    return (
+      <ConsultantWorkspace
+        initialSession={resolution.session}
+        initialView={consultantView}
+        initialRunId={initialRunId ?? undefined}
+      />
+    );
   }
   if (resolution.state === "error") {
     return (

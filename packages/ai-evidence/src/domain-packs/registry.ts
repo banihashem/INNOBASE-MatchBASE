@@ -468,6 +468,10 @@ const AGRICULTURAL_IDENTITY_CONCEPTS = [
   ["ahmad aghaei", "ahmad-aghaei", "احمد آقایی", "احمدآقایی"],
   ["agricultural commodity", "food commodity", "محصول کشاورزی", "سلعة زراعية"],
   ["iranian pistachio", "iran pistachio", "پسته ایرانی", "فستق إيراني"],
+  ["poultry", "chicken", "مرغ", "دجاج", "frango", "aves"],
+  ["frozen chicken", "frozen poultry", "مرغ منجمد", "دجاج مجمد"],
+  ["chicken breast", "shawarma", "سینه مرغ", "شاورما"],
+  ["brazil", "saudi", "برزیل", "السعودية"],
 ] as const;
 
 function matchedConceptCount(

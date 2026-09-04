@@ -33,6 +33,8 @@ export async function assertStandardWorkspaceAuthorized(
   const stored = grant.rows[0];
   if (context.tier === "standard" && stored?.tier === "standard")
     return "standard";
+  if (context.tier === "consultant" && stored?.tier === "consultant")
+    return "consultant";
   if (
     context.tier === "admin" &&
     context.adminSubRoles.includes("super_admin") &&

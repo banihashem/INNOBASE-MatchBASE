@@ -381,6 +381,7 @@ function buildStandardResultProjection(
             ? "stale"
             : "mixed";
       return {
+        candidate_id: candidate.candidate_id,
         display_name: candidate.display_name,
         country_code: candidate.country_code,
         rationale_extended: candidate.rationale_extended,

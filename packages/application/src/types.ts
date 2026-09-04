@@ -1,8 +1,11 @@
 import type {
   AdminSubRole,
   CanonicalFieldV1,
+  ConsultantResultProjectionV1,
+  ConsultantResultProjectionV2,
   DemoProjectionV1,
   PersistedTier,
+  StandardResultProjectionV1,
 } from "@matchbase/contracts";
 
 export const API_MINOR_VERSION = "2026-08-14";
@@ -66,7 +69,11 @@ export interface RunStatus {
 }
 
 export interface ResultDisclosure {
-  body: DemoProjectionV1;
+  body:
+    | DemoProjectionV1
+    | StandardResultProjectionV1
+    | ConsultantResultProjectionV1
+    | ConsultantResultProjectionV2;
   auditId: string;
 }
 

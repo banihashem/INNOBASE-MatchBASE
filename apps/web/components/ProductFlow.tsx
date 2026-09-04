@@ -73,6 +73,8 @@ type CanonicalResponse = {
   version: number;
   canonical_language: "en";
   canonical_text: string;
+  consultant_prose?: string;
+  deep_research_prompt?: string;
   source_language_tag: string;
   source_language_confidence: number;
   fields: CanonicalField[];
@@ -1060,6 +1062,60 @@ export function ProductFlow({
               value={canonicalText}
               onChange={(event) => setCanonicalText(event.target.value)}
             />
+            {canonical.consultant_prose ? (
+              <div style={{ marginTop: "1.25rem", marginBottom: "1.25rem" }}>
+                <label
+                  htmlFor="consultant-prose-display"
+                  style={{
+                    fontWeight: 600,
+                    display: "block",
+                    marginBottom: "0.5rem",
+                  }}
+                >
+                  Advisory Conceptual Summary (Display 1 — متناظر مشاوره‌ای)
+                </label>
+                <div
+                  id="consultant-prose-display"
+                  style={{
+                    padding: "1rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border-color, #cbd5e1)",
+                    background: "var(--surface-color, #f8fafc)",
+                    lineHeight: 1.6,
+                    fontSize: "0.95rem",
+                    whiteSpace: "pre-line",
+                  }}
+                >
+                  {canonical.consultant_prose}
+                </div>
+              </div>
+            ) : null}
+            {canonical.deep_research_prompt ? (
+              <div style={{ marginTop: "1.25rem", marginBottom: "1.25rem" }}>
+                <label
+                  htmlFor="deep-research-prompt-display"
+                  style={{
+                    fontWeight: 600,
+                    display: "block",
+                    marginBottom: "0.5rem",
+                  }}
+                >
+                  Deep Research Execution Prompt (Display 2 — پرامپت تحقیق عمیق)
+                </label>
+                <textarea
+                  id="deep-research-prompt-display"
+                  className="canonical-editor"
+                  style={{
+                    minHeight: "160px",
+                    fontFamily: "monospace",
+                    fontSize: "0.85rem",
+                    lineHeight: 1.5,
+                  }}
+                  readOnly
+                  value={canonical.deep_research_prompt}
+                />
+              </div>
+            ) : null}
             <h2>Structured fields</h2>
             <div className="field-list">
               {canonical.fields.map((field) => (

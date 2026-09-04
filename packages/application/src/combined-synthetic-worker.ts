@@ -94,7 +94,7 @@ async function work(): Promise<void> {
            ORDER BY effective_from DESC,created_at DESC LIMIT 1
          ) g ON true
         WHERE rr.research_mode='synthetic_reference'
-          AND rr.state IN ('queued','failed_retryable') AND g.tier IN ('demo','standard')
+          AND rr.state IN ('queued','failed_retryable') AND g.tier IN ('demo','standard','consultant')
         ORDER BY rr.queued_at,rr.run_id LIMIT 6`,
     );
     await Promise.all(
@@ -110,6 +110,9 @@ async function work(): Promise<void> {
           deploymentId: "slice2-combined-local-worker",
         };
         try {
+          console.log(
+            `Worker processing run ${row.run_id} for tier ${row.tier}...`,
+          );
           if (row.tier === "standard")
             await standardApplication.executeSyntheticRun(context, row.run_id);
           else
@@ -118,6 +121,9 @@ async function work(): Promise<void> {
               row.run_id,
               "three",
             );
+          console.log(
+            `Worker completed run ${row.run_id} for tier ${row.tier}.`,
+          );
         } catch (error) {
           if (
             error instanceof Error &&

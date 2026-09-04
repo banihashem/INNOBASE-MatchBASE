@@ -79,6 +79,7 @@ export type StandardEvidencedValueProjectionV1 =
     );
 
 export interface StandardCandidateProjectionV1 {
+  candidate_id?: string;
   display_name: string;
   country_code: string;
   rationale_extended: string;

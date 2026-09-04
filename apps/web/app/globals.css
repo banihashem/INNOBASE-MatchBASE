@@ -123,6 +123,17 @@ select {
   animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ─── Scrollbar ─────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
@@ -348,6 +359,19 @@ next-route-announcer {
   background: var(--slate-800);
   color: var(--slate-300);
   font-weight: 600;
+}
+
+.comparison-table th:first-child,
+.comparison-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--slate-800);
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.45);
+}
+
+.comparison-table td:first-child {
+  background: var(--slate-900);
 }
 
 /* ─── History list ──────────────────────────────────────── */
@@ -922,7 +946,7 @@ h3 {
 .environment-disclosure,
 .field-hint,
 .form-actions p {
-  color: var(--slate-500);
+  color: var(--muted, #94a3b8);
   font-size: 0.88rem;
 }
 
@@ -1191,6 +1215,17 @@ textarea:disabled {
 .error-summary {
   max-width: 880px;
   margin: 0 auto 2rem;
+}
+
+.info-summary {
+  padding: 1rem 1.25rem;
+  border-left: 5px solid var(--forest-2, #818cf8);
+  background: rgba(99, 102, 241, 0.08);
+  backdrop-filter: blur(8px);
+  border-radius: 0 0.75rem 0.75rem 0;
+  max-width: 880px;
+  margin: 0 auto 2rem;
+  color: var(--ink, #e2e8f0);
 }
 
 .validation-summary h2,
@@ -1956,17 +1991,6 @@ footer {
 
   .landing-hero h1 {
     font-size: 2rem;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
   }
 }
 

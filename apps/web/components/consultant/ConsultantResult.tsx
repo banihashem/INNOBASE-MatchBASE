@@ -149,7 +149,7 @@ export function ConsultantResultView({
           ) : null}
           {expanded ? (
             <>
-              <div className="error-summary" role="status">
+              <div className="info-summary" role="status">
                 <strong>Production release remains blocked.</strong> This is
                 {agricultural
                   ? " agent-researched agricultural qualification content. "
@@ -388,7 +388,7 @@ export function ConsultantResultView({
               </section>
             </>
           ) : (
-            <div className="error-summary" role="status">
+            <div className="info-summary" role="status">
               <strong>Consultant source readiness: limited.</strong>{" "}
               {
                 (consultant as ConsultantResultProjectionV1)

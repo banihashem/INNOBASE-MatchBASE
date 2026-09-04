@@ -17,7 +17,10 @@ export const SLICE1_AUTHENTICATED_ENDPOINTS = [
 export type Slice1AuthenticatedEndpoint =
   (typeof SLICE1_AUTHENTICATED_ENDPOINTS)[number];
 
-const END_USER_TIERS: ReadonlySet<PersistedTier> = new Set(["demo"]);
+const END_USER_TIERS: ReadonlySet<PersistedTier> = new Set([
+  "demo",
+  "consultant",
+]);
 
 /**
  * Slice 1 exposes the owner-bound Demo workflow only to Demo. Standard,

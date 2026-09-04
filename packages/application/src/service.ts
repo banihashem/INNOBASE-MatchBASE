@@ -32,6 +32,7 @@ import {
   type TransactionClient,
 } from "@matchbase/data";
 import { assertSlice1EndpointAuthorized } from "./authorization.js";
+import { ConsultantResultApplication } from "./consultant-result.js";
 import { assertStoredCompleteResultIntegrity } from "./standard-workspace.js";
 import {
   ApplicationFault,
@@ -282,7 +283,8 @@ export class MatchBaseApplication {
         canonical,
         emittedTelemetry,
       );
-    } catch {
+    } catch (error) {
+      console.error("[CANONICALIZATION ERROR]", error);
       throw new ApplicationFault(
         503,
         "canonicalisation-unavailable",
@@ -995,6 +997,14 @@ export class MatchBaseApplication {
           return [];
         return [field.canonicalValue];
       });
+      if (context.tier === "consultant") {
+        const consultantApp = new ConsultantResultApplication(this.pool);
+        const consultantRes = await consultantApp.getResult(context, runId);
+        return {
+          body: consultantRes.body,
+          auditId: randomUUID(),
+        };
+      }
       const projected = projectStoredResult({
         tier: "demo",
         completeResult: row.complete_result_document,
@@ -1135,7 +1145,22 @@ export class MatchBaseApplication {
     );
     if (!lease) return false;
     try {
-      const graph = buildSyntheticEvidenceGraph(runId, fixtureCase);
+      const canonicalRow = await this.pool.query<{
+        canonical_document: unknown;
+      }>(
+        `SELECT v.canonical_document
+           FROM research_run rr
+           JOIN canonical_request_version v USING(canonical_request_version_id)
+          WHERE rr.run_id = $1`,
+        [runId],
+      );
+      const canonicalDoc = canonicalRow.rows[0]?.canonical_document;
+      const graph = buildSyntheticEvidenceGraph(
+        runId,
+        fixtureCase,
+        canonicalDoc,
+        context.tier,
+      );
       await this.persistSyntheticResult(context, graph);
       return true;
     } catch (error) {

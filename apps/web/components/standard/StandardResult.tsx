@@ -87,7 +87,10 @@ export function StandardResult({
               <tr>
                 <th scope="col">Dimension</th>
                 {result.candidates.map((candidate) => (
-                  <th scope="col" key={candidate.display_name}>
+                  <th
+                    scope="col"
+                    key={`col-${candidate.candidate_id || candidate.display_name}`}
+                  >
                     <bdi dir="auto">{candidate.display_name}</bdi>
                   </th>
                 ))}
@@ -101,7 +104,9 @@ export function StandardResult({
                       {label(dimension.dimension_id)} ({dimension.weight}%)
                     </th>
                     {result.candidates.map((candidate) => (
-                      <td key={candidate.display_name}>
+                      <td
+                        key={`cell-${candidate.candidate_id || candidate.display_name}-${dimension.dimension_id}`}
+                      >
                         {candidate.dimension_scores[index]!.score}{" "}
                         <small>
                           {candidate.dimension_scores[index]!.confidence}
@@ -119,7 +124,7 @@ export function StandardResult({
         {result.candidates.map((candidate, index) => (
           <article
             className="candidate-card"
-            key={`${candidate.display_name}-${candidate.country_code}`}
+            key={`card-${candidate.candidate_id || candidate.display_name}`}
           >
             <div className="candidate-heading">
               <div>
@@ -209,13 +214,40 @@ export function StandardResult({
                   </p>
                   {"exact_url" in citation ? (
                     <p>
-                      <a
-                        href={citation.exact_url}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open evidence source (opens in a new tab)
-                      </a>
+                      {citation.exact_url.includes("example.invalid") ||
+                      citation.provenance === "synthetic_fixture" ? (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            fontSize: "0.85rem",
+                            color: "var(--muted, #94a3b8)",
+                            background: "rgba(148, 163, 184, 0.08)",
+                            padding: "0.3rem 0.6rem",
+                            borderRadius: "4px",
+                            border: "1px solid var(--line, #1c2738)",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontWeight: 600,
+                              color: "var(--forest-2, #818cf8)",
+                            }}
+                          >
+                            [Illustrative Demonstration Reference]
+                          </span>
+                          Offline synthetic evaluation dossier
+                        </span>
+                      ) : (
+                        <a
+                          href={citation.exact_url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open evidence source (opens in a new tab)
+                        </a>
+                      )}
                     </p>
                   ) : null}
                   <p>

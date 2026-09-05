@@ -871,7 +871,7 @@ export async function readAdminEntitlement(
   });
 }
 
-/** Audited bootstrap for Demo and non-production synthetic Standard fixtures. */
+/** Audited bootstrap for Demo and non-production synthetic Standard, Consultant, and Admin fixtures. */
 export async function ensureBootstrapEntitlement(
   client: TransactionClient,
   input: {
@@ -884,17 +884,28 @@ export async function ensureBootstrapEntitlement(
   } & (
     | { readonly tier: "demo" }
     | { readonly tier: "standard"; readonly grantorUserId: string }
+    | { readonly tier: "consultant"; readonly grantorUserId: string }
+    | {
+        readonly tier: "admin";
+        readonly grantorUserId: string;
+        readonly adminSubRole?: AdminSubRole;
+      }
   ),
 ): Promise<void> {
-  if (input.tier === "standard" && input.environment === "production") {
+  if (
+    (input.tier === "standard" ||
+      input.tier === "consultant" ||
+      input.tier === "admin") &&
+    input.environment === "production"
+  ) {
     throw new Error(
-      "Standard simulator bootstrap is prohibited in production.",
+      `${input.tier} simulator bootstrap is prohibited in production.`,
     );
   }
   const userIds =
-    input.tier === "standard"
-      ? [input.subjectUserId, input.grantorUserId]
-      : [input.subjectUserId];
+    input.tier === "demo"
+      ? [input.subjectUserId]
+      : [input.subjectUserId, input.grantorUserId];
   const users = await client.query<{ user_id: string }>(
     `SELECT user_id FROM app_user
       WHERE account_id=$1 AND user_id=ANY($2::uuid[]) AND status='active'
@@ -906,11 +917,11 @@ export async function ensureBootstrapEntitlement(
   if (!found.has(input.subjectUserId))
     throw new Error("Bootstrap subject is not active.");
   if (
-    input.tier === "standard" &&
+    input.tier !== "demo" &&
     (!found.has(input.grantorUserId) ||
       input.grantorUserId === input.subjectUserId)
   )
-    throw new Error("Standard bootstrap grantor is invalid.");
+    throw new Error(`${input.tier} bootstrap grantor is invalid.`);
   const before = await lockedSnapshot(
     client,
     input.accountId,
@@ -924,11 +935,12 @@ export async function ensureBootstrapEntitlement(
        VALUES($1,$2,$3,'demo','system',$4,clock_timestamp())`,
       [randomUUID(), input.accountId, input.subjectUserId, input.justification],
     );
-  } else {
+  } else if (input.tier === "admin") {
+    const subRole = input.adminSubRole ?? "super_admin";
     await client.query(
       `INSERT INTO entitlement_grant
         (grant_id,account_id,user_id,tier,grant_actor_kind,granted_by_user_id,justification,effective_from)
-       VALUES($1,$2,$3,'standard','user',$4,$5,clock_timestamp())`,
+       VALUES($1,$2,$3,'admin','user',$4,$5,clock_timestamp())`,
       [
         randomUUID(),
         input.accountId,
@@ -937,10 +949,63 @@ export async function ensureBootstrapEntitlement(
         input.justification,
       ],
     );
+    await client.query(
+      `INSERT INTO admin_role_grant
+        (admin_grant_id,account_id,user_id,sub_role,granted_by_user_id,
+         justification,effective_from)
+       VALUES($1,$2,$3,$4,$5,$6,clock_timestamp())`,
+      [
+        randomUUID(),
+        input.accountId,
+        input.subjectUserId,
+        subRole,
+        input.grantorUserId,
+        input.justification,
+      ],
+    );
+    await appendAuditEvent(client, {
+      accountId: input.accountId,
+      actorUserId: input.grantorUserId,
+      eventType: "entitlement.granted",
+      resourceKind: "app_user",
+      resourceId: input.subjectUserId,
+      outcome: "allow",
+      justification: input.justification,
+      correlationId: input.correlationId,
+      deploymentId: input.deploymentId,
+      detail: {
+        actorKind: "synthetic_simulator_bootstrap",
+        entitlementKind: "tier",
+        entitlementValue: "admin",
+        tier: "admin",
+        sub_role: subRole,
+        expires_at: null,
+        changed: true,
+        before: publicSnapshot(before),
+        after: { tier: "admin", admin_sub_roles: [subRole] },
+      },
+    });
+    return;
+  } else {
+    await client.query(
+      `INSERT INTO entitlement_grant
+        (grant_id,account_id,user_id,tier,grant_actor_kind,granted_by_user_id,justification,effective_from)
+       VALUES($1,$2,$3,$4,'user',$5,$6,clock_timestamp())`,
+      [
+        randomUUID(),
+        input.accountId,
+        input.subjectUserId,
+        input.tier,
+        input.grantorUserId,
+        input.justification,
+      ],
+    );
   }
   await appendAuditEvent(client, {
     accountId: input.accountId,
-    ...(input.tier === "standard" ? { actorUserId: input.grantorUserId } : {}),
+    ...(input.tier === "standard" || input.tier === "consultant"
+      ? { actorUserId: input.grantorUserId }
+      : {}),
     eventType: "entitlement.granted",
     resourceKind: "app_user",
     resourceId: input.subjectUserId,

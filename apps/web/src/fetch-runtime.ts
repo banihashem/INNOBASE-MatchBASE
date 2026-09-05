@@ -712,40 +712,15 @@ async function simulatorSession(
          VALUES($1,$2,$3,true,'active')`,
         [grantorId, accountId, `${identity.subject}:grantor`],
       );
-      await client.query(
-        `INSERT INTO entitlement_grant
-          (grant_id,account_id,user_id,tier,grant_actor_kind,granted_by_user_id,justification,effective_from)
-         VALUES($1,$2,$3,'admin','user',$4,$5,clock_timestamp())`,
-        [randomUUID(), accountId, userId, grantorId, "admin simulator bootstrap"],
-      );
-      await client.query(
-        `INSERT INTO admin_role_grant
-          (admin_grant_id,account_id,user_id,sub_role,granted_by_user_id,
-           justification,effective_from)
-         VALUES($1,$2,$3,'super_admin',$4,$5,clock_timestamp())`,
-        [randomUUID(), accountId, userId, grantorId, "admin simulator bootstrap"],
-      );
-      await appendAuditEvent(client, {
+      await ensureBootstrapEntitlement(client, {
         accountId,
-        actorUserId: grantorId,
-        eventType: "entitlement.granted",
-        resourceKind: "app_user",
-        resourceId: userId,
-        outcome: "allow",
-        justification: "admin simulator bootstrap",
+        subjectUserId: userId,
+        grantorUserId: grantorId,
         correlationId,
         deploymentId: current.config.deploymentId,
-        detail: {
-          actorKind: "synthetic_simulator_bootstrap",
-          entitlementKind: "tier",
-          entitlementValue: "admin",
-          tier: "admin",
-          sub_role: "super_admin",
-          expires_at: null,
-          changed: true,
-          before: { tier: null, admin_sub_roles: [] },
-          after: { tier: "admin", admin_sub_roles: ["super_admin"] },
-        },
+        environment: current.config.environment,
+        justification: "admin simulator bootstrap",
+        tier: "admin",
       });
     } else if (identity.tier === "demo") {
       await ensureBootstrapEntitlement(client, {

@@ -11,7 +11,11 @@
   "scripts": {
     "build": "pnpm -r --if-present build",
     "check": "pnpm run format:check && pnpm run lint && pnpm run governance:check && pnpm run slice1:evidence:check && pnpm run slice2:evidence:check && pnpm run slice3:evidence:check && pnpm run snapshot:check && pnpm run boundary:check && pnpm run protected:check && pnpm run secrets:scan && pnpm run secrets:scan:independent && pnpm run secrets:scan:history && pnpm run dependency:check && pnpm run license:check && pnpm -r --if-present check",
+    "check:dev": "pnpm run format:check && pnpm run lint && pnpm run boundary:check && pnpm run protected:check && pnpm run secrets:scan && pnpm -r --if-present check",
+    "check:full": "pnpm run check",
     "test": "pnpm -r --workspace-concurrency=1 --if-present test && pnpm run test:slice1:api && pnpm run test:slice2:api && pnpm run test:admin && node --test --test-concurrency=1 test/*.test.mjs test/slice3/*.test.mjs",
+    "test:unit": "pnpm -r --workspace-concurrency=1 --if-present test",
+    "test:integration": "pnpm run test:slice1:api && pnpm run test:slice2:api && pnpm run test:admin && node --test --test-concurrency=1 test/*.test.mjs test/slice3/*.test.mjs",
     "test:slice1:api": "pnpm --filter @matchbase/application build && pnpm --filter @matchbase/security build && node --test test/slice1/api/*.test.mjs",
     "test:slice2:api": "pnpm --filter @matchbase/application build && pnpm --filter @matchbase/security build && node --test --test-concurrency=1 test/slice2/api/*.test.mjs test/slice2/repository/*.test.mjs",
     "test:admin": "pnpm --filter @matchbase/data build && pnpm --filter @matchbase/application build && node --test test/admin/*.test.mjs && pnpm exec vitest run --config test/admin/vitest.admin.config.mjs",

@@ -6,6 +6,54 @@ Private, unlicensed implementation workspace for the MatchBASE evidence-gated de
 
 Slice 1 adds a production-structured, local-only authenticated Demo reference path to the verified Slice 0 governance baseline. It includes fail-closed Google OIDC contracts, an explicitly non-production simulator, PostgreSQL 18 persistence, canonical-English intake, atomic rolling quota, three global execution leases, fixture-only provider execution, hidden evidence storage, strict Demo projection, and responsive product UI. It does not call live identity or AI providers and does not deploy infrastructure or product workloads.
 
+## Development and Verification Workflows
+
+### 1. Developer Fast Feedback (`check:dev`)
+
+Runs formatting check, linting, boundary verification, protected baseline checks, candidate secret scan, and TypeScript typechecking across all workspace packages:
+
+```powershell
+pnpm run check:dev
+```
+
+### 2. Full Gate Verification (`check:full` / `check`)
+
+Runs the comprehensive test and governance gate, including slow archival, deep secretlint, and git history scans:
+
+```powershell
+pnpm run check:full
+```
+
+### 3. Unit and Integration Tests
+
+```powershell
+# Run workspace package tests
+pnpm run test:unit
+
+# Run API and integration test suites
+pnpm run test:integration
+
+# Run all automated tests
+pnpm test
+```
+
+### 4. Build Workspace
+
+```powershell
+pnpm run build
+```
+
+## Runtime Configuration
+
+MatchBASE uses environment variables for runtime configuration. A template is provided in [`.env.example`](.env.example).
+
+### Configuration Rules:
+
+- **Server-Side Only:** The canonical key for external model routing is `MATCHBASE_OPENROUTER_API_KEY`.
+- **Never Client-Exposed:** Never prefix model keys or secrets with `NEXT_PUBLIC_`.
+- **No Committed Secrets:** Never commit `.env`, `.env.local`, API keys, or credentials to Git history or files.
+- **Local Dev:** Use Windows User environment variables or local shell environment variables.
+
 ## Local verification
 
 ```powershell

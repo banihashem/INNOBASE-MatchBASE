@@ -19,6 +19,8 @@
     "test:slice1:api": "pnpm --filter @matchbase/application build && pnpm --filter @matchbase/security build && node --test test/slice1/api/*.test.mjs",
     "test:slice2:api": "pnpm --filter @matchbase/application build && pnpm --filter @matchbase/security build && node --test --test-concurrency=1 test/slice2/api/*.test.mjs test/slice2/repository/*.test.mjs",
     "test:admin": "pnpm --filter @matchbase/data build && pnpm --filter @matchbase/application build && node --test test/admin/*.test.mjs && pnpm exec vitest run --config test/admin/vitest.admin.config.mjs",
+    "test:consultant-output-v2": "pnpm --filter @matchbase/contracts build && node scripts/test-consultant-output-v2.mjs",
+    "seed:consultant-output-v2": "pnpm --filter @matchbase/contracts build && node scripts/seed-consultant-output-v2.mjs",
     "test:ci": "pnpm run snapshot:prepare && pnpm run build && pnpm run check && pnpm run test && pnpm run test:standalone:repeat && pnpm run test:browser",
     "slice1:validate:local": "node scripts/validate-slice1-local.mjs",
     "slice2:validate:local": "node scripts/validate-slice2-local.mjs",

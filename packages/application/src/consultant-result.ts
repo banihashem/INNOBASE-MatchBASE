@@ -16,6 +16,7 @@ import type {
   ConsultantRunHistoryV1,
   ConsultantResultProjectionV1,
   ConsultantResultProjectionV2,
+  ConsultantResearchOutputV2,
   ConsultantSourceFactV2,
   DemoProjectionV1,
   CompleteResultFoundationV2,
@@ -105,7 +106,9 @@ export type ConsultantResultRead =
   | {
       readonly projectionTier: "consultant";
       readonly body:
-        ConsultantResultProjectionV1 | ConsultantResultProjectionV2;
+        | ConsultantResultProjectionV1
+        | ConsultantResultProjectionV2
+        | ConsultantResearchOutputV2;
       readonly artifactDownload?: {
         readonly run_id: string;
         readonly artifact_version_id: string;

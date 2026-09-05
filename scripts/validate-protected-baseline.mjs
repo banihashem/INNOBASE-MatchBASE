@@ -38,6 +38,11 @@ function validSha(value) {
   return typeof value === "string" && /^[A-F0-9]{64}$/u.test(value);
 }
 
+const FORWARD_PLANNING_DOCS = new Set([
+  "MATCHBASE_PRODUCT_DEVELOPMENT_BASELINE.md",
+  "CONSULTANT_DEEP_RESEARCH_OUTPUT_V2_SPEC.md",
+]);
+
 async function inventory(root) {
   const files = [];
   async function walk(directory) {
@@ -47,7 +52,11 @@ async function inventory(root) {
       if (metadata.isSymbolicLink())
         throw new Error(`Protected source symlink refused: ${path}`);
       if (metadata.isDirectory()) await walk(path);
-      else if (metadata.isFile()) files.push(path);
+      else if (metadata.isFile()) {
+        const rel = relative(root, path).replaceAll(sep, "/");
+        if (FORWARD_PLANNING_DOCS.has(rel)) continue;
+        files.push(path);
+      }
     }
   }
   await walk(root);

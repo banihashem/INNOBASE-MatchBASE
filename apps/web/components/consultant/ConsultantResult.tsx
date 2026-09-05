@@ -2,16 +2,19 @@ import type { RefObject } from "react";
 import type {
   ConsultantResultProjectionV1,
   ConsultantResultProjectionV2,
+  ConsultantResearchOutputV2,
   DemoProjectionV1,
 } from "@matchbase/contracts";
 import { StandardResult } from "../standard/StandardResult";
 import type { StandardResultProjectionV1 } from "../standard/types";
+import { ConsultantResearchOutputView } from "./ConsultantResearchOutputView";
 
 export type ConsultantVisibleResult =
   | DemoProjectionV1
   | StandardResultProjectionV1
   | ConsultantResultProjectionV1
-  | ConsultantResultProjectionV2;
+  | ConsultantResultProjectionV2
+  | ConsultantResearchOutputV2;
 
 export interface ResultArtifactDownload {
   readonly run_id: string;
@@ -31,6 +34,15 @@ export function ConsultantResultView({
   headingRef?: RefObject<HTMLHeadingElement | null>;
   artifactDownload?: ResultArtifactDownload | null | undefined;
 }) {
+  if (result.schema_version === "consultant-research-output.v2")
+    return (
+      <ConsultantResearchOutputView
+        result={result}
+        onBack={onBack}
+        {...(headingRef ? { headingRef } : {})}
+        {...(artifactDownload ? { artifactDownload } : {})}
+      />
+    );
   if (result.schema_version === "standard-result-projection.v1")
     return (
       <StandardResult

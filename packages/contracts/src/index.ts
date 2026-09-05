@@ -24,3 +24,5 @@ export * from "./v2/consultant-projection.js";
 export * from "./v2/domain-pack.js";
 export * from "./v2/structured-request.js";
 export * from "./v2/standard-projection.js";
+export * from "./v2/consultant-research-output.js";
+export * from "./v2/golden-scenarios.js";

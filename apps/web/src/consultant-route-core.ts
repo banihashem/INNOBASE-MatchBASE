@@ -8,8 +8,10 @@ import {
   parseDemoProjectionV1,
   parseConsultantResultProjectionV1,
   parseConsultantResultProjectionV2,
+  parseConsultantResearchOutputV2,
   parseStandardResultProjectionV1,
   type ConsultantRunHistoryV1,
+  type ConsultantResearchOutputV2,
 } from "@matchbase/contracts";
 
 const UUID_PATTERN =
@@ -17,7 +19,11 @@ const UUID_PATTERN =
 
 export interface ConsultantRouteResult {
   readonly status: 200 | 202;
-  readonly body: ConsultantResultRead["body"] | ConsultantRunHistoryV1 | object;
+  readonly body:
+    | ConsultantResultRead["body"]
+    | ConsultantRunHistoryV1
+    | ConsultantResearchOutputV2
+    | object;
   readonly headers: Readonly<Record<string, string>>;
 }
 
@@ -144,6 +150,8 @@ export async function handleConsultantRoute(input: {
   const projection = await input.application.getResult(input.context, runId);
   const body = (() => {
     switch (projection.body.schema_version) {
+      case "consultant-research-output.v2":
+        return parseConsultantResearchOutputV2(projection.body);
       case "consultant-result-projection.v2":
         return parseConsultantResultProjectionV2(projection.body);
       case "consultant-result-projection.v1":

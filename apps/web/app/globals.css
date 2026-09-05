@@ -38,6 +38,39 @@
   --red-400: #f87171;
   --red-500: #b91c1c;
 
+  /* ─── Semantic Context Tokens (MB-UX-REM-001) ─────────────── */
+  --surface-page: #0b0f19;
+  --surface-dark: #111827;
+  --surface-elevated-dark: #1e293b;
+  --surface-light: #ffffff;
+  --surface-light-muted: #f8fafc;
+
+  --text-on-dark-primary: #f8fafc;
+  --text-on-dark-secondary: #cbd5e1;
+  --text-on-dark-muted: #94a3b8;
+
+  --text-on-light-primary: #0f172a;
+  --text-on-light-secondary: #334155;
+  --text-on-light-muted: #475569;
+
+  --badge-neutral-bg: #e2e8f0;
+  --badge-neutral-text: #0f172a;
+  --badge-status-bg: #dcfce7;
+  --badge-status-text: #14532d;
+  --badge-danger-bg: #fee2e2;
+  --badge-danger-text: #7f1d1d;
+  --badge-warning-bg: #fef3c7;
+  --badge-warning-text: #78350f;
+  --badge-info-bg: #eff6ff;
+  --badge-info-text: #1e40af;
+
+  --table-header-bg: #f1f5f9;
+  --table-header-text: #0f172a;
+  --table-border: #e2e8f0;
+
+  --link-on-dark: #818cf8;
+  --link-on-light: #1d4ed8;
+
   font-family:
     var(--font-inter),
     ui-sans-serif,
@@ -61,6 +94,140 @@ body {
   margin: 0;
   color: var(--ink);
   background: var(--paper);
+}
+
+/* ─── Semantic Surface / Content Contexts (MB-UX-REM-001) ─── */
+.surface-light-card {
+  background: var(--surface-light);
+  color: var(--text-on-light-primary);
+  border: 1px solid var(--slate-300);
+}
+.surface-light-card h1,
+.surface-light-card h2,
+.surface-light-card h3,
+.surface-light-card h4,
+.surface-light-card th {
+  color: var(--text-on-light-primary);
+}
+.surface-light-card p,
+.surface-light-card li,
+.surface-light-card td {
+  color: var(--text-on-light-secondary);
+}
+.surface-light-card .text-muted,
+.surface-light-card code {
+  color: var(--text-on-light-muted);
+}
+
+.surface-dark-card {
+  background: var(--surface-elevated-dark);
+  color: var(--text-on-dark-primary);
+  border: 1px solid var(--line);
+}
+.surface-dark-card h1,
+.surface-dark-card h2,
+.surface-dark-card h3,
+.surface-dark-card h4,
+.surface-dark-card th {
+  color: var(--text-on-dark-primary);
+}
+.surface-dark-card p,
+.surface-dark-card li,
+.surface-dark-card td {
+  color: var(--text-on-dark-secondary);
+}
+.surface-dark-card .text-muted,
+.surface-dark-card code {
+  color: var(--text-on-dark-muted);
+}
+
+.badge-query-type {
+  display: inline-block;
+  background: var(--badge-neutral-bg);
+  color: var(--badge-neutral-text);
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.badge-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.table-responsive-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1rem;
+}
+
+/* ─── Consultant Research Output V2 Scoped Overrides (MB-UX-REM-001) ─── */
+.consultant-v2-container {
+  color: var(--text-on-dark-secondary);
+}
+.consultant-v2-container > header h1,
+.consultant-v2-container > section > h2,
+.consultant-v2-container > section > div > h3,
+.consultant-v2-container > section > h3 {
+  color: var(--text-on-dark-primary);
+}
+.consultant-v2-container th {
+  color: var(--text-on-light-primary) !important;
+  background: var(--table-header-bg);
+}
+.consultant-v2-container td {
+  color: var(--text-on-light-secondary);
+}
+.consultant-v2-container th,
+.consultant-v2-container td {
+  border-color: var(--table-border);
+}
+.consultant-v2-container code {
+  color: var(--text-on-light-muted);
+}
+.consultant-v2-container .surface-light-card,
+.consultant-v2-container [style*="background: #ffffff"],
+.consultant-v2-container [style*="background: #f8fafc"] {
+  color: var(--text-on-light-secondary);
+}
+.consultant-v2-container .surface-light-card h1,
+.consultant-v2-container .surface-light-card h2,
+.consultant-v2-container .surface-light-card h3,
+.consultant-v2-container .surface-light-card h4,
+.consultant-v2-container [style*="background: #ffffff"] h1,
+.consultant-v2-container [style*="background: #ffffff"] h2,
+.consultant-v2-container [style*="background: #ffffff"] h3,
+.consultant-v2-container [style*="background: #ffffff"] h4,
+.consultant-v2-container [style*="background: #f8fafc"] h1,
+.consultant-v2-container [style*="background: #f8fafc"] h2,
+.consultant-v2-container [style*="background: #f8fafc"] h3,
+.consultant-v2-container [style*="background: #f8fafc"] h4 {
+  color: var(--text-on-light-primary);
+}
+.consultant-v2-container footer {
+  background: var(--surface-dark) !important;
+  color: var(--text-on-dark-primary) !important;
+}
+.consultant-v2-container footer h1,
+.consultant-v2-container footer h2,
+.consultant-v2-container footer h3,
+.consultant-v2-container footer h4 {
+  color: #60a5fa !important;
+}
+.consultant-v2-container footer p,
+.consultant-v2-container footer li {
+  color: var(--text-on-dark-secondary) !important;
+}
+.consultant-v2-container footer span {
+  color: var(--text-on-dark-muted);
 }
 
 button,

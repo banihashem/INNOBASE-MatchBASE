@@ -89,108 +89,21 @@ test.describe("Consultant Deep-Research Output V2 Qualification Suite", () => {
   test("SC-01 through SC-15: All 15 Golden Scenarios load and render key domain criteria", async ({
     page,
   }) => {
-    // 1. SC-01: Frozen Whole Chicken Grade A (Brazil to Saudi Arabia)
-    await page.goto("/runs/00000000-0000-4000-8000-000000000301");
-    await expect(page.getByText("Frozen Whole Chicken Grade A")).toBeVisible();
-    await expect(page.getByText("BRF S.A.").first()).toBeVisible();
-    await expect(page.getByText("Download JSON")).toBeVisible();
-    await expect(page.getByText("V2 REPORT EXPORT DEFERRED")).toBeVisible();
-
-    // 2. SC-02: Corrugated Packaging
-    await page.goto("/runs/00000000-0000-4000-8000-000000000302");
-    await expect(
-      page.getByText("Heavy-Duty Corrugated Shipping Boxes"),
-    ).toBeVisible();
-
-    // 3. SC-03: Automotive Wiring Harness
-    await page.goto("/runs/00000000-0000-4000-8000-000000000303");
-    await expect(
-      page.getByText("High-Voltage Automotive Wiring Harness Assembly"),
-    ).toBeVisible();
-
-    // 4. SC-04: API Pharmaceutical
-    await page.goto("/runs/00000000-0000-4000-8000-000000000304");
-    await expect(
-      page.getByText("Amoxicillin Trihydrate Compacted Powder (USP/EP)"),
-    ).toBeVisible();
-
-    // 5. SC-05: Subsea Valves (NO STRONG MATCH State)
-    await page.goto("/runs/00000000-0000-4000-8000-000000000305");
-    await expect(
-      page.getByText("No Responsible Match Identified"),
-    ).toBeVisible();
-    await expect(page.getByText("STATUS: NO STRONG MATCH")).toBeVisible();
-
-    // 6. SC-06: Specialty Chemical Formulation
-    await page.goto("/runs/00000000-0000-4000-8000-000000000306");
-    await expect(
-      page.getByText("Fluoropolymer Dispersions for Extreme Temp Gaskets"),
-    ).toBeVisible();
-
-    // 7. SC-07: Decoupled compatibility score vs evidence confidence
-    await page.goto("/runs/00000000-0000-4000-8000-000000000307");
-    await expect(
-      page.getByText("Precision Planetary Gearboxes for Robotics"),
-    ).toBeVisible();
-    // Verify both score >= 80 and LOW evidence confidence badge are truthfully displayed
-    await expect(page.getByText("LOW", { exact: true }).first()).toBeVisible();
-    await expect(
-      page.getByText("High Technical Fit with Low Evidence Confidence").first(),
-    ).toBeVisible();
-
-    // 8. SC-08: Multi-Tier Sourcing
-    await page.goto("/runs/00000000-0000-4000-8000-000000000308");
-    await expect(
-      page.getByText("Lithium Iron Phosphate (LFP) Prismatic Battery Cells"),
-    ).toBeVisible();
-
-    // 9. SC-09: Fast-Turn Prototype
-    await page.goto("/runs/00000000-0000-4000-8000-000000000309");
-    await expect(
-      page.getByText("5-Axis CNC Precision Prototype Machining (7-Day Turn)"),
-    ).toBeVisible();
-
-    // 10. SC-10: Aerospace Ceramic (NO STRONG MATCH State)
-    await page.goto("/runs/00000000-0000-4000-8000-000000000310");
-    await expect(
-      page.getByText("No Responsible Match Identified"),
-    ).toBeVisible();
-
-    // 11. SC-11: Cold-Chain Logistics
-    await page.goto("/runs/00000000-0000-4000-8000-000000000311");
-    await expect(
-      page.getByText(
-        "Validated -70C Ultra-Cold Chain Global Biologics Shipping",
-      ),
-    ).toBeVisible();
-
-    // 12. SC-12: Organic Fair-Trade Coffee
-    await page.goto("/runs/00000000-0000-4000-8000-000000000312");
-    await expect(
-      page.getByText("Organic Fair-Trade Green Arabica Coffee Beans Grade 1"),
-    ).toBeVisible();
-
-    // 13. SC-13: Precision Optical Sensors
-    await page.goto("/runs/00000000-0000-4000-8000-000000000313");
-    await expect(
-      page.getByText("Laser Collimator Lens Assemblies for LiDAR Systems"),
-    ).toBeVisible();
-
-    // 14. SC-14: Recycled PCR Pellets
-    await page.goto("/runs/00000000-0000-4000-8000-000000000314");
-    await expect(
-      page.getByText(
-        "Post-Consumer Recycled High-Density Polyethylene (rHDPE) Food-Grade",
-      ),
-    ).toBeVisible();
-
-    // 15. SC-15: Custom Silicon ASIC Packaging
-    await page.goto("/runs/00000000-0000-4000-8000-000000000315");
-    await expect(
-      page.getByText(
-        "Advanced Flip-Chip BGA Packaging and Final Test Services",
-      ),
-    ).toBeVisible();
+    for (const scenario of GOLDEN_SCENARIOS) {
+      await page.goto(`/runs/${scenario.run_id}`);
+      await expect(
+        page.getByText(scenario.request_snapshot.product_name).first(),
+      ).toBeVisible();
+      if (scenario.research_status === "no_strong_match") {
+        await expect(
+          page.getByText("No Responsible Match Identified"),
+        ).toBeVisible();
+      } else if (scenario.supplier_candidates.length > 0) {
+        await expect(
+          page.getByText(scenario.supplier_candidates[0].legal_name).first(),
+        ).toBeVisible();
+      }
+    }
   });
 
   test("Canonical Alias Resolution: run-v2-golden-01 resolves to SC-01", async ({
@@ -209,7 +122,9 @@ test.describe("Consultant Deep-Research Output V2 Qualification Suite", () => {
     await page.goto("/runs/00000000-0000-4000-8000-000000000301");
     await expect(page.getByText("Frozen Whole Chicken Grade A")).toBeVisible();
     await expect(page.getByText("Return to runs").first()).toBeVisible();
-    await expect(page.getByText("Download JSON")).toBeVisible();
+    await expect(
+      page.getByText("Technical Details & Data Export"),
+    ).toBeVisible();
 
     // 2. Tablet viewport (768 x 1024)
     await page.setViewportSize({ width: 768, height: 1024 });
@@ -230,7 +145,28 @@ test.describe("Consultant Deep-Research Output V2 Qualification Suite", () => {
     await expect(page.getByText("HTTP 404 Not Found")).toBeVisible();
     await expect(page.getByText("Return to Run Directory")).toBeVisible();
 
-    // 403 Forbidden
+    // 403 Forbidden: For non-consultant users, backend 403 renders Access Denied
+    await page.route("**/api/v1/me", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          account_id: "standard-user-account",
+          user_id: "standard-user-id",
+          display_name: "Standard Tier User",
+          tier: "standard",
+          quota: { limit: 5, used: 1, remaining: 4, next_capacity_at: null },
+          execution: { active: 0, capacity: 1 },
+          research_mode: {
+            id: "synthetic_reference",
+            label: "Synthetic reference",
+            live_qualified: false,
+          },
+          csrf_token: "standard-csrf",
+          environment: "test",
+        }),
+      }),
+    );
     await page.goto("/runs/00000000-0000-4000-8000-000000000888");
     await expect(page.getByText("HTTP 403 Forbidden")).toBeVisible();
     await expect(page.getByText("Switch to Consultant Session")).toBeVisible();

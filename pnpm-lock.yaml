@@ -92,6 +92,9 @@ importers:
       "@matchbase/data":
         specifier: workspace:*
         version: link:../../packages/data
+      "@matchbase/reporting":
+        specifier: workspace:*
+        version: link:../../packages/reporting
       next:
         specifier: 16.3.0
         version: 16.3.0(@playwright/test@1.62.1)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

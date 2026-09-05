@@ -26,3 +26,8 @@ export * from "./live-research-credential-policy.js";
 export * from "./live-research-pipeline-identity.js";
 export * from "./research-admission.js";
 export * from "./result-output-guard.js";
+export * from "./consultant-workflow-state.js";
+export * from "./openrouter-model-policy.js";
+export * from "./dual-lane-orchestrator.js";
+export * from "./synthesis-engine.js";
+export * from "./consultant-v3-service.js";

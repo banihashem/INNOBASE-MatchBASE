@@ -603,9 +603,9 @@ next-route-announcer {
 .low-confidence-marker {
   display: inline-block;
   padding: 0.25rem 0.4rem;
-  color: var(--amber-400) !important;
-  background: rgba(245, 158, 11, 0.15);
-  border-left: 3px solid var(--amber-500);
+  color: #92400e !important;
+  background: #fef3c7;
+  border-left: 3px solid #d97706;
   border-radius: 0 0.25rem 0.25rem 0;
 }
 
@@ -743,10 +743,10 @@ next-route-announcer {
 
 .cap-notice {
   padding: 0.75rem;
-  background: rgba(245, 158, 11, 0.1);
-  border-left: 4px solid var(--amber-500);
+  background: #fef3c7;
+  border-left: 4px solid #d97706;
   border-radius: 0 0.5rem 0.5rem 0;
-  color: var(--amber-400);
+  color: #78350f;
 }
 
 .evidence-card {

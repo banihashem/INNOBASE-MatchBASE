@@ -41,6 +41,7 @@ function validSha(value) {
 const FORWARD_PLANNING_DOCS = new Set([
   "MATCHBASE_PRODUCT_DEVELOPMENT_BASELINE.md",
   "CONSULTANT_DEEP_RESEARCH_OUTPUT_V2_SPEC.md",
+  "CONSULTANT_TIER_AGENTIC_RESEARCH_AND_UX_SPEC.md",
 ]);
 
 async function inventory(root) {

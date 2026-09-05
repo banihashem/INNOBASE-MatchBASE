@@ -33,6 +33,8 @@ export const DOMAIN_PACK_V2_AND_LEGACY_ANNOTATION_MIGRATION_ID =
   "0013_domain_pack_v2_and_legacy_annotation";
 export const CONSULTANT_V3_AGENTIC_WORKFLOW_MIGRATION_ID =
   "0014_consultant_v3_agentic_workflow";
+export const CONSULTANT_V3_WORKFLOW_PERSISTENCE_MIGRATION_ID =
+  "0015_consultant_v3_workflow_persistence";
 
 export interface MigrationDefinition {
   readonly id: string;
@@ -55,6 +57,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = Object.freeze([
   Object.freeze({ id: CONSULTANT_PDF_RENDER_LEDGER_MIGRATION_ID }),
   Object.freeze({ id: DOMAIN_PACK_V2_AND_LEGACY_ANNOTATION_MIGRATION_ID }),
   Object.freeze({ id: CONSULTANT_V3_AGENTIC_WORKFLOW_MIGRATION_ID }),
+  Object.freeze({ id: CONSULTANT_V3_WORKFLOW_PERSISTENCE_MIGRATION_ID }),
 ]);
 
 export const LATEST_MIGRATION_ID =

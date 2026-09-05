@@ -17,6 +17,7 @@ import type {
   ConsultantResultProjectionV1,
   ConsultantResultProjectionV2,
   ConsultantResearchOutputV2,
+  ConsultantResearchOutputV3,
   ConsultantSourceFactV2,
   DemoProjectionV1,
   CompleteResultFoundationV2,
@@ -30,6 +31,8 @@ import type {
   StructuredStandardRequestV1,
 } from "@matchbase/contracts";
 import {
+  parseConsultantResearchOutputV3,
+  CONSULTANT_RESEARCH_OUTPUT_V3_SCHEMA_VERSION,
   CONSULTANT_RESULT_PROJECTION_SCHEMA_VERSION,
   CONSULTANT_RESULT_PROJECTION_VERSION,
   CONSULTANT_DOMAIN_PACK_ID,
@@ -110,7 +113,8 @@ export type ConsultantResultRead =
       readonly body:
         | ConsultantResultProjectionV1
         | ConsultantResultProjectionV2
-        | ConsultantResearchOutputV2;
+        | ConsultantResearchOutputV2
+        | ConsultantResearchOutputV3;
       readonly artifactDownload?: {
         readonly run_id: string;
         readonly artifact_version_id: string;
@@ -1069,6 +1073,27 @@ export class ConsultantResultApplication {
         fields = [...projected.metadata.fieldsReleased];
         itemCount = projected.metadata.itemCount;
         projectionVersion = projected.metadata.projectionVersion;
+      } else if (
+        (row.complete_result_document as Record<string, unknown>)
+          .schema_version === CONSULTANT_RESEARCH_OUTPUT_V3_SCHEMA_VERSION
+      ) {
+        assertStoredCompleteResultIntegrity(
+          row.complete_result_document,
+          row.result_sha256,
+          runId,
+        );
+        const parsed = parseConsultantResearchOutputV3(
+          row.complete_result_document,
+        );
+        result = {
+          projectionTier: "consultant",
+          body: parsed,
+        };
+        fields = standardReleasedFieldPaths(
+          parsed as unknown as Record<string, unknown>,
+        );
+        itemCount = parsed.supplier_candidates.length;
+        projectionVersion = 3;
       } else if (
         (row.complete_result_document as Record<string, unknown>)
           .schema_version === CONSULTANT_RESEARCH_OUTPUT_V2_SCHEMA_VERSION

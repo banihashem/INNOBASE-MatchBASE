@@ -302,3 +302,61 @@ export interface ConsultantResearchOutputV3 extends FourIdTrace {
     readonly severity: "info" | "advisory" | "critical";
   }[];
 }
+
+export function parseConsultantResearchOutputV3(
+  value: unknown,
+): ConsultantResearchOutputV3 {
+  let normalized: unknown;
+  try {
+    normalized =
+      typeof value === "string"
+        ? JSON.parse(value)
+        : JSON.parse(JSON.stringify(value));
+  } catch {
+    throw new Error("Consultant research output v3 is not serializable.");
+  }
+
+  if (!normalized || typeof normalized !== "object") {
+    throw new Error("Consultant research output v3 must be an object.");
+  }
+
+  const root = normalized as Record<string, unknown>;
+
+  if (root.schema_version !== CONSULTANT_RESEARCH_OUTPUT_V3_SCHEMA_VERSION) {
+    throw new Error(
+      `Consultant research output v3 schema version must be "${CONSULTANT_RESEARCH_OUTPUT_V3_SCHEMA_VERSION}".`,
+    );
+  }
+
+  if (!root.research_run_id || typeof root.research_run_id !== "string") {
+    throw new Error(
+      "Consultant research output v3 requires a valid research_run_id.",
+    );
+  }
+
+  if (!root.user_profile_id || typeof root.user_profile_id !== "string") {
+    throw new Error(
+      "Consultant research output v3 requires a valid user_profile_id.",
+    );
+  }
+
+  if (!root.execution_id || typeof root.execution_id !== "string") {
+    throw new Error(
+      "Consultant research output v3 requires a valid execution_id.",
+    );
+  }
+
+  if (!root.classification_id || typeof root.classification_id !== "string") {
+    throw new Error(
+      "Consultant research output v3 requires a valid classification_id.",
+    );
+  }
+
+  if (!Array.isArray(root.supplier_candidates)) {
+    throw new Error(
+      "Consultant research output v3 requires a supplier_candidates array.",
+    );
+  }
+
+  return root as unknown as ConsultantResearchOutputV3;
+}

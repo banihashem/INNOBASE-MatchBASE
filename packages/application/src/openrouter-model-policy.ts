@@ -1,5 +1,3 @@
-import { BRAZIL_POULTRY_20_SUPPLIERS } from "@matchbase/contracts";
-
 export interface OpenRouterMessage {
   readonly role: "system" | "user" | "assistant";
   readonly content: string;
@@ -47,21 +45,11 @@ export async function callOpenRouterCompletion(
   const apiKey = getOpenRouterApiKey();
   const startTime = Date.now();
 
-  // If no API key is set, return mock fixture response immediately
+  // If no API key is set, fail explicitly without hidden synthetic domain fallback
   if (!apiKey) {
-    return {
-      model: params.model,
-      text: JSON.stringify({
-        status: "fixture_fallback",
-        note: "OpenRouter API key not configured; synthetic fixture utilized.",
-        candidates: BRAZIL_POULTRY_20_SUPPLIERS.slice(0, 10),
-      }),
-      input_tokens: 1200,
-      output_tokens: 2800,
-      latency_ms: 150,
-      cost_usd: 0.002,
-      live_api_invoked: false,
-    };
+    throw new Error(
+      "OpenRouter API key is not configured (MATCHBASE_OPENROUTER_API_KEY). Live research cannot be dispatched.",
+    );
   }
 
   try {
@@ -100,22 +88,9 @@ export async function callOpenRouterCompletion(
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "Unknown error");
-      console.warn(
-        `OpenRouter API returned ${res.status}: ${errText}. Falling back.`,
+      throw new Error(
+        `OpenRouter API returned HTTP ${res.status}: ${errText}. Provider failure must be handled explicitly.`,
       );
-      return {
-        model: params.model,
-        text: JSON.stringify({
-          status: "fallback_on_http_error",
-          http_status: res.status,
-          candidates: BRAZIL_POULTRY_20_SUPPLIERS.slice(0, 10),
-        }),
-        input_tokens: 800,
-        output_tokens: 1500,
-        latency_ms,
-        cost_usd: 0.001,
-        live_api_invoked: true,
-      };
     }
 
     const data = (await res.json()) as {
@@ -142,22 +117,8 @@ export async function callOpenRouterCompletion(
       live_api_invoked: true,
     };
   } catch (err) {
-    const latency_ms = Date.now() - startTime;
-    console.warn(
-      `OpenRouter request failed: ${String(err)}. Falling back to fixture.`,
+    throw new Error(
+      `OpenRouter request failed: ${err instanceof Error ? err.message : String(err)}. Provider failure must be handled explicitly.`,
     );
-    return {
-      model: params.model,
-      text: JSON.stringify({
-        status: "fallback_on_network_exception",
-        error: String(err),
-        candidates: BRAZIL_POULTRY_20_SUPPLIERS.slice(0, 10),
-      }),
-      input_tokens: 500,
-      output_tokens: 1000,
-      latency_ms,
-      cost_usd: 0.0,
-      live_api_invoked: false,
-    };
   }
 }

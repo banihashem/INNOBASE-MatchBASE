@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { SupplierEntityV3 } from "@matchbase/contracts";
 
 export interface SupplierDossierModalProps {
@@ -14,14 +14,34 @@ export function SupplierDossierModal({
   isOpen,
   onClose,
 }: SupplierDossierModalProps) {
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
+    if (isOpen) {
+      previousActiveElement.current =
+        document.activeElement as HTMLElement | null;
+      document.body.style.overflow = "hidden";
+      setTimeout(() => {
+        closeBtnRef.current?.focus();
+      }, 50);
+    } else {
+      document.body.style.overflow = "";
+      if (previousActiveElement.current) {
+        previousActiveElement.current.focus();
+      }
+    }
+
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape" && isOpen) {
         onClose();
       }
     }
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen || !supplier) return null;
@@ -56,9 +76,7 @@ export function SupplierDossierModal({
                     : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
                 }`}
               >
-                {isDirect
-                  ? "SFDA Active Direct Route"
-                  : "Conditional / Development"}
+                {isDirect ? "Active Direct Route" : "Conditional / Development"}
               </span>
             </div>
             <h2
@@ -84,6 +102,7 @@ export function SupplierDossierModal({
               </div>
             </div>
             <button
+              ref={closeBtnRef}
               type="button"
               onClick={onClose}
               className="rounded-lg p-2 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-400"
@@ -91,6 +110,8 @@ export function SupplierDossierModal({
             >
               <svg
                 className="w-6 h-6"
+                width={24}
+                height={24}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -114,6 +135,8 @@ export function SupplierDossierModal({
               <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
                 <svg
                   className="w-4 h-4 text-sky-600"
+                  width={16}
+                  height={16}
                   fill="currentColor"
                   viewBox="0 0 20 20"
                 >
@@ -136,10 +159,12 @@ export function SupplierDossierModal({
                   {supplier.headquarters_address}
                 </dd>
 
-                <dt className="text-slate-500 font-medium">Plants / SIF:</dt>
+                <dt className="text-slate-500 font-medium">
+                  Plants / Facilities:
+                </dt>
                 <dd className="col-span-2 font-mono text-slate-800">
                   {supplier.manufacturing_locations.join(", ") ||
-                    "SIF Validated"}
+                    "Validated Facilities"}
                 </dd>
 
                 <dt className="text-slate-500 font-medium">Website:</dt>
@@ -160,6 +185,8 @@ export function SupplierDossierModal({
               <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
                 <svg
                   className="w-4 h-4 text-sky-600"
+                  width={16}
+                  height={16}
                   fill="currentColor"
                   viewBox="0 0 20 20"
                 >
@@ -177,7 +204,7 @@ export function SupplierDossierModal({
 
                 <dt className="text-slate-500 font-medium">Phone:</dt>
                 <dd className="col-span-2 text-slate-800">
-                  {supplier.contacts.phone ?? "+55 Export Desk"}
+                  {supplier.contacts.phone ?? "Official Corporate Desk"}
                 </dd>
 
                 <dt className="text-slate-500 font-medium">Verification:</dt>
@@ -202,7 +229,7 @@ export function SupplierDossierModal({
                   score: assessment.dimension_scores.category_product_fit,
                 },
                 {
-                  label: "Compliance & SFDA Fit (20%)",
+                  label: "Compliance & Certification Fit (20%)",
                   score:
                     assessment.dimension_scores.compliance_certification_fit,
                 },
@@ -291,7 +318,7 @@ export function SupplierDossierModal({
                     Minimum Order Quantity (MOQ):
                   </span>
                   <span className="font-medium text-slate-800">
-                    {supplier.commercial.moq ?? "1 container (27 MT)"}
+                    {supplier.commercial.moq ?? "Standard Industrial MOQ"}
                   </span>
                 </div>
                 {supplier.commercial.price_min && (
@@ -311,7 +338,8 @@ export function SupplierDossierModal({
                   <span className="text-slate-500">Lead Time & Inco:</span>
                   <span className="font-medium text-slate-800">
                     {supplier.commercial.lead_time ?? "30-45 days"} &bull;{" "}
-                    {supplier.commercial.incoterm ?? "CIF Jeddah"}
+                    {supplier.commercial.incoterm ??
+                      "Standard International Terms"}
                   </span>
                 </div>
               </div>
@@ -345,7 +373,8 @@ export function SupplierDossierModal({
         {/* Footer */}
         <div className="bg-slate-100 px-6 py-3 flex justify-between items-center border-t border-slate-200">
           <span className="text-xs text-slate-500">
-            Source Trace: 100% grounded in official MAPA SIF & SFDA registries
+            Source Trace: Grounded in official trade registries and verified
+            supplier documentation
           </span>
           <button
             type="button"

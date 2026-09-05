@@ -629,22 +629,22 @@ export const BRAZIL_POULTRY_20_SUPPLIERS: readonly SupplierEntityV3[] = [
   })),
 ];
 
-export const GOLDEN_SCENARIO_SC01_V3: ConsultantResearchOutputV3 = {
+export const GOLDEN_SCENARIO_V3_01: ConsultantResearchOutputV3 = {
   schema_version: "consultant-research-output.v3",
   schema_contract_version: 1,
   user_profile_id: "00000000-0000-4000-8000-000000000020",
-  research_run_id: "00000000-0000-4000-8000-000000000301",
-  execution_id: "00000000-0000-4000-8000-000000002301",
-  classification_id: "00000000-0000-4000-8000-000000003301",
+  research_run_id: "00000000-0000-4000-8000-000000000401",
+  execution_id: "00000000-0000-4000-8000-000000002401",
+  classification_id: "00000000-0000-4000-8000-000000003401",
   title: "Brazilian Frozen Poultry Supply Opportunity for Saudi Arabia",
   subtitle:
     "Twenty-Supplier Deep-Research Evaluation Landscape (4 Active Direct-Route, 16 Conditional/Development)",
   generated_at: "2026-09-05T12:00:00Z",
   as_of_date: "2026-09-05",
-  research_mode: "live",
+  research_mode: "fixture",
   research_status: "complete",
   primary_classification: {
-    classification_id: "00000000-0000-4000-8000-000000003301",
+    classification_id: "00000000-0000-4000-8000-000000003401",
     scheme: "HS",
     code: "0207.12",
     version: "HS 2022",
@@ -661,7 +661,7 @@ export const GOLDEN_SCENARIO_SC01_V3: ConsultantResearchOutputV3 = {
   },
   secondary_classifications: [
     {
-      classification_id: "00000000-0000-4000-8000-000000003302",
+      classification_id: "00000000-0000-4000-8000-000000003402",
       scheme: "GS1_GPC",
       code: "10005769",
       version: "GPC 2024",
@@ -827,15 +827,20 @@ export const GOLDEN_SCENARIO_SC01_V3: ConsultantResearchOutputV3 = {
     executed_at: "2026-09-05T12:00:00Z",
   },
   report_artifact: {
-    artifact_id: "00000000-0000-4000-8000-000000004301",
+    artifact_id: "00000000-0000-4000-8000-000000004401",
     artifact_type: "pdf_landscape_report",
     filename: "INNOBASE_MatchBASE_Brazil_Saudi_Poultry_Supplier_Landscape.pdf",
     download_url:
-      "/api/v1/consultant/reports/00000000-0000-4000-8000-000000000301/pdf",
+      "/api/v1/consultant/reports/00000000-0000-4000-8000-000000000401/pdf",
     sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     generated_at: "2026-09-05T12:00:00Z",
   },
   limitations_and_disclosures: [
+    {
+      title: "Research Mode Disclosure",
+      description: "Demonstration dataset — not live market evidence",
+      severity: "info",
+    },
     {
       title: "Advisory Decision Support Boundary",
       description:
@@ -851,4 +856,678 @@ export const GOLDEN_SCENARIO_SC01_V3: ConsultantResearchOutputV3 = {
   ],
 };
 
-export const BRAZIL_POULTRY_GOLDEN_V3 = GOLDEN_SCENARIO_SC01_V3;
+export const GOLDEN_SCENARIO_SC01_V3 = GOLDEN_SCENARIO_V3_01;
+export const BRAZIL_POULTRY_GOLDEN_V3 = GOLDEN_SCENARIO_V3_01;
+
+// V3-02: Truthful Fewer-Than-20 Result (7 verified suppliers, no padding)
+export const GOLDEN_SCENARIO_V3_02: ConsultantResearchOutputV3 = {
+  ...GOLDEN_SCENARIO_V3_01,
+  research_run_id: "00000000-0000-4000-8000-000000000402",
+  execution_id: "00000000-0000-4000-8000-000000002402",
+  classification_id: "00000000-0000-4000-8000-000000003402",
+  title: "Specialty Organic Agri-Food Discovery (Truthful Scarcity)",
+  subtitle:
+    "Strict Certification Verification Yielding 7 Verified Suppliers (Target: 20)",
+  research_mode: "fixture",
+  research_status: "complete",
+  primary_classification: {
+    classification_id: "00000000-0000-4000-8000-000000003402",
+    scheme: "HS",
+    code: "1008.50",
+    version: "HS 2022",
+    jurisdiction: "Global (WCO)",
+    level: "6-digit subheading",
+    label: "Quinoa and Certified Organic Specialty Grains",
+    description:
+      "Certified organic grain products intended for international export.",
+    is_primary: true,
+    confidence: "high",
+    source_url: "https://www.wcoomd.org",
+    assigned_at: "2026-09-05T12:00:00Z",
+  },
+  target_candidates_count: 20,
+  total_candidates_found: 7,
+  supplier_candidates: BRAZIL_POULTRY_20_SUPPLIERS.slice(0, 7).map(
+    (s, idx) => ({
+      ...s,
+      candidate_id: `cand-org-${String(idx + 1).padStart(2, "0")}`,
+      assessment: {
+        ...s.assessment,
+        rank: idx + 1,
+        compatibility_score: Math.max(72, 95 - idx * 3),
+      },
+    }),
+  ),
+  executive_summary: {
+    headline:
+      "Truthful Scarcity: Exactly 7 Producers Verified Across Dual Lanes",
+    direct_answer:
+      "Deep dual-lane agentic research across 12 verification loops evaluated 43 potential entities. Exactly 7 producers satisfy all mandatory organic handling and export certification criteria. In accordance with MatchBASE truthfulness standards, the result is presented without artificial filler padding.",
+    key_findings: [
+      "Target was up to 20 candidates; 7 verified candidates identified.",
+      "14 candidate entities failed active USDA-NOP / EU-Bio equivalency checks.",
+      "Top 3 suppliers demonstrate immediate export allocation for Gulf destinations.",
+    ],
+    candidate_count: 7,
+    confidence_assessment: "high",
+    research_coverage_status: "sufficient",
+  },
+  report_artifact: {
+    artifact_id: "00000000-0000-4000-8000-000000004402",
+    artifact_type: "pdf_landscape_report",
+    filename: "INNOBASE_MatchBASE_Organic_AgriFood_7_Suppliers.pdf",
+    download_url:
+      "/api/v1/consultant/reports/00000000-0000-4000-8000-000000000402/pdf",
+    sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    generated_at: "2026-09-05T12:00:00Z",
+  },
+  limitations_and_disclosures: [
+    {
+      title: "Research Mode Disclosure",
+      description: "Demonstration dataset — not live market evidence",
+      severity: "info",
+    },
+    {
+      title: "Truthful Scarcity Disclosure",
+      description:
+        "7 verified legal entities met all criteria. MatchBASE policy strictly prohibits fabricating filler candidates to satisfy target caps.",
+      severity: "info",
+    },
+  ],
+};
+
+// V3-03: No Strong Match Result (0 suppliers, constraint relaxation guidance)
+export const GOLDEN_SCENARIO_V3_03: ConsultantResearchOutputV3 = {
+  ...GOLDEN_SCENARIO_V3_01,
+  research_run_id: "00000000-0000-4000-8000-000000000403",
+  execution_id: "00000000-0000-4000-8000-000000002403",
+  classification_id: "00000000-0000-4000-8000-000000003403",
+  title: "Ultra-Narrow Industrial Cryogenic Valve Discovery",
+  subtitle: "High Constraint Severity Leading to Truthful Zero Match",
+  research_mode: "fixture",
+  research_status: "no_strong_match",
+  primary_classification: {
+    classification_id: "00000000-0000-4000-8000-000000003403",
+    scheme: "HS",
+    code: "8481.80",
+    version: "HS 2022",
+    jurisdiction: "Global (WCO)",
+    level: "6-digit subheading",
+    label: "Industrial Valves and Mechanical Flow Control Appliances",
+    description: "High-pressure cryogenic and severe-service valves.",
+    is_primary: true,
+    confidence: "high",
+    source_url: "https://www.wcoomd.org",
+    assigned_at: "2026-09-05T12:00:00Z",
+  },
+  target_candidates_count: 20,
+  total_candidates_found: 0,
+  supplier_candidates: [],
+  executive_summary: {
+    headline:
+      "No Strong Match: Mutually Exclusive Dimensional & Pressure Tolerances",
+    direct_answer:
+      "Zero candidates satisfied the combined requirement of ASME Class 4500 rating with an 85mm outer envelope and 14-day turnaround. Independent verification confirmed physical design constraints conflict across all commercial standard manufacturers.",
+    key_findings: [
+      "Constraint Conflict: ASME Class 4500 wall thickness physically exceeds 85mm envelope constraint.",
+      "Recommendation: Relax outer envelope to 120mm OR reduce operating pressure rating to Class 2500.",
+      "Zero hallucinated suppliers provided.",
+    ],
+    candidate_count: 0,
+    confidence_assessment: "high",
+    no_match_summary:
+      "All candidate manufacturers were ruled out due to irreconcilable engineering geometry constraints.",
+    research_coverage_status: "sufficient",
+  },
+  report_artifact: {
+    artifact_id: "00000000-0000-4000-8000-000000004403",
+    artifact_type: "pdf_landscape_report",
+    filename: "INNOBASE_MatchBASE_Cryogenic_Valve_No_Match.pdf",
+    download_url:
+      "/api/v1/consultant/reports/00000000-0000-4000-8000-000000000403/pdf",
+    sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    generated_at: "2026-09-05T12:00:00Z",
+  },
+  limitations_and_disclosures: [
+    {
+      title: "Research Mode Disclosure",
+      description: "Demonstration dataset — not live market evidence",
+      severity: "info",
+    },
+    {
+      title: "Constraint Relaxation Required",
+      description:
+        "Zero matches found. To unlock discovery, relax outer envelope dimensions or operating pressure specifications.",
+      severity: "critical",
+    },
+  ],
+};
+
+// V3-04: One-Lane Failure / Partial Result (6 suppliers, transparent partial status)
+export const GOLDEN_SCENARIO_V3_04: ConsultantResearchOutputV3 = {
+  ...GOLDEN_SCENARIO_V3_01,
+  research_run_id: "00000000-0000-4000-8000-000000000404",
+  execution_id: "00000000-0000-4000-8000-000000002404",
+  classification_id: "00000000-0000-4000-8000-000000003404",
+  title:
+    "Specialty Chemical Resins (Stream 1 Completed, Stream 2 Upstream Disruption)",
+  subtitle: "Partial Verification Output with Transparent Lane Resumption",
+  research_mode: "fixture",
+  research_status: "partial",
+  primary_classification: {
+    classification_id: "00000000-0000-4000-8000-000000003404",
+    scheme: "HS",
+    code: "3907.30",
+    version: "HS 2022",
+    jurisdiction: "Global (WCO)",
+    level: "6-digit subheading",
+    label: "Epoxide Resins and Specialty Polymeric Formulations",
+    description:
+      "Industrial chemical resins and coating intermediate polymers.",
+    is_primary: true,
+    confidence: "medium",
+    source_url: "https://www.wcoomd.org",
+    assigned_at: "2026-09-05T12:00:00Z",
+  },
+  target_candidates_count: 20,
+  total_candidates_found: 6,
+  supplier_candidates: BRAZIL_POULTRY_20_SUPPLIERS.slice(0, 6).map(
+    (s, idx) => ({
+      ...s,
+      candidate_id: `cand-part-${String(idx + 1).padStart(2, "0")}`,
+      assessment: {
+        ...s.assessment,
+        rank: idx + 1,
+        compatibility_score: 80 - idx * 2,
+      },
+    }),
+  ),
+  executive_summary: {
+    headline:
+      "Partial Synthesis: Stream 1 (Gemini) Completed; Stream 2 (OpenAI) Timed Out",
+    direct_answer:
+      "Six candidate profiles were discovered and corroborated by Research Stream 1. Research Stream 2 encountered an upstream provider gateway timeout after loop 4. The run is presented in partial status with immediate retry/resumption enabled.",
+    key_findings: [
+      "Stream 1 successfully verified 6 candidates.",
+      "Stream 2 status: timed_out during corporate registry cross-referencing.",
+      "User can view current 6 profiles or trigger lane retry.",
+    ],
+    candidate_count: 6,
+    confidence_assessment: "medium",
+    research_coverage_status: "partial",
+  },
+  telemetry: {
+    lanes_executed: ["lane_gemini"],
+    verification_loops_count: 4,
+    total_input_tokens: 16200,
+    total_output_tokens: 4400,
+    total_cost_usd: 0.041,
+    execution_latency_ms: 12100,
+    synthesis_model_id: "openai/o3-mini",
+    executed_at: "2026-09-05T12:00:00Z",
+  },
+  report_artifact: {
+    artifact_id: "00000000-0000-4000-8000-000000004404",
+    artifact_type: "pdf_landscape_report",
+    filename: "INNOBASE_MatchBASE_Resins_Partial_6_Suppliers.pdf",
+    download_url:
+      "/api/v1/consultant/reports/00000000-0000-4000-8000-000000000404/pdf",
+    sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    generated_at: "2026-09-05T12:00:00Z",
+  },
+  limitations_and_disclosures: [
+    {
+      title: "Research Mode Disclosure",
+      description: "Demonstration dataset — not live market evidence",
+      severity: "info",
+    },
+    {
+      title: "Partial Lane Coverage Notice",
+      description:
+        "Only Independent Stream 1 converged. Stream 2 encountered upstream disruption. Click 'Resume Research' to re-dispatch Stream 2.",
+      severity: "advisory",
+    },
+  ],
+};
+
+export const UAE_WATER_HEATER_10_SUPPLIERS: readonly SupplierEntityV3[] = [
+  {
+    supplier_entity_id: "00000000-0000-4000-8000-000000002001",
+    candidate_id: "cand-wh-01",
+    legal_name: "Atlantic Boiler & Heating Systems FZE",
+    trading_name: "Atlantic Middle East",
+    brand_names: ["Atlantic", "Thermor"],
+    aliases: ["Groupe Atlantic UAE"],
+    supplier_type: "manufacturer",
+    manufacturer_status: "direct_manufacturer",
+    country_of_registration: "United Arab Emirates",
+    headquarters_address: "JAFZA View 18, Jebel Ali Free Zone, Dubai, UAE",
+    manufacturing_locations: [
+      "Fontenay-le-Comte, France",
+      "Izmir Plant, Turkey",
+    ],
+    website: "https://www.groupe-atlantic.com",
+    primary_domain: "groupe-atlantic.com",
+    identity_confidence: "high",
+    identity_evidence_ids: ["ev-wh-01"],
+    contacts: {
+      sales_email: "commercial.uae@groupe-atlantic.com",
+      general_email: "info.me@groupe-atlantic.com",
+      phone: "+971 4 881 5500",
+      linkedin_company_url: "https://www.linkedin.com/company/groupe-atlantic",
+      verification_status: "verified",
+      verified_at: "2026-06-20T09:00:00Z",
+      contact_evidence_ids: ["ev-wh-01"],
+    },
+    digital_assets: [
+      {
+        asset_class: "official corporate website",
+        url: "https://www.groupe-atlantic.com",
+        status: "inspected",
+      },
+    ],
+    offering: {
+      product_name: "Commercial Electric Storage Calorifier 500L",
+      product_family: "Industrial Water Heating Equipment",
+      specifications: {
+        capacity: "500 Litres",
+        working_pressure: "10 bar continuous (tested 15 bar)",
+        electrical_supply: "Three-Phase 400V 50/60Hz (15kW / 30kW options)",
+        outer_diameter: "810 mm (within 85cm constraint)",
+        corrosion_protection:
+          "Titanium electronic anode + high-purity vitreous enamel",
+      },
+      use_cases: ["Hotels", "Commercial Laundry", "Industrial Process Heating"],
+      country_of_origin: "France",
+      manufacturing_site:
+        "Groupe Atlantic Industrial Plant (ISO 9001 / PED Certified)",
+      customization_support: true,
+      private_label: false,
+      sample_availability: "available",
+      product_evidence_ids: ["ev-wh-01"],
+    },
+    commercial: {
+      price_min: 2450,
+      price_max: 2850,
+      currency: "USD",
+      unit: "unit",
+      incoterm: "DDP",
+      incoterm_location: "Dubai Mechanical Contractor Site",
+      moq: "2 units",
+      production_capacity: "1,500 units/month",
+      lead_time: "14 days from regional warehouse",
+      commercial_confidence: "high",
+      price_validity: "2026-10-31",
+      commercial_evidence_ids: ["ev-wh-price-01"],
+    },
+    packaging_and_logistics: {
+      packaging_type: "Reinforced wooden crate on pallet",
+      pack_size: "1 unit per pallet crate",
+      storage_conditions: "Enclosed dry warehouse",
+      shelf_life: "Indefinite",
+      origin_port: "Jebel Ali Port, Dubai",
+      shipping_modes: ["Flatbed dedicated truck"],
+      logistics_notes:
+        "Delivered on-site DDP Dubai with crane offloading support",
+      logistics_evidence_ids: ["ev-wh-01"],
+    },
+    certifications: [
+      {
+        certification_name: "CE Pressure Equipment Directive (PED 2014/68/EU)",
+        issuer: "TUV Rheinland",
+        certificate_number: "PED-CE-0035-2022",
+        status: "active",
+        verification_status: "verified",
+        evidence_ids: ["ev-wh-ped-01"],
+      },
+      {
+        certification_name: "UAE MoIAT / G-Mark Conformity",
+        issuer: "Ministry of Industry and Advanced Technology, UAE",
+        certificate_number: "MoIAT-EQ-2024-8812",
+        status: "active",
+        verification_status: "verified",
+        evidence_ids: ["ev-wh-moiat-01"],
+      },
+    ],
+    assessment: {
+      rank: 1,
+      compatibility_score: 95,
+      fit_band: "Strong Fit",
+      evidence_confidence: "high",
+      identity_confidence: "high",
+      data_completeness: 97,
+      dimension_scores: {
+        category_product_fit: 98,
+        compliance_certification_fit: 96,
+        volume_capacity_fit: 94,
+        price_tier_fit: 92,
+        positioning_brand_fit: 97,
+        geographic_reach_fit: 95,
+      },
+      mandatory_constraint_results: [
+        {
+          constraint: "500L tank capacity",
+          satisfied: true,
+          evidence_ids: ["ev-wh-01"],
+        },
+        {
+          constraint: "10 bar working pressure",
+          satisfied: true,
+          evidence_ids: ["ev-wh-ped-01"],
+        },
+        {
+          constraint: "Three-phase electrical 400V",
+          satisfied: true,
+          evidence_ids: ["ev-wh-01"],
+        },
+        {
+          constraint: "Outer diameter <= 85cm",
+          satisfied: true,
+          evidence_ids: ["ev-wh-01"],
+        },
+        {
+          constraint: "CE mark & UAE conformity",
+          satisfied: true,
+          evidence_ids: ["ev-wh-ped-01", "ev-wh-moiat-01"],
+        },
+      ],
+      positive_drivers: [
+        "Local Jebel Ali inventory enables 14-day DDP delivery in Dubai",
+        "Direct manufacturer regional subsidiary with certified technicians in UAE",
+        "Diameter of 81cm easily passes standard 85cm mechanical room access door",
+      ],
+      limiting_gaps: [],
+      risk_flags: [],
+      unknowns: [],
+      required_validation: [
+        "Verify flange connections match local piping design",
+      ],
+      recommended_next_action:
+        "Request technical submittal and pricing for 500L calorifier",
+    },
+  },
+  {
+    supplier_entity_id: "00000000-0000-4000-8000-000000002002",
+    candidate_id: "cand-wh-02",
+    legal_name: "Ariston Thermo Middle East FZE",
+    trading_name: "Ariston Group Dubai",
+    brand_names: ["Ariston", "Elco"],
+    aliases: ["Ariston Middle East"],
+    supplier_type: "manufacturer",
+    manufacturer_status: "direct_manufacturer",
+    country_of_registration: "United Arab Emirates",
+    headquarters_address: "Dubai Silicon Oasis, DDP Building, Dubai, UAE",
+    manufacturing_locations: ["Fabriano, Italy", "St. Petersburg, Russia"],
+    website: "https://www.ariston.com/en-me",
+    primary_domain: "ariston.com",
+    identity_confidence: "high",
+    identity_evidence_ids: ["ev-wh-02"],
+    contacts: {
+      sales_email: "commercial.me@ariston.com",
+      general_email: "support.dubai@ariston.com",
+      phone: "+971 4 392 7800",
+      verification_status: "verified",
+      verified_at: "2026-06-15T11:00:00Z",
+      contact_evidence_ids: ["ev-wh-02"],
+    },
+    digital_assets: [
+      {
+        asset_class: "official corporate website",
+        url: "https://www.ariston.com/en-me",
+        status: "inspected",
+      },
+    ],
+    offering: {
+      product_name: "Maxi Industrial Electric Storage Water Heater 500L",
+      product_family: "Commercial Water Heating Equipment",
+      specifications: {
+        capacity: "500 Litres",
+        working_pressure: "10 bar",
+        electrical_supply: "Three-Phase 380-415V 50Hz (20kW)",
+        outer_diameter: "825 mm",
+        corrosion_protection:
+          "Titanium Plus enamel with active cathodic protection",
+      },
+      use_cases: ["Commercial Buildings", "Gyms & Spas", "Food Processing"],
+      country_of_origin: "Italy",
+      manufacturing_site:
+        "Ariston Industrial Plant Fabriano (ISO 9001, CE Certified)",
+      customization_support: true,
+      private_label: false,
+      sample_availability: "available",
+      product_evidence_ids: ["ev-wh-02"],
+    },
+    commercial: {
+      price_min: 2300,
+      price_max: 2700,
+      currency: "USD",
+      unit: "unit",
+      incoterm: "DDP",
+      incoterm_location: "Dubai Site Delivery",
+      moq: "1 unit",
+      production_capacity: "2,000 units/month",
+      lead_time: "10 days",
+      commercial_confidence: "high",
+      price_validity: "2026-11-30",
+      commercial_evidence_ids: ["ev-wh-price-02"],
+    },
+    packaging_and_logistics: {
+      packaging_type: "Heavy corrugated packaging with timber pallet base",
+      pack_size: "1 unit",
+      storage_conditions: "Dry indoor storage",
+      shelf_life: "Indefinite",
+      origin_port: "Dubai Silicon Oasis Hub",
+      shipping_modes: ["Road freight express"],
+      logistics_notes: "Immediate dispatch from Dubai logistics facility",
+      logistics_evidence_ids: ["ev-wh-02"],
+    },
+    certifications: [
+      {
+        certification_name: "CE Pressure Equipment Directive",
+        issuer: "IMQ Italy",
+        certificate_number: "IMQ-PED-0042",
+        status: "active",
+        verification_status: "verified",
+        evidence_ids: ["ev-wh-ped-02"],
+      },
+      {
+        certification_name: "ESMA / G-Mark Conformity Certificate",
+        issuer: "ESMA UAE",
+        certificate_number: "ESMA-EC-90142",
+        status: "active",
+        verification_status: "verified",
+        evidence_ids: ["ev-wh-esma-02"],
+      },
+    ],
+    assessment: {
+      rank: 2,
+      compatibility_score: 93,
+      fit_band: "Strong Fit",
+      evidence_confidence: "high",
+      identity_confidence: "high",
+      data_completeness: 96,
+      dimension_scores: {
+        category_product_fit: 96,
+        compliance_certification_fit: 95,
+        volume_capacity_fit: 93,
+        price_tier_fit: 94,
+        positioning_brand_fit: 96,
+        geographic_reach_fit: 94,
+      },
+      mandatory_constraint_results: [
+        {
+          constraint: "500L tank capacity",
+          satisfied: true,
+          evidence_ids: ["ev-wh-02"],
+        },
+        {
+          constraint: "10 bar working pressure",
+          satisfied: true,
+          evidence_ids: ["ev-wh-ped-02"],
+        },
+        {
+          constraint: "Three-phase electrical 400V",
+          satisfied: true,
+          evidence_ids: ["ev-wh-02"],
+        },
+        {
+          constraint: "Outer diameter <= 85cm",
+          satisfied: true,
+          evidence_ids: ["ev-wh-02"],
+        },
+      ],
+      positive_drivers: [
+        "Extensive authorized dealer and technical service network across UAE",
+        "Diameter of 82.5cm meets door clearance specification",
+      ],
+      limiting_gaps: [],
+      risk_flags: [],
+      unknowns: [],
+      required_validation: [
+        "Confirm thermostat integration with building management system (BMS)",
+      ],
+      recommended_next_action:
+        "Confirm local stock levels with Dubai Silicon Oasis facility",
+    },
+  },
+  {
+    supplier_entity_id: "00000000-0000-4000-8000-000000002003",
+    candidate_id: "cand-wh-03",
+    legal_name: "Stiebel Eltron Middle East LLC",
+    trading_name: "Stiebel Eltron UAE",
+    brand_names: ["Stiebel Eltron"],
+    aliases: ["Stiebel Eltron Germany"],
+    supplier_type: "manufacturer",
+    manufacturer_status: "direct_manufacturer",
+    country_of_registration: "United Arab Emirates",
+    headquarters_address: "Al Barsha 1, Dubai, UAE",
+    manufacturing_locations: ["Holzminden, Germany", "Poprad, Slovakia"],
+    website: "https://www.stiebel-eltron.ae",
+    primary_domain: "stiebel-eltron.ae",
+    identity_confidence: "high",
+    identity_evidence_ids: ["ev-wh-03"],
+    contacts: {
+      sales_email: "info@stiebel-eltron.ae",
+      phone: "+971 4 455 8600",
+      verification_status: "verified",
+      verified_at: "2026-06-10T08:30:00Z",
+      contact_evidence_ids: ["ev-wh-03"],
+    },
+    digital_assets: [
+      {
+        asset_class: "official corporate website",
+        url: "https://www.stiebel-eltron.ae",
+        status: "inspected",
+      },
+    ],
+    offering: {
+      product_name: "SB 502 AC Commercial Storage Calorifier 500L",
+      product_family: "Industrial Water Heating Equipment",
+      specifications: {
+        capacity: "500 Litres",
+        working_pressure: "10 bar",
+        electrical_supply: "Three-Phase 400V 50Hz (18kW)",
+        outer_diameter: "840 mm",
+        corrosion_protection: "Special enamel coating with signal anode",
+      },
+      use_cases: ["Commercial Kitchens", "Hotels", "Healthcare Facilities"],
+      country_of_origin: "Germany",
+      manufacturing_site: "Holzminden Plant, Germany",
+      customization_support: true,
+      private_label: false,
+      sample_availability: "available",
+      product_evidence_ids: ["ev-wh-03"],
+    },
+    commercial: {
+      price_min: 2700,
+      price_max: 3200,
+      currency: "USD",
+      unit: "unit",
+      incoterm: "DDP",
+      incoterm_location: "Dubai Site Delivery",
+      moq: "1 unit",
+      production_capacity: "1,200 units/month",
+      lead_time: "18 days",
+      commercial_confidence: "high",
+      price_validity: "2026-10-15",
+      commercial_evidence_ids: ["ev-wh-price-03"],
+    },
+    packaging_and_logistics: {
+      packaging_type: "High-density foam and heavy-duty timber crate",
+      pack_size: "1 unit",
+      storage_conditions: "Dry indoor facility",
+      shelf_life: "Indefinite",
+      origin_port: "Dubai Logistics City",
+      shipping_modes: ["Road freight"],
+      logistics_notes: "DDP Dubai delivery with hydraulic lift gate offloading",
+      logistics_evidence_ids: ["ev-wh-03"],
+    },
+    certifications: [
+      {
+        certification_name: "CE Declaration of Conformity & PED 2014/68/EU",
+        issuer: "VDE Testing and Certification Institute",
+        certificate_number: "VDE-PED-40019",
+        status: "active",
+        verification_status: "verified",
+        evidence_ids: ["ev-wh-ped-03"],
+      },
+    ],
+    assessment: {
+      rank: 3,
+      compatibility_score: 91,
+      fit_band: "Strong Fit",
+      evidence_confidence: "high",
+      identity_confidence: "high",
+      data_completeness: 95,
+      dimension_scores: {
+        category_product_fit: 95,
+        compliance_certification_fit: 97,
+        volume_capacity_fit: 90,
+        price_tier_fit: 88,
+        positioning_brand_fit: 98,
+        geographic_reach_fit: 93,
+      },
+      mandatory_constraint_results: [
+        {
+          constraint: "500L tank capacity",
+          satisfied: true,
+          evidence_ids: ["ev-wh-03"],
+        },
+        {
+          constraint: "10 bar working pressure",
+          satisfied: true,
+          evidence_ids: ["ev-wh-ped-03"],
+        },
+        {
+          constraint: "Three-phase electrical 400V",
+          satisfied: true,
+          evidence_ids: ["ev-wh-03"],
+        },
+        {
+          constraint: "Outer diameter <= 85cm (84cm actual)",
+          satisfied: true,
+          evidence_ids: ["ev-wh-03"],
+        },
+      ],
+      positive_drivers: [
+        "Premium German engineering with proven high thermal insulation efficiency",
+        "840mm diameter fits within the strict 850mm door limit",
+      ],
+      limiting_gaps: ["Higher price point relative to market median"],
+      risk_flags: [],
+      unknowns: [],
+      required_validation: [
+        "Confirm spare parts pricing and lead time for immersion elements",
+      ],
+      recommended_next_action:
+        "Evaluate electrical panel requirements for 18kW immersion heater",
+    },
+  },
+];
+
+export const GOLDEN_SCENARIOS_V3: readonly ConsultantResearchOutputV3[] = [
+  GOLDEN_SCENARIO_V3_01,
+  GOLDEN_SCENARIO_V3_02,
+  GOLDEN_SCENARIO_V3_03,
+  GOLDEN_SCENARIO_V3_04,
+];

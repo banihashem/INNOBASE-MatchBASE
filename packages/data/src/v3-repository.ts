@@ -359,3 +359,210 @@ export async function getPdfReportLedgerByRunId(
   );
   return res.rows[0] ?? null;
 }
+
+export interface ConsultantWorkflowSessionRecord {
+  readonly session_id: string;
+  readonly account_id: string;
+  readonly run_id: string;
+  readonly user_profile_id: string;
+  readonly current_state: string;
+  readonly original_intake: Record<string, unknown>;
+  readonly draft_revision?: Record<string, unknown> | null;
+  readonly approved_request_revision?: Record<string, unknown> | null;
+  readonly advisory_output?: Record<string, unknown> | null;
+  readonly advisory_loop_records?: readonly Record<string, unknown>[] | null;
+  readonly deep_prompt_revision?: Record<string, unknown> | null;
+  readonly approvals?: readonly Record<string, unknown>[];
+  readonly classification?: Record<string, unknown> | null;
+  readonly execution_id?: string | null;
+  readonly last_checkpoint?: string | null;
+  readonly created_at?: string;
+  readonly updated_at?: string;
+}
+
+export async function saveConsultantWorkflowSession(
+  db: Queryable,
+  session: ConsultantWorkflowSessionRecord,
+): Promise<void> {
+  await db.query(
+    `INSERT INTO consultant_workflow_session (
+      session_id,
+      account_id,
+      run_id,
+      user_profile_id,
+      current_state,
+      original_intake,
+      draft_revision,
+      approved_request_revision,
+      advisory_output,
+      advisory_loop_records,
+      deep_prompt_revision,
+      approvals,
+      classification,
+      execution_id,
+      last_checkpoint,
+      updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, clock_timestamp())
+    ON CONFLICT (account_id, run_id)
+    DO UPDATE SET
+      current_state = EXCLUDED.current_state,
+      original_intake = EXCLUDED.original_intake,
+      draft_revision = EXCLUDED.draft_revision,
+      approved_request_revision = EXCLUDED.approved_request_revision,
+      advisory_output = EXCLUDED.advisory_output,
+      advisory_loop_records = EXCLUDED.advisory_loop_records,
+      deep_prompt_revision = EXCLUDED.deep_prompt_revision,
+      approvals = EXCLUDED.approvals,
+      classification = EXCLUDED.classification,
+      execution_id = EXCLUDED.execution_id,
+      last_checkpoint = EXCLUDED.last_checkpoint,
+      updated_at = clock_timestamp();`,
+    [
+      session.session_id,
+      session.account_id,
+      session.run_id,
+      session.user_profile_id,
+      session.current_state,
+      JSON.stringify(session.original_intake),
+      session.draft_revision ? JSON.stringify(session.draft_revision) : null,
+      session.approved_request_revision
+        ? JSON.stringify(session.approved_request_revision)
+        : null,
+      session.advisory_output ? JSON.stringify(session.advisory_output) : null,
+      session.advisory_loop_records
+        ? JSON.stringify(session.advisory_loop_records)
+        : null,
+      session.deep_prompt_revision
+        ? JSON.stringify(session.deep_prompt_revision)
+        : null,
+      JSON.stringify(session.approvals ?? []),
+      session.classification ? JSON.stringify(session.classification) : null,
+      session.execution_id ?? null,
+      session.last_checkpoint ?? null,
+    ],
+  );
+}
+
+export async function getConsultantWorkflowSessionByRunId(
+  db: Queryable,
+  accountId: string,
+  runId: string,
+): Promise<ConsultantWorkflowSessionRecord | null> {
+  const res = await db.query<{
+    session_id: string;
+    account_id: string;
+    run_id: string;
+    user_profile_id: string;
+    current_state: string;
+    original_intake: Record<string, unknown> | string;
+    draft_revision: Record<string, unknown> | string | null;
+    approved_request_revision: Record<string, unknown> | string | null;
+    advisory_output: Record<string, unknown> | string | null;
+    advisory_loop_records: readonly Record<string, unknown>[] | string | null;
+    deep_prompt_revision: Record<string, unknown> | string | null;
+    approvals: readonly Record<string, unknown>[] | string | null;
+    classification: Record<string, unknown> | string | null;
+    execution_id: string | null;
+    last_checkpoint: string | null;
+    created_at: Date;
+    updated_at: Date;
+  }>(
+    `SELECT * FROM consultant_workflow_session WHERE account_id = $1 AND run_id = $2;`,
+    [accountId, runId],
+  );
+  if (res.rows.length === 0) return null;
+  const row = res.rows[0]!;
+  const parseJson = <T>(val: unknown): T =>
+    typeof val === "string" ? (JSON.parse(val) as T) : (val as T);
+
+  return {
+    session_id: row.session_id,
+    account_id: row.account_id,
+    run_id: row.run_id,
+    user_profile_id: row.user_profile_id,
+    current_state: row.current_state,
+    original_intake: parseJson(row.original_intake),
+    draft_revision: row.draft_revision ? parseJson(row.draft_revision) : null,
+    approved_request_revision: row.approved_request_revision
+      ? parseJson(row.approved_request_revision)
+      : null,
+    advisory_output: row.advisory_output
+      ? parseJson(row.advisory_output)
+      : null,
+    advisory_loop_records: row.advisory_loop_records
+      ? parseJson(row.advisory_loop_records)
+      : null,
+    deep_prompt_revision: row.deep_prompt_revision
+      ? parseJson(row.deep_prompt_revision)
+      : null,
+    approvals: row.approvals ? parseJson(row.approvals) : [],
+    classification: row.classification ? parseJson(row.classification) : null,
+    execution_id: row.execution_id,
+    last_checkpoint: row.last_checkpoint,
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
+  };
+}
+
+export async function listConsultantWorkflowSessions(
+  db: Queryable,
+  accountId: string,
+  limit = 20,
+): Promise<readonly ConsultantWorkflowSessionRecord[]> {
+  const res = await db.query<{
+    session_id: string;
+    account_id: string;
+    run_id: string;
+    user_profile_id: string;
+    current_state: string;
+    original_intake: Record<string, unknown> | string;
+    draft_revision: Record<string, unknown> | string | null;
+    approved_request_revision: Record<string, unknown> | string | null;
+    advisory_output: Record<string, unknown> | string | null;
+    advisory_loop_records: readonly Record<string, unknown>[] | string | null;
+    deep_prompt_revision: Record<string, unknown> | string | null;
+    approvals: readonly Record<string, unknown>[] | string | null;
+    classification: Record<string, unknown> | string | null;
+    execution_id: string | null;
+    last_checkpoint: string | null;
+    created_at: Date;
+    updated_at: Date;
+  }>(
+    `SELECT * FROM consultant_workflow_session
+     WHERE account_id = $1
+     ORDER BY updated_at DESC
+     LIMIT $2;`,
+    [accountId, limit],
+  );
+
+  const parseJson = <T>(val: unknown): T =>
+    typeof val === "string" ? (JSON.parse(val) as T) : (val as T);
+
+  return res.rows.map((row) => ({
+    session_id: row.session_id,
+    account_id: row.account_id,
+    run_id: row.run_id,
+    user_profile_id: row.user_profile_id,
+    current_state: row.current_state,
+    original_intake: parseJson(row.original_intake),
+    draft_revision: row.draft_revision ? parseJson(row.draft_revision) : null,
+    approved_request_revision: row.approved_request_revision
+      ? parseJson(row.approved_request_revision)
+      : null,
+    advisory_output: row.advisory_output
+      ? parseJson(row.advisory_output)
+      : null,
+    advisory_loop_records: row.advisory_loop_records
+      ? parseJson(row.advisory_loop_records)
+      : null,
+    deep_prompt_revision: row.deep_prompt_revision
+      ? parseJson(row.deep_prompt_revision)
+      : null,
+    approvals: row.approvals ? parseJson(row.approvals) : [],
+    classification: row.classification ? parseJson(row.classification) : null,
+    execution_id: row.execution_id,
+    last_checkpoint: row.last_checkpoint,
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
+  }));
+}

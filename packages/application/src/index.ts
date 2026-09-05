@@ -31,3 +31,4 @@ export * from "./openrouter-model-policy.js";
 export * from "./dual-lane-orchestrator.js";
 export * from "./synthesis-engine.js";
 export * from "./consultant-v3-service.js";
+export * from "./preparation-gateway.js";

@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   parseConsultantResearchOutputV2,
+  parseConsultantResearchOutputV3,
   parseConsultantResultProjectionV1,
   parseConsultantResultProjectionV2,
   parseStandardResultProjectionV1,
@@ -18,6 +19,14 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 const GOLDEN_ALIAS_MAP: Record<string, string> = {
+  "run-v3-golden-01": "00000000-0000-4000-8000-000000000401",
+  "run-v3-golden-02": "00000000-0000-4000-8000-000000000402",
+  "run-v3-golden-03": "00000000-0000-4000-8000-000000000403",
+  "run-v3-golden-04": "00000000-0000-4000-8000-000000000404",
+  "run-v3-golden-1": "00000000-0000-4000-8000-000000000401",
+  "run-v3-golden-2": "00000000-0000-4000-8000-000000000402",
+  "run-v3-golden-3": "00000000-0000-4000-8000-000000000403",
+  "run-v3-golden-4": "00000000-0000-4000-8000-000000000404",
   "run-v2-golden-01": "00000000-0000-4000-8000-000000000301",
   "run-v2-golden-02": "00000000-0000-4000-8000-000000000302",
   "run-v2-golden-03": "00000000-0000-4000-8000-000000000303",
@@ -113,9 +122,10 @@ export default function RunResultPage({
 
     async function fetchResult() {
       try {
-        // Fast-fail invalid friendly aliases (e.g. run-v2-golden-99) as Not Found (404)
+        // Fast-fail invalid friendly aliases (e.g. run-v2-golden-99 or run-v3-golden-99) as Not Found (404)
         if (
-          runId.startsWith("run-v2-golden-") &&
+          (runId.startsWith("run-v2-golden-") ||
+            runId.startsWith("run-v3-golden-")) &&
           !(runId in GOLDEN_ALIAS_MAP)
         ) {
           if (!active) return;
@@ -224,6 +234,8 @@ export default function RunResultPage({
 
         const parsed: ConsultantVisibleResult = (() => {
           switch (body.schema_version) {
+            case "consultant-research-output.v3":
+              return parseConsultantResearchOutputV3(body);
             case "consultant-research-output.v2":
               return parseConsultantResearchOutputV2(body);
             case "consultant-result-projection.v1":

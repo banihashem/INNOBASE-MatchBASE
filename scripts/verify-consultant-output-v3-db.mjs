@@ -20,7 +20,7 @@ const client = await pool.connect();
 
 try {
   const accountId = "a9442670-2db5-447f-8fb4-c71f6e16a893";
-  const runId = "00000000-0000-4000-8000-000000000301";
+  const runId = "00000000-0000-4000-8000-000000000401";
 
   // 1. Verify consultant_output_v3
   const outRes = await client.query(
@@ -30,13 +30,38 @@ try {
   assert.equal(
     outRes.rows.length,
     1,
-    "Must find 1 consultant_output_v3 record",
+    "Must find 1 consultant_output_v3 record for V3-01",
   );
   const row = outRes.rows[0];
   assert.equal(row.schema_version, "consultant-research-output.v3");
   assert.equal(row.target_candidates_count, 20);
   assert.equal(row.total_candidates_found, 20);
-  console.log("✔ consultant_output_v3 row verified.");
+  console.log("✔ consultant_output_v3 row verified for V3-01.");
+
+  // Also verify V3-02, V3-03, V3-04 exist
+  for (const extraId of [
+    "00000000-0000-4000-8000-000000000402",
+    "00000000-0000-4000-8000-000000000403",
+    "00000000-0000-4000-8000-000000000404",
+  ]) {
+    const extraRes = await client.query(
+      `SELECT * FROM consultant_output_v3 WHERE account_id = $1 AND run_id = $2;`,
+      [accountId, extraId],
+    );
+    assert.equal(extraRes.rows.length, 1, `Must find record for ${extraId}`);
+  }
+  console.log("✔ All 4 V3 scenarios verified in consultant_output_v3.");
+
+  // Verify migration 0015 consultant_workflow_session table exists
+  const sessionTableRes = await client.query(
+    `SELECT to_regclass('public.consultant_workflow_session') IS NOT NULL AS exists;`,
+  );
+  assert.equal(
+    sessionTableRes.rows[0]?.exists,
+    true,
+    "consultant_workflow_session table must exist",
+  );
+  console.log("✔ consultant_workflow_session table verified (Migration 0015).");
 
   // 2. Verify product_classification
   const classRes = await client.query(

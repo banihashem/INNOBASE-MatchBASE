@@ -1,28 +1,50 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import type {
   ConsultantResearchOutputV3,
   SupplierEntityV3,
 } from "@matchbase/contracts";
 import { SupplierDossierModal } from "../../../components/consultant/SupplierDossierModal";
 
+const DEMONSTRATION_EXAMPLES = {
+  poultry: {
+    label:
+      "Example A: Brazilian Poultry for Saudi Arabia (Frozen Whole & Cuts)",
+    product_requirement:
+      "مرغ کامل منجمد گرید A (وزن 900 تا 1200 گرم) و قطعات سینه بی‌استخوان و فیله شاورما، بسته‌بندی صادراتی کارتن 10 کیلویی با 4 کیسه 2.5 کیلوگرمی. کشور مقصد: عربستان سعودی (بندر جده / دمام). تاریخ انقضا حداقل 12 ماه.",
+    technical_compliance:
+      "کشتارگاه دارای مجوز فعال و معتبر SFDA در برزیل الزامی است. گواهی حلال معتبر (FAMBRAS یا Cibal Halal). رعایت زنجیره سرد مداوم منفی 18 درجه سانتیگراد، بدون یخ‌زدگی مجدد، رطوبت کمتر از 4.5 درصد، کدهای معتبر MAPA SIF.",
+    order_profile:
+      "حجم سفارش اولیه 1 تا 3 کانتینر 40 فوت ریفر (تقریباً 27 تن به ازای هر کانتینر)، تکرار ماهیانه تا 2000 تن. شرایط تحویل CFR بندر جده. ترجیحاً خرید مستقیم از تولیدکننده اصلی (Direct Slaughterhouse).",
+  },
+  water_heaters: {
+    label:
+      "Example B: Commercial Electric Water Heaters for UAE (500L, 10 Bar)",
+    product_requirement:
+      "آبگرمکن برقی صنعتی مخزنی 500 لیتری ایستاده، فشار کاری مجاز 10 بار، المنت برقی 18 کیلووات سه‌فاز 400 ولت 50 هرتز، حداکثر قطر خارجی مخزن 850 میلی‌متر جهت عبور از درب استاندارد تاسیسات، عایق حرارتی پلی‌اورتان متراکم.",
+    technical_compliance:
+      "استاندارد CE اروپا، تطابق با استاندارد مخازن تحت فشار PED 2014/68/EU، تاییدیه ECAS امارات، پوشش داخلی لعاب شیشه‌ای (vitreous enamel) و آند منیزیم دوبل جهت جلوگیری از خوردگی آب سخت حاشیه خلیج فارس.",
+    order_profile:
+      "تعداد 45 دستگاه برای پروژه هتل در دبی، تحویل DDP در منطقه صنعتی دبی. گارانتی مخزن حداقل 5 سال و قطعات برقی حداقل 2 سال همراه با ارائه برگه تست هیدرواستاتیک کارخانه.",
+  },
+};
+
 export default function ConsultantWorkflowPage() {
-  // Intake Inputs
-  const [productRequirement, setProductRequirement] = useState(
-    "مرغ کامل منجمد گرید A (وزن 900 تا 1200 گرم) و قطعات سینه بی‌استخوان و فیله شاورما، بسته‌بندی صادراتی کارتن 10 کیلویی با 4 کیسه 2.5 کیلوگرمی. کشور مقصد: عربستان سعودی (بندر جده / دمام).",
-  );
-  const [technicalCompliance, setTechnicalCompliance] = useState(
-    "کشتارگاه دارای مجوز فعال و معتبر SFDA در برزیل الزامی است. گواهی حلال معتبر (FAMBRAS یا Cibal Halal). رعایت زنجیره سرد مداوم منفی 18 درجه سانتیگراد، بدون یخ‌زدگی مجدد، رطوبت کمتر از 4.5 درصد.",
-  );
-  const [orderProfile, setOrderProfile] = useState(
-    "حجم سفارش اولیه 1 تا 3 کانتینر 40 فوت ریفر (تقریباً 27 تن به ازای هر کانتینر)، تکرار ماهیانه تا 2000 تن. شرایط تحویل CIF جده. ترجیحاً خرید مستقیم از تولیدکننده اصلی (Direct Slaughterhouse).",
-  );
+  // Intake Inputs (Empty by default - F12)
+  const [productRequirement, setProductRequirement] = useState("");
+  const [technicalCompliance, setTechnicalCompliance] = useState("");
+  const [orderProfile, setOrderProfile] = useState("");
 
   // Popover Visibility States
   const [showPopover1, setShowPopover1] = useState(false);
   const [showPopover2, setShowPopover2] = useState(false);
   const [showPopover3, setShowPopover3] = useState(false);
+
+  const popoverBtnRef1 = useRef<HTMLButtonElement | null>(null);
+  const popoverBtnRef2 = useRef<HTMLButtonElement | null>(null);
+  const popoverBtnRef3 = useRef<HTMLButtonElement | null>(null);
 
   // Workflow Progression State
   const [runId, setRunId] = useState<string | null>(null);
@@ -41,6 +63,130 @@ export default function ConsultantWorkflowPage() {
   function triggerToast(msg: string) {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
+  }
+
+  // Set contextual page title (F13)
+  useEffect(() => {
+    if (output) {
+      document.title = `${output.request_snapshot.product_name} — Consultant Research | MatchBASE`;
+    } else if (runId) {
+      document.title = `Run ${runId.slice(-8)} — Consultant Research | MatchBASE`;
+    } else {
+      document.title = "Consultant Research Workflow | MatchBASE";
+    }
+  }, [output, runId]);
+
+  // Handle Escape key for popovers (F08)
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (showPopover1) {
+          setShowPopover1(false);
+          popoverBtnRef1.current?.focus();
+        }
+        if (showPopover2) {
+          setShowPopover2(false);
+          popoverBtnRef2.current?.focus();
+        }
+        if (showPopover3) {
+          setShowPopover3(false);
+          popoverBtnRef3.current?.focus();
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showPopover1, showPopover2, showPopover3]);
+
+  // Persistence: Restore session from URL param or localStorage (F04)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramRunId = urlParams.get("run_id");
+    const activeRunId =
+      paramRunId || localStorage.getItem("matchbase_active_workflow_run_id");
+
+    if (activeRunId && !runId) {
+      void loadExistingSession(activeRunId);
+    }
+  }, []);
+
+  async function loadExistingSession(targetRunId: string) {
+    setIsLoading(true);
+    try {
+      const res = await fetch(
+        `/api/v1/consultant/workflow?run_id=${encodeURIComponent(targetRunId)}`,
+        { cache: "no-store" },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.session) {
+          const s = data.session;
+          setRunId(s.run_id);
+          setWorkflowState(s.state);
+          if (s.intake) {
+            setProductRequirement(s.intake.product_requirement ?? "");
+            setTechnicalCompliance(s.intake.technical_compliance ?? "");
+            setOrderProfile(s.intake.order_profile ?? "");
+          }
+          if (s.step1_interpretation) {
+            setStep1Translation(
+              s.step1_interpretation.english_translation ?? "",
+            );
+          }
+          if (s.step2_advisory) {
+            setAdvisoryContext(s.step2_advisory);
+          }
+          if (s.step3_deep_prompt) {
+            setStep3Prompt(s.step3_deep_prompt.prompt_text ?? "");
+          }
+          if (s.output) {
+            setOutput(s.output);
+          }
+          if (typeof s.revealed_count === "number") {
+            setRevealedCount(s.revealed_count);
+          }
+          localStorage.setItem("matchbase_active_workflow_run_id", s.run_id);
+          window.history.replaceState(
+            {},
+            "",
+            `/consultant/workflow?run_id=${s.run_id}`,
+          );
+          triggerToast(
+            `Workflow session restored (Run ID: ${s.run_id.slice(-8)})`,
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load session:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function handleStartNew() {
+    setRunId(null);
+    setWorkflowState("intake_draft");
+    setProductRequirement("");
+    setTechnicalCompliance("");
+    setOrderProfile("");
+    setStep1Translation("");
+    setStep3Prompt("");
+    setAdvisoryContext(null);
+    setOutput(null);
+    setRevealedCount(5);
+    localStorage.removeItem("matchbase_active_workflow_run_id");
+    window.history.replaceState({}, "", "/consultant/workflow");
+    triggerToast("Ready for new sourcing workflow.");
+  }
+
+  // Load demonstration examples (F12)
+  function handleLoadExample(type: "poultry" | "water_heaters") {
+    const example = DEMONSTRATION_EXAMPLES[type];
+    setProductRequirement(example.product_requirement);
+    setTechnicalCompliance(example.technical_compliance);
+    setOrderProfile(example.order_profile);
+    triggerToast(`Loaded ${example.label}`);
   }
 
   // Action 1: Submit Intake
@@ -66,9 +212,18 @@ export default function ConsultantWorkflowPage() {
           data.session.step1_interpretation.english_translation,
         );
         setAdvisoryContext(data.session.step2_advisory);
-        setStep3Prompt(data.session.step3_deep_prompt.prompt_text);
+        setStep3Prompt(data.session.step3_deep_prompt?.prompt_text ?? "");
+        localStorage.setItem(
+          "matchbase_active_workflow_run_id",
+          data.session.run_id,
+        );
+        window.history.replaceState(
+          {},
+          "",
+          `/consultant/workflow?run_id=${data.session.run_id}`,
+        );
         triggerToast(
-          "Intake submitted successfully. Please review English Interpretation (Step 1).",
+          "Intake submitted and persisted. Review English Interpretation (Step 1).",
         );
       } else {
         alert(data.error || "Failed to submit intake");
@@ -81,7 +236,7 @@ export default function ConsultantWorkflowPage() {
     }
   }
 
-  // Action 2: Approve Step 1 Interpretation
+  // Action 2: Approve Step 1 Interpretation (Propagates edit downstream - F01)
   async function handleApproveStep1() {
     if (!runId) return;
     setIsLoading(true);
@@ -97,8 +252,16 @@ export default function ConsultantWorkflowPage() {
       });
       const data = await res.json();
       if (data.success && data.session) {
-        setWorkflowState("prep_step2_advisory_ready");
-        triggerToast("Step 1 Approved. Review Advisory Context (Step 2).");
+        setWorkflowState(data.session.state);
+        setAdvisoryContext(data.session.step2_advisory);
+        if (data.session.step3_deep_prompt) {
+          setStep3Prompt(data.session.step3_deep_prompt.prompt_text);
+        }
+        triggerToast(
+          "Step 1 Approved. Edits propagated to Stage 2 & 3. Review Advisory Context.",
+        );
+      } else {
+        alert(data.error || "Failed to approve Step 1");
       }
     } catch (err) {
       console.error(err);
@@ -131,6 +294,7 @@ export default function ConsultantWorkflowPage() {
         body: JSON.stringify({
           action: "execute_research",
           run_id: runId,
+          mode: "demonstration",
         }),
       });
       const data = await res.json();
@@ -139,8 +303,10 @@ export default function ConsultantWorkflowPage() {
         setWorkflowState("progressive_reveal_ready");
         setRevealedCount(5);
         triggerToast(
-          "Dual-lane research converged! Top 5 verified suppliers revealed.",
+          "Autonomous research complete! Top verified suppliers revealed.",
         );
+      } else {
+        alert(data.error || "Research execution failed");
       }
     } catch (err) {
       console.error(err);
@@ -150,7 +316,7 @@ export default function ConsultantWorkflowPage() {
     }
   }
 
-  // Action 4: Reveal More Candidates
+  // Action 4: Reveal More Candidates (+5)
   async function handleRevealMore() {
     if (!runId) return;
     setIsLoading(true);
@@ -167,7 +333,9 @@ export default function ConsultantWorkflowPage() {
       const data = await res.json();
       if (data.success) {
         setRevealedCount(data.revealed_count);
-        triggerToast(`Revealed ${data.revealed_count} of 20 suppliers.`);
+        triggerToast(
+          `Revealed ${data.revealed_count} of ${suppliers.length} suppliers.`,
+        );
       }
     } catch (err) {
       console.error(err);
@@ -176,7 +344,7 @@ export default function ConsultantWorkflowPage() {
     }
   }
 
-  // Action 5: JSON Export with notification
+  // Action 5: JSON Export with toast confirmation (F14)
   function handleJsonExport() {
     if (!output) return;
     const jsonStr = JSON.stringify(output, null, 2);
@@ -188,7 +356,7 @@ export default function ConsultantWorkflowPage() {
     a.click();
     URL.revokeObjectURL(url);
     triggerToast(
-      "Structured JSON exported. Remember to re-validate SFDA listings prior to commercial contract.",
+      "Structured JSON output exported successfully. Remember to re-validate registry listings prior to commercial contracts.",
     );
   }
 
@@ -197,7 +365,7 @@ export default function ConsultantWorkflowPage() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-4 sm:p-8 font-sans">
-      {/* Toast Notification */}
+      {/* Toast Notification (F14) */}
       {toastMessage && (
         <div
           role="status"
@@ -206,6 +374,8 @@ export default function ConsultantWorkflowPage() {
         >
           <svg
             className="w-5 h-5 text-sky-200"
+            width={20}
+            height={20}
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -228,25 +398,44 @@ export default function ConsultantWorkflowPage() {
               CONSULTANT-TIER AGENTIC RESEARCH WORKFLOW
             </div>
             <h1 className="text-3xl font-extrabold text-white tracking-tight">
-              Sourcing Intelligence & Deep Supplier Discovery
+              Structured B2B Sourcing Specification &amp; Agentic Intelligence
             </h1>
             <p className="text-slate-400 text-sm mt-1">
               End-to-end 3-section workflow: Multilingual 3-box intake, 3-step
-              Human preparation gates, and dual-lane agentic research targeting
-              up to 20 verified Brazilian poultry suppliers.
+              Human preparation gates, and dual-lane agentic research with
+              progressive disclosure.
             </p>
           </div>
-          {runId && (
-            <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 text-right">
-              <div className="text-[11px] font-bold text-slate-400 uppercase">
-                Active Run ID
-              </div>
-              <div className="font-mono text-xs text-sky-300">{runId}</div>
-              <div className="text-[11px] text-emerald-400 font-semibold mt-1">
-                State: {workflowState.replaceAll("_", " ")}
-              </div>
+          <div className="flex flex-col sm:items-end gap-2">
+            <div className="flex items-center gap-2">
+              <Link
+                href="/runs"
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
+              >
+                &larr; Run Directory
+              </Link>
+              {runId && (
+                <button
+                  type="button"
+                  onClick={handleStartNew}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
+                >
+                  + New Sourcing Workflow
+                </button>
+              )}
             </div>
-          )}
+            {runId && (
+              <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 text-right w-full sm:w-auto">
+                <div className="text-[11px] font-bold text-slate-400 uppercase">
+                  Active Run ID
+                </div>
+                <div className="font-mono text-xs text-sky-300">{runId}</div>
+                <div className="text-[11px] text-emerald-400 font-semibold mt-1">
+                  State: {workflowState.replaceAll("_", " ")}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -258,21 +447,45 @@ export default function ConsultantWorkflowPage() {
           aria-labelledby="section-1-heading"
           className="bg-slate-800/60 rounded-xl border border-slate-700 p-6 shadow-lg backdrop-blur"
         >
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
             <div>
               <h2
                 id="section-1-heading"
                 className="text-xl font-bold text-white flex items-center gap-2"
               >
-                <span className="w-6 h-6 rounded-full bg-sky-600 text-white text-xs flex items-center justify-center font-bold">
+                <span
+                  aria-hidden="true"
+                  className="w-6 h-6 rounded-full bg-sky-600 text-white text-xs flex items-center justify-center font-bold"
+                >
                   1
                 </span>
                 Section 1: Multilingual 3-Box Intake
               </h2>
               <p className="text-xs text-slate-400 mt-1">
                 Enter requirements in any language (Persian, Arabic, English,
-                Portuguese). Clear separation prevents prompt contamination.
+                Portuguese). Strict input isolation ensures clean translation.
               </p>
+            </div>
+
+            {/* Load demonstration example buttons (F12) */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-slate-400 font-medium">
+                Load Example:
+              </span>
+              <button
+                type="button"
+                onClick={() => handleLoadExample("poultry")}
+                className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded border border-slate-600 transition-colors"
+              >
+                A: Brazilian Poultry
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLoadExample("water_heaters")}
+                className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded border border-slate-600 transition-colors"
+              >
+                B: UAE Water Heaters
+              </button>
             </div>
           </div>
 
@@ -284,17 +497,22 @@ export default function ConsultantWorkflowPage() {
                   htmlFor="input-box-1"
                   className="text-sm font-semibold text-slate-200"
                 >
-                  Box 1: Product Requirement (Specification, Grade, Cuts, Form)
+                  Box 1: Product Requirement (Specification, Grade, Dimensions,
+                  Form)
                 </label>
                 <button
+                  ref={popoverBtnRef1}
                   type="button"
                   id="help-btn-1"
+                  aria-controls="help-popover-1"
                   aria-expanded={showPopover1}
                   onClick={() => setShowPopover1(!showPopover1)}
                   className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 focus:outline-none focus:underline"
                 >
                   <svg
                     className="w-4 h-4"
+                    width={16}
+                    height={16}
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -311,11 +529,15 @@ export default function ConsultantWorkflowPage() {
               </div>
 
               {showPopover1 && (
-                <div className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150">
-                  <strong>Guidance:</strong> Specify precise product type (e.g.
-                  Griller whole bird, calibrated weight ranges 900g/1000g/1100g,
-                  boneless skinless breast, or shawarma cut). Avoid mixing
-                  commercial price terms into this box.
+                <div
+                  id="help-popover-1"
+                  role="region"
+                  aria-labelledby="help-btn-1"
+                  className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150"
+                >
+                  <strong>Guidance:</strong> Specify exact product attributes:
+                  dimensions, capacity, materials, grades, and packaging
+                  configurations. Avoid commercial terms or prices here.
                 </div>
               )}
 
@@ -324,7 +546,7 @@ export default function ConsultantWorkflowPage() {
                 rows={3}
                 value={productRequirement}
                 onChange={(e) => setProductRequirement(e.target.value)}
-                className="w-full bg-slate-900/90 border border-slate-700 rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
                 placeholder="Enter detailed product requirements..."
                 required
               />
@@ -337,18 +559,21 @@ export default function ConsultantWorkflowPage() {
                   htmlFor="input-box-2"
                   className="text-sm font-semibold text-slate-200"
                 >
-                  Box 2: Technical, Quality & Trade Regulatory (SFDA, SIF,
-                  Halal, Moisture)
+                  Box 2: Technical, Quality &amp; Trade Regulatory Standards
                 </label>
                 <button
+                  ref={popoverBtnRef2}
                   type="button"
                   id="help-btn-2"
+                  aria-controls="help-popover-2"
                   aria-expanded={showPopover2}
                   onClick={() => setShowPopover2(!showPopover2)}
                   className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 focus:outline-none focus:underline"
                 >
                   <svg
                     className="w-4 h-4"
+                    width={16}
+                    height={16}
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -365,12 +590,15 @@ export default function ConsultantWorkflowPage() {
               </div>
 
               {showPopover2 && (
-                <div className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150">
-                  <strong>Guidance:</strong> List non-negotiable regulatory
-                  standards. For Saudi poultry import: SFDA active
-                  slaughterhouse establishment registration is legally
-                  mandatory. Require recognized Halal bodies (FAMBRAS or Cibal
-                  Halal) and MAPA SIF numbers.
+                <div
+                  id="help-popover-2"
+                  role="region"
+                  aria-labelledby="help-btn-2"
+                  className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150"
+                >
+                  <strong>Guidance:</strong> Specify mandatory regulatory
+                  clearances, quality certifications (e.g. CE, SFDA, Halal, ISO,
+                  PED), and technical testing regimes.
                 </div>
               )}
 
@@ -379,8 +607,8 @@ export default function ConsultantWorkflowPage() {
                 rows={3}
                 value={technicalCompliance}
                 onChange={(e) => setTechnicalCompliance(e.target.value)}
-                className="w-full bg-slate-900/90 border border-slate-700 rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
-                placeholder="Enter regulatory and compliance criteria..."
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                placeholder="Enter regulatory, quality, and compliance requirements..."
                 required
               />
             </div>
@@ -392,18 +620,22 @@ export default function ConsultantWorkflowPage() {
                   htmlFor="input-box-3"
                   className="text-sm font-semibold text-slate-200"
                 >
-                  Box 3: Order & Supplier Profile (Volume, Inco, Port, Price
-                  Target)
+                  Box 3: Order &amp; Commercial Profile (Volume, Terms, Port,
+                  Lead Time)
                 </label>
                 <button
+                  ref={popoverBtnRef3}
                   type="button"
                   id="help-btn-3"
+                  aria-controls="help-popover-3"
                   aria-expanded={showPopover3}
                   onClick={() => setShowPopover3(!showPopover3)}
                   className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 focus:outline-none focus:underline"
                 >
                   <svg
                     className="w-4 h-4"
+                    width={16}
+                    height={16}
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -420,12 +652,16 @@ export default function ConsultantWorkflowPage() {
               </div>
 
               {showPopover3 && (
-                <div className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150">
-                  <strong>Guidance:</strong> Detail your commercial parameters:
-                  target volume (e.g. 1 container trial vs 50 containers/month),
-                  delivery basis (CIF Jeddah or Dammam), target pricing, and
-                  whether you require direct slaughterhouse ownership or accept
-                  cooperative trading.
+                <div
+                  id="help-popover-3"
+                  role="region"
+                  aria-labelledby="help-btn-3"
+                  className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150"
+                >
+                  <strong>Guidance:</strong> Specify order volumes (trial vs
+                  recurring), Incoterms (CIF, CFR, FOB, DDP), target destination
+                  ports, and supplier relationship tier (direct manufacturer vs
+                  trader).
                 </div>
               )}
 
@@ -434,8 +670,8 @@ export default function ConsultantWorkflowPage() {
                 rows={3}
                 value={orderProfile}
                 onChange={(e) => setOrderProfile(e.target.value)}
-                className="w-full bg-slate-900/90 border border-slate-700 rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
-                placeholder="Enter order volumes, target pricing, Incoterm, and ports..."
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                placeholder="Enter order volume, delivery terms, port, and commercial criteria..."
                 required
               />
             </div>
@@ -450,6 +686,8 @@ export default function ConsultantWorkflowPage() {
                   <>
                     <svg
                       className="animate-spin h-4 w-4 text-white"
+                      width={16}
+                      height={16}
                       fill="none"
                       viewBox="0 0 24 24"
                     >
@@ -490,7 +728,10 @@ export default function ConsultantWorkflowPage() {
                 id="section-2-heading"
                 className="text-xl font-bold text-white flex items-center gap-2"
               >
-                <span className="w-6 h-6 rounded-full bg-amber-600 text-white text-xs flex items-center justify-center font-bold">
+                <span
+                  aria-hidden="true"
+                  className="w-6 h-6 rounded-full bg-amber-600 text-white text-xs flex items-center justify-center font-bold"
+                >
                   2
                 </span>
                 Section 2: Preparation Steps with Human Approval Gates
@@ -513,16 +754,12 @@ export default function ConsultantWorkflowPage() {
                     English Interpretation &amp; Tariff Classification Gate
                   </h3>
                 </div>
-                <div className="text-xs text-slate-400">
-                  Classification:{" "}
-                  <strong className="text-sky-400">HS 0207.12 (HS 2022)</strong>
-                </div>
               </div>
 
               <p className="text-xs text-slate-300 mb-2">
                 The intake has been translated and normalized into international
                 commercial English. You may edit this interpretation before
-                approving:
+                approving (edits will automatically propagate downstream):
               </p>
 
               <textarea
@@ -538,6 +775,8 @@ export default function ConsultantWorkflowPage() {
                 <span className="text-xs text-emerald-400 flex items-center gap-1">
                   <svg
                     className="w-4 h-4"
+                    width={16}
+                    height={16}
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -547,7 +786,7 @@ export default function ConsultantWorkflowPage() {
                       clipRule="evenodd"
                     />
                   </svg>
-                  Normalized to Global WCO Standards
+                  Harmonized Tariff System Classification &amp; Normalized Specs
                 </span>
                 <button
                   type="button"
@@ -588,7 +827,7 @@ export default function ConsultantWorkflowPage() {
                   </div>
                   <div className="bg-slate-800/80 p-3 rounded border border-slate-700">
                     <div className="font-bold text-amber-400 mb-1">
-                      Loop 2: Regulatory &amp; SFDA
+                      Loop 2: Regulatory &amp; Standards
                     </div>
                     <p className="text-slate-300 leading-relaxed">
                       {advisoryContext.loop2_regulatory}
@@ -604,22 +843,25 @@ export default function ConsultantWorkflowPage() {
                   </div>
                 </div>
 
-                <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-3">
-                  <span className="font-bold uppercase text-slate-500">
-                    Verified Registries Consulted:
-                  </span>
-                  {advisoryContext.sources.map((s: any, idx: number) => (
-                    <a
-                      key={idx}
-                      href={s.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sky-400 hover:text-sky-300 underline"
-                    >
-                      {s.title}
-                    </a>
-                  ))}
-                </div>
+                {advisoryContext.sources &&
+                  advisoryContext.sources.length > 0 && (
+                    <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-3">
+                      <span className="font-bold uppercase text-slate-500">
+                        Verified Registries Consulted:
+                      </span>
+                      {advisoryContext.sources.map((s: any, idx: number) => (
+                        <a
+                          key={idx}
+                          href={s.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-sky-400 hover:text-sky-300 underline"
+                        >
+                          {s.title}
+                        </a>
+                      ))}
+                    </div>
+                  )}
               </div>
             )}
 
@@ -642,7 +884,8 @@ export default function ConsultantWorkflowPage() {
 
                 <p className="text-xs text-slate-300 mb-2">
                   Review and edit the autonomous research directives sent to
-                  Lane G (Gemini Flash Web) and Lane O (OpenAI GPT-4o):
+                  Independent Research Stream 1 and Independent Research Stream
+                  2:
                 </p>
 
                 <textarea
@@ -651,15 +894,95 @@ export default function ConsultantWorkflowPage() {
                   rows={5}
                   value={step3Prompt}
                   onChange={(e) => setStep3Prompt(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 font-mono mb-4 focus:ring-2 focus:ring-sky-500"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 font-mono mb-3 focus:ring-2 focus:ring-sky-500"
                 />
 
-                <div className="flex justify-between items-center">
-                  <div className="text-xs text-slate-400 flex items-center gap-2">
-                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />
-                    Four-ID Traceability Ready &bull; Confidential Server-Side
-                    Execution
+                {/* Research Launch Summary (F05) */}
+                <div className="bg-slate-950/80 rounded-lg p-4 border border-sky-800/60 my-4 text-xs">
+                  <div className="flex items-center gap-2 mb-2 font-bold text-sky-300 text-sm">
+                    <svg
+                      width={16}
+                      height={16}
+                      className="w-4 h-4 text-sky-400"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    Research Launch Summary &amp; Governance Disclosures
                   </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-slate-300 mb-3">
+                    <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">
+                        Research Mode
+                      </div>
+                      <div className="font-semibold text-slate-100">
+                        Live Agentic / Fixture
+                      </div>
+                    </div>
+                    <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">
+                        Target Candidates
+                      </div>
+                      <div className="font-semibold text-slate-100">
+                        Up to 20 Verified Suppliers
+                      </div>
+                    </div>
+                    <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">
+                        Verification Loops
+                      </div>
+                      <div className="font-semibold text-slate-100">
+                        5 Registry &amp; Quality Checks
+                      </div>
+                    </div>
+                    <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">
+                        Cost Budget Cap
+                      </div>
+                      <div className="font-semibold text-emerald-400">
+                        $0.50 USD Maximum
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-slate-400 leading-relaxed">
+                    <strong className="text-slate-300">
+                      Truthful Scarcity Policy:
+                    </strong>{" "}
+                    The autonomous agents search authoritative registries. If
+                    market conditions or stringent constraints yield fewer
+                    matches, results reflect genuine verifiable market
+                    availability without artificial padding or fabricated
+                    entities.
+                  </div>
+                </div>
+
+                {/* Collapsible Technical Details (F11) */}
+                <details className="bg-slate-950/60 p-3 rounded border border-slate-800 text-xs text-slate-400 mb-4">
+                  <summary className="cursor-pointer font-semibold text-slate-300 hover:text-white">
+                    Technical Model &amp; Routing Details
+                  </summary>
+                  <div className="mt-2 space-y-1 pl-2">
+                    <div>
+                      &bull; Dual-stream multi-provider execution (Independent
+                      Stream 1 &amp; Stream 2)
+                    </div>
+                    <div>
+                      &bull; Four-ID Lineage Tracking: Request Version &bull;
+                      Confirmation ID &bull; Run ID &bull; Execution Trace
+                    </div>
+                    <div>
+                      &bull; Confidential Server-Side Key Vault &bull; Zero
+                      client-side credential exposure
+                    </div>
+                  </div>
+                </details>
+
+                <div className="flex justify-end">
                   <button
                     type="button"
                     onClick={handleApproveStep3AndExecute}
@@ -676,6 +999,8 @@ export default function ConsultantWorkflowPage() {
                       <>
                         <svg
                           className="animate-spin h-4 w-4 text-white"
+                          width={16}
+                          height={16}
                           fill="none"
                           viewBox="0 0 24 24"
                         >
@@ -696,7 +1021,10 @@ export default function ConsultantWorkflowPage() {
                         Executing Dual-Lane Research...
                       </>
                     ) : (
-                      <>Approve Prompt &amp; Launch Dual-Lane Research &rarr;</>
+                      <>
+                        Approve Directives &amp; Launch Dual-Lane Research
+                        &rarr;
+                      </>
                     )}
                   </button>
                 </div>
@@ -719,15 +1047,17 @@ export default function ConsultantWorkflowPage() {
                   id="section-3-heading"
                   className="text-xl font-bold text-white flex items-center gap-2"
                 >
-                  <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center font-bold">
+                  <span
+                    aria-hidden="true"
+                    className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center font-bold"
+                  >
                     3
                   </span>
                   Section 3: Verified Supplier Candidates &amp; Dossiers
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
                   Showing {visibleSuppliers.length} of {suppliers.length}{" "}
-                  verified candidate profiles (4 Active Direct-Route, 16
-                  Conditional/Development).
+                  verified candidate profiles.
                 </p>
               </div>
 
@@ -741,6 +1071,8 @@ export default function ConsultantWorkflowPage() {
                 >
                   <svg
                     className="w-4 h-4"
+                    width={16}
+                    height={16}
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -750,7 +1082,7 @@ export default function ConsultantWorkflowPage() {
                       clipRule="evenodd"
                     />
                   </svg>
-                  Download Landscape PDF (8-Page)
+                  Download Landscape PDF
                 </a>
 
                 <button
@@ -760,6 +1092,8 @@ export default function ConsultantWorkflowPage() {
                 >
                   <svg
                     className="w-4 h-4 text-slate-400"
+                    width={16}
+                    height={16}
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -792,7 +1126,6 @@ export default function ConsultantWorkflowPage() {
                             <span className="text-xs font-extrabold text-sky-400">
                               Rank #{supp.assessment.rank}
                             </span>
-                            {/* N01: Compliant high-contrast badge */}
                             <span
                               className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide ${
                                 isDirectRoute
@@ -801,7 +1134,7 @@ export default function ConsultantWorkflowPage() {
                               }`}
                             >
                               {isDirectRoute
-                                ? "SFDA Active Direct Route"
+                                ? "Active Direct Route"
                                 : "Conditional / Development"}
                             </span>
                           </div>
@@ -828,11 +1161,10 @@ export default function ConsultantWorkflowPage() {
                       <div className="text-xs space-y-1 my-3 bg-slate-800/60 p-2.5 rounded border border-slate-700/60">
                         <div className="flex justify-between">
                           <span className="text-slate-400">
-                            Approved Facilities (SIF):
+                            Country / Origin:
                           </span>
                           <span className="font-mono font-medium text-slate-200">
-                            {supp.manufacturing_locations.join(", ") ||
-                              "SIF Validated"}
+                            {supp.country_of_registration}
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -841,21 +1173,23 @@ export default function ConsultantWorkflowPage() {
                           </span>
                           <span className="text-slate-200 truncate max-w-[200px]">
                             {supp.commercial.production_capacity ??
-                              "Large industrial"}{" "}
-                            &bull; {supp.commercial.moq ?? "1 container"}
+                              "Industrial export"}{" "}
+                            &bull; {supp.commercial.moq ?? "Standard MOQ"}
                           </span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Website:</span>
-                          <a
-                            href={supp.website}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-sky-400 hover:text-sky-300 underline truncate max-w-[200px]"
-                          >
-                            {supp.primary_domain}
-                          </a>
-                        </div>
+                        {supp.website && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Website:</span>
+                            <a
+                              href={supp.website}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-sky-400 hover:text-sky-300 underline truncate max-w-[200px]"
+                            >
+                              {supp.primary_domain}
+                            </a>
+                          </div>
+                        )}
                       </div>
 
                       <p className="text-xs text-slate-300 line-clamp-2 mb-4">
@@ -897,6 +1231,8 @@ export default function ConsultantWorkflowPage() {
                 >
                   <svg
                     className="w-4 h-4"
+                    width={16}
+                    height={16}
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"

@@ -1221,8 +1221,12 @@ export const GOLDEN_SCENARIOS: readonly ConsultantResearchOutputV2[] = [
           fit_band: "strong",
           evidence_confidence: "high",
           dimension_scores: {
-            compliance_certification_fit: 100,
             category_product_fit: 95,
+            compliance_certification_fit: 100,
+            volume_capacity_fit: 96,
+            price_tier_fit: 92,
+            positioning_brand_fit: 95,
+            geographic_reach_fit: 98,
           },
           positive_drivers: [
             "Full SFDA compliance verified against official database",
@@ -1277,8 +1281,12 @@ export const GOLDEN_SCENARIOS: readonly ConsultantResearchOutputV2[] = [
           fit_band: "strong",
           evidence_confidence: "high",
           dimension_scores: {
-            compliance_certification_fit: 98,
             category_product_fit: 90,
+            compliance_certification_fit: 98,
+            volume_capacity_fit: 94,
+            price_tier_fit: 88,
+            positioning_brand_fit: 85,
+            geographic_reach_fit: 90,
           },
           positive_drivers: ["Active SFDA listing verified"],
           limiting_gaps: ["Higher MOQ requirement"],
@@ -1924,8 +1932,12 @@ export const GOLDEN_SCENARIOS: readonly ConsultantResearchOutputV2[] = [
           fit_band: "strong",
           evidence_confidence: "high",
           dimension_scores: {
-            compliance_certification_fit: 100,
             category_product_fit: 98,
+            compliance_certification_fit: 100,
+            volume_capacity_fit: 95,
+            price_tier_fit: 92,
+            positioning_brand_fit: 96,
+            geographic_reach_fit: 94,
           },
           positive_drivers: ["Direct AMS 4930 Nadcap accredited supplier"],
           limiting_gaps: [
@@ -2108,8 +2120,12 @@ export const GOLDEN_SCENARIOS: readonly ConsultantResearchOutputV2[] = [
           fit_band: "low",
           evidence_confidence: "low",
           dimension_scores: {
-            compliance_certification_fit: 30,
             category_product_fit: 85,
+            compliance_certification_fit: 30,
+            volume_capacity_fit: 60,
+            price_tier_fit: 75,
+            positioning_brand_fit: 50,
+            geographic_reach_fit: 55,
           },
           positive_drivers: ["Competitive pricing quoted on portal"],
           limiting_gaps: [
@@ -2307,9 +2323,12 @@ export const GOLDEN_SCENARIOS: readonly ConsultantResearchOutputV2[] = [
           fit_band: "strong",
           evidence_confidence: "high",
           dimension_scores: {
-            volume_capacity_fit: 100,
             category_product_fit: 94,
+            compliance_certification_fit: 98,
+            volume_capacity_fit: 100,
+            price_tier_fit: 92,
             positioning_brand_fit: 96,
+            geographic_reach_fit: 95,
           },
           positive_drivers: [
             "Global scale with multi-port redundant logistics",
@@ -2486,8 +2505,12 @@ export const GOLDEN_SCENARIOS: readonly ConsultantResearchOutputV2[] = [
           fit_band: "strong",
           evidence_confidence: "high",
           dimension_scores: {
-            compliance_certification_fit: 100,
             category_product_fit: 95,
+            compliance_certification_fit: 100,
+            volume_capacity_fit: 94,
+            price_tier_fit: 90,
+            positioning_brand_fit: 92,
+            geographic_reach_fit: 95,
           },
           positive_drivers: [
             "Direct certified organic grove",
@@ -2552,8 +2575,12 @@ export const GOLDEN_SCENARIOS: readonly ConsultantResearchOutputV2[] = [
           fit_band: "strong",
           evidence_confidence: "high",
           dimension_scores: {
+            category_product_fit: 92,
             compliance_certification_fit: 98,
             volume_capacity_fit: 92,
+            price_tier_fit: 88,
+            positioning_brand_fit: 90,
+            geographic_reach_fit: 94,
           },
           positive_drivers: [
             "High volume cooperative supply",
@@ -2792,8 +2819,12 @@ export const GOLDEN_SCENARIOS: readonly ConsultantResearchOutputV2[] = [
           fit_band: "strong",
           evidence_confidence: "high",
           dimension_scores: {
+            category_product_fit: 96,
             compliance_certification_fit: 98,
+            volume_capacity_fit: 94,
             price_tier_fit: 92,
+            positioning_brand_fit: 95,
+            geographic_reach_fit: 96,
           },
           positive_drivers: [
             "Full compliance and direct CIF delivery service to Jeddah",
@@ -2848,8 +2879,12 @@ export const GOLDEN_SCENARIOS: readonly ConsultantResearchOutputV2[] = [
           fit_band: "strong",
           evidence_confidence: "high",
           dimension_scores: {
+            category_product_fit: 94,
             compliance_certification_fit: 96,
+            volume_capacity_fit: 95,
             price_tier_fit: 94,
+            positioning_brand_fit: 92,
+            geographic_reach_fit: 90,
           },
           positive_drivers: ["Competitive CIF quotations and regular sailings"],
           limiting_gaps: [],

@@ -304,6 +304,7 @@ export const LEGACY_STANDARD_RESULT_INTEGRITY_RUN_ID =
   "stable-canonical-run" as const;
 
 export type StoredCompleteResultIntegrityMode =
+  | "consultant_research_output_v2_exact"
   | "complete_result_foundation_v1_exact"
   | "complete_result_foundation_v2_exact"
   | "legacy_standard_evidence_graph_v1_normalized_run_id";
@@ -348,7 +349,10 @@ export function assertStoredCompleteResultIntegrity(
 
   let expected: Buffer;
   let mode: StoredCompleteResultIntegrityMode;
-  if (record.schema_version === "complete-result-foundation.v2") {
+  if (record.schema_version === "consultant-research-output.v2") {
+    expected = standardCompleteResultDocumentSha256(document);
+    mode = "consultant_research_output_v2_exact";
+  } else if (record.schema_version === "complete-result-foundation.v2") {
     expected = standardCompleteResultDocumentSha256(document);
     mode = "complete_result_foundation_v2_exact";
   } else if (record.schema_version === "complete-result-foundation.v1") {

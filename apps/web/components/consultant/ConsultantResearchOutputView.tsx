@@ -1,5 +1,8 @@
 import type { RefObject } from "react";
-import type { ConsultantResearchOutputV2 } from "@matchbase/contracts";
+import {
+  type ConsultantResearchOutputV2,
+  CANONICAL_MATCH_DIMENSIONS_V2,
+} from "@matchbase/contracts";
 import type { ResultArtifactDownload } from "./ConsultantResult";
 
 export function ConsultantResearchOutputView({
@@ -52,22 +55,67 @@ export function ConsultantResearchOutputView({
         <button className="secondary-action" onClick={onBack} type="button">
           &larr; Return to runs
         </button>
-        {artifactDownload ? (
-          <a
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <button
             className="secondary-action"
-            href={artifactDownload.href}
-            download
-            data-matchbase-artifact-run-id={artifactDownload.run_id}
-            data-matchbase-artifact-version-id={
-              artifactDownload.artifact_version_id
-            }
-            data-matchbase-artifact-version={artifactDownload.version}
-            aria-label={`Download PDF report for run ${artifactDownload.run_id}`}
+            type="button"
+            onClick={() => {
+              const dataStr =
+                "data:text/json;charset=utf-8," +
+                encodeURIComponent(JSON.stringify(result, null, 2));
+              const downloadAnchor = document.createElement("a");
+              downloadAnchor.setAttribute("href", dataStr);
+              downloadAnchor.setAttribute(
+                "download",
+                `consultant-v2-${result.run_id}.json`,
+              );
+              document.body.appendChild(downloadAnchor);
+              downloadAnchor.click();
+              downloadAnchor.remove();
+            }}
+            aria-label="Download JSON output"
             style={{ fontWeight: 600 }}
           >
-            Download PDF report
-          </a>
-        ) : null}
+            Download JSON
+          </button>
+          {artifactDownload ? (
+            <a
+              className="secondary-action"
+              href={artifactDownload.href}
+              download
+              data-matchbase-artifact-run-id={artifactDownload.run_id}
+              data-matchbase-artifact-version-id={
+                artifactDownload.artifact_version_id
+              }
+              data-matchbase-artifact-version={artifactDownload.version}
+              aria-label={`Download PDF report for run ${artifactDownload.run_id}`}
+              style={{ fontWeight: 600 }}
+            >
+              Download PDF report
+            </a>
+          ) : (
+            <span
+              style={{
+                fontSize: "0.75rem",
+                background: "#fef3c7",
+                color: "#92400e",
+                border: "1px solid #fde68a",
+                borderRadius: "4px",
+                padding: "4px 8px",
+                fontWeight: 600,
+              }}
+            >
+              V2 REPORT EXPORT DEFERRED (Backlog item MB-UX-BACKLOG-001)
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Header & Badges */}
@@ -1425,6 +1473,24 @@ export function ConsultantResearchOutputView({
                           {cand.verification_status.replace(/_/g, " ")}
                         </span>
                       </div>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#64748b",
+                          marginBottom: "0.25rem",
+                          display: "flex",
+                          gap: "0.5rem",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span>
+                          Candidate ID: <code>{cand.candidate_id}</code>
+                        </span>
+                        <span>&bull;</span>
+                        <span>
+                          Entity ID: <code>{cand.entity_id}</code>
+                        </span>
+                      </div>
                       {cand.brand_names.length > 0 ? (
                         <div style={{ fontSize: "0.85rem", color: "#64748b" }}>
                           Brands: {cand.brand_names.join(", ")}
@@ -1548,6 +1614,117 @@ export function ConsultantResearchOutputView({
                     <strong>Verification Basis: </strong>
                     <bdi dir="auto">{cand.verification_summary}</bdi>
                   </p>
+
+                  {/* Canonical 6-Dimension Score Breakdown */}
+                  {cand.fit_assessment.dimension_scores &&
+                  Object.keys(cand.fit_assessment.dimension_scores).length >
+                    0 ? (
+                    <div
+                      style={{
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "6px",
+                        padding: "0.75rem 1rem",
+                        marginBottom: "1rem",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "0.85rem",
+                          fontWeight: 700,
+                          color: "#334155",
+                          marginBottom: "0.5rem",
+                        }}
+                      >
+                        Compatibility Dimension Breakdown (100% Weight Matrix)
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fit, minmax(200px, 1fr))",
+                          gap: "0.5rem 1rem",
+                        }}
+                      >
+                        {CANONICAL_MATCH_DIMENSIONS_V2.map((dim) => {
+                          const score =
+                            cand.fit_assessment.dimension_scores[
+                              dim.dimension_id
+                            ] ?? 0;
+                          const barColor =
+                            score >= 80
+                              ? "#059669"
+                              : score >= 60
+                                ? "#d97706"
+                                : "#dc2626";
+                          return (
+                            <div
+                              key={dim.dimension_id}
+                              style={{
+                                background: "#ffffff",
+                                border: "1px solid #e2e8f0",
+                                borderRadius: "4px",
+                                padding: "0.5rem",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                  marginBottom: "0.25rem",
+                                }}
+                              >
+                                <span style={{ color: "#1e293b" }}>
+                                  {dim.label}
+                                </span>
+                                <span style={{ color: "#64748b" }}>
+                                  {dim.weight}%
+                                </span>
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.5rem",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    flex: 1,
+                                    height: "6px",
+                                    background: "#e2e8f0",
+                                    borderRadius: "3px",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      width: `${Math.min(100, Math.max(0, score))}%`,
+                                      height: "100%",
+                                      background: barColor,
+                                    }}
+                                  />
+                                </div>
+                                <span
+                                  style={{
+                                    fontSize: "0.8rem",
+                                    fontWeight: 700,
+                                    color: barColor,
+                                    minWidth: "1.8rem",
+                                    textAlign: "right",
+                                  }}
+                                >
+                                  {score}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
 
                   {/* Positive Drivers & Limiting Gaps */}
                   <div

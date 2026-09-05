@@ -19,7 +19,7 @@ export default defineConfig({
     {
       name: "product-reference",
       testMatch:
-        /product-(?:(?:(?:live|standard|qualified)-)?reference-path|admin-(?:entitlements|requests)|consultant-result)\.spec\.mjs/u,
+        /product-(?:(?:(?:live|standard|qualified)-)?reference-path|admin-(?:entitlements|requests)|consultant-result|consultant-v2-uat)\.spec\.mjs/u,
       use: { baseURL: "http://127.0.0.1:3010" },
     },
   ],

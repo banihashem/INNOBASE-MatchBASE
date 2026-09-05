@@ -5,6 +5,8 @@ import {
   parseConsultantResearchOutputV2,
   isConsultantResearchOutputV2,
   adaptV1ToV2ConsultantOutput,
+  CANONICAL_MATCH_DIMENSIONS_V2,
+  CANONICAL_DIMENSION_IDS_V2,
   type ConsultantResearchOutputV2,
 } from "../src/v2/consultant-research-output.js";
 import { GOLDEN_SCENARIOS } from "../src/v2/golden-scenarios.js";
@@ -691,4 +693,190 @@ test("all 15 GOLDEN_SCENARIOS parse successfully and satisfy contract invariants
   assert.equal(primaryQueryTypes.has("product_catalog"), true);
   assert.equal(primaryQueryTypes.has("market_overview"), true);
   assert.equal(primaryQueryTypes.has("general_info"), true);
+});
+
+test("canonical 6-dimension scoring weights sum to 100% and candidates validate dimensions", () => {
+  assert.equal(CANONICAL_MATCH_DIMENSIONS_V2.length, 6);
+  const totalWeight = CANONICAL_MATCH_DIMENSIONS_V2.reduce(
+    (sum, d) => sum + d.weight,
+    0,
+  );
+  assert.equal(
+    totalWeight,
+    100,
+    "Canonical dimension weights must sum to exactly 100%",
+  );
+
+  const expectedDimensions = [
+    { dimension_id: "category_product_fit", weight: 25 },
+    { dimension_id: "compliance_certification_fit", weight: 20 },
+    { dimension_id: "volume_capacity_fit", weight: 15 },
+    { dimension_id: "price_tier_fit", weight: 15 },
+    { dimension_id: "positioning_brand_fit", weight: 15 },
+    { dimension_id: "geographic_reach_fit", weight: 10 },
+  ];
+  for (const expected of expectedDimensions) {
+    const dim = CANONICAL_MATCH_DIMENSIONS_V2.find(
+      (d) => d.dimension_id === expected.dimension_id,
+    );
+    assert.ok(dim, `Missing canonical dimension ${expected.dimension_id}`);
+    assert.equal(dim.weight, expected.weight);
+  }
+
+  // All candidates across golden scenarios with dimension_scores must include canonical dimensions
+  for (const scenario of GOLDEN_SCENARIOS) {
+    for (const cand of scenario.supplier_candidates) {
+      for (const id of CANONICAL_DIMENSION_IDS_V2) {
+        const score = cand.fit_assessment.dimension_scores[id];
+        assert.equal(
+          typeof score,
+          "number",
+          `Candidate ${cand.candidate_id} missing dimension ${id}`,
+        );
+        assert.ok(score !== undefined && score >= 0 && score <= 100);
+      }
+    }
+  }
+});
+
+test("preserves and validates all original Step-1 fields and downstream behaviors", () => {
+  const step1RequiredFields = [
+    "primary_query_type",
+    "secondary_query_types",
+    "intent_scope",
+    "business_context",
+    "product_category",
+    "product_name",
+    "confidence_level_required",
+    "compliance_sensitive",
+    "pricing_volatile",
+    "product_attributes",
+  ] as const;
+
+  for (const scenario of GOLDEN_SCENARIOS) {
+    const snapshot = scenario.request_snapshot;
+    for (const field of step1RequiredFields) {
+      assert.notEqual(
+        snapshot[field],
+        undefined,
+        `Scenario ${scenario.result_id} must preserve Step-1 field: ${field}`,
+      );
+    }
+
+    // 1. primary_query_type activates corresponding module
+    const primary = snapshot.primary_query_type;
+    assert.ok(
+      scenario.result_modules[primary] !== undefined,
+      `Primary query type ${primary} must activate module in ${scenario.result_id}`,
+    );
+
+    // 2. secondary_query_types activate supplemental modules
+    for (const sec of snapshot.secondary_query_types) {
+      assert.ok(
+        scenario.result_modules[sec] !== undefined,
+        `Secondary query type ${sec} must activate module in ${scenario.result_id}`,
+      );
+    }
+
+    // 3. compliance_sensitive activates mandatory compliance treatment
+    if (snapshot.compliance_sensitive) {
+      assert.ok(
+        scenario.supplier_candidates.some(
+          (c) =>
+            c.compliance.sfda_approved !== undefined ||
+            c.compliance.halal_certified !== undefined ||
+            c.compliance.regulatory_clearance_status !== "unknown" ||
+            c.fit_assessment.mandatory_constraint_results.length > 0,
+        ) ||
+          scenario.request_snapshot.mandatory_constraints.length > 0 ||
+          Boolean(
+            scenario.result_modules.market_overview &&
+            scenario.result_modules.market_overview.regulatory_context.length >
+              0,
+          ) ||
+          Boolean(
+            scenario.result_modules.general_info &&
+            scenario.result_modules.general_info.regulatory_standards.length >
+              0,
+          ) ||
+          scenario.unknowns.some(
+            (u) =>
+              u.impact === "blocking" ||
+              u.field_or_topic.toLowerCase().includes("compliance"),
+          ),
+        `Compliance sensitive scenario ${scenario.result_id} must demonstrate compliance treatment`,
+      );
+    }
+
+    // 4. pricing_volatile requires dated observations or volatility warnings
+    if (snapshot.pricing_volatile && scenario.result_modules.pricing) {
+      assert.ok(
+        scenario.result_modules.pricing.volatility_rating === "high" ||
+          scenario.result_modules.pricing.volatility_rating === "medium",
+        `Pricing volatile scenario must indicate medium or high volatility`,
+      );
+      assert.ok(
+        scenario.result_modules.pricing.pricing_observations.every(
+          (obs) => obs.retrieved_at.length > 0,
+        ),
+        `Pricing observations must be dated`,
+      );
+    }
+  }
+});
+
+test("demonstrates decoupling of compatibility_score from evidence_confidence", () => {
+  // SC-09: high compatibility + low confidence
+  const sc09 = GOLDEN_SCENARIOS.find(
+    (s) => s.result_id === "SC-09-RES-HIGH-SCORE-LOW-CONF",
+  );
+  assert.ok(sc09, "Must include SC-09 high-fit low-confidence scenario");
+  const cand09 = sc09.supplier_candidates[0];
+  assert.ok(cand09);
+  assert.ok(
+    cand09.fit_assessment.compatibility_score >= 80,
+    "SC-09 compatibility score must be high (>=80)",
+  );
+  assert.equal(
+    cand09.fit_assessment.evidence_confidence,
+    "low",
+    "SC-09 evidence confidence must be low",
+  );
+  assert.equal(
+    cand09.fit_assessment.human_review_required,
+    true,
+    "SC-09 must require human review",
+  );
+
+  // SC-01: high compatibility + high confidence
+  const sc01 = GOLDEN_SCENARIOS.find(
+    (s) => s.result_id === "SC-01-RES-POULTRY-BR",
+  );
+  assert.ok(sc01);
+  const cand01 = sc01.supplier_candidates[0];
+  assert.ok(cand01);
+  assert.ok(cand01.fit_assessment.compatibility_score >= 80);
+  assert.equal(cand01.fit_assessment.evidence_confidence, "high");
+
+  // SC-10: no match (0 candidates)
+  const sc10 = GOLDEN_SCENARIOS.find(
+    (s) => s.result_id === "SC-10-RES-NO-MATCH-HEATER",
+  );
+  assert.ok(sc10);
+  assert.equal(sc10.research_status, "no_strong_match");
+  assert.equal(sc10.supplier_candidates.length, 0);
+
+  // SC-11: insufficient evidence
+  const sc11 = GOLDEN_SCENARIOS.find(
+    (s) => s.result_id === "SC-11-RES-SPARSE-TITANIUM",
+  );
+  assert.ok(sc11);
+  assert.equal(sc11.research_status, "insufficient_evidence");
+
+  // SC-12: conflicting evidence
+  const sc12 = GOLDEN_SCENARIOS.find(
+    (s) => s.result_id === "SC-12-RES-CONFLICT-MEAT",
+  );
+  assert.ok(sc12);
+  assert.ok(sc12.claims.some((c) => c.conflict_status === "conflicting"));
 });

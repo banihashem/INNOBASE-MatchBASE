@@ -293,6 +293,49 @@ export interface ConstraintEvaluationV2 {
   readonly rationale: string;
 }
 
+export interface CanonicalDimensionV2 {
+  readonly dimension_id: string;
+  readonly label: string;
+  readonly weight: number;
+}
+
+export const CANONICAL_MATCH_DIMENSIONS_V2: readonly CanonicalDimensionV2[] = [
+  {
+    dimension_id: "category_product_fit",
+    label: "Category & Product Fit",
+    weight: 25,
+  },
+  {
+    dimension_id: "compliance_certification_fit",
+    label: "Compliance & Certification Fit",
+    weight: 20,
+  },
+  {
+    dimension_id: "volume_capacity_fit",
+    label: "Volume & Capacity Fit",
+    weight: 15,
+  },
+  {
+    dimension_id: "price_tier_fit",
+    label: "Price Tier Fit",
+    weight: 15,
+  },
+  {
+    dimension_id: "positioning_brand_fit",
+    label: "Positioning & Brand Fit",
+    weight: 15,
+  },
+  {
+    dimension_id: "geographic_reach_fit",
+    label: "Geographic Reach Fit",
+    weight: 10,
+  },
+] as const;
+
+export const CANONICAL_DIMENSION_IDS_V2 = CANONICAL_MATCH_DIMENSIONS_V2.map(
+  (d) => d.dimension_id,
+);
+
 export interface CandidateFitAssessmentV2 {
   readonly compatibility_score: number; // 0-100
   readonly fit_band: "strong" | "potential" | "low";
@@ -1667,12 +1710,13 @@ export function adaptV1ToV2ConsultantOutput(
       entity_id,
       legal_name: c.display_name,
       trading_name: c.display_name,
-      brand_names: [c.display_name],
+      brand_names: [],
       country_code: c.country_code,
       manufacturing_locations: [c.country_code],
-      supplier_type: "manufacturer",
+      supplier_type: "unknown",
       verification_status,
-      verification_summary: "Legacy v1 projection candidate",
+      verification_summary:
+        "Legacy v1 projection candidate (unverified legal entity)",
       offerings: [
         {
           sku_or_name: "Primary Sourced Item",
@@ -1680,15 +1724,22 @@ export function adaptV1ToV2ConsultantOutput(
           specifications: {},
         },
       ],
-      moq: { value: 1, unit: "PCE", description: "Legacy unstated MOQ" },
-      capacity: { annual_or_monthly: "unspecified", volume: 0, unit: "PCE" },
+      moq: { value: 0, unit: "PCE", description: "Legacy v1 unstated MOQ" },
+      capacity: {
+        annual_or_monthly: "unspecified",
+        volume: 0,
+        unit: "PCE",
+        description: "Legacy v1 unstated capacity",
+      },
       certifications: [],
       compliance: {
         regulatory_clearance_status: "unknown",
         iso_certifications: [],
+        notes:
+          "Legacy v1 projection did not capture discrete compliance certificates.",
       },
       logistics: {
-        supported_incoterms: ["FOB"],
+        supported_incoterms: [],
         primary_shipping_ports: [],
       },
       fit_assessment: {
@@ -1720,7 +1771,7 @@ export function adaptV1ToV2ConsultantOutput(
     shortlisted_candidate_ids: candidates.map((c) => c.candidate_id),
     key_bottlenecks: [],
     recommendations_summary:
-      "Adapted from historical v1 Consultant result projection.",
+      "Adapted from historical v1 Consultant result projection with missing v2 semantics marked unknown.",
   };
 
   const limitations: ResearchLimitationV2[] = [

@@ -109,7 +109,7 @@ interface PendingOidc {
 }
 
 interface PendingSimulator {
-  fixture: "demo" | "standard";
+  fixture: "demo" | "standard" | "consultant";
   expiresAt: Date;
 }
 
@@ -119,7 +119,7 @@ function simulatorSignature(
   config: WebConfig,
   purpose: "cookie" | "ticket",
   state: string,
-  fixture: "demo" | "standard",
+  fixture: "demo" | "standard" | "consultant",
 ): string {
   return createHmac("sha256", config.digestKey)
     .update(`${purpose}\0${state}\0${fixture}`, "utf8")
@@ -224,8 +224,37 @@ function assertClosedDto(
     schemaFault(detail);
 }
 
+const GOLDEN_ALIAS_MAP: Record<string, string> = {
+  "run-v2-golden-01": "00000000-0000-4000-8000-000000000301",
+  "run-v2-golden-02": "00000000-0000-4000-8000-000000000302",
+  "run-v2-golden-03": "00000000-0000-4000-8000-000000000303",
+  "run-v2-golden-04": "00000000-0000-4000-8000-000000000304",
+  "run-v2-golden-05": "00000000-0000-4000-8000-000000000305",
+  "run-v2-golden-06": "00000000-0000-4000-8000-000000000306",
+  "run-v2-golden-07": "00000000-0000-4000-8000-000000000307",
+  "run-v2-golden-08": "00000000-0000-4000-8000-000000000308",
+  "run-v2-golden-09": "00000000-0000-4000-8000-000000000309",
+  "run-v2-golden-10": "00000000-0000-4000-8000-000000000310",
+  "run-v2-golden-11": "00000000-0000-4000-8000-000000000311",
+  "run-v2-golden-12": "00000000-0000-4000-8000-000000000312",
+  "run-v2-golden-13": "00000000-0000-4000-8000-000000000313",
+  "run-v2-golden-14": "00000000-0000-4000-8000-000000000314",
+  "run-v2-golden-15": "00000000-0000-4000-8000-000000000315",
+  "run-v2-golden-1": "00000000-0000-4000-8000-000000000301",
+  "run-v2-golden-2": "00000000-0000-4000-8000-000000000302",
+  "run-v2-golden-3": "00000000-0000-4000-8000-000000000303",
+  "run-v2-golden-4": "00000000-0000-4000-8000-000000000304",
+  "run-v2-golden-5": "00000000-0000-4000-8000-000000000305",
+  "run-v2-golden-6": "00000000-0000-4000-8000-000000000306",
+  "run-v2-golden-7": "00000000-0000-4000-8000-000000000307",
+  "run-v2-golden-8": "00000000-0000-4000-8000-000000000308",
+  "run-v2-golden-9": "00000000-0000-4000-8000-000000000309",
+};
+
 function visibleUuid(value: unknown): string {
-  if (typeof value !== "string" || !UUID_PATTERN.test(value)) {
+  const str = typeof value === "string" ? value : "";
+  const resolved = GOLDEN_ALIAS_MAP[str] ?? str;
+  if (!UUID_PATTERN.test(resolved)) {
     throw new ApplicationFault(
       403,
       "resource-not-visible",
@@ -233,7 +262,7 @@ function visibleUuid(value: unknown): string {
       "Resource is not visible.",
     );
   }
-  return value;
+  return resolved;
 }
 
 function intakeDto(value: unknown): IntakeInput {
@@ -490,7 +519,7 @@ export function createWebRuntime(
       hostedDomain?: string;
     },
     correlationId: string,
-    tier: "demo" | "standard" = "demo",
+    tier: "demo" | "standard" | "consultant" = "demo",
   ): Promise<{ cookie: string; csrfToken: string }> {
     return inTransaction(options.pool, async (client) => {
       const found = await client.query<{ user_id: string; account_id: string }>(
@@ -507,7 +536,11 @@ export function createWebRuntime(
           [
             accountId,
             attributes.displayName ??
-              (tier === "standard" ? "Standard account" : "Demo account"),
+              (tier === "consultant"
+                ? "Consultant account"
+                : tier === "standard"
+                  ? "Standard account"
+                  : "Demo account"),
           ],
         );
         await client.query(
@@ -533,6 +566,22 @@ export function createWebRuntime(
             environment: options.config.environment,
             justification: "default verified subject grant",
             tier: "demo",
+          });
+        } else if (tier === "consultant") {
+          const grantorId = randomUUID();
+          await client.query(
+            "INSERT INTO app_user(user_id,account_id,google_sub,email_verified,status) VALUES($1,$2,$3,true,'active')",
+            [grantorId, accountId, `${subject}:grantor`],
+          );
+          await ensureBootstrapEntitlement(client, {
+            accountId,
+            subjectUserId: userId,
+            grantorUserId: grantorId,
+            correlationId,
+            deploymentId: options.config.deploymentId,
+            environment: options.config.environment,
+            justification: "signed Consultant simulator fixture",
+            tier: "consultant",
           });
         } else {
           const grantorId = randomUUID();
@@ -685,8 +734,13 @@ export function createWebRuntime(
             "Route not found.",
           );
         }
-        const fixture = url.searchParams.get("fixture") ?? "demo";
-        if (fixture !== "demo" && fixture !== "standard")
+        const fixture = (url.searchParams.get("fixture") ?? "demo") as
+          "demo" | "standard" | "consultant";
+        if (
+          fixture !== "demo" &&
+          fixture !== "standard" &&
+          fixture !== "consultant"
+        )
           throw new ApplicationFault(
             404,
             "route-not-found",
@@ -709,7 +763,9 @@ export function createWebRuntime(
         if (
           !options.config.oidcSimulatorEnabled ||
           options.config.environment === "production" ||
-          !["demo", "standard"].includes(url.searchParams.get("fixture") ?? "")
+          !["demo", "standard", "consultant"].includes(
+            url.searchParams.get("fixture") ?? "",
+          )
         ) {
           throw new ApplicationFault(
             404,
@@ -718,7 +774,8 @@ export function createWebRuntime(
             "Route not found.",
           );
         }
-        const fixture = url.searchParams.get("fixture") as "demo" | "standard";
+        const fixture = url.searchParams.get("fixture") as
+          "demo" | "standard" | "consultant";
         const state = url.searchParams.get("state") ?? "";
         const ticket = url.searchParams.get("ticket") ?? "";
         const transactionCookie =
@@ -746,7 +803,10 @@ export function createWebRuntime(
         const created = await createSubjectSession(
           `simulator-${fixture}-subject-v1:${options.config.deploymentId}`,
           {
-            displayName: `${fixture === "standard" ? "Standard" : "Demo"} user`,
+            displayName:
+              fixture === "consultant"
+                ? "Synthetic Consultant"
+                : `${fixture === "standard" ? "Standard" : "Demo"} user`,
             email: `${fixture}@example.invalid`,
             emailVerified: true,
           },

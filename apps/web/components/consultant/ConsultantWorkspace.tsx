@@ -5,6 +5,7 @@ import {
   parseDemoProjectionV1,
   parseConsultantResultProjectionV1,
   parseConsultantResultProjectionV2,
+  parseConsultantResearchOutputV2,
   parseConsultantRunHistoryV1,
   parseStandardResultProjectionV1,
 } from "@matchbase/contracts";
@@ -101,6 +102,8 @@ export function ConsultantWorkspace({
         throw new Error("Consultant result schema is invalid.");
       const result = (() => {
         switch (body.schema_version) {
+          case "consultant-research-output.v2":
+            return parseConsultantResearchOutputV2(body);
           case "consultant-result-projection.v1":
             return parseConsultantResultProjectionV1(body);
           case "consultant-result-projection.v2":

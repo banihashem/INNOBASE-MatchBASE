@@ -45,6 +45,8 @@ import {
   CONSULTANT_SYNTHETIC_LIMITATION_NOTICES,
   parseConsultantResultProjectionV1,
   parseConsultantResultProjectionV2,
+  parseConsultantResearchOutputV2,
+  CONSULTANT_RESEARCH_OUTPUT_V2_SCHEMA_VERSION,
 } from "@matchbase/contracts";
 import {
   appendAuditEvent,
@@ -1067,6 +1069,27 @@ export class ConsultantResultApplication {
         fields = [...projected.metadata.fieldsReleased];
         itemCount = projected.metadata.itemCount;
         projectionVersion = projected.metadata.projectionVersion;
+      } else if (
+        (row.complete_result_document as Record<string, unknown>)
+          .schema_version === CONSULTANT_RESEARCH_OUTPUT_V2_SCHEMA_VERSION
+      ) {
+        assertStoredCompleteResultIntegrity(
+          row.complete_result_document,
+          row.result_sha256,
+          runId,
+        );
+        const parsed = parseConsultantResearchOutputV2(
+          row.complete_result_document,
+        );
+        result = {
+          projectionTier: "consultant",
+          body: parsed,
+        };
+        fields = standardReleasedFieldPaths(
+          parsed as unknown as Record<string, unknown>,
+        );
+        itemCount = parsed.supplier_candidates.length;
+        projectionVersion = 2;
       } else {
         assertStoredCompleteResultIntegrity(
           row.complete_result_document,

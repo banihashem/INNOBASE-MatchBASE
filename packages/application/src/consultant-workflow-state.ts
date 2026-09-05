@@ -18,11 +18,13 @@ export type ConsultantWorkflowState =
   | "progressive_reveal_ready"
   | "pdf_generating"
   | "workflow_complete"
-  | "workflow_failed";
+  | "workflow_failed"
+  | "invalidated";
 
 export const CONSULTANT_WORKFLOW_STATES: readonly ConsultantWorkflowState[] = [
   "intake_draft",
   "intake_submitted",
+  "invalidated",
   "prep_step1_interpreting",
   "prep_step1_awaiting_approval",
   "prep_step1_approved",
@@ -99,8 +101,9 @@ export const VALID_WORKFLOW_TRANSITIONS: Readonly<
     "workflow_failed",
   ],
   pdf_generating: ["workflow_complete", "workflow_failed"],
-  workflow_complete: ["intake_draft"],
-  workflow_failed: ["intake_draft", "research_dispatching"],
+  workflow_complete: ["intake_draft", "invalidated"],
+  workflow_failed: ["intake_draft", "research_dispatching", "invalidated"],
+  invalidated: [],
 };
 
 export function canTransitionWorkflowState(

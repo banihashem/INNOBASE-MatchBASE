@@ -5,11 +5,15 @@ import {
   saveConsultantWorkflowSession,
   getConsultantWorkflowSessionByRunId,
   getConsultantOutputV3ByRunId,
+  saveConsultantIntakeSnapshot,
+  computeIntakeContentHash,
   type ConsultantWorkflowSessionRecord,
 } from "@matchbase/data";
-import type {
-  ConsultantResearchOutputV3,
-  ProductClassificationRecord,
+import {
+  type ConsultantResearchOutputV3,
+  type ProductClassificationRecord,
+  validateIntakeSemanticCoherence,
+  validateConsultantOutputV3SemanticCoherence,
 } from "@matchbase/contracts";
 import {
   type ConsultantWorkflowState,
@@ -232,6 +236,21 @@ export async function submitConsultantIntake(
   const execution_id = crypto.randomUUID();
   const revision_id = crypto.randomUUID();
 
+  // Validate intake semantic coherence (reject cross-request / cross-domain mixing)
+  const intakeCoherence = validateIntakeSemanticCoherence({
+    product_requirement: submission.product_requirement,
+    technical_compliance: submission.technical_compliance,
+    order_profile: submission.order_profile,
+  });
+  if (!intakeCoherence.isCoherent) {
+    const err = new Error(
+      `Intake semantic coherence violation: ${intakeCoherence.errors.join("; ")}`,
+    );
+    (err as any).status = 422;
+    (err as any).code = "MB-422-COHERENCE";
+    throw err;
+  }
+
   // Run Step 1 interpretation through PreparationModelGateway
   const step1 = await gateway.extractAndInterpret({
     product_requirement: submission.product_requirement,
@@ -283,6 +302,23 @@ export async function submitConsultantIntake(
   activeSessions.set(run_id, session);
 
   if (db) {
+    const snapshotId = crypto.randomUUID();
+    const contentHash = computeIntakeContentHash(
+      submission.product_requirement,
+      submission.technical_compliance,
+      submission.order_profile,
+    );
+    await saveConsultantIntakeSnapshot(db, {
+      snapshot_id: snapshotId,
+      account_id: submission.account_id,
+      user_profile_id: submission.user_profile_id,
+      run_id,
+      revision_number: 1,
+      product_requirement: submission.product_requirement,
+      technical_compliance: submission.technical_compliance,
+      order_profile: submission.order_profile,
+      content_hash: contentHash,
+    });
     await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
   }
 
@@ -456,6 +492,17 @@ export async function executeConsultantWorkflowResearch(
     product_category: session.step1_interpretation.product_category,
     dual_lane_result: dualResult,
   });
+
+  // Mode-aware and semantic-coherence validation gate
+  const coherence = validateConsultantOutputV3SemanticCoherence(output);
+  if (!coherence.isCoherent) {
+    const err = new Error(
+      `Semantic coherence validation failed: ${coherence.errors.join("; ")}`,
+    );
+    (err as any).status = 422;
+    (err as any).code = "MB-422-COHERENCE";
+    throw err;
+  }
 
   // Persist to PostgreSQL database (consultant_output_v3 + supplier entities)
   await saveConsultantOutputV3(db, {

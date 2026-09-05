@@ -168,7 +168,7 @@ export function synthesizeConsultantOutputV3(
       claims: GOLDEN_SCENARIO_V3_02.claims,
       evidence_sources: GOLDEN_SCENARIO_V3_02.evidence_sources,
       telemetry: {
-        lanes_executed: ["lane_gemini", "lane_openai"],
+        lanes_executed: isLive ? ["lane_gemini", "lane_openai"] : [],
         verification_loops_count: dual_lane_result.verification_loops_completed,
         total_input_tokens: isLive ? dual_lane_result.total_input_tokens : 0,
         total_output_tokens: isLive ? dual_lane_result.total_output_tokens : 0,
@@ -315,7 +315,7 @@ export function synthesizeConsultantOutputV3(
     claims: GOLDEN_SCENARIO_V3_01.claims,
     evidence_sources: GOLDEN_SCENARIO_V3_01.evidence_sources,
     telemetry: {
-      lanes_executed: ["lane_gemini", "lane_openai"],
+      lanes_executed: isLive ? ["lane_gemini", "lane_openai"] : [],
       verification_loops_count: dual_lane_result.verification_loops_completed,
       total_input_tokens: isLive ? dual_lane_result.total_input_tokens : 0,
       total_output_tokens: isLive ? dual_lane_result.total_output_tokens : 0,

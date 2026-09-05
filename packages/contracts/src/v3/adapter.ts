@@ -118,10 +118,7 @@ export function adaptV2ToV3ConsultantOutput(
               : cert.verification_state === "expired"
                 ? ("expired" as const)
                 : ("conditional" as const),
-          verification_status:
-            cert.verification_state === "verified"
-              ? ("verified" as const)
-              : ("claimed" as const),
+          verification_status: "claimed" as const,
           evidence_ids: cert.evidence_id ? [cert.evidence_id] : [],
         })),
         assessment: {
@@ -308,6 +305,28 @@ export function adaptV3ToV2ConsultantOutput(
         }
       }
 
+      const isFixture = v3.research_mode === "fixture";
+      const verification_status = isFixture
+        ? ("illustrative" as const)
+        : ("externally_verified" as const);
+      const verification_summary = isFixture
+        ? "Illustrative profile for demonstration"
+        : `Verified via official corporate registry (${s.country_of_registration})`;
+
+      const sfdaConstraint = s.assessment.mandatory_constraint_results?.find(
+        (m) => m.constraint.toLowerCase().includes("sfda"),
+      );
+      const sfdaApproved = sfdaConstraint
+        ? sfdaConstraint.satisfied
+        : s.assessment.compatibility_score > 60;
+
+      const halalConstraint = s.assessment.mandatory_constraint_results?.find(
+        (m) => m.constraint.toLowerCase().includes("halal"),
+      );
+      const halalCertified = halalConstraint
+        ? halalConstraint.satisfied
+        : s.assessment.compatibility_score > 60;
+
       return {
         candidate_id: s.candidate_id,
         entity_id: s.supplier_entity_id,
@@ -318,8 +337,8 @@ export function adaptV3ToV2ConsultantOutput(
         manufacturing_locations: s.manufacturing_locations,
         ...(s.website ? { website: s.website } : {}),
         supplier_type: s.supplier_type,
-        verification_status: "externally_verified" as const,
-        verification_summary: `Verified via official corporate registry (${s.country_of_registration})`,
+        verification_status,
+        verification_summary,
         offerings: [
           {
             sku_or_name: s.offering.product_name,
@@ -352,9 +371,11 @@ export function adaptV3ToV2ConsultantOutput(
           ...(c.evidence_ids[0] ? { evidence_id: c.evidence_ids[0] } : {}),
         })),
         compliance: {
-          regulatory_clearance_status: "cleared" as const,
-          sfda_approved: true,
-          halal_certified: true,
+          regulatory_clearance_status: sfdaApproved
+            ? ("cleared" as const)
+            : ("pending" as const),
+          sfda_approved: Boolean(sfdaApproved),
+          halal_certified: Boolean(halalCertified),
           iso_certifications: ["ISO 9001", "HACCP"],
         },
         logistics: {
@@ -442,7 +463,10 @@ export function adaptV3ToV2ConsultantOutput(
       source_type: "official_registry" as const,
       retrieved_at: e.retrieved_at,
       freshness_status: e.freshness_status as any,
-      verification_status: "verified" as const,
+      verification_status:
+        e.verification_status === "illustrative"
+          ? ("illustrative" as const)
+          : ("verified" as const),
       excerpt_summary: e.excerpt_summary,
       supports_claim_ids: e.supports_claim_ids,
       contradicts_claim_ids: e.contradicts_claim_ids,

@@ -291,7 +291,7 @@ export default function RunsPage() {
             }}
           >
             <Link
-              href="/consultant/workflow"
+              href="/consultant/workflow?mode=new"
               className="primary-action"
               style={{
                 background: "#1d4ed8",
@@ -303,6 +303,18 @@ export default function RunsPage() {
               }}
             >
               + New Consultant Research
+            </Link>
+            <Link
+              href="/consultant/workflow?action=resume"
+              className="secondary-action"
+              style={{
+                padding: "8px 16px",
+                borderRadius: "6px",
+                textDecoration: "none",
+                fontWeight: 600,
+              }}
+            >
+              Resume Research
             </Link>
             <Link
               href="/"

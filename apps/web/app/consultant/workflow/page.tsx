@@ -72,55 +72,118 @@ export default function ConsultantWorkflowPage() {
     setTimeout(() => setToastMessage(null), 4000);
   }
 
-  // Pre-submit draft persistence: restore draft if no active run
+  // Session & Entitlement State
+  const [userSession, setUserSession] = useState<{
+    tier: string;
+    userId: string;
+    accountId: string;
+  } | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+
+  // Resume Modal State
+  const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
+  const [incompleteSessions, setIncompleteSessions] = useState<any[]>([]);
+  const [activeDraftSession, setActiveDraftSession] = useState<any>(null);
+  const [draftId, setDraftId] = useState<string>(() =>
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : "draft-" + Date.now(),
+  );
+
+  // Session verification & purge old localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("matchbase_workflow_draft_v1");
+        localStorage.removeItem("matchbase_active_workflow_run_id");
+      } catch {
+        // ignore
+      }
+    }
+
+    void fetch("/api/v1/me", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) {
+          setUserSession(null);
+          return;
+        }
+        const data = await res.json();
+        setUserSession({
+          tier: data.tier,
+          userId: data.user_id,
+          accountId: data.account_id,
+        });
+
+        // If not consultant, clear any local draft in memory
+        if (data.tier !== "consultant" && data.tier !== "admin") {
+          setProductRequirement("");
+          setTechnicalCompliance("");
+          setOrderProfile("");
+          setRunId(null);
+          setOutput(null);
+        }
+      })
+      .catch(() => setUserSession(null))
+      .finally(() => setSessionLoading(false));
+  }, []);
+
+  // Check URL params for run_id or action=resume
   useEffect(() => {
     if (typeof window === "undefined") return;
     const searchParams = new URLSearchParams(window.location.search);
     const urlRunId = searchParams.get("run_id");
-    if (!urlRunId && !runId) {
-      try {
-        const savedDraft = localStorage.getItem("matchbase_workflow_draft_v1");
-        if (savedDraft) {
-          const parsed = JSON.parse(savedDraft);
-          if (parsed.productRequirement)
-            setProductRequirement(parsed.productRequirement);
-          if (parsed.technicalCompliance)
-            setTechnicalCompliance(parsed.technicalCompliance);
-          if (parsed.orderProfile) setOrderProfile(parsed.orderProfile);
-          setDraftStatus("saved");
-        }
-      } catch (e) {
-        console.warn("Could not restore workflow draft:", e);
-      }
-    }
-  }, [runId]);
+    const action = searchParams.get("action");
 
-  // Pre-submit draft persistence: auto-save debounced
+    if (urlRunId && !runId) {
+      void loadExistingSession(urlRunId);
+    } else if (action === "resume") {
+      void handleOpenResumeModal();
+    }
+  }, []);
+
+  // Server-side debounced draft auto-save
   useEffect(() => {
-    if (typeof window === "undefined" || runId) return;
+    if (
+      !userSession ||
+      (userSession.tier !== "consultant" && userSession.tier !== "admin")
+    )
+      return;
+    if (runId) return; // Do not overwrite draft once a run is submitted
     if (!productRequirement && !technicalCompliance && !orderProfile) {
       setDraftStatus("idle");
       return;
     }
     setDraftStatus("saving");
     const timer = setTimeout(() => {
-      try {
-        localStorage.setItem(
-          "matchbase_workflow_draft_v1",
-          JSON.stringify({
+      void fetch("/api/v1/consultant/workflow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save_draft",
+          draft_id: draftId,
+          draft_data: {
             productRequirement,
             technicalCompliance,
             orderProfile,
             savedAt: new Date().toISOString(),
-          }),
-        );
-        setDraftStatus("saved");
-      } catch (e) {
-        console.warn("Could not save workflow draft:", e);
-      }
-    }, 600);
+          },
+        }),
+      })
+        .then((res) => {
+          if (res.ok) setDraftStatus("saved");
+          else setDraftStatus("idle");
+        })
+        .catch(() => setDraftStatus("idle"));
+    }, 800);
     return () => clearTimeout(timer);
-  }, [productRequirement, technicalCompliance, orderProfile, runId]);
+  }, [
+    productRequirement,
+    technicalCompliance,
+    orderProfile,
+    runId,
+    draftId,
+    userSession,
+  ]);
 
   // Set contextual page title (F13)
   useEffect(() => {
@@ -149,24 +212,71 @@ export default function ConsultantWorkflowPage() {
           setShowPopover3(false);
           popoverBtnRef3.current?.focus();
         }
+        if (isResumeModalOpen) {
+          setIsResumeModalOpen(false);
+        }
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showPopover1, showPopover2, showPopover3]);
+  }, [showPopover1, showPopover2, showPopover3, isResumeModalOpen]);
 
-  // Persistence: Restore session from URL param or localStorage (F04)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const urlParams = new URLSearchParams(window.location.search);
-    const paramRunId = urlParams.get("run_id");
-    const activeRunId =
-      paramRunId || localStorage.getItem("matchbase_active_workflow_run_id");
-
-    if (activeRunId && !runId) {
-      void loadExistingSession(activeRunId);
+  async function handleOpenResumeModal() {
+    setIsResumeModalOpen(true);
+    try {
+      const [resInc, resDraft] = await Promise.all([
+        fetch("/api/v1/consultant/workflow?incomplete=true", {
+          cache: "no-store",
+        }),
+        fetch("/api/v1/consultant/workflow?active_draft=true", {
+          cache: "no-store",
+        }),
+      ]);
+      if (resInc.ok) {
+        const d = await resInc.json();
+        setIncompleteSessions(d.sessions ?? []);
+      }
+      if (resDraft.ok) {
+        const d = await resDraft.json();
+        setActiveDraftSession(d.draft ?? null);
+      }
+    } catch (e) {
+      console.error("Failed to fetch resume options:", e);
     }
-  }, []);
+  }
+
+  function handleResumeDraft(draft: any) {
+    if (draft?.draft_data) {
+      setProductRequirement(draft.draft_data.productRequirement ?? "");
+      setTechnicalCompliance(draft.draft_data.technicalCompliance ?? "");
+      setOrderProfile(draft.draft_data.orderProfile ?? "");
+      setDraftId(draft.draft_id);
+      setIsResumeModalOpen(false);
+      triggerToast("Resumed server-saved draft.");
+    }
+  }
+
+  async function handleAbandonDraft(idToAbandon: string) {
+    try {
+      await fetch("/api/v1/consultant/workflow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "abandon_draft",
+          draft_id: idToAbandon,
+        }),
+      });
+      setActiveDraftSession(null);
+      triggerToast("Server draft discarded.");
+    } catch (e) {
+      console.error("Failed to abandon draft:", e);
+    }
+  }
+
+  function handleResumeSession(targetRunId: string) {
+    setIsResumeModalOpen(false);
+    void loadExistingSession(targetRunId);
+  }
 
   async function loadExistingSession(targetRunId: string) {
     setIsLoading(true);
@@ -203,7 +313,6 @@ export default function ConsultantWorkflowPage() {
           if (typeof s.revealed_count === "number") {
             setRevealedCount(s.revealed_count);
           }
-          localStorage.setItem("matchbase_active_workflow_run_id", s.run_id);
           window.history.replaceState(
             {},
             "",
@@ -233,10 +342,13 @@ export default function ConsultantWorkflowPage() {
     setOutput(null);
     setRevealedCount(5);
     setDraftStatus("idle");
-    localStorage.removeItem("matchbase_active_workflow_run_id");
-    localStorage.removeItem("matchbase_workflow_draft_v1");
-    window.history.replaceState({}, "", "/consultant/workflow");
-    triggerToast("Ready for new sourcing workflow.");
+    setDraftId(
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : "draft-" + Date.now(),
+    );
+    window.history.replaceState({}, "", "/consultant/workflow?mode=new");
+    triggerToast("Started new blank sourcing workflow.");
   }
 
   // Load demonstration examples (F12)
@@ -273,11 +385,6 @@ export default function ConsultantWorkflowPage() {
         setAdvisoryContext(data.session.step2_advisory);
         setStep3Prompt(data.session.step3_deep_prompt?.prompt_text ?? "");
         setDraftStatus("idle");
-        localStorage.removeItem("matchbase_workflow_draft_v1");
-        localStorage.setItem(
-          "matchbase_active_workflow_run_id",
-          data.session.run_id,
-        );
         window.history.replaceState(
           {},
           "",
@@ -424,8 +531,58 @@ export default function ConsultantWorkflowPage() {
   const suppliers = output?.supplier_candidates ?? [];
   const visibleSuppliers = suppliers.slice(0, revealedCount);
 
+  // Entitlement gate: deny standard or unauthenticated users from viewing or manipulating consultant drafts
+  if (
+    !sessionLoading &&
+    (!userSession ||
+      (userSession.tier !== "consultant" && userSession.tier !== "admin"))
+  ) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100 p-8 flex items-center justify-center font-sans">
+        <a href="#main-content" className="sr-only focus:not-sr-only">
+          Skip to main content
+        </a>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="max-w-md w-full bg-slate-800 border border-slate-700 rounded-xl p-6 text-center space-y-4 shadow-2xl"
+        >
+          <div className="text-amber-400 font-bold uppercase text-xs tracking-wider">
+            Access Restricted
+          </div>
+          <h1 className="text-xl font-bold text-white">
+            Consultant Access Required
+          </h1>
+          <p className="text-sm text-slate-400">
+            Consultant-tier research workflow requires consultant tier
+            entitlement. Standard and unauthenticated users cannot access
+            consultant workflows or drafts.
+          </p>
+          <div className="pt-2 flex flex-col gap-2">
+            <a
+              href="/auth/simulator/start?fixture=consultant"
+              className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-lg transition-colors shadow"
+            >
+              Sign In as Consultant
+            </a>
+            <Link
+              href="/runs"
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-lg transition-colors border border-slate-600"
+            >
+              &larr; Return to Run Directory
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-4 sm:p-8 font-sans">
+      <a href="#main-content" className="sr-only focus:not-sr-only">
+        Skip to main content
+      </a>
+
       {/* Toast Notification (F14) */}
       {toastMessage && (
         <div
@@ -468,22 +625,27 @@ export default function ConsultantWorkflowPage() {
             </p>
           </div>
           <div className="flex flex-col sm:items-end gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Link
                 href="/runs"
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
               >
                 &larr; Run Directory
               </Link>
-              {runId && (
-                <button
-                  type="button"
-                  onClick={handleStartNew}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
-                >
-                  + New Sourcing Workflow
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleStartNew}
+                className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-lg shadow transition-colors"
+              >
+                + New Consultant Research
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenResumeModal}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
+              >
+                Resume Research
+              </button>
             </div>
             {runId && (
               <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 text-right w-full sm:w-auto">
@@ -528,7 +690,7 @@ export default function ConsultantWorkflowPage() {
                 )}
                 {draftStatus === "saved" && (
                   <span className="text-[11px] font-medium text-emerald-400 ml-2 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
-                    Draft saved locally
+                    Server Draft Saved
                   </span>
                 )}
               </h2>
@@ -1251,7 +1413,13 @@ export default function ConsultantWorkflowPage() {
             {/* Candidate Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {visibleSuppliers.map((supp) => {
-                const isDirectRoute = supp.assessment.rank <= 4;
+                const isIllustrative =
+                  output.research_mode === "fixture" ||
+                  supp.legal_name.includes("[Illustrative]") ||
+                  supp.candidate_id.startsWith("cand-v3-") ||
+                  supp.candidate_id.startsWith("cand-demo-");
+                const isDirectRoute =
+                  !isIllustrative && supp.assessment.rank <= 4;
                 return (
                   <div
                     key={supp.candidate_id}
@@ -1266,14 +1434,18 @@ export default function ConsultantWorkflowPage() {
                             </span>
                             <span
                               className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide ${
-                                isDirectRoute
-                                  ? "bg-emerald-950 text-emerald-300 border border-emerald-700"
-                                  : "bg-amber-950 text-amber-200 border border-amber-800"
+                                isIllustrative
+                                  ? "bg-amber-950 text-amber-200 border border-amber-800"
+                                  : isDirectRoute
+                                    ? "bg-emerald-950 text-emerald-300 border border-emerald-700"
+                                    : "bg-amber-950 text-amber-200 border border-amber-800"
                               }`}
                             >
-                              {isDirectRoute
-                                ? "Active Direct Route"
-                                : "Conditional / Development"}
+                              {isIllustrative
+                                ? "Illustrative Profile"
+                                : isDirectRoute
+                                  ? "Active Direct Route"
+                                  : "Conditional / Development"}
                             </span>
                           </div>
                           <h3 className="text-base font-bold text-white">
@@ -1290,7 +1462,9 @@ export default function ConsultantWorkflowPage() {
                             {supp.assessment.compatibility_score}
                           </div>
                           <div className="text-[10px] text-slate-400 uppercase font-semibold mt-1">
-                            {supp.assessment.fit_band}
+                            {isIllustrative
+                              ? "Illustrative Score"
+                              : supp.assessment.fit_band}
                           </div>
                         </div>
                       </div>
@@ -1315,9 +1489,15 @@ export default function ConsultantWorkflowPage() {
                             &bull; {supp.commercial.moq ?? "Standard MOQ"}
                           </span>
                         </div>
-                        {supp.website && (
-                          <div className="flex justify-between">
-                            <span className="text-slate-400">Website:</span>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">
+                            {isIllustrative ? "Fixture ID:" : "Website:"}
+                          </span>
+                          {isIllustrative ? (
+                            <span className="font-mono text-slate-300">
+                              {supp.candidate_id}
+                            </span>
+                          ) : (
                             <a
                               href={supp.website}
                               target="_blank"
@@ -1326,6 +1506,16 @@ export default function ConsultantWorkflowPage() {
                             >
                               {supp.primary_domain}
                             </a>
+                          )}
+                        </div>
+                        {isIllustrative && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">
+                              Public Website:
+                            </span>
+                            <span className="italic text-slate-500">
+                              Not applicable — illustrative entity
+                            </span>
                           </div>
                         )}
                       </div>
@@ -1400,6 +1590,152 @@ export default function ConsultantWorkflowPage() {
           setSelectedSupplier(null);
         }}
       />
+
+      {/* Resume Research Modal */}
+      {isResumeModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="resume-modal-title"
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsResumeModalOpen(false);
+          }}
+        >
+          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full p-6 shadow-2xl space-y-5 text-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h2
+                  id="resume-modal-title"
+                  className="text-lg font-bold text-white"
+                >
+                  Resume Research Session
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Select a server-persisted draft or an existing workflow
+                  session.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsResumeModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-md transition-colors"
+                aria-label="Close modal"
+              >
+                <svg
+                  className="w-5 h-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            {/* Active Server Draft Section */}
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-sky-400 mb-2">
+                Active Server Draft
+              </h3>
+              {activeDraftSession ? (
+                <div className="bg-slate-800/80 border border-sky-800/60 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs text-slate-300">
+                    <span className="font-semibold text-white">
+                      Draft {activeDraftSession.draft_id?.slice(-8)}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {activeDraftSession.draft_data?.savedAt
+                        ? new Date(
+                            activeDraftSession.draft_data.savedAt,
+                          ).toLocaleTimeString()
+                        : "Recently saved"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 line-clamp-2 bg-slate-950/50 p-2 rounded border border-slate-800">
+                    {activeDraftSession.draft_data?.productRequirement ||
+                      "(Empty requirements)"}
+                  </p>
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleAbandonDraft(activeDraftSession.draft_id)
+                      }
+                      className="px-2.5 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded transition-colors"
+                    >
+                      Discard Draft
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleResumeDraft(activeDraftSession)}
+                      className="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded shadow transition-colors"
+                    >
+                      Resume Draft
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 bg-slate-800/40 rounded-lg p-3 border border-slate-800 italic">
+                  No active server-saved draft found.
+                </div>
+              )}
+            </div>
+
+            {/* Recent Incomplete / Saved Sessions Section */}
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
+                Incomplete &amp; Active Research Runs
+              </h3>
+              {incompleteSessions.length > 0 ? (
+                <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                  {incompleteSessions.map((session) => (
+                    <div
+                      key={session.run_id}
+                      className="bg-slate-800/60 hover:bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-lg p-3 flex items-center justify-between transition-colors"
+                    >
+                      <div>
+                        <div className="text-xs font-mono font-bold text-sky-400">
+                          {session.run_id.slice(-8)}
+                        </div>
+                        <div className="text-xs text-slate-300 capitalize">
+                          State: {session.state?.replace(/_/g, " ")}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleResumeSession(session.run_id)}
+                        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded border border-slate-600 transition-colors"
+                      >
+                        Resume Run
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 bg-slate-800/40 rounded-lg p-3 border border-slate-800 italic">
+                  No incomplete sessions found for this account.
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsResumeModalOpen(false)}
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-colors border border-slate-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

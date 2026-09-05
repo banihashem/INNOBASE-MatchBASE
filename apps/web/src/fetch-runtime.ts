@@ -666,6 +666,23 @@ async function sessionFor(
   return resolution.session;
 }
 
+export async function resolveRequestSession(
+  request: Request,
+  suppliedPath?: string,
+): Promise<RequestContext> {
+  const current = services();
+  const suppliedCorrelationId = request.headers.get("mb-correlation-id");
+  const correlationId =
+    suppliedCorrelationId &&
+    /^[A-Za-z0-9._:-]{1,128}$/u.test(suppliedCorrelationId)
+      ? suppliedCorrelationId
+      : randomUUID();
+  const url = new URL(request.url);
+  const path = suppliedPath ?? url.pathname;
+  const session = await sessionFor(request, current, correlationId, path);
+  return session.requestContext;
+}
+
 function unsafeKey(
   request: Request,
   current: Services,

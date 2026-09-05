@@ -47,9 +47,14 @@ export function SupplierDossierModal({
   if (!isOpen || !supplier) return null;
 
   const assessment = supplier.assessment;
-  const isDirect =
-    supplier.manufacturer_status === "direct_manufacturer" &&
-    assessment.rank <= 4;
+  const isIllustrative =
+    supplier.legal_name.includes("[Illustrative]") ||
+    supplier.candidate_id.startsWith("cand-v3-") ||
+    supplier.candidate_id.startsWith("cand-demo-") ||
+    (Boolean(supplier.website) &&
+      (supplier.website.includes("matchbase.internal") ||
+        supplier.website.includes("example.internal")));
+  const isDirect = !isIllustrative && assessment.rank <= 4;
 
   return (
     <div
@@ -71,12 +76,18 @@ export function SupplierDossierModal({
               </span>
               <span
                 className={`text-xs px-2 py-0.5 rounded font-bold uppercase ${
-                  isDirect
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                    : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                  isIllustrative
+                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                    : isDirect
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                      : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
                 }`}
               >
-                {isDirect ? "Active Direct Route" : "Conditional / Development"}
+                {isIllustrative
+                  ? "Illustrative Profile"
+                  : isDirect
+                    ? "Active Direct Route"
+                    : "Conditional / Development"}
               </span>
             </div>
             <h2
@@ -98,7 +109,7 @@ export function SupplierDossierModal({
                 <span className="text-sm font-normal text-slate-400">/100</span>
               </div>
               <div className="text-xs text-slate-300 font-semibold">
-                {assessment.fit_band}
+                {isIllustrative ? "Illustrative Score" : assessment.fit_band}
               </div>
             </div>
             <button
@@ -164,19 +175,27 @@ export function SupplierDossierModal({
                 </dt>
                 <dd className="col-span-2 font-mono text-slate-800">
                   {supplier.manufacturing_locations.join(", ") ||
-                    "Validated Facilities"}
+                    (isIllustrative
+                      ? "Synthetic Test Facility"
+                      : "Validated Facilities")}
                 </dd>
 
                 <dt className="text-slate-500 font-medium">Website:</dt>
-                <dd className="col-span-2 text-sky-600 truncate">
-                  <a
-                    href={supplier.website}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline hover:text-sky-800"
-                  >
-                    {supplier.primary_domain}
-                  </a>
+                <dd className="col-span-2 text-slate-600 truncate">
+                  {isIllustrative ? (
+                    <span className="italic text-slate-500">
+                      Not applicable — illustrative entity
+                    </span>
+                  ) : (
+                    <a
+                      href={supplier.website}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline text-sky-600 hover:text-sky-800"
+                    >
+                      {supplier.primary_domain}
+                    </a>
+                  )}
                 </dd>
               </dl>
             </div>
@@ -193,24 +212,38 @@ export function SupplierDossierModal({
                   <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
                   <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
                 </svg>
-                Verified Commercial Contacts
+                {isIllustrative
+                  ? "Entity Verification & Status"
+                  : "Verified Commercial Contacts"}
               </h3>
               <dl className="grid grid-cols-3 gap-2 text-xs">
                 <dt className="text-slate-500 font-medium">Sales Desk:</dt>
                 <dd className="col-span-2 font-mono text-slate-800">
-                  {supplier.contacts.sales_email ??
-                    `export@${supplier.primary_domain}`}
+                  {isIllustrative
+                    ? "Not applicable — illustrative profile"
+                    : (supplier.contacts.sales_email ??
+                      `export@${supplier.primary_domain}`)}
                 </dd>
 
                 <dt className="text-slate-500 font-medium">Phone:</dt>
                 <dd className="col-span-2 text-slate-800">
-                  {supplier.contacts.phone ?? "Official Corporate Desk"}
+                  {isIllustrative
+                    ? "Not applicable — illustrative profile"
+                    : (supplier.contacts.phone ?? "Official Corporate Desk")}
                 </dd>
 
                 <dt className="text-slate-500 font-medium">Verification:</dt>
                 <dd className="col-span-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                    Verified Public Corporate Channel
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                      isIllustrative
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {isIllustrative
+                      ? "Demonstration Profile (Not Externally Verified)"
+                      : "Verified Public Corporate Channel"}
                   </span>
                 </dd>
               </dl>
@@ -373,8 +406,9 @@ export function SupplierDossierModal({
         {/* Footer */}
         <div className="bg-slate-100 px-6 py-3 flex justify-between items-center border-t border-slate-200">
           <span className="text-xs text-slate-500">
-            Source Trace: Grounded in official trade registries and verified
-            supplier documentation
+            {isIllustrative
+              ? "Demonstration Profile: Illustrative fixture candidate for workflow evaluation. Not live market evidence."
+              : "Source Trace: Grounded in official trade registries and verified supplier documentation"}
           </span>
           <button
             type="button"

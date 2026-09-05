@@ -26,7 +26,7 @@ export const V3_01_EVIDENCE_SOURCES: readonly EvidenceSourceV3[] = [
     source_type: "official_registry",
     retrieved_at: "2026-09-05T09:00:00Z",
     freshness_status: "current",
-    verification_status: "externally_verified",
+    verification_status: "illustrative",
     excerpt_summary:
       "Official list of approved Brazilian poultry slaughterhouses accredited for export to the Kingdom of Saudi Arabia.",
     supports_claim_ids: ["cl-poultry-01"],
@@ -42,7 +42,7 @@ export const V3_01_EVIDENCE_SOURCES: readonly EvidenceSourceV3[] = [
     source_type: "official_registry",
     retrieved_at: "2026-09-05T09:15:00Z",
     freshness_status: "current",
-    verification_status: "externally_verified",
+    verification_status: "illustrative",
     excerpt_summary:
       "National Brazilian registry of federally inspected slaughterhouses and poultry processing facilities.",
     supports_claim_ids: ["cl-poultry-01"],
@@ -57,7 +57,7 @@ export const V3_01_EVIDENCE_SOURCES: readonly EvidenceSourceV3[] = [
     source_type: "official_registry",
     retrieved_at: "2026-09-05T09:30:00Z",
     freshness_status: "current",
-    verification_status: "externally_verified",
+    verification_status: "illustrative",
     excerpt_summary:
       "Accredited Islamic slaughterhouse halal inspection certificates for GCC poultry exports.",
     supports_claim_ids: ["cl-poultry-02"],
@@ -72,7 +72,7 @@ export const V3_01_EVIDENCE_SOURCES: readonly EvidenceSourceV3[] = [
     source_type: "trade_directory",
     retrieved_at: "2026-09-05T09:45:00Z",
     freshness_status: "current",
-    verification_status: "externally_verified",
+    verification_status: "illustrative",
     excerpt_summary:
       "Monthly benchmark pricing and container freight indications for frozen poultry exports to Middle Eastern ports.",
     supports_claim_ids: ["cl-poultry-03"],
@@ -87,7 +87,7 @@ export const V3_01_EVIDENCE_SOURCES: readonly EvidenceSourceV3[] = [
     source_type: "trade_directory",
     retrieved_at: "2026-09-05T10:00:00Z",
     freshness_status: "current",
-    verification_status: "externally_verified",
+    verification_status: "illustrative",
     excerpt_summary:
       "Direct ocean reefer container liner service schedules connecting Southern Brazil to Jeddah Islamic Port.",
     supports_claim_ids: ["cl-poultry-03"],
@@ -118,7 +118,7 @@ export const V3_01_CLAIMS: readonly ClaimV3[] = [
     claim_type: "compliance",
     claim_text:
       "Top tier Brazilian poultry slaughterhouse establishments hold active sanitary approvals under MAPA SIF and SFDA foreign registries.",
-    status: "externally_verified",
+    status: "illustrative",
     confidence: "high",
     conflict_status: "corroborated",
     evidence_ids: ["ev-sfda-registry-01", "ev-mapa-sif-01"],
@@ -128,7 +128,7 @@ export const V3_01_CLAIMS: readonly ClaimV3[] = [
     claim_type: "compliance",
     claim_text:
       "Recognized Halal certifying bodies in Brazil audit slaughter lines according to GSO 993 standards.",
-    status: "externally_verified",
+    status: "illustrative",
     confidence: "high",
     conflict_status: "corroborated",
     evidence_ids: ["ev-halal-cert-01"],
@@ -138,7 +138,7 @@ export const V3_01_CLAIMS: readonly ClaimV3[] = [
     claim_type: "pricing",
     claim_text:
       "Indicative spot export pricing for Grade A frozen whole chicken ranges between $1,580 and $1,740 per MT on a containerized basis.",
-    status: "externally_verified",
+    status: "illustrative",
     confidence: "high",
     conflict_status: "corroborated",
     evidence_ids: ["ev-abpa-benchmark-01", "ev-paranagua-port-01"],
@@ -328,14 +328,14 @@ export const BRAZIL_POULTRY_20_SUPPLIERS: readonly SupplierEntityV3[] =
             ? `SFDA-BR-${rank + 100}`
             : "SFDA-AUDIT-PENDING",
           status: sfdaApproved ? "active" : "conditional",
-          verification_status: "verified",
+          verification_status: "claimed",
           evidence_ids: ["ev-sfda-registry-01"],
         },
         {
           certification_name: "Accredited Halal Slaughter Certification",
           issuer: "FAMBRAS Halal Brazil",
           status: "active",
-          verification_status: "verified",
+          verification_status: "claimed",
           evidence_ids: ["ev-halal-cert-01"],
         },
       ],
@@ -513,7 +513,7 @@ export const GOLDEN_SCENARIO_V3_01: ConsultantResearchOutputV3 = {
   claims: V3_01_CLAIMS,
   evidence_sources: V3_01_EVIDENCE_SOURCES,
   telemetry: {
-    lanes_executed: ["lane_gemini", "lane_openai"],
+    lanes_executed: [],
     verification_loops_count: 5,
     total_input_tokens: 0,
     total_output_tokens: 0,
@@ -571,7 +571,7 @@ export const V3_02_EVIDENCE_SOURCES: readonly EvidenceSourceV3[] = [
     source_type: "official_registry",
     retrieved_at: "2026-09-05T10:00:00Z",
     freshness_status: "current",
-    verification_status: "externally_verified",
+    verification_status: "illustrative",
     excerpt_summary:
       "Official conformity registry for commercial pressure vessels and electrical water heating equipment.",
     supports_claim_ids: ["cl-wh-01"],
@@ -587,7 +587,7 @@ export const V3_02_EVIDENCE_SOURCES: readonly EvidenceSourceV3[] = [
     source_type: "official_registry",
     retrieved_at: "2026-09-05T10:15:00Z",
     freshness_status: "current",
-    verification_status: "externally_verified",
+    verification_status: "illustrative",
     excerpt_summary:
       "EU conformity certificates verifying pressure vessel testing up to 15 bar for 10 bar working pressure calorifiers.",
     supports_claim_ids: ["cl-wh-01"],
@@ -618,7 +618,7 @@ export const V3_02_CLAIMS: readonly ClaimV3[] = [
     claim_type: "compliance",
     claim_text:
       "Verified industrial electric water heaters hold mandatory CE PED 2014/68/EU certification and UAE MoIAT conformity.",
-    status: "externally_verified",
+    status: "illustrative",
     confidence: "high",
     conflict_status: "corroborated",
     evidence_ids: ["ev-wh-moiat-01", "ev-wh-ped-01"],
@@ -719,7 +719,7 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
         issuer: "TUV Rheinland",
         certificate_number: "PED-CE-0035-2022",
         status: "active",
-        verification_status: "verified",
+        verification_status: "claimed",
         evidence_ids: ["ev-wh-ped-01"],
       },
       {
@@ -727,7 +727,7 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
         issuer: "Ministry of Industry and Advanced Technology, UAE",
         certificate_number: "MoIAT-EQ-2024-8812",
         status: "active",
-        verification_status: "verified",
+        verification_status: "claimed",
         evidence_ids: ["ev-wh-moiat-01"],
       },
     ],
@@ -872,7 +872,7 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
         issuer: "Bureau Veritas France",
         certificate_number: "BV-PED-2023-9014",
         status: "active",
-        verification_status: "verified",
+        verification_status: "claimed",
         evidence_ids: ["ev-wh-ped-01"],
       },
       {
@@ -880,7 +880,7 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
         issuer: "Ministry of Industry and Advanced Technology, UAE",
         certificate_number: "MoIAT-EQ-2024-9104",
         status: "active",
-        verification_status: "verified",
+        verification_status: "claimed",
         evidence_ids: ["ev-wh-moiat-01"],
       },
     ],
@@ -1024,7 +1024,7 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
         issuer: "VDE Testing Institute",
         certificate_number: "VDE-PED-40019",
         status: "active",
-        verification_status: "verified",
+        verification_status: "claimed",
         evidence_ids: ["ev-wh-ped-01"],
       },
       {
@@ -1032,7 +1032,7 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
         issuer: "Ministry of Industry and Advanced Technology, UAE",
         certificate_number: "MoIAT-EQ-2024-7741",
         status: "active",
-        verification_status: "verified",
+        verification_status: "claimed",
         evidence_ids: ["ev-wh-moiat-01"],
       },
     ],
@@ -1237,7 +1237,7 @@ export const GOLDEN_SCENARIO_V3_02: ConsultantResearchOutputV3 = {
   claims: V3_02_CLAIMS,
   evidence_sources: V3_02_EVIDENCE_SOURCES,
   telemetry: {
-    lanes_executed: ["lane_gemini", "lane_openai"],
+    lanes_executed: [],
     verification_loops_count: 5,
     total_input_tokens: 0,
     total_output_tokens: 0,
@@ -1282,7 +1282,7 @@ export const GOLDEN_SCENARIO_V3_03: ConsultantResearchOutputV3 = {
   research_run_id: "00000000-0000-4000-8000-000000000403",
   execution_id: "00000000-0000-4000-8000-000000002403",
   classification_id: "00000000-0000-4000-8000-000000003403",
-  title: "Ultra-Narrow Industrial Cryogenic Water Heater Discovery",
+  title: "No Strong Match — Commercial Electric Water Heater 500L",
   subtitle:
     "High Constraint Severity Leading to Truthful Zero Match (No Strong Match)",
   generated_at: "2026-09-05T12:00:00Z",
@@ -1386,7 +1386,7 @@ export const GOLDEN_SCENARIO_V3_03: ConsultantResearchOutputV3 = {
       source_type: "official_registry",
       retrieved_at: "2026-09-05T10:00:00Z",
       freshness_status: "current",
-      verification_status: "externally_verified",
+      verification_status: "illustrative",
       excerpt_summary:
         "Geometric and pressure envelope standards for cylindrical calorifiers.",
       supports_claim_ids: [],
@@ -1394,7 +1394,7 @@ export const GOLDEN_SCENARIO_V3_03: ConsultantResearchOutputV3 = {
     },
   ],
   telemetry: {
-    lanes_executed: ["lane_gemini", "lane_openai"],
+    lanes_executed: [],
     verification_loops_count: 5,
     total_input_tokens: 0,
     total_output_tokens: 0,
@@ -1443,7 +1443,7 @@ export const V3_04_EVIDENCE_SOURCES: readonly EvidenceSourceV3[] = [
     source_type: "official_registry",
     retrieved_at: "2026-09-05T10:00:00Z",
     freshness_status: "current",
-    verification_status: "externally_verified",
+    verification_status: "illustrative",
     excerpt_summary:
       "Official registry of industrial reverse osmosis membrane modules and high-recovery desalination systems.",
     supports_claim_ids: ["cl-ro-01"],
@@ -1472,7 +1472,7 @@ export const V3_04_CLAIMS: readonly ClaimV3[] = [
     claim_type: "compliance",
     claim_text:
       "Industrial reverse osmosis systems meet ASME boiler and pressure vessel code Section X for composite pressure vessels.",
-    status: "externally_verified",
+    status: "illustrative",
     confidence: "high",
     conflict_status: "corroborated",
     evidence_ids: ["ev-ro-wqa-01"],
@@ -1589,7 +1589,7 @@ export const GOLDEN_SCENARIO_V3_04_SUPPLIERS: readonly SupplierEntityV3[] = [
         issuer: "Water Quality Association",
         certificate_number: `WQA-RO-2024-${rank * 100}`,
         status: "active",
-        verification_status: "verified",
+        verification_status: "claimed",
         evidence_ids: ["ev-ro-wqa-01"],
       },
     ],
@@ -1746,7 +1746,7 @@ export const GOLDEN_SCENARIO_V3_04: ConsultantResearchOutputV3 = {
   claims: V3_04_CLAIMS,
   evidence_sources: V3_04_EVIDENCE_SOURCES,
   telemetry: {
-    lanes_executed: ["lane_gemini"],
+    lanes_executed: [],
     verification_loops_count: 5,
     total_input_tokens: 1450,
     total_output_tokens: 3100,

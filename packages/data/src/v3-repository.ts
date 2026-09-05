@@ -376,6 +376,8 @@ export interface ConsultantWorkflowSessionRecord {
   readonly classification?: Record<string, unknown> | null;
   readonly execution_id?: string | null;
   readonly last_checkpoint?: string | null;
+  readonly is_invalidated?: boolean;
+  readonly invalidation_reason?: string | null;
   readonly created_at?: string;
   readonly updated_at?: string;
 }
@@ -401,8 +403,10 @@ export async function saveConsultantWorkflowSession(
       classification,
       execution_id,
       last_checkpoint,
+      is_invalidated,
+      invalidation_reason,
       updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, clock_timestamp())
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, clock_timestamp())
     ON CONFLICT (account_id, run_id)
     DO UPDATE SET
       current_state = EXCLUDED.current_state,
@@ -416,6 +420,8 @@ export async function saveConsultantWorkflowSession(
       classification = EXCLUDED.classification,
       execution_id = EXCLUDED.execution_id,
       last_checkpoint = EXCLUDED.last_checkpoint,
+      is_invalidated = EXCLUDED.is_invalidated,
+      invalidation_reason = EXCLUDED.invalidation_reason,
       updated_at = clock_timestamp();`,
     [
       session.session_id,
@@ -439,6 +445,8 @@ export async function saveConsultantWorkflowSession(
       session.classification ? JSON.stringify(session.classification) : null,
       session.execution_id ?? null,
       session.last_checkpoint ?? null,
+      session.is_invalidated ?? false,
+      session.invalidation_reason ?? null,
     ],
   );
 }
@@ -499,6 +507,8 @@ export async function getConsultantWorkflowSessionByRunId(
     classification: row.classification ? parseJson(row.classification) : null,
     execution_id: row.execution_id,
     last_checkpoint: row.last_checkpoint,
+    is_invalidated: Boolean((row as any).is_invalidated),
+    invalidation_reason: (row as any).invalidation_reason ?? null,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };
@@ -525,6 +535,8 @@ export async function listConsultantWorkflowSessions(
     classification: Record<string, unknown> | string | null;
     execution_id: string | null;
     last_checkpoint: string | null;
+    is_invalidated?: boolean;
+    invalidation_reason?: string | null;
     created_at: Date;
     updated_at: Date;
   }>(
@@ -562,7 +574,218 @@ export async function listConsultantWorkflowSessions(
     classification: row.classification ? parseJson(row.classification) : null,
     execution_id: row.execution_id,
     last_checkpoint: row.last_checkpoint,
+    is_invalidated: Boolean(row.is_invalidated),
+    invalidation_reason: row.invalidation_reason ?? null,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   }));
+}
+
+export interface ConsultantIntakeSnapshotRecord {
+  readonly snapshot_id: string;
+  readonly account_id: string;
+  readonly user_profile_id: string;
+  readonly run_id: string;
+  readonly revision_number: number;
+  readonly product_requirement: string;
+  readonly technical_compliance: string;
+  readonly order_profile: string;
+  readonly content_hash: string;
+  readonly created_at?: string;
+}
+
+export interface ConsultantDraftSessionRecord {
+  readonly draft_id: string;
+  readonly account_id: string;
+  readonly user_profile_id: string;
+  readonly tier: "consultant";
+  readonly current_run_id?: string | null;
+  readonly snapshot_id?: string | null;
+  readonly draft_version: number;
+  readonly status: "active" | "submitted" | "abandoned";
+  readonly draft_data: Record<string, unknown>;
+  readonly updated_at?: string;
+  readonly created_at?: string;
+}
+
+export function computeIntakeContentHash(
+  productRequirement: string,
+  technicalCompliance: string,
+  orderProfile: string,
+): string {
+  return createHash("sha256")
+    .update(
+      `${productRequirement.trim()}\n---\n${technicalCompliance.trim()}\n---\n${orderProfile.trim()}`,
+    )
+    .digest("hex");
+}
+
+export async function saveConsultantIntakeSnapshot(
+  db: Queryable,
+  snapshot: ConsultantIntakeSnapshotRecord,
+): Promise<void> {
+  await db.query(
+    `INSERT INTO consultant_intake_snapshot (
+      snapshot_id, account_id, user_profile_id, run_id, revision_number,
+      product_requirement, technical_compliance, order_profile, content_hash
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    ON CONFLICT (snapshot_id) DO NOTHING;`,
+    [
+      snapshot.snapshot_id,
+      snapshot.account_id,
+      snapshot.user_profile_id,
+      snapshot.run_id,
+      snapshot.revision_number,
+      snapshot.product_requirement,
+      snapshot.technical_compliance,
+      snapshot.order_profile,
+      snapshot.content_hash,
+    ],
+  );
+}
+
+export async function getConsultantIntakeSnapshot(
+  db: Queryable,
+  accountId: string,
+  snapshotId: string,
+): Promise<ConsultantIntakeSnapshotRecord | null> {
+  const res = await db.query<{
+    snapshot_id: string;
+    account_id: string;
+    user_profile_id: string;
+    run_id: string;
+    revision_number: number;
+    product_requirement: string;
+    technical_compliance: string;
+    order_profile: string;
+    content_hash: string;
+    created_at: Date;
+  }>(
+    `SELECT * FROM consultant_intake_snapshot
+     WHERE account_id = $1 AND snapshot_id = $2;`,
+    [accountId, snapshotId],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  return {
+    snapshot_id: row.snapshot_id,
+    account_id: row.account_id,
+    user_profile_id: row.user_profile_id,
+    run_id: row.run_id,
+    revision_number: row.revision_number,
+    product_requirement: row.product_requirement,
+    technical_compliance: row.technical_compliance,
+    order_profile: row.order_profile,
+    content_hash: row.content_hash,
+    created_at: row.created_at.toISOString(),
+  };
+}
+
+export async function saveConsultantDraftSession(
+  db: Queryable,
+  draft: ConsultantDraftSessionRecord,
+): Promise<void> {
+  // Ensure at most one active draft per user/account: supersede any older active drafts
+  if (draft.status === "active") {
+    await db.query(
+      `UPDATE consultant_draft_session
+       SET status = 'abandoned', updated_at = clock_timestamp()
+       WHERE account_id = $1 AND user_profile_id = $2 AND status = 'active' AND draft_id <> $3;`,
+      [draft.account_id, draft.user_profile_id, draft.draft_id],
+    );
+  }
+
+  await db.query(
+    `INSERT INTO consultant_draft_session (
+      draft_id, account_id, user_profile_id, tier, current_run_id,
+      snapshot_id, draft_version, status, draft_data, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp())
+    ON CONFLICT (draft_id)
+    DO UPDATE SET
+      current_run_id = EXCLUDED.current_run_id,
+      snapshot_id = EXCLUDED.snapshot_id,
+      draft_version = consultant_draft_session.draft_version + 1,
+      status = EXCLUDED.status,
+      draft_data = EXCLUDED.draft_data,
+      updated_at = clock_timestamp();`,
+    [
+      draft.draft_id,
+      draft.account_id,
+      draft.user_profile_id,
+      draft.tier,
+      draft.current_run_id ?? null,
+      draft.snapshot_id ?? null,
+      draft.draft_version,
+      draft.status,
+      JSON.stringify(draft.draft_data),
+    ],
+  );
+}
+
+export async function getActiveConsultantDraftSession(
+  db: Queryable,
+  accountId: string,
+  userProfileId: string,
+): Promise<ConsultantDraftSessionRecord | null> {
+  const res = await db.query<{
+    draft_id: string;
+    account_id: string;
+    user_profile_id: string;
+    tier: "consultant";
+    current_run_id: string | null;
+    snapshot_id: string | null;
+    draft_version: number;
+    status: "active" | "submitted" | "abandoned";
+    draft_data: Record<string, unknown> | string;
+    updated_at: Date;
+    created_at: Date;
+  }>(
+    `SELECT * FROM consultant_draft_session
+     WHERE account_id = $1 AND user_profile_id = $2 AND status = 'active'
+     ORDER BY updated_at DESC
+     LIMIT 1;`,
+    [accountId, userProfileId],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  const parseJson = (val: unknown): Record<string, unknown> =>
+    typeof val === "string"
+      ? JSON.parse(val)
+      : (val as Record<string, unknown>);
+  return {
+    draft_id: row.draft_id,
+    account_id: row.account_id,
+    user_profile_id: row.user_profile_id,
+    tier: row.tier,
+    current_run_id: row.current_run_id,
+    snapshot_id: row.snapshot_id,
+    draft_version: row.draft_version,
+    status: row.status,
+    draft_data: parseJson(row.draft_data),
+    updated_at: row.updated_at.toISOString(),
+    created_at: row.created_at.toISOString(),
+  };
+}
+
+export async function abandonConsultantDraftSession(
+  db: Queryable,
+  accountId: string,
+  draftId?: string | null,
+  userProfileId?: string | null,
+): Promise<void> {
+  if (draftId) {
+    await db.query(
+      `UPDATE consultant_draft_session
+       SET status = 'abandoned', updated_at = clock_timestamp()
+       WHERE account_id = $1 AND draft_id = $2;`,
+      [accountId, draftId],
+    );
+  } else if (userProfileId) {
+    await db.query(
+      `UPDATE consultant_draft_session
+       SET status = 'abandoned', updated_at = clock_timestamp()
+       WHERE account_id = $1 AND user_profile_id = $2 AND status = 'active';`,
+      [accountId, userProfileId],
+    );
+  }
 }

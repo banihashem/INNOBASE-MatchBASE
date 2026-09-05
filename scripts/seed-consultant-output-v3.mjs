@@ -283,7 +283,11 @@ try {
       ],
     );
 
-    // 11. Supplier entities
+    // 11. Supplier entities (clean previous seed for this run first)
+    await client.query(
+      "DELETE FROM consultant_supplier_entity_v3 WHERE account_id = $1 AND run_id = $2",
+      [accountId, runId],
+    );
     for (const s of scenario.supplier_candidates) {
       const hash = createHash("md5")
         .update(`${runId}:${s.candidate_id}`)

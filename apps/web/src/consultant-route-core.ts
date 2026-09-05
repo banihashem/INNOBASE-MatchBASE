@@ -19,6 +19,41 @@ import {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
+const GOLDEN_ALIAS_MAP: Record<string, string> = {
+  "run-v2-golden-01": "00000000-0000-4000-8000-000000000301",
+  "run-v2-golden-02": "00000000-0000-4000-8000-000000000302",
+  "run-v2-golden-03": "00000000-0000-4000-8000-000000000303",
+  "run-v2-golden-04": "00000000-0000-4000-8000-000000000304",
+  "run-v2-golden-05": "00000000-0000-4000-8000-000000000305",
+  "run-v2-golden-06": "00000000-0000-4000-8000-000000000306",
+  "run-v2-golden-07": "00000000-0000-4000-8000-000000000307",
+  "run-v2-golden-08": "00000000-0000-4000-8000-000000000308",
+  "run-v2-golden-09": "00000000-0000-4000-8000-000000000309",
+  "run-v2-golden-10": "00000000-0000-4000-8000-000000000310",
+  "run-v2-golden-11": "00000000-0000-4000-8000-000000000311",
+  "run-v2-golden-12": "00000000-0000-4000-8000-000000000312",
+  "run-v2-golden-13": "00000000-0000-4000-8000-000000000313",
+  "run-v2-golden-14": "00000000-0000-4000-8000-000000000314",
+  "run-v2-golden-15": "00000000-0000-4000-8000-000000000315",
+  "run-v2-golden-1": "00000000-0000-4000-8000-000000000301",
+  "run-v2-golden-2": "00000000-0000-4000-8000-000000000302",
+  "run-v2-golden-3": "00000000-0000-4000-8000-000000000303",
+  "run-v2-golden-4": "00000000-0000-4000-8000-000000000304",
+  "run-v2-golden-5": "00000000-0000-4000-8000-000000000305",
+  "run-v2-golden-6": "00000000-0000-4000-8000-000000000306",
+  "run-v2-golden-7": "00000000-0000-4000-8000-000000000307",
+  "run-v2-golden-8": "00000000-0000-4000-8000-000000000308",
+  "run-v2-golden-9": "00000000-0000-4000-8000-000000000309",
+  "run-v3-golden-01": "00000000-0000-4000-8000-000000000401",
+  "run-v3-golden-02": "00000000-0000-4000-8000-000000000402",
+  "run-v3-golden-03": "00000000-0000-4000-8000-000000000403",
+  "run-v3-golden-04": "00000000-0000-4000-8000-000000000404",
+  "run-v3-golden-1": "00000000-0000-4000-8000-000000000401",
+  "run-v3-golden-2": "00000000-0000-4000-8000-000000000402",
+  "run-v3-golden-3": "00000000-0000-4000-8000-000000000403",
+  "run-v3-golden-4": "00000000-0000-4000-8000-000000000404",
+};
+
 export interface ConsultantRouteResult {
   readonly status: 200 | 202;
   readonly body:
@@ -142,7 +177,8 @@ export async function handleConsultantRoute(input: {
       ? /^\/api\/v1\/consultant\/runs\/([^/]+)\/result$/u.exec(input.pathname)
       : /^\/api\/v1\/runs\/([^/]+)\/result$/u.exec(input.pathname);
   if (input.method !== "GET" || !match) return null;
-  const runId = match[1];
+  const rawRunId = match[1];
+  const runId = (rawRunId && GOLDEN_ALIAS_MAP[rawRunId]) ?? rawRunId;
   if (!runId || !UUID_PATTERN.test(runId))
     throw new ApplicationFault(
       403,
@@ -169,13 +205,17 @@ export async function handleConsultantRoute(input: {
         throw new Error("Consultant result schema is unsupported.");
     }
   })();
-  if (
-    body !== null &&
-    typeof body === "object" &&
-    "run_id" in body &&
-    body.run_id !== runId
-  )
-    throw new Error("Consultant result identity is invalid.");
+  if (body !== null && typeof body === "object") {
+    const record = body as unknown as Record<string, unknown>;
+    const docRunId =
+      typeof record.run_id === "string"
+        ? record.run_id
+        : typeof record.research_run_id === "string"
+          ? record.research_run_id
+          : null;
+    if (docRunId !== null && docRunId !== runId)
+      throw new Error("Consultant result identity is invalid.");
+  }
   return {
     status: 200,
     body,

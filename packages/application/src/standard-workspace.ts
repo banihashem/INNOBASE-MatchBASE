@@ -304,6 +304,7 @@ export const LEGACY_STANDARD_RESULT_INTEGRITY_RUN_ID =
   "stable-canonical-run" as const;
 
 export type StoredCompleteResultIntegrityMode =
+  | "consultant_research_output_v3_exact"
   | "consultant_research_output_v2_exact"
   | "complete_result_foundation_v1_exact"
   | "complete_result_foundation_v2_exact"
@@ -344,12 +345,16 @@ export function assertStoredCompleteResultIntegrity(
   if (!Buffer.isBuffer(storedSha256) || storedSha256.length !== 32)
     throw new Error("Stored complete-result integrity digest is invalid.");
   const record = document as Record<string, unknown>;
-  if (record.run_id !== expectedRunId)
+  const runId = record.run_id ?? record.research_run_id;
+  if (runId !== expectedRunId)
     throw new Error("Stored complete-result run identity is invalid.");
 
   let expected: Buffer;
   let mode: StoredCompleteResultIntegrityMode;
-  if (record.schema_version === "consultant-research-output.v2") {
+  if (record.schema_version === "consultant-research-output.v3") {
+    expected = standardCompleteResultDocumentSha256(document);
+    mode = "consultant_research_output_v3_exact";
+  } else if (record.schema_version === "consultant-research-output.v2") {
     expected = standardCompleteResultDocumentSha256(document);
     mode = "consultant_research_output_v2_exact";
   } else if (record.schema_version === "complete-result-foundation.v2") {

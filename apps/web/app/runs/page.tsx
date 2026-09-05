@@ -90,7 +90,10 @@ export default function RunsPage() {
           if (data.sessions) {
             setIncompleteSessions(
               data.sessions.filter(
-                (s) => s.current_state !== "workflow_complete",
+                (s) =>
+                  s.current_state !== "workflow_complete" &&
+                  s.current_state !== "invalidated" &&
+                  !s.last_checkpoint?.startsWith("invalidated"),
               ),
             );
           }

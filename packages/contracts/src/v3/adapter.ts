@@ -81,7 +81,6 @@ export function adaptV2ToV3ConsultantOutput(
         identity_evidence_ids: c.evidence_ids,
         contacts: {
           ...(c.website ? { contact_page_url: c.website } : {}),
-          ...(c.website ? { sales_email: `sales@${primary_domain}` } : {}),
           verification_status: "claimed" as const,
           contact_evidence_ids: c.evidence_ids,
         },

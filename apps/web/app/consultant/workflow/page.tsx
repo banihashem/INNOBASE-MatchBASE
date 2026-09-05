@@ -60,10 +60,67 @@ export default function ConsultantWorkflowPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const [draftStatus, setDraftStatus] = useState<"idle" | "saving" | "saved">(
+    "idle",
+  );
+  const [researchMode, setResearchMode] = useState<"demonstration" | "live">(
+    "demonstration",
+  );
+
   function triggerToast(msg: string) {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
   }
+
+  // Pre-submit draft persistence: restore draft if no active run
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const urlRunId = searchParams.get("run_id");
+    if (!urlRunId && !runId) {
+      try {
+        const savedDraft = localStorage.getItem("matchbase_workflow_draft_v1");
+        if (savedDraft) {
+          const parsed = JSON.parse(savedDraft);
+          if (parsed.productRequirement)
+            setProductRequirement(parsed.productRequirement);
+          if (parsed.technicalCompliance)
+            setTechnicalCompliance(parsed.technicalCompliance);
+          if (parsed.orderProfile) setOrderProfile(parsed.orderProfile);
+          setDraftStatus("saved");
+        }
+      } catch (e) {
+        console.warn("Could not restore workflow draft:", e);
+      }
+    }
+  }, [runId]);
+
+  // Pre-submit draft persistence: auto-save debounced
+  useEffect(() => {
+    if (typeof window === "undefined" || runId) return;
+    if (!productRequirement && !technicalCompliance && !orderProfile) {
+      setDraftStatus("idle");
+      return;
+    }
+    setDraftStatus("saving");
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          "matchbase_workflow_draft_v1",
+          JSON.stringify({
+            productRequirement,
+            technicalCompliance,
+            orderProfile,
+            savedAt: new Date().toISOString(),
+          }),
+        );
+        setDraftStatus("saved");
+      } catch (e) {
+        console.warn("Could not save workflow draft:", e);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [productRequirement, technicalCompliance, orderProfile, runId]);
 
   // Set contextual page title (F13)
   useEffect(() => {
@@ -175,7 +232,9 @@ export default function ConsultantWorkflowPage() {
     setAdvisoryContext(null);
     setOutput(null);
     setRevealedCount(5);
+    setDraftStatus("idle");
     localStorage.removeItem("matchbase_active_workflow_run_id");
+    localStorage.removeItem("matchbase_workflow_draft_v1");
     window.history.replaceState({}, "", "/consultant/workflow");
     triggerToast("Ready for new sourcing workflow.");
   }
@@ -213,6 +272,8 @@ export default function ConsultantWorkflowPage() {
         );
         setAdvisoryContext(data.session.step2_advisory);
         setStep3Prompt(data.session.step3_deep_prompt?.prompt_text ?? "");
+        setDraftStatus("idle");
+        localStorage.removeItem("matchbase_workflow_draft_v1");
         localStorage.setItem(
           "matchbase_active_workflow_run_id",
           data.session.run_id,
@@ -294,7 +355,7 @@ export default function ConsultantWorkflowPage() {
         body: JSON.stringify({
           action: "execute_research",
           run_id: runId,
-          mode: "demonstration",
+          mode: researchMode,
         }),
       });
       const data = await res.json();
@@ -459,7 +520,17 @@ export default function ConsultantWorkflowPage() {
                 >
                   1
                 </span>
-                Section 1: Multilingual 3-Box Intake
+                <span>Section 1: Multilingual 3-Box Intake</span>
+                {draftStatus === "saving" && (
+                  <span className="text-[11px] font-medium text-amber-400 animate-pulse ml-2 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800">
+                    Draft saving...
+                  </span>
+                )}
+                {draftStatus === "saved" && (
+                  <span className="text-[11px] font-medium text-emerald-400 ml-2 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+                    Draft saved locally
+                  </span>
+                )}
               </h2>
               <p className="text-xs text-slate-400 mt-1">
                 Enter requirements in any language (Persian, Arabic, English,
@@ -915,20 +986,83 @@ export default function ConsultantWorkflowPage() {
                     </svg>
                     Research Launch Summary &amp; Governance Disclosures
                   </div>
+
+                  {/* Explicit Execution Mode Selection */}
+                  <div className="mb-4">
+                    <div className="text-xs font-semibold text-slate-300 mb-2">
+                      Select Autonomous Execution Mode:
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label
+                        className={`cursor-pointer p-3 rounded-lg border transition-all ${
+                          researchMode === "demonstration"
+                            ? "bg-sky-950/70 border-sky-500 shadow-sm"
+                            : "bg-slate-900/90 border-slate-700 hover:border-slate-600"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <input
+                            type="radio"
+                            name="research_mode"
+                            value="demonstration"
+                            checked={researchMode === "demonstration"}
+                            onChange={() => setResearchMode("demonstration")}
+                            className="text-sky-500 focus:ring-sky-500"
+                          />
+                          <span className="font-bold text-xs text-white">
+                            Demonstration Research (Zero Spend)
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 pl-5">
+                          Under 5 seconds, simulated dual-lane fixture with
+                          verified structure. Ideal for UAT qualification and
+                          evaluations.
+                        </p>
+                      </label>
+                      <label
+                        className={`cursor-pointer p-3 rounded-lg border transition-all ${
+                          researchMode === "live"
+                            ? "bg-sky-950/70 border-sky-500 shadow-sm"
+                            : "bg-slate-900/90 border-slate-700 hover:border-slate-600"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <input
+                            type="radio"
+                            name="research_mode"
+                            value="live"
+                            checked={researchMode === "live"}
+                            onChange={() => setResearchMode("live")}
+                            className="text-sky-500 focus:ring-sky-500"
+                          />
+                          <span className="font-bold text-xs text-white">
+                            Live Web Research (OpenRouter)
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 pl-5">
+                          Live dual-lane search via Gemini Flash + GPT-4o.
+                          ~$0.50 budget cap, 30&ndash;60s duration.
+                        </p>
+                      </label>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-slate-300 mb-3">
                     <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
                       <div className="text-[10px] text-slate-400 uppercase font-bold">
                         Research Mode
                       </div>
-                      <div className="font-semibold text-slate-100">
-                        Live Agentic / Fixture
+                      <div className="font-semibold text-slate-100 text-xs">
+                        {researchMode === "demonstration"
+                          ? "Demonstration / Fixture"
+                          : "Live Web Agentic"}
                       </div>
                     </div>
                     <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
                       <div className="text-[10px] text-slate-400 uppercase font-bold">
                         Target Candidates
                       </div>
-                      <div className="font-semibold text-slate-100">
+                      <div className="font-semibold text-slate-100 text-xs">
                         Up to 20 Verified Suppliers
                       </div>
                     </div>
@@ -936,16 +1070,20 @@ export default function ConsultantWorkflowPage() {
                       <div className="text-[10px] text-slate-400 uppercase font-bold">
                         Verification Loops
                       </div>
-                      <div className="font-semibold text-slate-100">
-                        5 Registry &amp; Quality Checks
+                      <div className="font-semibold text-slate-100 text-xs">
+                        {researchMode === "demonstration"
+                          ? "5 Structure Checks"
+                          : "Up to 15 Deep Checks"}
                       </div>
                     </div>
                     <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
                       <div className="text-[10px] text-slate-400 uppercase font-bold">
                         Cost Budget Cap
                       </div>
-                      <div className="font-semibold text-emerald-400">
-                        $0.50 USD Maximum
+                      <div className="font-semibold text-emerald-400 text-xs">
+                        {researchMode === "demonstration"
+                          ? "$0.00 (Zero Spend)"
+                          : "$0.50 USD Maximum"}
                       </div>
                     </div>
                   </div>

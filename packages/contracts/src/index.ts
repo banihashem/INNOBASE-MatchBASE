@@ -29,3 +29,4 @@ export * from "./v2/golden-scenarios.js";
 export * from "./v3/consultant-research-output.js";
 export * from "./v3/golden-scenarios.js";
 export * from "./v3/adapter.js";
+export * from "./v3/integrity-validator.js";

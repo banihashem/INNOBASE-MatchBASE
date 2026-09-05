@@ -319,9 +319,12 @@ Task: Execute deep agentic research to discover and verify legitimate commercial
 
     if (domain === "poultry") {
       // Determine exact Incoterm from approved request (preserving CIF -> CFR edits!)
-      let deliveryTerm = "CIF Jeddah";
-      if (approvedRequest.english_translation.includes("CFR")) {
-        deliveryTerm = "CFR Jeddah";
+      let deliveryTerm = "CFR Jeddah";
+      if (
+        approvedRequest.english_translation.includes("CIF") &&
+        !approvedRequest.english_translation.includes("CFR")
+      ) {
+        deliveryTerm = "CIF Jeddah";
       } else if (approvedRequest.incoterm) {
         deliveryTerm = approvedRequest.incoterm;
       }
@@ -339,8 +342,8 @@ Task: Execute deep agentic research to discover and verify legitimate commercial
 Task: Execute deep agentic research targeting the Brazilian Poultry Export Landscape for the Saudi Arabian Market.
 
 1. Product Specifications & Target Criteria:
-   - Product: Grade A Whole Frozen Chicken and standard portion cuts (boneless breast, shawarma cuts)
-   - Calibration / Sizing: ${weightSpec} calibrated whole birds; IQF portion cuts in 2.5 kg inner polybags
+   - Product: Grade A Whole Frozen Chicken (calibrated ${weightSpec})
+   - Calibration / Sizing: ${weightSpec} calibrated whole birds
    - Packaging: 10 kg export master cartons (4 x 2.5 kg inner bags), export-grade corrugated labeling
    - Quality & Technical: Continuous deep freeze (-18°C), maximum 4.5% water absorption glaze, 12-month shelf life
    - Mandatory Regulatory Clearances:
@@ -348,7 +351,7 @@ Task: Execute deep agentic research targeting the Brazilian Poultry Export Lands
      * Active MAPA (Ministério da Agricultura e Pecuária) SIF sanitary inspection registration
      * Accredited Halal slaughter certification (FAMBRAS Halal, Cibal Halal, or equivalent SFDA-approved body)
    - Commercial Delivery: ${deliveryTerm} (or Dammam Port), containerized 40ft reefer ocean freight
-   - Volume: Initial 1 to 3 containers (approx. 27 MT/container), recurring monthly demand scaling to 2,000 MT/month
+   - Volume: 4 × 40ft reefer containers (approx. 108 MT)
 
 2. Discovery & Eligibility Rules:
    - Identify active direct slaughterhouse establishments (Frigoríficos) in Brazil meeting all Saudi import mandates.
@@ -373,7 +376,7 @@ Task: Execute deep agentic research targeting the Brazilian Poultry Export Lands
           "Direct Brazilian poultry slaughterhouse (SIF-registered establishment)",
           "Active SFDA foreign food establishment listing for Saudi Arabia",
           "Accredited Halal slaughter certificate (FAMBRAS, Cibal, or SFDA-approved equivalent)",
-          `Calibrated whole bird (${weightSpec}) and IQF cuts in 10kg cartons (4x2.5kg)`,
+          `Calibrated whole bird (${weightSpec}) in 10kg cartons (4x2.5kg)`,
           `Containerized reefer shipping to Saudi Arabia under ${deliveryTerm} terms`,
         ],
         evidence_thresholds: [
@@ -428,18 +431,32 @@ Discovery Criteria:
       ? "1000g - 1200g"
       : "900g - 1200g";
 
-    // Check if user specified Incoterm
-    let incoterm = "CIF Jeddah";
-    if (intake.order_profile.includes("CFR")) {
-      incoterm = "CFR Jeddah";
+    // Check if user specified Incoterm (strictly preserve CFR if mentioned)
+    let incoterm = "CFR Jeddah";
+    if (intake.order_profile.includes("CIF")) {
+      incoterm = "CIF Jeddah";
     } else if (intake.order_profile.includes("FOB")) {
       incoterm = "FOB Brazilian Port";
     }
 
+    // Extract exact quantity without inventing 1-3 containers or 2,000 MT/month
+    const containerMatch = intake.order_profile.match(
+      /([0-9۰-۹]+)\s*(?:×|x|\*|-)?\s*(?:40|۴۰)?\s*(?:foot|فوت)?\s*(?:reefer|کانتینر|container)/i,
+    );
+    let quantityText = "4 × 40-foot reefer containers (approx. 108 MT)";
+    if (containerMatch) {
+      const count = containerMatch[1]!.replace(/[۰-۹]/g, (d) =>
+        String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)),
+      );
+      quantityText = `${count} × 40-foot reefer containers`;
+    } else if (intake.order_profile.trim()) {
+      quantityText = intake.order_profile.trim();
+    }
+
     const englishTranslation = `
-Product Requirement: Grade A whole frozen chicken (${weightRange}) and standard portion cuts (boneless skinless breast, shawarma cut). Export packaging in 10 kg master cartons containing 4 x 2.5 kg inner polybags. Destination: Saudi Arabia (Jeddah Islamic Port / Dammam).
+Product Requirement: Grade A whole frozen chicken (${weightRange}). Export packaging in 10 kg master cartons containing 4 x 2.5 kg inner polybags. Destination: Saudi Arabia (Jeddah Islamic Port / Dammam).
 Technical & Compliance: Mandatory active SFDA foreign establishment listing in Brazil. Accredited Halal slaughter certification (FAMBRAS or Cibal Halal). Continuous cold-chain compliance (-18°C), no refreezing, maximum 4.5% moisture water absorption glaze, MAPA/SIF sanitary traceability, and 12-month shelf life.
-Commercial & Order Profile: Initial trial volume of 1 to 3 x 40ft reefer containers (~27 MT/container), scaling to 2,000 MT/month recurring supply. Delivery terms ${incoterm}. Direct procurement from accredited primary slaughterhouse (Frigorífico) preferred.
+Commercial & Order Profile: Order volume of ${quantityText}. Delivery terms ${incoterm}. Direct procurement from accredited primary slaughterhouse (Frigorífico) preferred.
 `.trim();
 
     const explicitRequirements: NormalizedRequirement[] = [
@@ -447,7 +464,7 @@ Commercial & Order Profile: Initial trial volume of 1 to 3 x 40ft reefer contain
         requirement_id: crypto.randomUUID(),
         source_box: "product_requirement",
         source_text_reference: intake.product_requirement,
-        normalized_value: `Whole chicken Grade A calibrated (${weightRange}) and portion cuts`,
+        normalized_value: `Whole chicken Grade A calibrated (${weightRange})`,
         requirement_level: "mandatory",
         derivation_type: "explicit",
       },
@@ -497,10 +514,9 @@ Commercial & Order Profile: Initial trial volume of 1 to 3 x 40ft reefer contain
         requirement_id: crypto.randomUUID(),
         source_box: "order_profile",
         source_text_reference: intake.order_profile,
-        normalized_value:
-          "1 to 3 containers initial, scaling to 2,000 MT/month",
-        unit: "MT",
-        requirement_level: "preferred",
+        normalized_value: quantityText,
+        unit: "containers",
+        requirement_level: "mandatory",
         derivation_type: "explicit",
       },
     ];
@@ -514,7 +530,7 @@ Commercial & Order Profile: Initial trial volume of 1 to 3 x 40ft reefer contain
       level: "6-digit subheading",
       label:
         "Meat and edible offal of fowls of the species Gallus domesticus, not cut in pieces, frozen",
-      description: "Frozen whole chicken and griller poultry cuts.",
+      description: "Frozen whole chicken and griller poultry.",
       is_primary: true,
       confidence: "high",
       source_url: "https://www.wcoomd.org",
@@ -525,7 +541,7 @@ Commercial & Order Profile: Initial trial volume of 1 to 3 x 40ft reefer contain
       original_language: "fa",
       english_translation: englishTranslation,
       product_category: "Poultry & Frozen Meat",
-      product_name: `Frozen Whole Chicken (${weightRange}) & Cuts Grade A`,
+      product_name: `Frozen Whole Chicken (${weightRange}) Grade A`,
       explicit_requirements: explicitRequirements,
       mandatory_requirements: [
         "Active SFDA foreign slaughterhouse establishment listing",
@@ -534,10 +550,10 @@ Commercial & Order Profile: Initial trial volume of 1 to 3 x 40ft reefer contain
         "10 kg export carton with 4 x 2.5 kg inner bags",
         "-18°C continuous cold-chain, max 4.5% moisture, 12-month shelf life",
         `${incoterm} delivery terms`,
+        `Order quantity: ${quantityText}`,
       ],
       preferred_requirements: [
         "Direct slaughterhouse contract without trading intermediaries",
-        "Volume capability scaling to 2,000 MT/month",
       ],
       excluded_requirements: [
         "Non-SFDA approved slaughterhouses",
@@ -549,7 +565,8 @@ Commercial & Order Profile: Initial trial volume of 1 to 3 x 40ft reefer contain
         "Specific discharge port preference between Jeddah and Dammam",
       ],
       suggested_clarifications: [
-        "Confirm whether payment terms will be 100% confirmed irrevocable LC at sight or CAD",
+        "Confirm long-term recurring volume projections beyond initial shipment (e.g. if monthly scaling to 2,000 MT/month is contemplated).",
+        "Confirm whether payment terms will be 100% confirmed irrevocable LC at sight or CAD.",
       ],
       classification,
     };
@@ -565,10 +582,22 @@ Commercial & Order Profile: Initial trial volume of 1 to 3 x 40ft reefer contain
     if (intake.order_profile.includes("CIF")) incoterm = "CIF Jebel Ali";
     if (intake.order_profile.includes("FOB")) incoterm = "FOB European Port";
 
+    // Extract exact quantity without inventing 10 to 50 units
+    const unitsMatch = intake.order_profile.match(
+      /([0-9۰-۹]+)\s*(?:دستگاه|unit|piece|calorifier|heater)/i,
+    );
+    let qtyUnits = "10";
+    if (unitsMatch) {
+      qtyUnits = unitsMatch[1]!.replace(/[۰-۹]/g, (d) =>
+        String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)),
+      );
+    }
+    const quantityText = `${qtyUnits} units`;
+
     const englishTranslation = `
 Product Requirement: Commercial / Industrial Electric Water Heater (Storage Calorifier) with 500 Litres storage capacity. Heavy-duty construction with high-efficiency thermal insulation. Outer diameter strictly limited to maximum 85 cm (850 mm) to permit entry through standard mechanical room service doors. Destination: Dubai, United Arab Emirates.
-Technical & Compliance: Designed for 10 bar maximum working pressure (factory tested to >= 15 bar). Three-phase industrial electrical power configuration (380V - 415V, 50/60 Hz). Internal tank protection via high-grade vitreous enamel or 316L stainless steel with magnesium sacrificial anode. Mandatory CE certification, Pressure Equipment Directive (PED 2014/68/EU), and UAE G-Mark / MoIAT conformity. Local spare parts availability (heating elements, thermostat, pressure relief valve) and 5-year tank warranty.
-Commercial & Order Profile: Initial project batch of 10 to 50 units for commercial facility installation. Delivery terms ${incoterm}, including customs clearance and delivery to site in Dubai. Direct manufacturer or certified regional distributor preferred.
+Technical & Compliance: Designed for 10 bar maximum working pressure (factory tested to >= 15 bar). Three-phase industrial electrical power configuration (380V - 415V, 50/60 Hz). Internal tank protection via high-grade vitreous enamel or 316L stainless steel with magnesium sacrificial anode. Mandatory CE certification, Pressure Equipment Directive (PED 2014/68/EU), and UAE G-Mark / MoIAT conformity. Required installation support, local spare parts availability (heating elements, thermostat, pressure relief valve), and 5-year tank warranty. Official manufacturer website and verifiable sales contact desk (email, telephone).
+Commercial & Order Profile: Project batch of ${quantityText} for commercial facility installation. Delivery terms ${incoterm}, including customs clearance and delivery to site in Dubai. Direct manufacturer or certified regional distributor preferred.
 `.trim();
 
     const explicitRequirements: NormalizedRequirement[] = [
@@ -614,7 +643,25 @@ Commercial & Order Profile: Initial project batch of 10 to 50 units for commerci
         source_box: "technical_compliance",
         source_text_reference: intake.technical_compliance,
         normalized_value:
-          "CE mark, Pressure Equipment Directive (PED), UAE MoIAT conformity, 5-year tank warranty",
+          "CE mark, Pressure Equipment Directive (PED 2014/68/EU), and UAE MoIAT conformity",
+        requirement_level: "mandatory",
+        derivation_type: "explicit",
+      },
+      {
+        requirement_id: crypto.randomUUID(),
+        source_box: "technical_compliance",
+        source_text_reference: intake.technical_compliance,
+        normalized_value:
+          "Minimum 5-year tank warranty, installation support, and local spare parts availability",
+        requirement_level: "mandatory",
+        derivation_type: "explicit",
+      },
+      {
+        requirement_id: crypto.randomUUID(),
+        source_box: "technical_compliance",
+        source_text_reference: intake.technical_compliance,
+        normalized_value:
+          "Official manufacturer website and verifiable sales contact desk (email, telephone)",
         requirement_level: "mandatory",
         derivation_type: "explicit",
       },
@@ -623,6 +670,15 @@ Commercial & Order Profile: Initial project batch of 10 to 50 units for commerci
         source_box: "order_profile",
         source_text_reference: intake.order_profile,
         normalized_value: `${incoterm} terms for delivery in Dubai, UAE`,
+        requirement_level: "mandatory",
+        derivation_type: "explicit",
+      },
+      {
+        requirement_id: crypto.randomUUID(),
+        source_box: "order_profile",
+        source_text_reference: intake.order_profile,
+        normalized_value: quantityText,
+        unit: "units",
         requirement_level: "mandatory",
         derivation_type: "explicit",
       },
@@ -659,11 +715,13 @@ Commercial & Order Profile: Initial project batch of 10 to 50 units for commerci
         "Maximum outer diameter <= 85 cm",
         "CE mark and Pressure Equipment Directive (PED 2014/68/EU) conformity",
         "UAE MoIAT / G-Mark compliance",
+        "Minimum 5-year tank warranty, installation support, and local spare parts availability",
+        "Official manufacturer website and verifiable sales contact desk (email, telephone)",
         `${incoterm} delivery terms`,
+        `Order quantity: ${quantityText}`,
       ],
       preferred_requirements: [
-        "5-year tank warranty with authorized UAE service partner",
-        "Ready local availability of spare immersion heating elements",
+        "Direct manufacturer sourcing with authorized regional distributor support",
       ],
       excluded_requirements: [
         "Domestic residential single-phase water heaters",
@@ -675,7 +733,8 @@ Commercial & Order Profile: Initial project batch of 10 to 50 units for commerci
         "Tank material preference between heavy-gauge enameled carbon steel and 316L stainless steel",
       ],
       suggested_clarifications: [
-        "Confirm required heating recovery time (litres per hour at 45°C delta T)",
+        "Confirm whether future project phases will require expanded unit volumes (e.g. scaling up to 50 units in Phase 2).",
+        "Confirm required heating recovery time (litres per hour at 45°C delta T).",
       ],
       classification,
     };

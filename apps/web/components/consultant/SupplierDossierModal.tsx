@@ -51,9 +51,11 @@ export function SupplierDossierModal({
     supplier.legal_name.includes("[Illustrative]") ||
     supplier.candidate_id.startsWith("cand-v3-") ||
     supplier.candidate_id.startsWith("cand-demo-") ||
+    supplier.entity_basis === "synthetic_fixture" ||
+    supplier.verification_status === "illustrative" ||
     (Boolean(supplier.website) &&
-      (supplier.website.includes("matchbase.internal") ||
-        supplier.website.includes("example.internal")));
+      (supplier.website!.includes("matchbase.internal") ||
+        supplier.website!.includes("example.internal")));
   const isDirect = !isIllustrative && assessment.rank <= 4;
 
   return (
@@ -188,12 +190,12 @@ export function SupplierDossierModal({
                     </span>
                   ) : (
                     <a
-                      href={supplier.website}
+                      href={supplier.website ?? undefined}
                       target="_blank"
                       rel="noreferrer"
                       className="underline text-sky-600 hover:text-sky-800"
                     >
-                      {supplier.primary_domain}
+                      {supplier.primary_domain ?? "Official Website"}
                     </a>
                   )}
                 </dd>
@@ -221,15 +223,17 @@ export function SupplierDossierModal({
                 <dd className="col-span-2 font-mono text-slate-800">
                   {isIllustrative
                     ? "Not applicable — illustrative profile"
-                    : (supplier.contacts.sales_email ??
-                      `export@${supplier.primary_domain}`)}
+                    : (supplier.contacts?.sales_email ??
+                      (supplier.primary_domain
+                        ? `export@${supplier.primary_domain}`
+                        : "Not provided"))}
                 </dd>
 
                 <dt className="text-slate-500 font-medium">Phone:</dt>
                 <dd className="col-span-2 text-slate-800">
                   {isIllustrative
                     ? "Not applicable — illustrative profile"
-                    : (supplier.contacts.phone ?? "Official Corporate Desk")}
+                    : (supplier.contacts?.phone ?? "Official Corporate Desk")}
                 </dd>
 
                 <dt className="text-slate-500 font-medium">Verification:</dt>

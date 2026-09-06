@@ -183,8 +183,7 @@ export const BRAZIL_POULTRY_20_SUPPLIERS: readonly SupplierEntityV3[] =
     const rank = idx + 1;
     const candId = `cand-br-${String(rank).padStart(2, "0")}`;
     const entityId = `00000000-0000-4000-8000-${String(1000 + rank).padStart(12, "0")}`;
-    const sifNum = `SIF-ILLUS-${String(100 + rank * 7)}`;
-    const domainSlug = `illus-poultry-${String(rank).padStart(2, "0")}.matchbase.internal`;
+    const fixturePlantId = `FIXTURE-PLANT-${String(rank).padStart(3, "0")}`;
 
     const sfdaApproved = rank <= 8;
     const isCandidate1 = rank === 1;
@@ -231,7 +230,7 @@ export const BRAZIL_POULTRY_20_SUPPLIERS: readonly SupplierEntityV3[] =
       );
     } else if (!sfdaApproved) {
       limitingGaps.push(
-        `SFDA listing pending renewal: Establishment ${sifNum} holds MAPA SIF export registration but is awaiting SFDA bilateral audit reinstatement.`,
+        `Illustrative SFDA status pending: Facility ${fixturePlantId} is modeled as awaiting bilateral audit reinstatement.`,
       );
       requiredValidation.push(
         "Monitor SFDA foreign slaughterhouse portal for official re-listing prior to purchase order confirmation.",
@@ -248,28 +247,26 @@ export const BRAZIL_POULTRY_20_SUPPLIERS: readonly SupplierEntityV3[] =
       candidate_id: candId,
       legal_name: `${name} [Illustrative]`,
       trading_name: `${name.split(" ")[0]} Export Brazil [Illustrative]`,
-      brand_names: [`${name.split(" ")[0]} Griller`],
+      brand_names: [`${name.split(" ")[0]} Griller [Illustrative]`],
       aliases: [],
+      entity_basis: "synthetic_fixture",
+      verification_status: "illustrative",
+      evidence_basis: "illustrative_fixture",
+      fixture_entity_id: `FIXTURE-POULTRY-${String(rank).padStart(3, "0")}`,
       supplier_type: "manufacturer",
       manufacturer_status: "direct_manufacturer",
       country_of_registration: "Brazil",
-      headquarters_address: `Avenida Industrial ${rank * 100}, Paraná, Brazil (Demonstration Entity)`,
-      manufacturing_locations: [`${sifNum} (Paraná Slaughterhouse Plant)`],
-      website: `https://${domainSlug}`,
-      primary_domain: domainSlug,
-      identity_confidence: "high",
+      headquarters_address: "Illustrative location: Southern Brazil",
+      manufacturing_locations: [`${fixturePlantId} (Illustrative Facility)`],
+      website: null,
+      primary_domain: null,
+      identity_confidence: "not_assessed",
       identity_evidence_ids: ["ev-fixture-policy-01", "ev-mapa-sif-01"],
       contacts: {
-        verification_status: "unverified",
-        contact_evidence_ids: ["ev-fixture-policy-01"],
+        verification_status: "not_applicable",
+        contact_evidence_ids: [],
       },
-      digital_assets: [
-        {
-          asset_class: "demonstration fixture record",
-          url: `https://${domainSlug}`,
-          status: "inspected",
-        },
-      ],
+      digital_assets: [],
       offering: {
         product_name: "Frozen Whole Chicken Grade A",
         product_family: "Poultry Meat",
@@ -287,7 +284,7 @@ export const BRAZIL_POULTRY_20_SUPPLIERS: readonly SupplierEntityV3[] =
           "Retail packaging",
         ],
         country_of_origin: "Brazil",
-        manufacturing_site: `${sifNum} Industrial Plant`,
+        manufacturing_site: `${fixturePlantId} (Illustrative Plant)`,
         customization_support: true,
         private_label: true,
         sample_availability: "available",
@@ -300,10 +297,10 @@ export const BRAZIL_POULTRY_20_SUPPLIERS: readonly SupplierEntityV3[] =
         unit: "metric ton",
         incoterm: observedIncoterm,
         incoterm_location: "Jeddah Islamic Port",
-        moq: "1 container (27 MT)",
-        production_capacity: `${20000 + rank * 5000} MT/month`,
-        lead_time: `${30 + (rank % 4) * 3} days`,
-        commercial_confidence: "high",
+        moq: "Illustrative MOQ: 1 container (27 MT)",
+        production_capacity: `Illustrative capacity: ${20000 + rank * 5000} MT/month`,
+        lead_time: `Illustrative lead time: ${30 + (rank % 4) * 3} days`,
+        commercial_confidence: "not_assessed",
         price_validity: "2026-10-31",
         commercial_evidence_ids: ["ev-abpa-benchmark-01"],
       },
@@ -321,21 +318,18 @@ export const BRAZIL_POULTRY_20_SUPPLIERS: readonly SupplierEntityV3[] =
       certifications: [
         {
           certification_name: sfdaApproved
-            ? "SFDA Approved Foreign Slaughterhouse"
-            : "SFDA Re-listing Audit Pending",
-          issuer: "Saudi Food and Drug Authority",
-          certificate_number: sfdaApproved
-            ? `SFDA-BR-${rank + 100}`
-            : "SFDA-AUDIT-PENDING",
+            ? "Illustrative SFDA Requirement Outcome: Pass"
+            : "Illustrative SFDA Requirement Outcome: Pending",
+          issuer: "Illustrative scenario condition",
           status: sfdaApproved ? "active" : "conditional",
-          verification_status: "claimed",
+          verification_status: "illustrative",
           evidence_ids: ["ev-sfda-registry-01"],
         },
         {
-          certification_name: "Accredited Halal Slaughter Certification",
-          issuer: "FAMBRAS Halal Brazil",
+          certification_name: "Illustrative Halal Requirement Outcome: Pass",
+          issuer: "Illustrative scenario condition",
           status: "active",
-          verification_status: "claimed",
+          verification_status: "illustrative",
           evidence_ids: ["ev-halal-cert-01"],
         },
       ],
@@ -343,8 +337,8 @@ export const BRAZIL_POULTRY_20_SUPPLIERS: readonly SupplierEntityV3[] =
         rank,
         compatibility_score: score,
         fit_band: fitBand,
-        evidence_confidence: "high",
-        identity_confidence: "high",
+        evidence_confidence: "not_assessed",
+        identity_confidence: "not_assessed",
         data_completeness: 94 - (rank % 5) * 2,
         dimension_scores: {
           category_product_fit: sfdaApproved ? 95 : 85,
@@ -373,12 +367,12 @@ export const BRAZIL_POULTRY_20_SUPPLIERS: readonly SupplierEntityV3[] =
         ],
         positive_drivers: sfdaApproved
           ? [
-              `Active SFDA foreign establishment approval with valid SIF registration (${sifNum})`,
-              "Proven production capacity and export cold-chain infrastructure",
+              "Illustrative SFDA constraint outcome: Pass; illustrative sanitary-registration scenario: Pass",
+              `Illustrative capacity: ${20000 + rank * 5000} MT/month under illustrative scenario`,
             ]
           : [
-              `High industrial capacity (${20000 + rank * 5000} MT/month) under federal SIF inspection`,
-              "Valid accredited Halal certification",
+              `Illustrative capacity: ${20000 + rank * 5000} MT/month under illustrative scenario`,
+              "Illustrative Halal constraint outcome: Pass",
             ],
         limiting_gaps: limitingGaps,
         risk_flags: sfdaApproved
@@ -388,9 +382,9 @@ export const BRAZIL_POULTRY_20_SUPPLIERS: readonly SupplierEntityV3[] =
         required_validation: requiredValidation,
         recommended_next_action: sfdaApproved
           ? isCandidate1
-            ? "Request revised commercial quotation on CFR basis"
-            : "Initiate formal RFQ wave"
-          : "Hold commercial negotiations until SFDA re-listing verification is completed",
+            ? "Illustrative next action: In a live result, request revised quotation on CFR basis"
+            : "Illustrative next action: In a live result, verify the counterparty and request an RFQ."
+          : "Illustrative next action: In a live result, hold negotiations until SFDA re-listing is verified.",
       },
     };
   });
@@ -496,16 +490,18 @@ export const GOLDEN_SCENARIO_V3_01: ConsultantResearchOutputV3 = {
     headline:
       "20 Illustrative Candidate Profiles Synthesized for Brazil-Saudi Trade Corridor",
     direct_answer:
-      "Demonstration dataset providing 20 illustrative candidate entities structured under MatchBASE Policy A. Top-tier candidates satisfy active SFDA foreign establishment listing and accredited Halal certification. Lineage tracing distinguishes the buyer approved CFR Jeddah requirement from observed supplier CIF terms.",
+      "This demonstration contains 20 synthetic profiles configured to exercise MatchBASE scoring, progressive disclosure, compliance-cap behavior, and requested-vs-observed trade-term comparison.",
     key_findings: [
-      "Demonstration mode: 20 illustrative profiles generated for progressive disclosure evaluation.",
+      "Demonstration completeness: Complete for UX and workflow validation.",
+      "External market coverage: Not assessed.",
+      "External evidence confidence: Not assessed.",
       "Commercial lineage: Buyer approved CFR Jeddah; Rank 1 supplier observed basis is CIF Jeddah (term mismatch flagged).",
       "Compliance cap enforced: Candidates with pending SFDA renewal are strictly capped at compatibility score <= 60.",
       "Exact quantity: Request preserved as 4 × 40-foot reefer containers without unapproved range conversion.",
     ],
     candidate_count: 20,
-    confidence_assessment: "high",
-    research_coverage_status: "sufficient",
+    confidence_assessment: "not_assessed",
+    research_coverage_status: "not_assessed",
   },
   target_candidates_count: 20,
   total_candidates_found: 20,
@@ -640,32 +636,27 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
     supplier_entity_id: "00000000-0000-4000-8000-000000002001",
     candidate_id: "cand-wh-01",
     legal_name: "Caloria Thermal Systems Europe S.p.A. [Illustrative]",
-    trading_name: "Caloria Middle East",
-    brand_names: ["Caloria", "ThermorMax"],
-    aliases: ["Caloria Industrial Heating"],
+    trading_name: "Caloria Middle East [Illustrative]",
+    brand_names: ["Caloria [Illustrative]", "ThermorMax [Illustrative]"],
+    aliases: [],
+    entity_basis: "synthetic_fixture",
+    verification_status: "illustrative",
+    evidence_basis: "illustrative_fixture",
+    fixture_entity_id: "FIXTURE-WH-001",
     supplier_type: "manufacturer",
     manufacturer_status: "direct_manufacturer",
     country_of_registration: "Italy",
-    headquarters_address: "Via dell'Industria 45, Bergamo, Italy",
-    manufacturing_locations: [
-      "Bergamo Plant, Italy",
-      "Dubai Regional Hub, UAE",
-    ],
-    website: "https://illus-caloria.matchbase.internal",
-    primary_domain: "illus-caloria.matchbase.internal",
-    identity_confidence: "high",
+    headquarters_address: "Illustrative location: Bergamo, Italy",
+    manufacturing_locations: ["FIXTURE-WH-PLANT-001 (Illustrative Facility)"],
+    website: null,
+    primary_domain: null,
+    identity_confidence: "not_assessed",
     identity_evidence_ids: ["ev-wh-spec-01"],
     contacts: {
-      verification_status: "unverified",
-      contact_evidence_ids: ["ev-wh-spec-01"],
+      verification_status: "not_applicable",
+      contact_evidence_ids: [],
     },
-    digital_assets: [
-      {
-        asset_class: "demonstration fixture website",
-        url: "https://illus-caloria.matchbase.internal",
-        status: "inspected",
-      },
-    ],
+    digital_assets: [],
     offering: {
       product_name: "Commercial Electric Storage Calorifier 500L",
       product_family: "Industrial Water Heating Equipment",
@@ -682,7 +673,7 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
       },
       use_cases: ["Hotels", "Commercial Laundry", "Central Domestic Hot Water"],
       country_of_origin: "Italy",
-      manufacturing_site: "Bergamo Industrial Plant (ISO 9001 / PED Certified)",
+      manufacturing_site: "FIXTURE-WH-PLANT-001 (Illustrative Plant)",
       customization_support: true,
       private_label: false,
       sample_availability: "available",
@@ -695,10 +686,10 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
       unit: "unit",
       incoterm: "DDP",
       incoterm_location: "Dubai Industrial Area, UAE",
-      moq: "1 unit",
-      production_capacity: "1,500 units/month",
-      lead_time: "14 days from regional warehouse",
-      commercial_confidence: "high",
+      moq: "Illustrative MOQ: 1 unit",
+      production_capacity: "Illustrative capacity: 1,500 units/month",
+      lead_time: "Illustrative lead time: 14 days",
+      commercial_confidence: "not_assessed",
       price_validity: "2026-10-31",
       commercial_evidence_ids: ["ev-wh-spec-01"],
     },
@@ -716,18 +707,18 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
     certifications: [
       {
         certification_name: "CE Pressure Equipment Directive (PED 2014/68/EU)",
-        issuer: "TUV Rheinland",
-        certificate_number: "PED-CE-0035-2022",
+        issuer: "Illustrative scenario condition",
+        certificate_number: null,
         status: "active",
-        verification_status: "claimed",
+        verification_status: "illustrative",
         evidence_ids: ["ev-wh-ped-01"],
       },
       {
         certification_name: "UAE MoIAT / G-Mark Conformity",
-        issuer: "Ministry of Industry and Advanced Technology, UAE",
-        certificate_number: "MoIAT-EQ-2024-8812",
+        issuer: "Illustrative scenario condition",
+        certificate_number: null,
         status: "active",
-        verification_status: "claimed",
+        verification_status: "illustrative",
         evidence_ids: ["ev-wh-moiat-01"],
       },
     ],
@@ -735,8 +726,8 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
       rank: 1,
       compatibility_score: 95,
       fit_band: "Strong Fit",
-      evidence_confidence: "high",
-      identity_confidence: "high",
+      evidence_confidence: "not_assessed",
+      identity_confidence: "not_assessed",
       data_completeness: 97,
       dimension_scores: {
         category_product_fit: 98,
@@ -790,36 +781,34 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
         "Confirm on-site electrical panel isolator ratings prior to hookup",
       ],
       recommended_next_action:
-        "Issue formal RFQ for exact 10-unit project batch on DDP Dubai terms",
+        "Illustrative next action: In a live result, verify the counterparty and request an RFQ.",
     },
   },
   {
     supplier_entity_id: "00000000-0000-4000-8000-000000002002",
     candidate_id: "cand-wh-02",
     legal_name: "ThermaVessel Industrial SAS [Illustrative]",
-    trading_name: "ThermaVessel Gulf",
-    brand_names: ["ThermaVessel"],
-    aliases: ["ThermaVessel France"],
+    trading_name: "ThermaVessel Gulf [Illustrative]",
+    brand_names: ["ThermaVessel [Illustrative]"],
+    aliases: [],
+    entity_basis: "synthetic_fixture",
+    verification_status: "illustrative",
+    evidence_basis: "illustrative_fixture",
+    fixture_entity_id: "FIXTURE-WH-002",
     supplier_type: "manufacturer",
     manufacturer_status: "direct_manufacturer",
     country_of_registration: "France",
-    headquarters_address: "Zone Industrielle Nord, Lyon, France",
-    manufacturing_locations: ["Lyon, France"],
-    website: "https://illus-thermavessel.matchbase.internal",
-    primary_domain: "illus-thermavessel.matchbase.internal",
-    identity_confidence: "high",
+    headquarters_address: "Illustrative location: Lyon, France",
+    manufacturing_locations: ["FIXTURE-WH-PLANT-002 (Illustrative Facility)"],
+    website: null,
+    primary_domain: null,
+    identity_confidence: "not_assessed",
     identity_evidence_ids: ["ev-wh-spec-01"],
     contacts: {
-      verification_status: "unverified",
-      contact_evidence_ids: ["ev-wh-spec-01"],
+      verification_status: "not_applicable",
+      contact_evidence_ids: [],
     },
-    digital_assets: [
-      {
-        asset_class: "demonstration fixture website",
-        url: "https://illus-thermavessel.matchbase.internal",
-        status: "inspected",
-      },
-    ],
+    digital_assets: [],
     offering: {
       product_name: "Maxi-Calor Industrial Electric Water Heater 500L",
       product_family: "Industrial Water Heating Equipment",
@@ -836,7 +825,7 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
       },
       use_cases: ["Commercial Buildings", "Gyms & Spas", "Food Processing"],
       country_of_origin: "France",
-      manufacturing_site: "Lyon Industrial Plant (ISO 9001, CE Certified)",
+      manufacturing_site: "FIXTURE-WH-PLANT-002 (Illustrative Plant)",
       customization_support: true,
       private_label: false,
       sample_availability: "available",
@@ -849,10 +838,10 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
       unit: "unit",
       incoterm: "DDP",
       incoterm_location: "Dubai Site Delivery",
-      moq: "1 unit",
-      production_capacity: "2,000 units/month",
-      lead_time: "10 days from Dubai free-zone stock",
-      commercial_confidence: "high",
+      moq: "Illustrative MOQ: 1 unit",
+      production_capacity: "Illustrative capacity: 2,000 units/month",
+      lead_time: "Illustrative lead time: 10 days",
+      commercial_confidence: "not_assessed",
       price_validity: "2026-11-30",
       commercial_evidence_ids: ["ev-wh-spec-01"],
     },
@@ -869,18 +858,18 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
     certifications: [
       {
         certification_name: "CE Pressure Equipment Directive (PED)",
-        issuer: "Bureau Veritas France",
-        certificate_number: "BV-PED-2023-9014",
+        issuer: "Illustrative scenario condition",
+        certificate_number: null,
         status: "active",
-        verification_status: "claimed",
+        verification_status: "illustrative",
         evidence_ids: ["ev-wh-ped-01"],
       },
       {
         certification_name: "UAE MoIAT / G-Mark Conformity",
-        issuer: "Ministry of Industry and Advanced Technology, UAE",
-        certificate_number: "MoIAT-EQ-2024-9104",
+        issuer: "Illustrative scenario condition",
+        certificate_number: null,
         status: "active",
-        verification_status: "claimed",
+        verification_status: "illustrative",
         evidence_ids: ["ev-wh-moiat-01"],
       },
     ],
@@ -888,8 +877,8 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
       rank: 2,
       compatibility_score: 93,
       fit_band: "Strong Fit",
-      evidence_confidence: "high",
-      identity_confidence: "high",
+      evidence_confidence: "not_assessed",
+      identity_confidence: "not_assessed",
       data_completeness: 96,
       dimension_scores: {
         category_product_fit: 96,
@@ -942,36 +931,34 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
         "Confirm Building Management System (BMS) thermostat interface",
       ],
       recommended_next_action:
-        "Request technical data sheet for 20kW electrical configuration",
+        "Illustrative next action: In a live result, verify the counterparty and request an RFQ.",
     },
   },
   {
     supplier_entity_id: "00000000-0000-4000-8000-000000002003",
     candidate_id: "cand-wh-03",
     legal_name: "GulfCalor HVAC Manufacturing LLC [Illustrative]",
-    trading_name: "GulfCalor Dubai",
-    brand_names: ["GulfCalor"],
-    aliases: ["Gulf Calorifier Systems"],
+    trading_name: "GulfCalor Dubai [Illustrative]",
+    brand_names: ["GulfCalor [Illustrative]"],
+    aliases: [],
+    entity_basis: "synthetic_fixture",
+    verification_status: "illustrative",
+    evidence_basis: "illustrative_fixture",
+    fixture_entity_id: "FIXTURE-WH-003",
     supplier_type: "manufacturer",
     manufacturer_status: "direct_manufacturer",
     country_of_registration: "United Arab Emirates",
-    headquarters_address: "Industrial Area 1, Jebel Ali, Dubai, UAE",
-    manufacturing_locations: ["Jebel Ali Industrial Facility, Dubai, UAE"],
-    website: "https://illus-gulfcalor.matchbase.internal",
-    primary_domain: "illus-gulfcalor.matchbase.internal",
-    identity_confidence: "high",
+    headquarters_address: "Illustrative location: Dubai, UAE",
+    manufacturing_locations: ["FIXTURE-WH-PLANT-003 (Illustrative Facility)"],
+    website: null,
+    primary_domain: null,
+    identity_confidence: "not_assessed",
     identity_evidence_ids: ["ev-wh-spec-01"],
     contacts: {
-      verification_status: "unverified",
-      contact_evidence_ids: ["ev-wh-spec-01"],
+      verification_status: "not_applicable",
+      contact_evidence_ids: [],
     },
-    digital_assets: [
-      {
-        asset_class: "demonstration fixture website",
-        url: "https://illus-gulfcalor.matchbase.internal",
-        status: "inspected",
-      },
-    ],
+    digital_assets: [],
     offering: {
       product_name: "GC-500 Heavy Industrial Commercial Calorifier",
       product_family: "Industrial Water Heating Equipment",
@@ -988,7 +975,7 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
       },
       use_cases: ["Commercial Kitchens", "Hotels", "Healthcare Facilities"],
       country_of_origin: "United Arab Emirates",
-      manufacturing_site: "Jebel Ali Manufacturing Plant, Dubai",
+      manufacturing_site: "FIXTURE-WH-PLANT-003 (Illustrative Plant)",
       customization_support: true,
       private_label: true,
       sample_availability: "available",
@@ -1001,10 +988,10 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
       unit: "unit",
       incoterm: "DDP",
       incoterm_location: "Dubai Contractor Site",
-      moq: "1 unit",
-      production_capacity: "800 units/month",
-      lead_time: "5 days",
-      commercial_confidence: "high",
+      moq: "Illustrative MOQ: 1 unit",
+      production_capacity: "Illustrative capacity: 800 units/month",
+      lead_time: "Illustrative lead time: 5 days",
+      commercial_confidence: "not_assessed",
       price_validity: "2026-10-15",
       commercial_evidence_ids: ["ev-wh-spec-01"],
     },
@@ -1021,18 +1008,18 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
     certifications: [
       {
         certification_name: "CE Pressure Equipment Directive (PED 2014/68/EU)",
-        issuer: "VDE Testing Institute",
-        certificate_number: "VDE-PED-40019",
+        issuer: "Illustrative scenario condition",
+        certificate_number: null,
         status: "active",
-        verification_status: "claimed",
+        verification_status: "illustrative",
         evidence_ids: ["ev-wh-ped-01"],
       },
       {
         certification_name: "UAE MoIAT / ECAS Conformity Certificate",
-        issuer: "Ministry of Industry and Advanced Technology, UAE",
-        certificate_number: "MoIAT-EQ-2024-7741",
+        issuer: "Illustrative scenario condition",
+        certificate_number: null,
         status: "active",
-        verification_status: "claimed",
+        verification_status: "illustrative",
         evidence_ids: ["ev-wh-moiat-01"],
       },
     ],
@@ -1040,8 +1027,8 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
       rank: 3,
       compatibility_score: 91,
       fit_band: "Strong Fit",
-      evidence_confidence: "high",
-      identity_confidence: "high",
+      evidence_confidence: "not_assessed",
+      identity_confidence: "not_assessed",
       data_completeness: 95,
       dimension_scores: {
         category_product_fit: 95,
@@ -1095,7 +1082,7 @@ export const GOLDEN_SCENARIO_V3_02_SUPPLIERS: readonly SupplierEntityV3[] = [
         "Inspect factory hydrostatic test record for 10-unit batch",
       ],
       recommended_next_action:
-        "Schedule factory inspection visit at Jebel Ali facility",
+        "Illustrative next action: In a live result, verify the counterparty and request an RFQ.",
     },
   },
 ];
@@ -1228,8 +1215,8 @@ export const GOLDEN_SCENARIO_V3_02: ConsultantResearchOutputV3 = {
       "Request B quantity preserved exactly as 10 units without unapproved expansion.",
     ],
     candidate_count: 3,
-    confidence_assessment: "high",
-    research_coverage_status: "sufficient",
+    confidence_assessment: "not_assessed",
+    research_coverage_status: "not_assessed",
   },
   target_candidates_count: 20,
   total_candidates_found: 3,
@@ -1368,8 +1355,8 @@ export const GOLDEN_SCENARIO_V3_03: ConsultantResearchOutputV3 = {
       "Constraint relaxation guidance provided below to enable viable candidate discovery.",
     ],
     candidate_count: 0,
-    confidence_assessment: "high",
-    research_coverage_status: "sufficient",
+    confidence_assessment: "not_assessed",
+    research_coverage_status: "not_assessed",
   },
   target_candidates_count: 20,
   total_candidates_found: 0,
@@ -1491,23 +1478,27 @@ export const V3_04_CLAIMS: readonly ClaimV3[] = [
 
 export const GOLDEN_SCENARIO_V3_04_SUPPLIERS: readonly SupplierEntityV3[] = [
   "AquaPure Industrial Systems GmbH [Illustrative]",
-  "Hydranautics Process Equipment S.L. [Illustrative]",
+  "Aquapore Synthetic Membrane Systems S.L. [Illustrative]",
   "Oasis Water Technologies Ltd. [Illustrative]",
   "Membrana Filtration Systems S.p.A. [Illustrative]",
 ].map((name, idx) => {
   const rank = idx + 1;
   const candId = `cand-ro-${String(rank).padStart(2, "0")}`;
   const entityId = `00000000-0000-4000-8000-${String(4000 + rank).padStart(12, "0")}`;
-  const domainSlug = `illus-ro-${String(rank).padStart(2, "0")}.matchbase.internal`;
+  const fixturePlantId = `FIXTURE-RO-PLANT-${String(rank).padStart(3, "0")}`;
   const brandName = name.split(" ")[0] ?? name;
 
   return {
     supplier_entity_id: entityId,
     candidate_id: candId,
     legal_name: name,
-    trading_name: `${brandName} Water Systems`,
-    brand_names: [brandName],
+    trading_name: `${brandName} Water Systems [Illustrative]`,
+    brand_names: [`${brandName} [Illustrative]`],
     aliases: [],
+    entity_basis: "synthetic_fixture",
+    verification_status: "illustrative",
+    evidence_basis: "illustrative_fixture",
+    fixture_entity_id: `FIXTURE-RO-${String(rank).padStart(3, "0")}`,
     supplier_type: "manufacturer",
     manufacturer_status: "direct_manufacturer",
     country_of_registration:
@@ -1518,23 +1509,17 @@ export const GOLDEN_SCENARIO_V3_04_SUPPLIERS: readonly SupplierEntityV3[] = [
           : idx === 2
             ? "United Kingdom"
             : "Italy",
-    headquarters_address: `Water Processing Industrial Park ${rank * 10}, Europe`,
-    manufacturing_locations: [`RO Plant ${rank}, Europe`],
-    website: `https://${domainSlug}`,
-    primary_domain: domainSlug,
-    identity_confidence: "high",
+    headquarters_address: "Illustrative location: Europe",
+    manufacturing_locations: [`${fixturePlantId} (Illustrative Facility)`],
+    website: null,
+    primary_domain: null,
+    identity_confidence: "not_assessed",
     identity_evidence_ids: ["ev-ro-spec-01"],
     contacts: {
-      verification_status: "unverified",
-      contact_evidence_ids: ["ev-ro-spec-01"],
+      verification_status: "not_applicable",
+      contact_evidence_ids: [],
     },
-    digital_assets: [
-      {
-        asset_class: "demonstration fixture website",
-        url: `https://${domainSlug}`,
-        status: "inspected",
-      },
-    ],
+    digital_assets: [],
     offering: {
       product_name:
         "Commercial Brackish Water Reverse Osmosis System (50 m3/day)",
@@ -1552,7 +1537,7 @@ export const GOLDEN_SCENARIO_V3_04_SUPPLIERS: readonly SupplierEntityV3[] = [
         "Potable Water Supply",
       ],
       country_of_origin: idx === 0 ? "Germany" : "EU",
-      manufacturing_site: `European Assembly Center ${rank}`,
+      manufacturing_site: `${fixturePlantId} (Illustrative Assembly Center)`,
       customization_support: true,
       private_label: false,
       sample_availability: "unavailable",
@@ -1565,10 +1550,10 @@ export const GOLDEN_SCENARIO_V3_04_SUPPLIERS: readonly SupplierEntityV3[] = [
       unit: "system",
       incoterm: "CIF",
       incoterm_location: "Jeddah Islamic Port",
-      moq: "1 system",
-      production_capacity: "30 systems/month",
-      lead_time: "45 days",
-      commercial_confidence: "medium",
+      moq: "Illustrative MOQ: 1 system",
+      production_capacity: "Illustrative capacity: 30 systems/month",
+      lead_time: "Illustrative lead time: 45 days",
+      commercial_confidence: "not_assessed",
       price_validity: "2026-10-31",
       commercial_evidence_ids: ["ev-ro-spec-01"],
     },
@@ -1585,11 +1570,10 @@ export const GOLDEN_SCENARIO_V3_04_SUPPLIERS: readonly SupplierEntityV3[] = [
     },
     certifications: [
       {
-        certification_name: "WQA Certified Industrial Water Filtration",
-        issuer: "Water Quality Association",
-        certificate_number: `WQA-RO-2024-${rank * 100}`,
+        certification_name: "Illustrative WQA Requirement Outcome: Pass",
+        issuer: "Illustrative scenario condition",
         status: "active",
-        verification_status: "claimed",
+        verification_status: "illustrative",
         evidence_ids: ["ev-ro-wqa-01"],
       },
     ],
@@ -1597,8 +1581,8 @@ export const GOLDEN_SCENARIO_V3_04_SUPPLIERS: readonly SupplierEntityV3[] = [
       rank,
       compatibility_score: 84 - idx * 3,
       fit_band: "Strong Fit",
-      evidence_confidence: "medium",
-      identity_confidence: "high",
+      evidence_confidence: "not_assessed",
+      identity_confidence: "not_assessed",
       data_completeness: 92,
       dimension_scores: {
         category_product_fit: 90,
@@ -1626,8 +1610,8 @@ export const GOLDEN_SCENARIO_V3_04_SUPPLIERS: readonly SupplierEntityV3[] = [
         },
       ],
       positive_drivers: [
-        "High salt rejection (>99.2%) and energy-recovery pump configuration",
-        "Pre-commissioned modular skid reduces on-site installation time",
+        "Illustrative capacity: High salt rejection (>99.2%) and energy-recovery pump configuration",
+        "Pre-commissioned modular skid reduces on-site installation time under illustrative scenario",
       ],
       limiting_gaps: [
         "Stream 2 (OpenAI) timed out before corporate registry cross-referencing completed",
@@ -1640,7 +1624,7 @@ export const GOLDEN_SCENARIO_V3_04_SUPPLIERS: readonly SupplierEntityV3[] = [
         "Confirm raw water TDS chemical analysis against membrane limits",
       ],
       recommended_next_action:
-        "Execute Stream 2 resumption or proceed with Stream 1 candidate shortlist",
+        "Illustrative next action: In a live result, execute Stream 2 resumption or proceed with candidate shortlist",
     },
   };
 });

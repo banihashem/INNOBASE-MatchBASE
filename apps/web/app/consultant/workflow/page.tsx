@@ -84,11 +84,28 @@ export default function ConsultantWorkflowPage() {
   const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
   const [incompleteSessions, setIncompleteSessions] = useState<any[]>([]);
   const [activeDraftSession, setActiveDraftSession] = useState<any>(null);
-  const [draftId, setDraftId] = useState<string>(() =>
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : "draft-" + Date.now(),
-  );
+  const [draftId, setDraftId] = useState<string>("");
+  const [draftVersion, setDraftVersion] = useState<number>(1);
+  const [coherenceError, setCoherenceError] = useState<{
+    code: string;
+    message: string;
+    conflicts?: Array<{
+      fields: string[];
+      product_families: string[];
+      explanation: string;
+    }>;
+    recoverable?: boolean;
+  } | null>(null);
+  const [conflictState, setConflictState] = useState<{
+    current_version: number;
+    submitted_version: number;
+    unsaved_data: {
+      productRequirement: string;
+      technicalCompliance: string;
+      orderProfile: string;
+    };
+  } | null>(null);
+  const coherenceSummaryRef = useRef<HTMLDivElement | null>(null);
 
   // Session verification & purge old localStorage
   useEffect(() => {
@@ -127,21 +144,32 @@ export default function ConsultantWorkflowPage() {
       .finally(() => setSessionLoading(false));
   }, []);
 
-  // Check URL params for run_id or action=resume
+  // Check URL params for run_id, draft_id or action=resume
   useEffect(() => {
     if (typeof window === "undefined") return;
     const searchParams = new URLSearchParams(window.location.search);
     const urlRunId = searchParams.get("run_id");
+    const urlDraftId = searchParams.get("draft_id");
     const action = searchParams.get("action");
 
     if (urlRunId && !runId) {
       void loadExistingSession(urlRunId);
+    } else if (urlDraftId) {
+      void loadExistingDraft(urlDraftId);
     } else if (action === "resume") {
       void handleOpenResumeModal();
+    } else {
+      // Check if current tab has an active draft in sessionStorage
+      const storedDraftId = sessionStorage.getItem("matchbase_active_draft_id");
+      if (storedDraftId) {
+        void loadExistingDraft(storedDraftId);
+      } else {
+        void handleCreateNewDraft();
+      }
     }
   }, []);
 
-  // Server-side debounced draft auto-save
+  // Server-side debounced draft auto-save with optimistic concurrency
   useEffect(() => {
     if (
       !userSession ||
@@ -153,6 +181,8 @@ export default function ConsultantWorkflowPage() {
       setDraftStatus("idle");
       return;
     }
+    if (!draftId) return;
+
     setDraftStatus("saving");
     const timer = setTimeout(() => {
       void fetch("/api/v1/consultant/workflow", {
@@ -161,6 +191,8 @@ export default function ConsultantWorkflowPage() {
         body: JSON.stringify({
           action: "save_draft",
           draft_id: draftId,
+          draft_version: draftVersion,
+          expected_version: draftVersion,
           draft_data: {
             productRequirement,
             technicalCompliance,
@@ -169,9 +201,31 @@ export default function ConsultantWorkflowPage() {
           },
         }),
       })
-        .then((res) => {
-          if (res.ok) setDraftStatus("saved");
-          else setDraftStatus("idle");
+        .then(async (res) => {
+          if (res.status === 409) {
+            const errData = await res.json();
+            setDraftStatus("idle");
+            setConflictState({
+              current_version:
+                errData.error?.current_version ?? draftVersion + 1,
+              submitted_version: draftVersion,
+              unsaved_data: {
+                productRequirement,
+                technicalCompliance,
+                orderProfile,
+              },
+            });
+            return;
+          }
+          if (res.ok) {
+            const data = await res.json();
+            if (data.draft_version) {
+              setDraftVersion(data.draft_version);
+            }
+            setDraftStatus("saved");
+          } else {
+            setDraftStatus("idle");
+          }
         })
         .catch(() => setDraftStatus("idle"));
     }, 800);
@@ -182,6 +236,7 @@ export default function ConsultantWorkflowPage() {
     orderProfile,
     runId,
     draftId,
+    draftVersion,
     userSession,
   ]);
 
@@ -251,9 +306,90 @@ export default function ConsultantWorkflowPage() {
       setTechnicalCompliance(draft.draft_data.technicalCompliance ?? "");
       setOrderProfile(draft.draft_data.orderProfile ?? "");
       setDraftId(draft.draft_id);
+      setDraftVersion(draft.draft_version ?? 1);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("matchbase_active_draft_id", draft.draft_id);
+        window.history.replaceState(
+          {},
+          "",
+          `/consultant/workflow?draft_id=${draft.draft_id}`,
+        );
+      }
       setIsResumeModalOpen(false);
       triggerToast("Resumed server-saved draft.");
     }
+  }
+
+  async function handleCreateNewDraft() {
+    try {
+      const res = await fetch("/api/v1/consultant/workflow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create_draft" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.draft_id) {
+          setDraftId(data.draft_id);
+          setDraftVersion(data.draft_version ?? 1);
+          sessionStorage.setItem("matchbase_active_draft_id", data.draft_id);
+          window.history.replaceState(
+            {},
+            "",
+            `/consultant/workflow?draft_id=${data.draft_id}`,
+          );
+          return;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to create server draft:", e);
+    }
+    const fallbackId =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : "draft-" + Date.now();
+    setDraftId(fallbackId);
+    setDraftVersion(1);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("matchbase_active_draft_id", fallbackId);
+      window.history.replaceState(
+        {},
+        "",
+        `/consultant/workflow?draft_id=${fallbackId}`,
+      );
+    }
+  }
+
+  async function loadExistingDraft(targetDraftId: string) {
+    try {
+      const res = await fetch(
+        `/api/v1/consultant/workflow?draft_id=${encodeURIComponent(targetDraftId)}`,
+        { cache: "no-store" },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.draft) {
+          const d = data.draft;
+          setDraftId(d.draft_id);
+          setDraftVersion(d.draft_version ?? 1);
+          if (d.draft_data) {
+            setProductRequirement(d.draft_data.productRequirement ?? "");
+            setTechnicalCompliance(d.draft_data.technicalCompliance ?? "");
+            setOrderProfile(d.draft_data.orderProfile ?? "");
+          }
+          sessionStorage.setItem("matchbase_active_draft_id", d.draft_id);
+          window.history.replaceState(
+            {},
+            "",
+            `/consultant/workflow?draft_id=${d.draft_id}`,
+          );
+          return;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load draft:", err);
+    }
+    await handleCreateNewDraft();
   }
 
   async function handleAbandonDraft(idToAbandon: string) {
@@ -330,7 +466,7 @@ export default function ConsultantWorkflowPage() {
     }
   }
 
-  function handleStartNew() {
+  async function handleStartNew() {
     setRunId(null);
     setWorkflowState("intake_draft");
     setProductRequirement("");
@@ -342,12 +478,9 @@ export default function ConsultantWorkflowPage() {
     setOutput(null);
     setRevealedCount(5);
     setDraftStatus("idle");
-    setDraftId(
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : "draft-" + Date.now(),
-    );
-    window.history.replaceState({}, "", "/consultant/workflow?mode=new");
+    setCoherenceError(null);
+    setConflictState(null);
+    await handleCreateNewDraft();
     triggerToast("Started new blank sourcing workflow.");
   }
 
@@ -357,6 +490,7 @@ export default function ConsultantWorkflowPage() {
     setProductRequirement(example.product_requirement);
     setTechnicalCompliance(example.technical_compliance);
     setOrderProfile(example.order_profile);
+    setCoherenceError(null);
     triggerToast(`Loaded ${example.label}`);
   }
 
@@ -364,18 +498,39 @@ export default function ConsultantWorkflowPage() {
   async function handleSubmitIntake(e: React.FormEvent) {
     e.preventDefault();
     setIsLoading(true);
+    setCoherenceError(null);
     try {
       const res = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "submit_intake",
+          draft_id: draftId,
           product_requirement: productRequirement,
           technical_compliance: technicalCompliance,
           order_profile: orderProfile,
         }),
       });
       const data = await res.json();
+      if (res.status === 422 || data.code === "MB-422-COHERENCE") {
+        setCoherenceError({
+          code: data.code || data.error?.code || "MB-422-COHERENCE",
+          message:
+            data.message ||
+            data.error?.message ||
+            "The request contains materially conflicting product requirements.",
+          conflicts: data.conflicts || data.error?.conflicts || [],
+          recoverable: true,
+        });
+        setTimeout(() => {
+          coherenceSummaryRef.current?.focus();
+          coherenceSummaryRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }, 50);
+        return;
+      }
       if (data.success && data.session) {
         setRunId(data.session.run_id);
         setWorkflowState(data.session.state);
@@ -385,6 +540,7 @@ export default function ConsultantWorkflowPage() {
         setAdvisoryContext(data.session.step2_advisory);
         setStep3Prompt(data.session.step3_deep_prompt?.prompt_text ?? "");
         setDraftStatus("idle");
+        setCoherenceError(null);
         window.history.replaceState(
           {},
           "",
@@ -722,230 +878,344 @@ export default function ConsultantWorkflowPage() {
             </div>
           </div>
 
-          <form onSubmit={handleSubmitIntake} className="space-y-6">
-            {/* Box 1: Product Requirement */}
-            <div className="relative">
-              <div className="flex items-center justify-between mb-1.5">
-                <label
-                  htmlFor="input-box-1"
-                  className="text-sm font-semibold text-slate-200"
-                >
-                  Box 1: Product Requirement (Specification, Grade, Dimensions,
-                  Form)
-                </label>
-                <button
-                  ref={popoverBtnRef1}
-                  type="button"
-                  id="help-btn-1"
-                  aria-controls="help-popover-1"
-                  aria-expanded={showPopover1}
-                  onClick={() => setShowPopover1(!showPopover1)}
-                  className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 focus:outline-none focus:underline"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    width={16}
-                    height={16}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+          {(() => {
+            const isBox1Conflicted = coherenceError?.conflicts?.some((c) =>
+              c.fields.some((f) => f.includes("product_requirement")),
+            );
+            const isBox2Conflicted = coherenceError?.conflicts?.some((c) =>
+              c.fields.some(
+                (f) => f.includes("technical") || f.includes("compliance"),
+              ),
+            );
+            const isBox3Conflicted = coherenceError?.conflicts?.some((c) =>
+              c.fields.some(
+                (f) => f.includes("order") || f.includes("profile"),
+              ),
+            );
+
+            return (
+              <form onSubmit={handleSubmitIntake} className="space-y-6">
+                {coherenceError && (
+                  <div
+                    id="coherence-error-summary"
+                    ref={coherenceSummaryRef}
+                    tabIndex={-1}
+                    role="alert"
+                    aria-live="assertive"
+                    className="p-4 rounded-lg bg-rose-950/80 border-2 border-rose-600 text-rose-100 shadow-xl focus:outline-none focus:ring-2 focus:ring-rose-400"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  {showPopover1 ? "Hide Help" : "Help & Guidance"}
-                </button>
-              </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-rose-400 text-xl font-bold">
+                          ⚠️
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-bold text-rose-200">
+                              Specification Coherence Conflict (
+                              {coherenceError.code})
+                            </h3>
+                            <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-rose-900/80 text-rose-300 border border-rose-700">
+                              Action Required
+                            </span>
+                          </div>
+                          <p className="text-xs text-rose-200/90 mt-1">
+                            {coherenceError.message}
+                          </p>
 
-              {showPopover1 && (
-                <div
-                  id="help-popover-1"
-                  role="region"
-                  aria-labelledby="help-btn-1"
-                  className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150"
-                >
-                  <strong>Guidance:</strong> Specify exact product attributes:
-                  dimensions, capacity, materials, grades, and packaging
-                  configurations. Avoid commercial terms or prices here.
-                </div>
-              )}
+                          {coherenceError.conflicts &&
+                            coherenceError.conflicts.length > 0 && (
+                              <div className="mt-3 space-y-2">
+                                {coherenceError.conflicts.map(
+                                  (conflict, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="bg-rose-900/40 rounded p-2.5 text-xs border border-rose-800/80 space-y-1"
+                                    >
+                                      <p className="font-semibold text-rose-200">
+                                        {conflict.explanation}
+                                      </p>
+                                      <div className="flex flex-wrap gap-2 text-[11px] text-rose-300/80 pt-1">
+                                        <span>
+                                          <strong>Conflicting Fields:</strong>{" "}
+                                          {conflict.fields
+                                            .map((f) => f.replaceAll("_", " "))
+                                            .join(", ")}
+                                        </span>
+                                        {conflict.product_families && (
+                                          <span>
+                                            &bull;{" "}
+                                            <strong>
+                                              Detected Categories:
+                                            </strong>{" "}
+                                            {conflict.product_families
+                                              .map((f) =>
+                                                f.replaceAll("_", " "),
+                                              )
+                                              .join(" vs ")}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+                            )}
 
-              <textarea
-                id="input-box-1"
-                rows={3}
-                value={productRequirement}
-                onChange={(e) => setProductRequirement(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
-                placeholder="Enter detailed product requirements..."
-                required
-              />
-            </div>
-
-            {/* Box 2: Technical, Quality & Trade Regulatory */}
-            <div className="relative">
-              <div className="flex items-center justify-between mb-1.5">
-                <label
-                  htmlFor="input-box-2"
-                  className="text-sm font-semibold text-slate-200"
-                >
-                  Box 2: Technical, Quality &amp; Trade Regulatory Standards
-                </label>
-                <button
-                  ref={popoverBtnRef2}
-                  type="button"
-                  id="help-btn-2"
-                  aria-controls="help-popover-2"
-                  aria-expanded={showPopover2}
-                  onClick={() => setShowPopover2(!showPopover2)}
-                  className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 focus:outline-none focus:underline"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    width={16}
-                    height={16}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  {showPopover2 ? "Hide Help" : "Help & Guidance"}
-                </button>
-              </div>
-
-              {showPopover2 && (
-                <div
-                  id="help-popover-2"
-                  role="region"
-                  aria-labelledby="help-btn-2"
-                  className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150"
-                >
-                  <strong>Guidance:</strong> Specify mandatory regulatory
-                  clearances, quality certifications (e.g. CE, SFDA, Halal, ISO,
-                  PED), and technical testing regimes.
-                </div>
-              )}
-
-              <textarea
-                id="input-box-2"
-                rows={3}
-                value={technicalCompliance}
-                onChange={(e) => setTechnicalCompliance(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
-                placeholder="Enter regulatory, quality, and compliance requirements..."
-                required
-              />
-            </div>
-
-            {/* Box 3: Order & Supplier Profile */}
-            <div className="relative">
-              <div className="flex items-center justify-between mb-1.5">
-                <label
-                  htmlFor="input-box-3"
-                  className="text-sm font-semibold text-slate-200"
-                >
-                  Box 3: Order &amp; Commercial Profile (Volume, Terms, Port,
-                  Lead Time)
-                </label>
-                <button
-                  ref={popoverBtnRef3}
-                  type="button"
-                  id="help-btn-3"
-                  aria-controls="help-popover-3"
-                  aria-expanded={showPopover3}
-                  onClick={() => setShowPopover3(!showPopover3)}
-                  className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 focus:outline-none focus:underline"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    width={16}
-                    height={16}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  {showPopover3 ? "Hide Help" : "Help & Guidance"}
-                </button>
-              </div>
-
-              {showPopover3 && (
-                <div
-                  id="help-popover-3"
-                  role="region"
-                  aria-labelledby="help-btn-3"
-                  className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150"
-                >
-                  <strong>Guidance:</strong> Specify order volumes (trial vs
-                  recurring), Incoterms (CIF, CFR, FOB, DDP), target destination
-                  ports, and supplier relationship tier (direct manufacturer vs
-                  trader).
-                </div>
-              )}
-
-              <textarea
-                id="input-box-3"
-                rows={3}
-                value={orderProfile}
-                onChange={(e) => setOrderProfile(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
-                placeholder="Enter order volume, delivery terms, port, and commercial criteria..."
-                required
-              />
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="px-6 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-sm transition-all shadow-md hover:shadow-sky-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {isLoading ? (
-                  <>
-                    <svg
-                      className="animate-spin h-4 w-4 text-white"
-                      width={16}
-                      height={16}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v8H4z"
-                      />
-                    </svg>
-                    Processing Intake...
-                  </>
-                ) : (
-                  <>Submit Intake &amp; Proceed to Preparation &rarr;</>
+                          <p className="text-[11px] text-rose-300/80 mt-2">
+                            Your entered requirements have been preserved.
+                            Adjust Box 1 or Box 2 to align technical compliance
+                            with the product family before resubmitting.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCoherenceError(null)}
+                        className="text-rose-400 hover:text-rose-200 text-xs px-2 py-1 rounded bg-rose-900/60 hover:bg-rose-800 transition"
+                        aria-label="Dismiss error summary"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
                 )}
-              </button>
-            </div>
-          </form>
+
+                {/* Box 1: Product Requirement */}
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label
+                      htmlFor="input-box-1"
+                      className="text-sm font-semibold text-slate-200"
+                    >
+                      Box 1: Product Requirement (Specification, Grade,
+                      Dimensions, Form)
+                    </label>
+                    <button
+                      ref={popoverBtnRef1}
+                      type="button"
+                      id="help-btn-1"
+                      aria-controls="help-popover-1"
+                      aria-expanded={showPopover1}
+                      onClick={() => setShowPopover1(!showPopover1)}
+                      className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 focus:outline-none focus:underline"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        width={16}
+                        height={16}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                      {showPopover1 ? "Hide Help" : "Help & Guidance"}
+                    </button>
+                  </div>
+
+                  {showPopover1 && (
+                    <div
+                      id="help-popover-1"
+                      role="region"
+                      aria-labelledby="help-btn-1"
+                      className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150"
+                    >
+                      <strong>Guidance:</strong> Specify exact product
+                      attributes: dimensions, capacity, materials, grades, and
+                      packaging configurations. Avoid commercial terms or prices
+                      here.
+                    </div>
+                  )}
+
+                  <textarea
+                    id="input-box-1"
+                    rows={3}
+                    value={productRequirement}
+                    onChange={(e) => {
+                      setProductRequirement(e.target.value);
+                      if (coherenceError) setCoherenceError(null);
+                    }}
+                    className={`w-full bg-slate-950 border ${isBox1Conflicted ? "border-rose-500 ring-2 ring-rose-500/40" : "border-slate-700"} rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500`}
+                    placeholder="Enter detailed product requirements..."
+                    required
+                  />
+                </div>
+
+                {/* Box 2: Technical, Quality & Trade Regulatory */}
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label
+                      htmlFor="input-box-2"
+                      className="text-sm font-semibold text-slate-200"
+                    >
+                      Box 2: Technical, Quality &amp; Trade Regulatory Standards
+                    </label>
+                    <button
+                      ref={popoverBtnRef2}
+                      type="button"
+                      id="help-btn-2"
+                      aria-controls="help-popover-2"
+                      aria-expanded={showPopover2}
+                      onClick={() => setShowPopover2(!showPopover2)}
+                      className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 focus:outline-none focus:underline"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        width={16}
+                        height={16}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                      {showPopover2 ? "Hide Help" : "Help & Guidance"}
+                    </button>
+                  </div>
+
+                  {showPopover2 && (
+                    <div
+                      id="help-popover-2"
+                      role="region"
+                      aria-labelledby="help-btn-2"
+                      className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150"
+                    >
+                      <strong>Guidance:</strong> Specify mandatory regulatory
+                      clearances, quality certifications (e.g. CE, SFDA, Halal,
+                      ISO, PED), and technical testing regimes.
+                    </div>
+                  )}
+
+                  <textarea
+                    id="input-box-2"
+                    rows={3}
+                    value={technicalCompliance}
+                    onChange={(e) => {
+                      setTechnicalCompliance(e.target.value);
+                      if (coherenceError) setCoherenceError(null);
+                    }}
+                    className={`w-full bg-slate-950 border ${isBox2Conflicted ? "border-rose-500 ring-2 ring-rose-500/40" : "border-slate-700"} rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500`}
+                    placeholder="Enter regulatory, quality, and compliance requirements..."
+                    required
+                  />
+                </div>
+
+                {/* Box 3: Order & Supplier Profile */}
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label
+                      htmlFor="input-box-3"
+                      className="text-sm font-semibold text-slate-200"
+                    >
+                      Box 3: Order &amp; Commercial Profile (Volume, Terms,
+                      Port, Lead Time)
+                    </label>
+                    <button
+                      ref={popoverBtnRef3}
+                      type="button"
+                      id="help-btn-3"
+                      aria-controls="help-popover-3"
+                      aria-expanded={showPopover3}
+                      onClick={() => setShowPopover3(!showPopover3)}
+                      className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 focus:outline-none focus:underline"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        width={16}
+                        height={16}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                      {showPopover3 ? "Hide Help" : "Help & Guidance"}
+                    </button>
+                  </div>
+
+                  {showPopover3 && (
+                    <div
+                      id="help-popover-3"
+                      role="region"
+                      aria-labelledby="help-btn-3"
+                      className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150"
+                    >
+                      <strong>Guidance:</strong> Specify order volumes (trial vs
+                      recurring), Incoterms (CIF, CFR, FOB, DDP), target
+                      destination ports, and supplier relationship tier (direct
+                      manufacturer vs trader).
+                    </div>
+                  )}
+
+                  <textarea
+                    id="input-box-3"
+                    rows={3}
+                    value={orderProfile}
+                    onChange={(e) => {
+                      setOrderProfile(e.target.value);
+                      if (coherenceError) setCoherenceError(null);
+                    }}
+                    className={`w-full bg-slate-950 border ${isBox3Conflicted ? "border-rose-500 ring-2 ring-rose-500/40" : "border-slate-700"} rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500`}
+                    placeholder="Enter order volume, delivery terms, port, and commercial criteria..."
+                    required
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="px-6 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-sm transition-all shadow-md hover:shadow-sky-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isLoading ? (
+                      <>
+                        <svg
+                          className="animate-spin h-4 w-4 text-white"
+                          width={16}
+                          height={16}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8v8H4z"
+                          />
+                        </svg>
+                        Processing Intake...
+                      </>
+                    ) : (
+                      <>Submit Intake &amp; Proceed to Preparation &rarr;</>
+                    )}
+                  </button>
+                </div>
+              </form>
+            );
+          })()}
         </section>
 
         {/* ========================================================= */}
@@ -1499,7 +1769,7 @@ export default function ConsultantWorkflowPage() {
                             </span>
                           ) : (
                             <a
-                              href={supp.website}
+                              href={supp.website ?? undefined}
                               target="_blank"
                               rel="noreferrer"
                               className="text-sky-400 hover:text-sky-300 underline truncate max-w-[200px]"
@@ -1731,6 +2001,141 @@ export default function ConsultantWorkflowPage() {
                 className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-colors border border-slate-700"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Draft Concurrency Conflict Modal (Phase D - MB-409) */}
+      {conflictState && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="conflict-dialog-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+        >
+          <div className="bg-slate-900 border-2 border-amber-600 rounded-xl max-w-lg w-full p-6 shadow-2xl text-slate-100">
+            <div className="flex items-center gap-3 text-amber-400 mb-3">
+              <span className="text-2xl">⚠️</span>
+              <h2
+                id="conflict-dialog-title"
+                className="text-lg font-bold text-white"
+              >
+                Draft Concurrency Conflict (MB-409)
+              </h2>
+            </div>
+            <p className="text-sm text-slate-300 mb-4">
+              This draft was updated in another browser tab or session (Version{" "}
+              <span className="font-mono text-amber-300 font-bold">
+                {conflictState.current_version}
+              </span>{" "}
+              saved on server vs your local version{" "}
+              <span className="font-mono text-slate-400">
+                {conflictState.submitted_version}
+              </span>
+              ). Automatic merge was prevented to protect your inputs.
+            </p>
+
+            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs mb-5 space-y-1.5">
+              <div className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
+                Your Unsaved Local Inputs
+              </div>
+              <p className="text-slate-200 truncate">
+                <strong>Box 1:</strong>{" "}
+                {conflictState.unsaved_data.productRequirement || "(empty)"}
+              </p>
+              <p className="text-slate-200 truncate">
+                <strong>Box 2:</strong>{" "}
+                {conflictState.unsaved_data.technicalCompliance || "(empty)"}
+              </p>
+              <p className="text-slate-200 truncate">
+                <strong>Box 3:</strong>{" "}
+                {conflictState.unsaved_data.orderProfile || "(empty)"}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={async () => {
+                  const unsaved = conflictState.unsaved_data;
+                  setConflictState(null);
+                  setIsLoading(true);
+                  try {
+                    const res = await fetch("/api/v1/consultant/workflow", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ action: "create_draft" }),
+                    });
+                    const d = await res.json();
+                    if (d.success && d.draft_id) {
+                      setDraftId(d.draft_id);
+                      setDraftVersion(1);
+                      sessionStorage.setItem(
+                        "matchbase_active_draft_id",
+                        d.draft_id,
+                      );
+                      window.history.replaceState(
+                        {},
+                        "",
+                        `/consultant/workflow?draft_id=${d.draft_id}`,
+                      );
+                      await fetch("/api/v1/consultant/workflow", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          action: "save_draft",
+                          draft_id: d.draft_id,
+                          draft_version: 1,
+                          expected_version: 1,
+                          draft_data: {
+                            productRequirement: unsaved.productRequirement,
+                            technicalCompliance: unsaved.technicalCompliance,
+                            orderProfile: unsaved.orderProfile,
+                            savedAt: new Date().toISOString(),
+                          },
+                        }),
+                      });
+                      triggerToast(
+                        "Saved local inputs as a new independent draft.",
+                      );
+                    }
+                  } catch (e) {
+                    console.error("Failed to fork draft:", e);
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+                className="w-full py-2.5 px-4 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-xs transition shadow"
+              >
+                Keep my version as a new draft
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const targetDraftId = draftId;
+                  setConflictState(null);
+                  await loadExistingDraft(targetDraftId);
+                  triggerToast("Loaded latest version from server.");
+                }}
+                className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs border border-slate-700 transition"
+              >
+                Review latest saved version (overwrite local edits)
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const targetDraftId = draftId;
+                  setConflictState(null);
+                  await loadExistingDraft(targetDraftId);
+                  triggerToast("Discarded unsaved local edits.");
+                }}
+                className="w-full py-2 px-4 bg-transparent hover:bg-rose-950/40 text-rose-400 hover:text-rose-300 text-xs rounded transition"
+              >
+                Discard my local changes
               </button>
             </div>
           </div>

@@ -244,10 +244,13 @@ export async function submitConsultantIntake(
   });
   if (!intakeCoherence.isCoherent) {
     const err = new Error(
-      `Intake semantic coherence violation: ${intakeCoherence.errors.join("; ")}`,
+      intakeCoherence.conflicts[0]?.explanation ??
+        `Intake semantic coherence violation: ${intakeCoherence.errors.join("; ")}`,
     );
     (err as any).status = 422;
     (err as any).code = "MB-422-COHERENCE";
+    (err as any).conflicts = intakeCoherence.conflicts;
+    (err as any).recoverable = true;
     throw err;
   }
 

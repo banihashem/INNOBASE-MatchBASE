@@ -31,6 +31,7 @@
     "test:consultant-v3:fixture-truth": "pnpm --filter @matchbase/contracts build && node scripts/test-consultant-v3-fixture-truth.mjs",
     "test:consultant-v3:coherence": "pnpm --filter @matchbase/contracts build && node scripts/test-consultant-v3-coherence.mjs",
     "test:consultant-v3:draft-isolation": "pnpm --filter @matchbase/data build && node scripts/test-consultant-v3-draft-isolation.mjs",
+    "test:consultant-v3:draft-concurrency": "node scripts/test-consultant-v3-draft-concurrency.mjs",
     "test:ci": "pnpm run snapshot:prepare && pnpm run build && pnpm run check && pnpm run test && pnpm run test:standalone:repeat && pnpm run test:browser",
     "slice1:validate:local": "node scripts/validate-slice1-local.mjs",
     "slice2:validate:local": "node scripts/validate-slice2-local.mjs",

@@ -681,45 +681,152 @@ export async function getConsultantIntakeSnapshot(
   };
 }
 
-export async function saveConsultantDraftSession(
+export async function createConsultantDraftSession(
   db: Queryable,
-  draft: ConsultantDraftSessionRecord,
-): Promise<void> {
-  // Ensure at most one active draft per user/account: supersede any older active drafts
-  if (draft.status === "active") {
-    await db.query(
-      `UPDATE consultant_draft_session
-       SET status = 'abandoned', updated_at = clock_timestamp()
-       WHERE account_id = $1 AND user_profile_id = $2 AND status = 'active' AND draft_id <> $3;`,
-      [draft.account_id, draft.user_profile_id, draft.draft_id],
-    );
-  }
-
+  accountId: string,
+  userProfileId: string,
+): Promise<{ draft_id: string; draft_version: number }> {
+  const draft_id = randomUUID();
   await db.query(
     `INSERT INTO consultant_draft_session (
       draft_id, account_id, user_profile_id, tier, current_run_id,
-      snapshot_id, draft_version, status, draft_data, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp())
-    ON CONFLICT (draft_id)
-    DO UPDATE SET
-      current_run_id = EXCLUDED.current_run_id,
-      snapshot_id = EXCLUDED.snapshot_id,
-      draft_version = consultant_draft_session.draft_version + 1,
-      status = EXCLUDED.status,
-      draft_data = EXCLUDED.draft_data,
-      updated_at = clock_timestamp();`,
-    [
-      draft.draft_id,
-      draft.account_id,
-      draft.user_profile_id,
-      draft.tier,
-      draft.current_run_id ?? null,
-      draft.snapshot_id ?? null,
-      draft.draft_version,
-      draft.status,
-      JSON.stringify(draft.draft_data),
-    ],
+      snapshot_id, draft_version, status, draft_data, updated_at, created_at
+    ) VALUES ($1, $2, $3, 'consultant', null, null, 1, 'active', '{}'::jsonb, clock_timestamp(), clock_timestamp());`,
+    [draft_id, accountId, userProfileId],
   );
+  return { draft_id, draft_version: 1 };
+}
+
+export async function getConsultantDraftSessionById(
+  db: Queryable,
+  accountId: string,
+  userProfileId: string,
+  draftId: string,
+): Promise<ConsultantDraftSessionRecord | null> {
+  const res = await db.query<{
+    draft_id: string;
+    account_id: string;
+    user_profile_id: string;
+    tier: "consultant";
+    current_run_id: string | null;
+    snapshot_id: string | null;
+    draft_version: number;
+    status: "active" | "submitted" | "abandoned";
+    draft_data: Record<string, unknown> | string;
+    updated_at: Date;
+    created_at: Date;
+  }>(
+    `SELECT * FROM consultant_draft_session
+     WHERE draft_id = $1 AND account_id = $2 AND user_profile_id = $3
+     LIMIT 1;`,
+    [draftId, accountId, userProfileId],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  const parseJson = (val: unknown): Record<string, unknown> =>
+    typeof val === "string"
+      ? JSON.parse(val)
+      : (val as Record<string, unknown>);
+  return {
+    draft_id: row.draft_id,
+    account_id: row.account_id,
+    user_profile_id: row.user_profile_id,
+    tier: row.tier,
+    current_run_id: row.current_run_id,
+    snapshot_id: row.snapshot_id,
+    draft_version: row.draft_version,
+    status: row.status,
+    draft_data: parseJson(row.draft_data),
+    updated_at: row.updated_at.toISOString(),
+    created_at: row.created_at.toISOString(),
+  };
+}
+
+export async function saveConsultantDraftSession(
+  db: Queryable,
+  draft: ConsultantDraftSessionRecord,
+  expectedVersion?: number,
+): Promise<{ draft_id: string; draft_version: number }> {
+  // Check if draft already exists
+  const checkRes = await db.query<{
+    draft_id: string;
+    draft_version: number;
+    account_id: string;
+    status: string;
+    draft_data: Record<string, unknown> | string;
+  }>(
+    `SELECT draft_id, draft_version, account_id, status, draft_data
+     FROM consultant_draft_session
+     WHERE draft_id = $1;`,
+    [draft.draft_id],
+  );
+
+  const existing = checkRes.rows[0];
+  if (existing) {
+    if (existing.account_id !== draft.account_id) {
+      const err = new Error("Unauthorized to modify this draft.");
+      (err as any).status = 403;
+      (err as any).code = "MB-403-FORBIDDEN";
+      throw err;
+    }
+
+    // Optimistic Concurrency Check: If caller supplied an expectedVersion and it doesn't match
+    if (
+      typeof expectedVersion === "number" &&
+      existing.draft_version !== expectedVersion
+    ) {
+      const conflictErr = new Error("This draft was updated in another tab.");
+      (conflictErr as any).status = 409;
+      (conflictErr as any).code = "MB-409-DRAFT-CONFLICT";
+      (conflictErr as any).current_version = existing.draft_version;
+      (conflictErr as any).submitted_version = expectedVersion;
+      (conflictErr as any).recoverable = true;
+      throw conflictErr;
+    }
+
+    const nextVersion = existing.draft_version + 1;
+    await db.query(
+      `UPDATE consultant_draft_session
+       SET current_run_id = $2,
+           snapshot_id = $3,
+           draft_version = $4,
+           status = $5,
+           draft_data = $6,
+           updated_at = clock_timestamp()
+       WHERE draft_id = $1 AND account_id = $7;`,
+      [
+        draft.draft_id,
+        draft.current_run_id ?? null,
+        draft.snapshot_id ?? null,
+        nextVersion,
+        draft.status,
+        JSON.stringify(draft.draft_data),
+        draft.account_id,
+      ],
+    );
+    return { draft_id: draft.draft_id, draft_version: nextVersion };
+  } else {
+    // New draft insertion
+    const initialVersion = draft.draft_version || 1;
+    await db.query(
+      `INSERT INTO consultant_draft_session (
+        draft_id, account_id, user_profile_id, tier, current_run_id,
+        snapshot_id, draft_version, status, draft_data, updated_at, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp(), clock_timestamp());`,
+      [
+        draft.draft_id,
+        draft.account_id,
+        draft.user_profile_id,
+        draft.tier,
+        draft.current_run_id ?? null,
+        draft.snapshot_id ?? null,
+        initialVersion,
+        draft.status,
+        JSON.stringify(draft.draft_data),
+      ],
+    );
+    return { draft_id: draft.draft_id, draft_version: initialVersion };
+  }
 }
 
 export async function getActiveConsultantDraftSession(

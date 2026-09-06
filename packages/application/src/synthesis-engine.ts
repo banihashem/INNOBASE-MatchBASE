@@ -150,17 +150,26 @@ export function synthesizeConsultantOutputV3(
         ],
       },
       executive_summary: {
-        headline: `${candidates.length} Truthful Illustrative Manufacturers Verified for UAE DDP Corridor`,
-        direct_answer:
-          "Identified 3 illustrative European commercial water heater manufacturers meeting all technical constraints (500L, 10 bar, <=85cm envelope, CE/PED, DDP Dubai).",
-        key_findings: [
-          "All 3 candidates satisfy the strict 85 cm service door access constraint.",
-          "CE and PED 2014/68/EU conformity verified against technical construction files.",
-          "Spare heating elements and 5-year warranty support available through regional distribution hubs.",
-        ],
+        headline: isLive
+          ? `${candidates.length} Truthful Illustrative Manufacturers Verified for UAE DDP Corridor`
+          : `${candidates.length} Truthful Illustrative Manufacturers Configured for UAE DDP Corridor`,
+        direct_answer: isLive
+          ? "Identified 3 illustrative European commercial water heater manufacturers meeting all technical constraints (500L, 10 bar, <=85cm envelope, CE/PED, DDP Dubai)."
+          : "Demonstration dataset: exactly 3 illustrative commercial water heater manufacturers configured for testing technical constraints (500L, 10 bar, <=85cm envelope, CE/PED, DDP Dubai).",
+        key_findings: isLive
+          ? [
+              "All 3 candidates satisfy the strict 85 cm service door access constraint.",
+              "CE and PED 2014/68/EU conformity verified against technical construction files.",
+              "Spare heating elements and 5-year warranty support available through regional distribution hubs.",
+            ]
+          : [
+              "All 3 illustrative candidates satisfy the strict 85 cm service door access constraint.",
+              "Demonstration completeness: Complete for UX and workflow validation.",
+              "External market coverage: Not assessed.",
+            ],
         candidate_count: candidates.length,
-        confidence_assessment: "high",
-        research_coverage_status: "sufficient",
+        confidence_assessment: isLive ? "high" : "not_assessed",
+        research_coverage_status: isLive ? "sufficient" : "not_assessed",
       },
       target_candidates_count: 20,
       total_candidates_found: candidates.length,
@@ -295,19 +304,28 @@ export function synthesizeConsultantOutputV3(
       ],
     },
     executive_summary: {
-      headline:
-        "20 Illustrative Brazilian Poultry Slaughterhouse Candidates Mapped for Saudi Arabian Import",
-      direct_answer:
-        "Direct export from Brazil to Saudi Arabia is restricted to MAPA SIF facilities with active SFDA approvals. 4 active Tier-1 candidates operate active approved facilities. 16 development candidates offer verified capacity with SFDA renewal or partner packing requirements. Candidate 1 commercial term mismatch (observed CIF vs requested CFR) is explicitly flagged.",
-      key_findings: [
-        "Active Tier-1 candidates hold verifiable SFDA plant numbers and active GCC Halal compliance.",
-        "Conditional candidates require SFDA list renewal; scores strictly capped at <= 60.",
-        "Candidate 1 flags Commercial-Term Mismatch (observed CIF basis vs requested CFR terms).",
-        "Indicative pricing benchmark ranges between $1,620 and $1,740 per MT for 1000g Grade A whole chicken.",
-      ],
+      headline: isLive
+        ? "20 Illustrative Brazilian Poultry Slaughterhouse Candidates Mapped for Saudi Arabian Import"
+        : "20 Synthetic Brazilian Poultry Demonstration Profiles (Policy A)",
+      direct_answer: isLive
+        ? "Direct export from Brazil to Saudi Arabia is restricted to MAPA SIF facilities with active SFDA approvals. 4 active Tier-1 candidates operate active approved facilities. 16 development candidates offer verified capacity with SFDA renewal or partner packing requirements. Candidate 1 commercial term mismatch (observed CIF vs requested CFR) is explicitly flagged."
+        : "This demonstration contains 20 synthetic profiles configured to exercise MatchBASE scoring, progressive disclosure, compliance-cap behavior, and requested-vs-observed trade-term comparison.",
+      key_findings: isLive
+        ? [
+            "Active Tier-1 candidates hold verifiable SFDA plant numbers and active GCC Halal compliance.",
+            "Conditional candidates require SFDA list renewal; scores strictly capped at <= 60.",
+            "Candidate 1 flags Commercial-Term Mismatch (observed CIF basis vs requested CFR terms).",
+            "Indicative pricing benchmark ranges between $1,620 and $1,740 per MT for 1000g Grade A whole chicken.",
+          ]
+        : [
+            "This demonstration contains 20 synthetic profiles configured to exercise MatchBASE scoring.",
+            "Demonstration completeness: Complete for UX and workflow validation.",
+            "External market coverage: Not assessed.",
+            "External evidence confidence: Not assessed.",
+          ],
       candidate_count: candidates.length,
-      confidence_assessment: "high",
-      research_coverage_status: "sufficient",
+      confidence_assessment: isLive ? "high" : "not_assessed",
+      research_coverage_status: isLive ? "sufficient" : "not_assessed",
     },
     target_candidates_count: 20,
     total_candidates_found: candidates.length,

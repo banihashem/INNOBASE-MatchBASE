@@ -270,6 +270,12 @@ export function validateConsultantOutputV3SemanticCoherence(
   };
 }
 
+export interface IntakeCoherenceConflict {
+  readonly fields: readonly string[];
+  readonly product_families: readonly string[];
+  readonly explanation: string;
+}
+
 /**
  * Validates the 3-box intake snapshot for cross-request / cross-domain contamination.
  * Rejects submissions where boxes derive from conflicting product domains (e.g. poultry + water heaters).
@@ -286,6 +292,7 @@ export function validateIntakeSemanticCoherence(intake: {
   valid: boolean;
   errors: readonly string[];
   violations: readonly string[];
+  conflicts: readonly IntakeCoherenceConflict[];
 } {
   const errors: string[] = [];
   const reqText = intake.product_requirement ?? intake.productRequirement ?? "";
@@ -299,11 +306,50 @@ export function validateIntakeSemanticCoherence(intake: {
 
   const activeDomains = [dom1, dom2, dom3].filter((d) => d !== "generic");
   const uniqueDomains = Array.from(new Set(activeDomains));
+  const conflicts: IntakeCoherenceConflict[] = [];
 
   if (uniqueDomains.length > 1) {
     errors.push(
       `Cross-domain intake contamination detected: Box 1 domain '${dom1}', Box 2 domain '${dom2}', Box 3 domain '${dom3}'. Domains cannot be mixed across intake boxes.`,
     );
+
+    const conflictingFields: string[] = [];
+    if (dom1 !== "generic") conflictingFields.push("product_requirement");
+    if (dom2 !== "generic" && dom2 !== dom1)
+      conflictingFields.push("technical_quality_trade_requirements");
+    if (dom3 !== "generic" && dom3 !== dom1 && dom3 !== dom2)
+      conflictingFields.push("order_supplier_profile");
+
+    const domainLabels: Record<string, string> = {
+      water_heater: "industrial_water_heater",
+      poultry: "poultry_food_product",
+      reverse_osmosis: "reverse_osmosis_systems",
+      pump: "industrial_pumps",
+      coffee: "agricultural_coffee",
+    };
+
+    let explanation =
+      "The request contains materially conflicting product requirements.";
+    if (dom1 === "water_heater" && (dom2 === "poultry" || dom3 === "poultry")) {
+      explanation =
+        "Poultry slaughter and SFDA poultry-establishment constraints do not apply to an industrial electric water heater.";
+    } else if (
+      dom1 === "poultry" &&
+      (dom2 === "water_heater" || dom3 === "water_heater")
+    ) {
+      explanation =
+        "Water heater electrical/pressure vessel standards do not apply to a poultry food procurement request.";
+    } else {
+      explanation = `Requirements for ${dom2} do not apply to a ${dom1} request.`;
+    }
+
+    conflicts.push({
+      fields: conflictingFields.length
+        ? conflictingFields
+        : ["product_requirement", "technical_quality_trade_requirements"],
+      product_families: uniqueDomains.map((d) => domainLabels[d] ?? d),
+      explanation,
+    });
   }
 
   const isCoherent = errors.length === 0;
@@ -312,5 +358,6 @@ export function validateIntakeSemanticCoherence(intake: {
     valid: isCoherent,
     errors,
     violations: errors,
+    conflicts,
   };
 }

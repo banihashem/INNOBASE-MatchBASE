@@ -12,6 +12,8 @@ import {
 } from "@matchbase/application";
 import {
   listConsultantWorkflowSessions,
+  createConsultantDraftSession,
+  getConsultantDraftSessionById,
   saveConsultantDraftSession,
   getActiveConsultantDraftSession,
   abandonConsultantDraftSession,
@@ -68,7 +70,21 @@ export async function POST(req: Request): Promise<NextResponse> {
     const body = (await req.json()) as Record<string, unknown>;
     const action = body.action as string;
 
-    // Action: Save Draft Session
+    // Action: Create New Independent Server Draft
+    if (action === "create_draft") {
+      const created = await createConsultantDraftSession(
+        pool,
+        context.accountId,
+        context.userId,
+      );
+      return NextResponse.json({
+        success: true,
+        draft_id: created.draft_id,
+        draft_version: created.draft_version,
+      });
+    }
+
+    // Action: Save Draft Session with Optimistic Concurrency Check
     if (action === "save_draft") {
       const UUID_REGEX =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -81,21 +97,35 @@ export async function POST(req: Request): Promise<NextResponse> {
       const snapshot_id = (body.snapshot_id as string) || null;
       const draft_version =
         typeof body.draft_version === "number" ? body.draft_version : 1;
+      const expected_version =
+        typeof body.expected_version === "number"
+          ? body.expected_version
+          : typeof body.draft_version === "number"
+            ? body.draft_version
+            : undefined;
       const draft_data = (body.draft_data as Record<string, unknown>) || {};
 
-      await saveConsultantDraftSession(pool, {
-        draft_id,
-        account_id: context.accountId,
-        user_profile_id: context.userId,
-        tier: "consultant",
-        current_run_id,
-        snapshot_id,
-        draft_version,
-        status: "active",
-        draft_data,
-      });
+      const saved = await saveConsultantDraftSession(
+        pool,
+        {
+          draft_id,
+          account_id: context.accountId,
+          user_profile_id: context.userId,
+          tier: "consultant",
+          current_run_id,
+          snapshot_id,
+          draft_version,
+          status: "active",
+          draft_data,
+        },
+        expected_version,
+      );
 
-      return NextResponse.json({ success: true, draft_id, draft_version });
+      return NextResponse.json({
+        success: true,
+        draft_id: saved.draft_id,
+        draft_version: saved.draft_version,
+      });
     }
 
     // Action: Abandon Draft Session
@@ -103,6 +133,13 @@ export async function POST(req: Request): Promise<NextResponse> {
       const draft_id = body.draft_id as string;
       if (draft_id) {
         await abandonConsultantDraftSession(pool, context.accountId, draft_id);
+      } else {
+        await abandonConsultantDraftSession(
+          pool,
+          context.accountId,
+          undefined,
+          context.userId,
+        );
       }
       return NextResponse.json({ success: true });
     }
@@ -265,6 +302,57 @@ export async function POST(req: Request): Promise<NextResponse> {
     console.error("Error in consultant workflow API:", err);
     const status = (err as any)?.status || 500;
     const code = (err as any)?.code || "MB-500-INTERNAL";
+
+    if (code === "MB-422-COHERENCE" || status === 422) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "MB-422-COHERENCE",
+            message:
+              err instanceof Error
+                ? err.message
+                : "The request contains materially conflicting product requirements.",
+            conflicts: (err as any)?.conflicts ?? [
+              {
+                fields: [
+                  "product_requirement",
+                  "technical_quality_trade_requirements",
+                ],
+                product_families: [
+                  "industrial_water_heater",
+                  "poultry_food_product",
+                ],
+                explanation:
+                  err instanceof Error
+                    ? err.message
+                    : "Conflicting product requirements detected across intake fields.",
+              },
+            ],
+            recoverable: true,
+          },
+        },
+        { status: 422 },
+      );
+    }
+
+    if (code === "MB-409-DRAFT-CONFLICT" || status === 409) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "MB-409-DRAFT-CONFLICT",
+            message:
+              err instanceof Error
+                ? err.message
+                : "This draft was updated in another tab.",
+            current_version: (err as any)?.current_version ?? 1,
+            submitted_version: (err as any)?.submitted_version ?? 1,
+            recoverable: true,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err), code },
       { status },
@@ -316,8 +404,26 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   const url = new URL(req.url);
   const runId = url.searchParams.get("run_id");
+  const draftIdParam = url.searchParams.get("draft_id");
   const listIncomplete = url.searchParams.get("incomplete");
   const getActiveDraft = url.searchParams.get("active_draft");
+
+  // Retrieve specific server draft by ID
+  if (draftIdParam) {
+    const draft = await getConsultantDraftSessionById(
+      pool,
+      context.accountId,
+      context.userId,
+      draftIdParam,
+    );
+    if (!draft) {
+      return NextResponse.json(
+        { error: "Draft not found", code: "MB-404-DRAFT" },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json({ success: true, draft });
+  }
 
   // Retrieve active server-scoped draft
   if (getActiveDraft === "true") {

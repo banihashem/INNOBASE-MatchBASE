@@ -22,7 +22,7 @@ export type PrimaryQueryTypeV2 =
   | "market_overview"
   | "general_info";
 
-export type ConfidenceLevelV2 = "high" | "medium" | "low";
+export type ConfidenceLevelV2 = "high" | "medium" | "low" | "not_assessed";
 
 export type VerificationStatusV2 =
   | "externally_verified"

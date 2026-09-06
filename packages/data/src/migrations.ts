@@ -37,6 +37,8 @@ export const CONSULTANT_V3_WORKFLOW_PERSISTENCE_MIGRATION_ID =
   "0015_consultant_v3_workflow_persistence";
 export const CONSULTANT_V3_DRAFT_ISOLATION_MIGRATION_ID =
   "0016_consultant_v3_draft_isolation_and_snapshots";
+export const CONSULTANT_V3_FIXTURE_TRUTH_RELAXATION_MIGRATION_ID =
+  "0017_consultant_v3_fixture_truth_relaxation";
 
 export interface MigrationDefinition {
   readonly id: string;
@@ -61,6 +63,9 @@ export const MIGRATIONS: readonly MigrationDefinition[] = Object.freeze([
   Object.freeze({ id: CONSULTANT_V3_AGENTIC_WORKFLOW_MIGRATION_ID }),
   Object.freeze({ id: CONSULTANT_V3_WORKFLOW_PERSISTENCE_MIGRATION_ID }),
   Object.freeze({ id: CONSULTANT_V3_DRAFT_ISOLATION_MIGRATION_ID }),
+  Object.freeze({
+    id: CONSULTANT_V3_FIXTURE_TRUTH_RELAXATION_MIGRATION_ID,
+  }),
 ]);
 
 export const LATEST_MIGRATION_ID =

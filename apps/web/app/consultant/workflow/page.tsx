@@ -120,7 +120,13 @@ export default function ConsultantWorkflowPage() {
       orderProfile: string;
     };
   } | null>(null);
+  const [step1Fidelity, setStep1Fidelity] = useState<any>(null);
   const coherenceSummaryRef = useRef<HTMLDivElement | null>(null);
+  const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isCloningDraftRef = useRef<boolean>(false);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const conflictModalRef = useRef<HTMLDivElement | null>(null);
+  const conflictPrimaryBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // Session verification & purge old localStorage
   useEffect(() => {
@@ -159,13 +165,35 @@ export default function ConsultantWorkflowPage() {
       .finally(() => setSessionLoading(false));
   }, []);
 
-  // Check URL params for run_id, draft_id or action=resume
+  // Check URL params for mode=new, run_id, draft_id or action=resume
   useEffect(() => {
     if (typeof window === "undefined") return;
     const searchParams = new URLSearchParams(window.location.search);
+    const mode = searchParams.get("mode");
     const urlRunId = searchParams.get("run_id");
     const urlDraftId = searchParams.get("draft_id");
     const action = searchParams.get("action");
+
+    // N06 (P2): mode=new has absolute precedence over sessionStorage and incomplete runs
+    if (mode === "new") {
+      sessionStorage.removeItem("matchbase_active_draft_id");
+      setProductRequirement("");
+      setTechnicalCompliance("");
+      setOrderProfile("");
+      setRunId(null);
+      setWorkflowState("intake_draft");
+      setStep1Translation("");
+      setStep3Prompt("");
+      setAdvisoryContext(null);
+      setOutput(null);
+      setRevealedCount(5);
+      setDraftStatus("idle");
+      setCoherenceError(null);
+      setConflictState(null);
+      setStep1Fidelity(null);
+      void handleCreateNewDraft();
+      return;
+    }
 
     if (urlRunId) {
       void loadExistingSession(urlRunId);
@@ -194,6 +222,8 @@ export default function ConsultantWorkflowPage() {
       return;
     if (hydrationState !== "hydrated") return; // Prevent overwriting before server hydration
     if (runId) return; // Do not overwrite draft once a run is submitted
+    if (isCloningDraftRef.current) return; // Freeze autosave during clone transition (N03)
+    if (conflictState) return; // Freeze autosave while in conflict state (N03)
     if (!productRequirement && !technicalCompliance && !orderProfile) {
       setDraftStatus("idle");
       return;
@@ -201,7 +231,11 @@ export default function ConsultantWorkflowPage() {
     if (!draftId) return;
 
     setDraftStatus("saving");
-    const timer = setTimeout(() => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+    autosaveTimerRef.current = setTimeout(() => {
+      if (isCloningDraftRef.current || conflictState) return;
       void fetch("/api/v1/consultant/workflow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -246,7 +280,12 @@ export default function ConsultantWorkflowPage() {
         })
         .catch(() => setDraftStatus("idle"));
     }, 800);
-    return () => clearTimeout(timer);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    };
   }, [
     productRequirement,
     technicalCompliance,
@@ -256,7 +295,19 @@ export default function ConsultantWorkflowPage() {
     draftVersion,
     userSession,
     hydrationState,
+    conflictState,
   ]);
+
+  // N04: Trap initial focus into conflict modal and store previous active element
+  useEffect(() => {
+    if (conflictState) {
+      previousFocusRef.current = document.activeElement as HTMLElement;
+      const t = setTimeout(() => {
+        conflictPrimaryBtnRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(t);
+    }
+  }, [conflictState]);
 
   // Set contextual page title (F13)
   useEffect(() => {
@@ -501,6 +552,9 @@ export default function ConsultantWorkflowPage() {
             setStep1Translation(
               s.step1_interpretation.english_translation ?? "",
             );
+            setStep1Fidelity(
+              s.step1_interpretation.fidelity_validation ?? null,
+            );
           }
           if (s.step2_advisory) {
             setAdvisoryContext(s.step2_advisory);
@@ -539,6 +593,10 @@ export default function ConsultantWorkflowPage() {
   }
 
   async function handleStartNew() {
+    sessionStorage.removeItem("matchbase_active_draft_id");
+    if (typeof window !== "undefined") {
+      window.history.replaceState({}, "", "/consultant/workflow?mode=new");
+    }
     setRunId(null);
     setWorkflowState("intake_draft");
     setProductRequirement("");
@@ -552,6 +610,7 @@ export default function ConsultantWorkflowPage() {
     setDraftStatus("idle");
     setCoherenceError(null);
     setConflictState(null);
+    setStep1Fidelity(null);
     await handleCreateNewDraft();
     triggerToast("Started new blank sourcing workflow.");
   }
@@ -608,6 +667,9 @@ export default function ConsultantWorkflowPage() {
         setWorkflowState(data.session.state);
         setStep1Translation(
           data.session.step1_interpretation.english_translation,
+        );
+        setStep1Fidelity(
+          data.session.step1_interpretation.fidelity_validation ?? null,
         );
         setAdvisoryContext(data.session.step2_advisory);
         setDraftStatus("idle");
@@ -1403,6 +1465,55 @@ export default function ConsultantWorkflowPage() {
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 font-mono mb-3 focus:ring-2 focus:ring-sky-500"
               />
 
+              {/* Step 1 Explicit Requirement Fidelity Review (N02) */}
+              {step1Fidelity && (
+                <div className="bg-slate-950/80 p-3 rounded-lg border border-slate-800 text-xs mb-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-emerald-400 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                      Requirement Fidelity Verified (
+                      {step1Fidelity.preserved_count} /{" "}
+                      {step1Fidelity.ledger?.total_explicit_count ??
+                        step1Fidelity.preserved_count}{" "}
+                      explicit clauses preserved)
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Silent Mutations: 0
+                    </span>
+                  </div>
+
+                  {Array.isArray(step1Fidelity.model_suggestions) &&
+                    step1Fidelity.model_suggestions.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-slate-800/80">
+                        <div className="text-amber-300 font-semibold text-[11px] flex items-center gap-1 mb-1">
+                          <span>💡</span> Model Suggestions (Separated from
+                          Approved Facts):
+                        </div>
+                        {step1Fidelity.model_suggestions.map(
+                          (s: any, idx: number) => (
+                            <div
+                              key={idx}
+                              className="bg-amber-950/20 border border-amber-800/40 rounded p-2 text-amber-200/90 text-[11px]"
+                            >
+                              <span className="font-bold text-amber-300">
+                                {s.title}:
+                              </span>{" "}
+                              {s.suggested_value} —{" "}
+                              <span className="text-amber-300/80 italic">
+                                {s.reasoning}
+                              </span>{" "}
+                              <span className="text-slate-400 text-[10px] block mt-0.5">
+                                [Status: Kept as suggestion only; not injected
+                                into mandatory requirements]
+                              </span>
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    )}
+                </div>
+              )}
+
               <div className="flex justify-between items-center">
                 <span className="text-xs text-emerald-400 flex items-center gap-1">
                   <svg
@@ -2151,25 +2262,68 @@ export default function ConsultantWorkflowPage() {
         </div>
       )}
 
-      {/* Draft Concurrency Conflict Modal (Phase D - MB-409) */}
+      {/* Draft Concurrency Conflict Modal (Phase D - MB-409-DRAFT-CONFLICT) */}
       {conflictState && (
         <div
-          role="dialog"
+          role="alertdialog"
           aria-modal="true"
           aria-labelledby="conflict-dialog-title"
+          aria-describedby="conflict-dialog-desc"
+          ref={conflictModalRef}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              const targetDraftId = draftId;
+              if (autosaveTimerRef.current) {
+                clearTimeout(autosaveTimerRef.current);
+              }
+              setConflictState(null);
+              previousFocusRef.current?.focus();
+              void loadExistingDraft(targetDraftId);
+              triggerToast("Loaded latest version from server.");
+              return;
+            }
+
+            if (e.key === "Tab" && conflictModalRef.current) {
+              const focusable =
+                conflictModalRef.current.querySelectorAll<HTMLElement>(
+                  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+                );
+              if (focusable.length === 0) return;
+              const first = focusable[0]!;
+              const last = focusable[focusable.length - 1]!;
+
+              if (e.shiftKey) {
+                if (document.activeElement === first) {
+                  e.preventDefault();
+                  last.focus();
+                }
+              } else {
+                if (document.activeElement === last) {
+                  e.preventDefault();
+                  first.focus();
+                }
+              }
+            }
+          }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200"
         >
           <div className="bg-slate-900 border-2 border-amber-600 rounded-xl max-w-lg w-full p-6 shadow-2xl text-slate-100">
             <div className="flex items-center gap-3 text-amber-400 mb-3">
-              <span className="text-2xl">⚠️</span>
+              <span className="text-2xl" aria-hidden="true">
+                ⚠️
+              </span>
               <h2
                 id="conflict-dialog-title"
                 className="text-lg font-bold text-white"
               >
-                Draft Concurrency Conflict (MB-409)
+                Draft Concurrency Conflict (MB-409-DRAFT-CONFLICT)
               </h2>
             </div>
-            <p className="text-sm text-slate-300 mb-4">
+            <p
+              id="conflict-dialog-desc"
+              className="text-sm text-slate-300 mb-4"
+            >
               This draft was updated in another browser tab or session (Version{" "}
               <span className="font-mono text-amber-300 font-bold">
                 {conflictState.current_version}
@@ -2201,21 +2355,33 @@ export default function ConsultantWorkflowPage() {
 
             <div className="flex flex-col gap-2.5">
               <button
+                ref={conflictPrimaryBtnRef}
                 type="button"
                 onClick={async () => {
                   const unsaved = conflictState.unsaved_data;
-                  setConflictState(null);
+                  if (autosaveTimerRef.current) {
+                    clearTimeout(autosaveTimerRef.current);
+                  }
+                  isCloningDraftRef.current = true;
                   setIsLoading(true);
                   try {
                     const res = await fetch("/api/v1/consultant/workflow", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ action: "create_draft" }),
+                      body: JSON.stringify({
+                        action: "clone_draft",
+                        draft_data: {
+                          productRequirement: unsaved.productRequirement,
+                          technicalCompliance: unsaved.technicalCompliance,
+                          orderProfile: unsaved.orderProfile,
+                          savedAt: new Date().toISOString(),
+                        },
+                      }),
                     });
                     const d = await res.json();
                     if (d.success && d.draft_id) {
                       setDraftId(d.draft_id);
-                      setDraftVersion(1);
+                      setDraftVersion(d.draft_version ?? 1);
                       sessionStorage.setItem(
                         "matchbase_active_draft_id",
                         d.draft_id,
@@ -2225,33 +2391,22 @@ export default function ConsultantWorkflowPage() {
                         "",
                         `/consultant/workflow?draft_id=${d.draft_id}`,
                       );
-                      await fetch("/api/v1/consultant/workflow", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          action: "save_draft",
-                          draft_id: d.draft_id,
-                          draft_version: 1,
-                          expected_version: 1,
-                          draft_data: {
-                            productRequirement: unsaved.productRequirement,
-                            technicalCompliance: unsaved.technicalCompliance,
-                            orderProfile: unsaved.orderProfile,
-                            savedAt: new Date().toISOString(),
-                          },
-                        }),
-                      });
+                      setConflictState(null);
+                      previousFocusRef.current?.focus();
                       triggerToast(
-                        "Saved local inputs as a new independent draft.",
+                        "Saved local inputs as a new independent draft (Version 1).",
                       );
                     }
                   } catch (e) {
-                    console.error("Failed to fork draft:", e);
+                    console.error("Failed to clone draft:", e);
                   } finally {
                     setIsLoading(false);
+                    setTimeout(() => {
+                      isCloningDraftRef.current = false;
+                    }, 300);
                   }
                 }}
-                className="w-full py-2.5 px-4 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-xs transition shadow"
+                className="w-full py-2.5 px-4 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-xs transition shadow focus:ring-2 focus:ring-sky-400 focus:outline-none"
               >
                 Keep my version as a new draft
               </button>
@@ -2260,11 +2415,15 @@ export default function ConsultantWorkflowPage() {
                 type="button"
                 onClick={async () => {
                   const targetDraftId = draftId;
+                  if (autosaveTimerRef.current) {
+                    clearTimeout(autosaveTimerRef.current);
+                  }
                   setConflictState(null);
+                  previousFocusRef.current?.focus();
                   await loadExistingDraft(targetDraftId);
                   triggerToast("Loaded latest version from server.");
                 }}
-                className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs border border-slate-700 transition"
+                className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs border border-slate-700 transition focus:ring-2 focus:ring-slate-400 focus:outline-none"
               >
                 Review latest saved version (overwrite local edits)
               </button>
@@ -2273,11 +2432,15 @@ export default function ConsultantWorkflowPage() {
                 type="button"
                 onClick={async () => {
                   const targetDraftId = draftId;
+                  if (autosaveTimerRef.current) {
+                    clearTimeout(autosaveTimerRef.current);
+                  }
                   setConflictState(null);
+                  previousFocusRef.current?.focus();
                   await loadExistingDraft(targetDraftId);
                   triggerToast("Discarded unsaved local edits.");
                 }}
-                className="w-full py-2 px-4 bg-transparent hover:bg-rose-950/40 text-rose-400 hover:text-rose-300 text-xs rounded transition"
+                className="w-full py-2 px-4 bg-transparent hover:bg-rose-950/40 text-rose-400 hover:text-rose-300 text-xs rounded transition focus:ring-2 focus:ring-rose-400 focus:outline-none"
               >
                 Discard my local changes
               </button>

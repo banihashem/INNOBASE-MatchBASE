@@ -33,6 +33,8 @@
     "test:consultant-v3:draft-isolation": "pnpm --filter @matchbase/data build && node scripts/test-consultant-v3-draft-isolation.mjs",
     "test:consultant-v3:draft-concurrency": "node scripts/test-consultant-v3-draft-concurrency.mjs",
     "test:consultant-v3:resume": "node scripts/test-consultant-v3-resume.mjs",
+    "test:consultant-v3:pdf": "pnpm --filter @matchbase/reporting build && node scripts/test-consultant-v3-pdf.mjs",
+    "test:consultant-v3:fidelity": "pnpm --filter @matchbase/contracts build && pnpm --filter @matchbase/application build && node scripts/test-consultant-v3-fidelity.mjs",
     "test:ci": "pnpm run snapshot:prepare && pnpm run build && pnpm run check && pnpm run test && pnpm run test:standalone:repeat && pnpm run test:browser",
     "slice1:validate:local": "node scripts/validate-slice1-local.mjs",
     "slice2:validate:local": "node scripts/validate-slice2-local.mjs",

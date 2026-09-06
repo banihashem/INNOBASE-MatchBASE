@@ -17,6 +17,7 @@ import {
   saveConsultantDraftSession,
   getActiveConsultantDraftSession,
   abandonConsultantDraftSession,
+  getConsultantDraftSessionByRunId,
 } from "@matchbase/data";
 import { getAppDatabasePool } from "../../../../../src/db-client";
 import { resolveRequestSession } from "../../../../../src/fetch-runtime";
@@ -435,12 +436,15 @@ export async function GET(req: Request): Promise<NextResponse> {
     return NextResponse.json({ success: true, draft });
   }
 
-  // List incomplete workflow sessions for account
+  // List incomplete workflow sessions for account (excluding invalidated sessions)
   if (listIncomplete === "true") {
-    const sessions = await listConsultantWorkflowSessions(
+    const allSessions = await listConsultantWorkflowSessions(
       pool,
       context.accountId,
       20,
+    );
+    const sessions = allSessions.filter(
+      (s) => !s.is_invalidated && s.current_state !== "invalidated",
     );
     return NextResponse.json({ success: true, sessions });
   }
@@ -458,8 +462,15 @@ export async function GET(req: Request): Promise<NextResponse> {
       context,
       runId,
       pool,
-      resourceKind: "run_result",
+      resourceKind: "run_detail",
     });
+
+    // Lookup linked draft session
+    const draft = await getConsultantDraftSessionByRunId(
+      pool,
+      context.accountId,
+      authorized.runId,
+    );
 
     // Try in-memory or workflow table session first
     const session = await getOrRestoreWorkflowSession(
@@ -468,19 +479,57 @@ export async function GET(req: Request): Promise<NextResponse> {
       authorized.runId,
     );
     if (session) {
-      return NextResponse.json({ success: true, session });
+      if (draft) {
+        (session as any).draft_id = draft.draft_id;
+        (session as any).draft_version = draft.draft_version;
+      }
+      return NextResponse.json({ success: true, session, draft });
     }
 
     // Output is authorized and present
-    return NextResponse.json({
-      success: true,
-      session: {
-        run_id: authorized.runId,
-        state: "workflow_complete",
-        revealed_count: authorized.output.supplier_candidates.length,
-        output: authorized.output,
-      },
-    });
+    if (authorized.output) {
+      return NextResponse.json({
+        success: true,
+        session: {
+          run_id: authorized.runId,
+          draft_id: draft?.draft_id ?? null,
+          draft_version: draft?.draft_version ?? 1,
+          state: "workflow_complete",
+          revealed_count: authorized.output.supplier_candidates.length,
+          output: authorized.output,
+        },
+        draft,
+      });
+    }
+
+    // Workflow session present without output (in-progress run)
+    if (authorized.session) {
+      const restoredSession = {
+        run_id: authorized.session.run_id,
+        session_id: authorized.session.session_id,
+        draft_id: draft?.draft_id ?? null,
+        draft_version: draft?.draft_version ?? 1,
+        state: authorized.session.current_state,
+        intake: authorized.session.original_intake,
+        step1_interpretation:
+          authorized.session.approved_request_revision ??
+          authorized.session.draft_revision,
+        step2_advisory: authorized.session.advisory_output,
+        step3_deep_prompt: authorized.session.deep_prompt_revision,
+        revealed_count: 5,
+        output: null,
+      };
+      return NextResponse.json({
+        success: true,
+        session: restoredSession,
+        draft,
+      });
+    }
+
+    return NextResponse.json(
+      { error: "Session or output not found", code: "MB-404-NOT-FOUND" },
+      { status: 404 },
+    );
   } catch (readError) {
     if (readError instanceof ApplicationFault) {
       return NextResponse.json(
@@ -488,6 +537,7 @@ export async function GET(req: Request): Promise<NextResponse> {
           error: readError.message,
           code: readError.code,
           status: readError.status,
+          details: (readError as any).headers ?? (readError as any).details,
         },
         { status: readError.status },
       );

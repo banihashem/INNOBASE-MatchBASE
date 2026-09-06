@@ -896,3 +896,48 @@ export async function abandonConsultantDraftSession(
     );
   }
 }
+
+export async function getConsultantDraftSessionByRunId(
+  db: Queryable,
+  accountId: string,
+  runId: string,
+): Promise<ConsultantDraftSessionRecord | null> {
+  const res = await db.query<{
+    draft_id: string;
+    account_id: string;
+    user_profile_id: string;
+    tier: "consultant";
+    current_run_id: string | null;
+    snapshot_id: string | null;
+    draft_version: number;
+    status: "active" | "submitted" | "abandoned";
+    draft_data: Record<string, unknown> | string;
+    updated_at: Date;
+    created_at: Date;
+  }>(
+    `SELECT * FROM consultant_draft_session
+     WHERE current_run_id = $1 AND account_id = $2
+     ORDER BY updated_at DESC
+     LIMIT 1;`,
+    [runId, accountId],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  const parseJson = (val: unknown): Record<string, unknown> =>
+    typeof val === "string"
+      ? JSON.parse(val)
+      : (val as Record<string, unknown>);
+  return {
+    draft_id: row.draft_id,
+    account_id: row.account_id,
+    user_profile_id: row.user_profile_id,
+    tier: row.tier,
+    current_run_id: row.current_run_id,
+    snapshot_id: row.snapshot_id,
+    draft_version: row.draft_version,
+    status: row.status,
+    draft_data: parseJson(row.draft_data),
+    updated_at: row.updated_at.toISOString(),
+    created_at: row.created_at.toISOString(),
+  };
+}

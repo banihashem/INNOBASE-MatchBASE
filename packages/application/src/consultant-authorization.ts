@@ -99,11 +99,33 @@ export async function authorizeConsultantRunResourceRead(options: {
   context: RequestContext;
   runId: string;
   pool: ConnectionPool;
-  resourceKind?: "report_pdf" | "report_json" | "run_result" | "run_detail";
+  resourceKind?: "report_pdf" | "report_json" | "run_result";
 }): Promise<{
   status: 200;
   runId: string;
   output: ConsultantResearchOutputV3;
+  session?: ConsultantWorkflowSessionRecord;
+}>;
+export async function authorizeConsultantRunResourceRead(options: {
+  context: RequestContext;
+  runId: string;
+  pool: ConnectionPool;
+  resourceKind: "run_detail";
+}): Promise<{
+  status: 200;
+  runId: string;
+  output?: ConsultantResearchOutputV3 | null;
+  session?: ConsultantWorkflowSessionRecord;
+}>;
+export async function authorizeConsultantRunResourceRead(options: {
+  context: RequestContext;
+  runId: string;
+  pool: ConnectionPool;
+  resourceKind?: "report_pdf" | "report_json" | "run_result" | "run_detail";
+}): Promise<{
+  status: 200;
+  runId: string;
+  output?: ConsultantResearchOutputV3 | null;
   session?: ConsultantWorkflowSessionRecord;
 }> {
   const { context, runId, pool, resourceKind = "report_pdf" } = options;
@@ -256,6 +278,14 @@ export async function authorizeConsultantRunResourceRead(options: {
           output: memorySession.output,
         };
       }
+      if (resourceKind === "run_detail") {
+        return {
+          status: 200,
+          runId: effectiveRunId,
+          output: null,
+          session: memorySession as any,
+        };
+      }
     }
 
     // Check golden scenarios fallback
@@ -327,15 +357,6 @@ export async function authorizeConsultantRunResourceRead(options: {
     if (mem?.output) output = mem.output;
   }
 
-  if (!output) {
-    throw new ApplicationFault(
-      404,
-      "run-not-found",
-      "MB-404-RUN",
-      "The requested run was not found.",
-    );
-  }
-
   const session: ConsultantWorkflowSessionRecord | undefined = row.session_id
     ? {
         session_id: row.session_id,
@@ -372,6 +393,23 @@ export async function authorizeConsultantRunResourceRead(options: {
           String(row.session_updated_at ?? ""),
       }
     : undefined;
+
+  if (!output) {
+    if (resourceKind === "run_detail" && session) {
+      return {
+        status: 200,
+        runId: effectiveRunId,
+        output: null,
+        session,
+      };
+    }
+    throw new ApplicationFault(
+      404,
+      "run-not-found",
+      "MB-404-RUN",
+      "The requested run was not found.",
+    );
+  }
 
   return {
     status: 200,

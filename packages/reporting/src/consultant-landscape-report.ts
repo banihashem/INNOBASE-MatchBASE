@@ -32,7 +32,7 @@ export function generateConsultantLandscapeHtml(
     output.telemetry.total_cost_usd === 0;
 
   const demoBannerHtml = isDemo
-    ? `<div class="demo-banner">DEMONSTRATION RESEARCH &bull; NOT FOR COMMERCIAL RELIANCE &bull; SYNTHETIC ILLUSTRATIVE ENTITIES</div>`
+    ? `<div class="demo-banner">DEMONSTRATION RESEARCH &bull; SYNTHETIC ILLUSTRATIVE ENTITIES &bull; NOT LIVE MARKET EVIDENCE &bull; NOT FOR COMMERCIAL RELIANCE</div>`
     : "";
 
   return `<!doctype html>
@@ -433,7 +433,7 @@ export function generateConsultantLandscapeHtml(
             <th style="width: 140px;">Company &amp; Fixture ID</th>
             <th style="width: 70px;">Status</th>
             <th style="width: 75px;">Facilities</th>
-            <th style="width: 90px;">Country / Domain</th>
+            <th style="width: 90px;">${isDemo ? "Country / Entity Type" : "Country / Domain"}</th>
             <th style="width: 80px;">Capacity / MOQ</th>
             <th style="width: 40px;">Score</th>
             <th>Strategic Rationale &amp; Observed Basis</th>
@@ -464,7 +464,7 @@ export function generateConsultantLandscapeHtml(
             <td>${escapeHtml(s.manufacturing_locations.join(", ") || "Verified Facility")}</td>
             <td>
               ${escapeHtml(s.country_of_registration)}<br>
-              <small style="color: #C41E3A;">${escapeHtml(s.primary_domain)}</small>
+              <small style="color: ${s.primary_domain ? "#C41E3A" : "#64748b"};">${escapeHtml(s.primary_domain ?? (isDemo ? "Illustrative Entity" : "Not Provided"))}</small>
             </td>
             <td>
               <small>${escapeHtml(s.commercial.production_capacity ?? "Commercial capacity")}</small><br>

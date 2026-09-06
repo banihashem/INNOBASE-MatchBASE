@@ -20,6 +20,7 @@ const REAL_COMPANY_DENYLIST = [
   "perdigao",
   "seara",
   "jbs",
+  "hydranautics",
 ];
 
 const scenarios = [
@@ -98,13 +99,22 @@ for (const { name, data } of scenarios) {
       );
     }
 
-    // No live public websites
-    if (cand.website) {
-      assert.ok(
-        cand.website.includes(".internal") || cand.website === "",
-        `Candidate ${cand.candidate_id} website must be internal fixture domain, got: ${cand.website}`,
-      );
-    }
+    // No live public websites or fake internal websites presented to user
+    assert.equal(
+      cand.website,
+      null,
+      `Candidate ${cand.candidate_id} website must be null in synthetic fixtures, got: ${cand.website}`,
+    );
+    assert.equal(
+      cand.primary_domain,
+      null,
+      `Candidate ${cand.candidate_id} primary_domain must be null in synthetic fixtures, got: ${cand.primary_domain}`,
+    );
+    assert.equal(
+      cand.identity_confidence,
+      "not_assessed",
+      `Candidate ${cand.candidate_id} identity_confidence must be 'not_assessed'`,
+    );
   }
   console.log(
     `✔ All ${data.supplier_candidates.length} candidates satisfy synthetic demonstration truth rules`,

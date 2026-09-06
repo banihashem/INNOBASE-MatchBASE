@@ -39,6 +39,18 @@ async function runTests() {
   const consultantCookie = await getAuthCookie("consultant");
   const standardCookie = await getAuthCookie("standard");
 
+  // Clean any pre-existing active drafts for consultant test user
+  await fetch(`${BASE_URL}/api/v1/consultant/workflow`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: consultantCookie,
+    },
+    body: JSON.stringify({
+      action: "abandon_draft",
+    }),
+  });
+
   console.log("\n1. Testing Server-Side Draft Saving for Consultant...");
   const testDraftId = crypto.randomUUID();
   const testDraftData = {
@@ -169,6 +181,20 @@ async function runTests() {
   });
   assert.equal(abandonRes.status, 200, "Abandon draft must return 200");
 
+  const checkSpecificRes = await fetch(
+    `${BASE_URL}/api/v1/consultant/workflow?draft_id=${testDraftId}`,
+    {
+      headers: { Cookie: consultantCookie },
+    },
+  );
+  assert.equal(checkSpecificRes.status, 200);
+  const checkSpecificJson = await checkSpecificRes.json();
+  assert.equal(
+    checkSpecificJson.draft?.status,
+    "abandoned",
+    "Specific draft status must be 'abandoned'",
+  );
+
   const checkAbandonedRes = await fetch(
     `${BASE_URL}/api/v1/consultant/workflow?active_draft=true`,
     {
@@ -182,7 +208,7 @@ async function runTests() {
     null,
     "Active draft must be null after abandonment",
   );
-  console.log("✔ Server draft successfully abandoned and cleared");
+  console.log("✔ Server draft successfully abandoned and verified");
 
   console.log("\n=======================================================");
   console.log("✔ ALL CONSULTANT V3 DRAFT & SESSION ISOLATION TESTS PASSED!");

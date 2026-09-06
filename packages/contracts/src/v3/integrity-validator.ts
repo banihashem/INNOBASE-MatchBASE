@@ -69,11 +69,13 @@ export function validateConsultantOutputV3Integrity(
     for (const eid of s.identity_evidence_ids) {
       checkEvidenceRef(eid, `supplier ${s.candidate_id} identity_evidence_ids`);
     }
-    for (const eid of s.contacts.contact_evidence_ids) {
-      checkEvidenceRef(
-        eid,
-        `supplier ${s.candidate_id} contacts.contact_evidence_ids`,
-      );
+    if (s.contacts?.contact_evidence_ids) {
+      for (const eid of s.contacts.contact_evidence_ids) {
+        checkEvidenceRef(
+          eid,
+          `supplier ${s.candidate_id} contacts.contact_evidence_ids`,
+        );
+      }
     }
     for (const eid of s.offering.product_evidence_ids) {
       checkEvidenceRef(
@@ -177,7 +179,7 @@ export function validateConsultantOutputV3Integrity(
       (acc, s) =>
         acc +
         s.identity_evidence_ids.length +
-        s.contacts.contact_evidence_ids.length +
+        (s.contacts?.contact_evidence_ids.length ?? 0) +
         s.offering.product_evidence_ids.length +
         s.commercial.commercial_evidence_ids.length +
         (s.packaging_and_logistics?.logistics_evidence_ids.length ?? 0) +

@@ -47,7 +47,8 @@ export interface VerifiedPublicContact {
   readonly whatsapp_business?: string;
   readonly linkedin_company_url?: string;
   readonly other_official_social_urls?: readonly string[];
-  readonly verification_status: "verified" | "claimed" | "unverified";
+  readonly verification_status:
+    "verified" | "claimed" | "unverified" | "illustrative" | "not_applicable";
   readonly verified_at?: string;
   readonly contact_evidence_ids: readonly string[];
 }
@@ -118,13 +119,14 @@ export interface PackagingAndLogisticsV3 {
 
 export interface CertificationItemV3 {
   readonly certification_name: string;
-  readonly issuer?: string;
-  readonly certificate_number?: string;
+  readonly issuer?: string | null;
+  readonly certificate_number?: string | null;
   readonly scope?: string;
   readonly status: "active" | "conditional" | "expired" | "unknown";
   readonly valid_from?: string;
   readonly valid_until?: string;
-  readonly verification_status: "verified" | "claimed" | "unverified";
+  readonly verification_status:
+    "verified" | "claimed" | "unverified" | "illustrative" | "not_applicable";
   readonly destination_market_relevance?: string;
   readonly evidence_ids: readonly string[];
 }
@@ -168,6 +170,10 @@ export interface SupplierEntityV3 {
   readonly aliases: readonly string[];
   readonly parent_entity_id?: string;
   readonly subsidiary_relationship?: string;
+  readonly entity_basis?: "synthetic_fixture" | "live_verified";
+  readonly verification_status?: VerificationStatusV2;
+  readonly evidence_basis?: "illustrative_fixture" | "live_evidence";
+  readonly fixture_entity_id?: string;
   readonly supplier_type: SupplierTypeV2;
   readonly manufacturer_status:
     | "direct_manufacturer"
@@ -178,11 +184,11 @@ export interface SupplierEntityV3 {
   readonly headquarters_address: string;
   readonly manufacturing_locations: readonly string[];
   readonly registry_identifiers?: Readonly<Record<string, string>>;
-  readonly website: string;
-  readonly primary_domain: string;
+  readonly website: string | null;
+  readonly primary_domain: string | null;
   readonly identity_confidence: ConfidenceLevelV2;
   readonly identity_evidence_ids: readonly string[];
-  readonly contacts: VerifiedPublicContact;
+  readonly contacts?: VerifiedPublicContact | null;
   readonly digital_assets: readonly DigitalAssetCoverage[];
   readonly offering: SupplierOfferingV3;
   readonly commercial: CommercialDataV3;
@@ -287,7 +293,7 @@ export interface ConsultantResearchOutputV3 extends FourIdTrace {
     readonly primary_limitation?: string;
     readonly no_match_summary?: string;
     readonly research_coverage_status?:
-      "sufficient" | "partial" | "insufficient";
+      "sufficient" | "partial" | "insufficient" | "not_assessed";
   };
   readonly target_candidates_count: 20;
   readonly total_candidates_found: number;

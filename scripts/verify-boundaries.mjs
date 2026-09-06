@@ -39,7 +39,8 @@ for (const path of trackedIgnoredFiles(root)) {
 
 function walk(directory) {
   for (const name of readdirSync(directory)) {
-    if (name === ".git" || name === "node_modules") continue;
+    if (name === ".git" || name === "node_modules" || name === ".artifacts")
+      continue;
     const path = resolve(directory, name);
     const rel = relative(root, path);
     const first = rel.split(sep)[0];

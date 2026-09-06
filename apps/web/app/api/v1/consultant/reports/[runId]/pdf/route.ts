@@ -4,7 +4,10 @@ import {
   authorizeConsultantRunResourceRead,
 } from "@matchbase/application";
 import { savePdfReportLedger } from "@matchbase/data";
-import { generateConsultantPdf } from "@matchbase/reporting";
+import {
+  generateConsultantPdf,
+  ConsultantPdfRendererUnavailableError,
+} from "@matchbase/reporting";
 import { getAppDatabasePool } from "../../../../../../../src/db-client";
 import { resolveRequestSession } from "../../../../../../../src/fetch-runtime";
 
@@ -17,7 +20,9 @@ export async function GET(
 ): Promise<Response> {
   const headers = new Headers({
     "Cache-Control": "private, no-store",
-    Vary: "Cookie",
+    Pragma: "no-cache",
+    Vary: "Cookie, Authorization",
+    "X-Content-Type-Options": "nosniff",
   });
 
   try {
@@ -84,8 +89,32 @@ export async function GET(
       candidatesCount === 0 ? 1 : Math.ceil(candidatesCount / 5);
     const pageCount = 4 + matrixPages;
 
-    // Generate PDF bytes
-    const pdfBuffer = await generateConsultantPdf(output);
+    // Generate PDF bytes with controlled error handling
+    let pdfBuffer: Buffer;
+    try {
+      pdfBuffer = await generateConsultantPdf(output);
+    } catch (renderError) {
+      console.error("Consultant PDF generation failed:", renderError);
+      if (renderError instanceof ConsultantPdfRendererUnavailableError) {
+        return NextResponse.json(
+          {
+            error: renderError.message,
+            code: renderError.code,
+            status: renderError.status,
+          },
+          { status: renderError.status, headers },
+        );
+      }
+      return NextResponse.json(
+        {
+          error:
+            "Consultant PDF renderer is currently unavailable. Please retry shortly.",
+          code: "MB-503-PDF-RENDERER-UNAVAILABLE",
+          status: 503,
+        },
+        { status: 503, headers },
+      );
+    }
 
     // Persist to database ledger
     try {

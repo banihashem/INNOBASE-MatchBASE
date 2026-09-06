@@ -31,3 +31,4 @@ export * from "./v3/golden-scenarios.js";
 export * from "./v3/adapter.js";
 export * from "./v3/integrity-validator.js";
 export * from "./v3/semantic-coherence-validator.js";
+export * from "./v3/requirement-fidelity.js";

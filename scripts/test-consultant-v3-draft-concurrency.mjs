@@ -311,6 +311,130 @@ async function runTests() {
     "  No unhandled exception, no React crash loop, recoverable=true",
   );
 
+  // =========================================================================
+  // 5. Atomic Clone Draft Action & Zero Secondary Conflict (N03)
+  // =========================================================================
+  console.log(
+    "\n5. Testing Atomic clone_draft Action & Zero Secondary Conflict Loop...",
+  );
+
+  // Tab A creates a draft and advances version to 2
+  const sharedDraftRes = await fetch(`${BASE_URL}/api/v1/consultant/workflow`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: consultantCookie,
+    },
+    body: JSON.stringify({ action: "create_draft" }),
+  });
+  const sharedDraftData = await sharedDraftRes.json();
+  const sharedDraftId = sharedDraftData.draft_id;
+
+  // Save version 1 -> advances to version 2 on server
+  await fetch(`${BASE_URL}/api/v1/consultant/workflow`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: consultantCookie,
+    },
+    body: JSON.stringify({
+      action: "save_draft",
+      draft_id: sharedDraftId,
+      draft_version: 1,
+      expected_version: 1,
+      draft_data: { test: "initial version" },
+    }),
+  });
+
+  // Stale client tries to save version 1 -> gets 409 conflict
+  const conflictSaveRes = await fetch(
+    `${BASE_URL}/api/v1/consultant/workflow`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: consultantCookie,
+      },
+      body: JSON.stringify({
+        action: "save_draft",
+        draft_id: sharedDraftId,
+        draft_version: 1,
+        expected_version: 1,
+        draft_data: { test: "conflicting client edit" },
+      }),
+    },
+  );
+  assert.equal(
+    conflictSaveRes.status,
+    409,
+    "Must return 409 on version mismatch",
+  );
+  const conflictData = await conflictSaveRes.json();
+  assert.equal(conflictData.error?.code, "MB-409-DRAFT-CONFLICT");
+
+  // Client chooses "Keep my version as a new draft" -> invokes clone_draft
+  const cloneRes = await fetch(`${BASE_URL}/api/v1/consultant/workflow`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: consultantCookie,
+    },
+    body: JSON.stringify({
+      action: "clone_draft",
+      draft_data: { test: "conflicting client edit" },
+    }),
+  });
+  assert.equal(cloneRes.status, 200, "clone_draft must return HTTP 200 OK");
+  const cloneData = await cloneRes.json();
+  assert.ok(cloneData.success, "clone_draft must succeed");
+  assert.ok(cloneData.draft_id, "clone_draft must return new draft_id");
+  assert.notEqual(
+    cloneData.draft_id,
+    sharedDraftId,
+    "Cloned draft_id must be distinct from original",
+  );
+  assert.equal(
+    cloneData.draft_version,
+    1,
+    "Cloned draft starting version must be 1",
+  );
+
+  // Subsequent save on cloned draft succeeds without any 409 conflict
+  const subsequentSaveRes = await fetch(
+    `${BASE_URL}/api/v1/consultant/workflow`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: consultantCookie,
+      },
+      body: JSON.stringify({
+        action: "save_draft",
+        draft_id: cloneData.draft_id,
+        draft_version: 1,
+        expected_version: 1,
+        draft_data: { test: "subsequent client edit on cloned draft" },
+      }),
+    },
+  );
+  assert.equal(
+    subsequentSaveRes.status,
+    200,
+    `Subsequent save on cloned draft must return 200 without secondary conflict, got ${subsequentSaveRes.status}`,
+  );
+  const subsequentData = await subsequentSaveRes.json();
+  assert.equal(
+    subsequentData.draft_version,
+    2,
+    "Subsequent save advances version to 2",
+  );
+  console.log(
+    "✔ Atomic clone_draft creates independent draft with starting version 1",
+  );
+  console.log(
+    "✔ Zero secondary 409 conflict loops on subsequent autosave/edit",
+  );
+
   console.log("\n=======================================================");
   console.log("✔ ALL DRAFT CONCURRENCY & COHERENCE TESTS PASSED!");
   console.log("=======================================================");

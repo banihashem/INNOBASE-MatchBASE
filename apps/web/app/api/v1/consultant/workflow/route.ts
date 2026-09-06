@@ -85,6 +85,32 @@ export async function POST(req: Request): Promise<NextResponse> {
       });
     }
 
+    // Action: Clone Conflicting Draft as New Independent Draft Atomically (N03)
+    if (action === "clone_draft") {
+      const draft_data = (body.draft_data as Record<string, unknown>) || {};
+      const newDraftId = crypto.randomUUID();
+      const saved = await saveConsultantDraftSession(
+        pool,
+        {
+          draft_id: newDraftId,
+          account_id: context.accountId,
+          user_profile_id: context.userId,
+          tier: "consultant",
+          current_run_id: null,
+          snapshot_id: null,
+          draft_version: 1,
+          status: "active",
+          draft_data,
+        },
+        undefined,
+      );
+      return NextResponse.json({
+        success: true,
+        draft_id: saved.draft_id,
+        draft_version: saved.draft_version,
+      });
+    }
+
     // Action: Save Draft Session with Optimistic Concurrency Check
     if (action === "save_draft") {
       const UUID_REGEX =

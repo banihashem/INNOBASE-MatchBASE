@@ -1,5 +1,14 @@
 import crypto from "node:crypto";
-import type { ProductClassificationRecord } from "@matchbase/contracts";
+import type {
+  ProductClassificationRecord,
+  ExplicitRequirementLedger,
+  ModelSuggestionItem,
+  Step1FidelityValidationResult,
+} from "@matchbase/contracts";
+import {
+  extractExplicitRequirementLedger,
+  validateStep1RequirementFidelity,
+} from "@matchbase/contracts";
 
 export interface NormalizedRequirement {
   readonly requirement_id: string;
@@ -7,7 +16,7 @@ export interface NormalizedRequirement {
     "product_requirement" | "technical_compliance" | "order_profile";
   readonly source_text_reference: string;
   readonly normalized_value: string;
-  readonly unit?: string;
+  readonly unit?: string | undefined;
   readonly requirement_level: "mandatory" | "preferred" | "excluded";
   readonly derivation_type:
     "explicit" | "normalized" | "inferred_suggestion" | "unknown";
@@ -26,6 +35,9 @@ export interface Step1InterpretationResult {
   readonly unknowns: readonly string[];
   readonly suggested_clarifications: readonly string[];
   readonly classification: ProductClassificationRecord;
+  readonly ledger?: ExplicitRequirementLedger | undefined;
+  readonly model_suggestions?: readonly ModelSuggestionItem[] | undefined;
+  readonly fidelity_validation?: Step1FidelityValidationResult | undefined;
 }
 
 export interface Step2AdvisoryResult {
@@ -539,21 +551,31 @@ Commercial & Order Profile: Order volume of ${quantityText}. Delivery terms ${in
       assigned_at: new Date().toISOString(),
     };
 
+    const mandatoryRequirements = [
+      "Active SFDA foreign slaughterhouse establishment listing",
+      "Accredited Halal certification (FAMBRAS or Cibal Halal)",
+      `Whole bird weight calibration (${weightRange})`,
+      "10 kg export carton with 4 x 2.5 kg inner bags",
+      "-18°C continuous cold-chain, max 4.5% moisture, 12-month shelf life",
+      `${incoterm} delivery terms`,
+      `Order quantity: ${quantityText}`,
+    ];
+
+    const ledger = extractExplicitRequirementLedger(intake);
+    const fidelityValidation = validateStep1RequirementFidelity(intake, {
+      english_translation: englishTranslation,
+      mandatory_requirements: mandatoryRequirements,
+      explicit_requirements: explicitRequirements,
+      model_suggestions: [],
+    });
+
     return {
       original_language: "fa",
       english_translation: englishTranslation,
       product_category: "Poultry & Frozen Meat",
       product_name: `Frozen Whole Chicken (${weightRange}) Grade A`,
       explicit_requirements: explicitRequirements,
-      mandatory_requirements: [
-        "Active SFDA foreign slaughterhouse establishment listing",
-        "Accredited Halal certification (FAMBRAS or Cibal Halal)",
-        `Whole bird weight calibration (${weightRange})`,
-        "10 kg export carton with 4 x 2.5 kg inner bags",
-        "-18°C continuous cold-chain, max 4.5% moisture, 12-month shelf life",
-        `${incoterm} delivery terms`,
-        `Order quantity: ${quantityText}`,
-      ],
+      mandatory_requirements: mandatoryRequirements,
       preferred_requirements: [
         "Direct slaughterhouse contract without trading intermediaries",
       ],
@@ -571,6 +593,9 @@ Commercial & Order Profile: Order volume of ${quantityText}. Delivery terms ${in
         "Confirm whether payment terms will be 100% confirmed irrevocable LC at sight or CAD.",
       ],
       classification,
+      ledger,
+      model_suggestions: [],
+      fidelity_validation: fidelityValidation,
     };
   }
 
@@ -596,9 +621,59 @@ Commercial & Order Profile: Order volume of ${quantityText}. Delivery terms ${in
     }
     const quantityText = `${qtyUnits} units`;
 
+    // Detect indoor installation requirement
+    const isIndoor =
+      /indoor|داخلی|موتورخانه/i.test(intake.product_requirement) ||
+      /indoor|داخلی/i.test(intake.technical_compliance);
+
+    // Detect BMS-compatible thermostat requirement
+    const isBms =
+      /bms|building management|ترموستات/i.test(intake.technical_compliance) ||
+      /bms/i.test(intake.product_requirement);
+
+    // Detect user-specified warranty period (strictly preserve 2-year warranty)
+    const is2Year =
+      /2\s*[- ]?year|two[- ]year|۲\s*سال|2\s*سال|24\s*ماه/i.test(
+        intake.technical_compliance,
+      ) || /2\s*[- ]?year|two[- ]year/i.test(intake.product_requirement);
+
+    const is5Year =
+      !is2Year &&
+      (/5\s*[- ]?year|five[- ]year|۵\s*سال|5\s*سال|60\s*ماه/i.test(
+        intake.technical_compliance,
+      ) ||
+        /5\s*[- ]?year|five[- ]year/i.test(intake.product_requirement));
+
+    const warrantyClause = is2Year
+      ? "two-year UAE warranty (24 months)"
+      : is5Year
+        ? "five-year warranty (60 months)"
+        : "standard manufacturer warranty";
+
+    // Model suggestions kept strictly separate from approved facts
+    const modelSuggestions: ModelSuggestionItem[] = is2Year
+      ? [
+          {
+            suggestion_id: crypto.randomUUID(),
+            title: "Extended Tank Warranty Consideration",
+            suggested_value: "5-year commercial tank warranty",
+            reasoning:
+              "Commercial calorifiers in hospitality/industrial use commonly request a 5-year tank warranty, though the user specified a 2-year warranty.",
+            status: "not_included_in_approved_request",
+          },
+        ]
+      : [];
+
+    const indoorPhrase = isIndoor
+      ? " Suitable for indoor mechanical room installation."
+      : "";
+    const bmsPhrase = isBms
+      ? " BMS-compatible thermostat integration for building automation."
+      : "";
+
     const englishTranslation = `
-Product Requirement: Commercial / Industrial Electric Water Heater (Storage Calorifier) with 500 Litres storage capacity. Heavy-duty construction with high-efficiency thermal insulation. Outer diameter strictly limited to maximum 85 cm (850 mm) to permit entry through standard mechanical room service doors. Destination: Dubai, United Arab Emirates.
-Technical & Compliance: Designed for 10 bar maximum working pressure (factory tested to >= 15 bar). Three-phase industrial electrical power configuration (380V - 415V, 50/60 Hz). Internal tank protection via high-grade vitreous enamel or 316L stainless steel with magnesium sacrificial anode. Mandatory CE certification, Pressure Equipment Directive (PED 2014/68/EU), and UAE G-Mark / MoIAT conformity. Required installation support, local spare parts availability (heating elements, thermostat, pressure relief valve), and 5-year tank warranty. Official manufacturer website and verifiable sales contact desk (email, telephone).
+Product Requirement: Commercial / Industrial Electric Water Heater (Storage Calorifier) with 500 Litres storage capacity. Heavy-duty construction with high-efficiency thermal insulation. Outer diameter strictly limited to maximum 85 cm (850 mm) to permit entry through standard mechanical room service doors.${indoorPhrase} Destination: Dubai, United Arab Emirates.
+Technical & Compliance: Designed for 10 bar maximum working pressure (factory tested to >= 15 bar). Three-phase 400V industrial electrical power configuration (380V - 415V, 50/60 Hz). Internal tank protection via high-grade vitreous enamel or 316L stainless steel with magnesium sacrificial anode. Mandatory CE certification, Pressure Equipment Directive (PED 2014/68/EU), and UAE G-Mark / MoIAT conformity.${bmsPhrase} Required installation support, local spare parts availability (heating elements, thermostat, pressure relief valve), and ${warrantyClause}. Official manufacturer website and verifiable sales contact desk (email, telephone).
 Commercial & Order Profile: Project batch of ${quantityText} for commercial facility installation. Delivery terms ${incoterm}, including customs clearance and delivery to site in Dubai. Direct manufacturer or certified regional distributor preferred.
 `.trim();
 
@@ -622,6 +697,20 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
         requirement_level: "mandatory",
         derivation_type: "explicit",
       },
+    ];
+
+    if (isIndoor) {
+      explicitRequirements.push({
+        requirement_id: crypto.randomUUID(),
+        source_box: "product_requirement",
+        source_text_reference: intake.product_requirement,
+        normalized_value: "Indoor mechanical room installation",
+        requirement_level: "mandatory",
+        derivation_type: "explicit",
+      });
+    }
+
+    explicitRequirements.push(
       {
         requirement_id: crypto.randomUUID(),
         source_box: "technical_compliance",
@@ -636,7 +725,8 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
         source_box: "technical_compliance",
         source_text_reference: intake.technical_compliance,
         normalized_value:
-          "Three-phase industrial electrical supply (380V - 415V, 50/60Hz)",
+          "Three-phase 400V industrial electrical supply (380V - 415V, 50/60Hz)",
+        unit: "V",
         requirement_level: "mandatory",
         derivation_type: "explicit",
       },
@@ -649,12 +739,25 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
         requirement_level: "mandatory",
         derivation_type: "explicit",
       },
+    );
+
+    if (isBms) {
+      explicitRequirements.push({
+        requirement_id: crypto.randomUUID(),
+        source_box: "technical_compliance",
+        source_text_reference: intake.technical_compliance,
+        normalized_value: "BMS-compatible thermostat integration",
+        requirement_level: "mandatory",
+        derivation_type: "explicit",
+      });
+    }
+
+    explicitRequirements.push(
       {
         requirement_id: crypto.randomUUID(),
         source_box: "technical_compliance",
         source_text_reference: intake.technical_compliance,
-        normalized_value:
-          "Minimum 5-year tank warranty, installation support, and local spare parts availability",
+        normalized_value: `${warrantyClause}, installation support, and local spare parts availability`,
         requirement_level: "mandatory",
         derivation_type: "explicit",
       },
@@ -684,7 +787,7 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
         requirement_level: "mandatory",
         derivation_type: "explicit",
       },
-    ];
+    );
 
     const classification: ProductClassificationRecord = {
       classification_id: crypto.randomUUID(),
@@ -703,6 +806,48 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
       assigned_at: new Date().toISOString(),
     };
 
+    const mandatoryRequirements: string[] = [
+      "500 Litres storage capacity calorifier",
+      "10 bar working pressure rating (factory hydro-tested to 15 bar)",
+      "Three-phase 400V industrial connection (380-415V, 50Hz)",
+      "Maximum outer diameter <= 85 cm",
+    ];
+
+    if (isIndoor) {
+      mandatoryRequirements.push("Indoor mechanical room installation");
+    }
+
+    mandatoryRequirements.push(
+      "CE mark and Pressure Equipment Directive (PED 2014/68/EU) conformity",
+      "UAE MoIAT / G-Mark compliance",
+    );
+
+    if (isBms) {
+      mandatoryRequirements.push("BMS-compatible thermostat integration");
+    }
+
+    mandatoryRequirements.push(
+      `${warrantyClause}, installation support, and local spare parts availability`,
+      "Official manufacturer website and verifiable sales contact desk (email, telephone)",
+      `${incoterm} delivery terms`,
+      `Order quantity: ${quantityText}`,
+    );
+
+    const ledger = extractExplicitRequirementLedger(intake);
+    const fidelityValidation = validateStep1RequirementFidelity(intake, {
+      english_translation: englishTranslation,
+      mandatory_requirements: mandatoryRequirements,
+      explicit_requirements: explicitRequirements,
+      model_suggestions: modelSuggestions,
+    });
+
+    if (!fidelityValidation.valid) {
+      console.warn(
+        "Water heater Step 1 fidelity validation flagged issues:",
+        fidelityValidation.explanation,
+      );
+    }
+
     return {
       original_language: "fa",
       english_translation: englishTranslation,
@@ -710,18 +855,7 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
       product_name:
         "Industrial Electric Water Heater 500L (10 Bar, Three-Phase)",
       explicit_requirements: explicitRequirements,
-      mandatory_requirements: [
-        "500 Litres storage capacity calorifier",
-        "10 bar working pressure rating (factory hydro-tested to 15 bar)",
-        "Three-phase industrial connection (380-415V, 50Hz)",
-        "Maximum outer diameter <= 85 cm",
-        "CE mark and Pressure Equipment Directive (PED 2014/68/EU) conformity",
-        "UAE MoIAT / G-Mark compliance",
-        "Minimum 5-year tank warranty, installation support, and local spare parts availability",
-        "Official manufacturer website and verifiable sales contact desk (email, telephone)",
-        `${incoterm} delivery terms`,
-        `Order quantity: ${quantityText}`,
-      ],
+      mandatory_requirements: mandatoryRequirements,
       preferred_requirements: [
         "Direct manufacturer sourcing with authorized regional distributor support",
       ],
@@ -739,6 +873,9 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
         "Confirm required heating recovery time (litres per hour at 45°C delta T).",
       ],
       classification,
+      ledger,
+      model_suggestions: modelSuggestions,
+      fidelity_validation: fidelityValidation,
     };
   }
 
@@ -796,16 +933,26 @@ Commercial & Order Profile: ${intake.order_profile}
       },
     ];
 
+    const mandatoryRequirements = [
+      intake.product_requirement,
+      intake.technical_compliance,
+    ];
+
+    const ledger = extractExplicitRequirementLedger(intake);
+    const fidelityValidation = validateStep1RequirementFidelity(intake, {
+      english_translation: englishTranslation,
+      mandatory_requirements: mandatoryRequirements,
+      explicit_requirements: explicitRequirements,
+      model_suggestions: [],
+    });
+
     return {
       original_language: "en",
       english_translation: englishTranslation,
       product_category: "Industrial Equipment & Machinery",
       product_name: "Industrial Equipment Specification",
       explicit_requirements: explicitRequirements,
-      mandatory_requirements: [
-        intake.product_requirement,
-        intake.technical_compliance,
-      ],
+      mandatory_requirements: mandatoryRequirements,
       preferred_requirements: [intake.order_profile],
       excluded_requirements: [],
       ambiguities: [],
@@ -817,6 +964,9 @@ Commercial & Order Profile: ${intake.order_profile}
         "Please confirm exact delivery port and certification body",
       ],
       classification,
+      ledger,
+      model_suggestions: [],
+      fidelity_validation: fidelityValidation,
     };
   }
 }

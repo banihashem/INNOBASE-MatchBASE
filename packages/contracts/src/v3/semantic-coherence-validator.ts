@@ -20,44 +20,97 @@ const DOMAIN_KEYWORDS: Record<
       "poultry",
       "chicken",
       "broiler",
-      "meat",
+      "poultry meat",
       "slaughterhouse",
       "halal",
       "sif",
       "sfda",
+      "مرغ",
+      "طیور",
+      "کشتارگاه",
+      "جوجه",
+      "فراورده‌های طیور",
+      "گوشت مرغ",
+      "دواجن",
+      "دجاج",
+      "مسلخ",
     ],
   },
   water_heater: {
     hsPrefix: "8516.10",
     keywords: [
       "water heater",
+      "waterheater",
       "calorifier",
-      "heating",
-      "tank",
-      "cylinder",
-      "immersion",
-      "bar",
-      "ped",
+      "electric water heater",
+      "storage water heater",
+      "commercial water heater",
+      "industrial water heater",
+      "electric water",
+      "immersion heater",
+      "vitreous enamel",
+      "ped 2014/68/eu",
+      "10 bar",
+      "three-phase heater",
+      "3-phase heater",
+      "آبگرمکن",
+      "ابگرمکن",
+      "آب‌گرم‌کن",
+      "کالریفر",
+      "مخزن آبگرم",
+      "منبع دوجداره",
+      "المنت برقی",
+      "سخان",
+      "سخانات",
+      "سخان مياه",
     ],
   },
   reverse_osmosis: {
     hsPrefix: "8421.21",
     keywords: [
       "reverse osmosis",
-      "membrane",
-      "filtration",
+      "ro membrane",
+      "filtration system",
       "water treatment",
-      "permeate",
       "desalination",
+      "permeate",
+      "brackish water",
+      "اسمز معکوس",
+      "تصفیه آب",
+      "ممبران",
+      "غشا",
+      "آب شیرین کن",
+      "تناضح عکسی",
+      "تحلية المياه",
     ],
   },
   pump: {
     hsPrefix: "8413",
-    keywords: ["pump", "impeller", "centrifugal", "flow rate", "hydraulic"],
+    keywords: [
+      "pump",
+      "impeller",
+      "centrifugal pump",
+      "hydraulic pump",
+      "submersible pump",
+      "پمپ",
+      "الکتروپمپ",
+      "مضخة",
+      "مضخات",
+    ],
   },
   coffee: {
     hsPrefix: "0901",
-    keywords: ["coffee", "arabica", "robusta", "green coffee", "beans"],
+    keywords: [
+      "coffee",
+      "arabica",
+      "robusta",
+      "green coffee",
+      "coffee beans",
+      "قهوه",
+      "دانه قهوه",
+      "قهوة",
+      "بن",
+    ],
   },
 };
 
@@ -76,17 +129,24 @@ const PROHIBITED_DEMONSTRATION_BRANDS = [
   "bradford white",
 ];
 
-export function detectDomain(text?: string | null): string {
-  if (!text) return "generic";
+export function detectAllDomains(text?: string | null): string[] {
+  if (!text) return [];
   const lower = text.toLowerCase();
+  const matched = new Set<string>();
   for (const [domain, config] of Object.entries(DOMAIN_KEYWORDS)) {
     for (const kw of config.keywords) {
       if (lower.includes(kw)) {
-        return domain;
+        matched.add(domain);
+        break;
       }
     }
   }
-  return "generic";
+  return Array.from(matched);
+}
+
+export function detectDomain(text?: string | null): string {
+  const domains = detectAllDomains(text);
+  return domains.length > 0 ? domains[0]! : "generic";
 }
 
 /**
@@ -273,12 +333,15 @@ export function validateConsultantOutputV3SemanticCoherence(
 export interface IntakeCoherenceConflict {
   readonly fields: readonly string[];
   readonly product_families: readonly string[];
+  readonly primary_product_family?: string;
+  readonly conflicting_product_family?: string;
   readonly explanation: string;
 }
 
 /**
  * Validates the 3-box intake snapshot for cross-request / cross-domain contamination.
- * Rejects submissions where boxes derive from conflicting product domains (e.g. poultry + water heaters).
+ * Rejects submissions where boxes derive from conflicting product domains (e.g. poultry + water heaters)
+ * or explicit multi-product requests within a single box.
  */
 export function validateIntakeSemanticCoherence(intake: {
   product_requirement?: string | null;
@@ -300,56 +363,119 @@ export function validateIntakeSemanticCoherence(intake: {
     intake.technical_compliance ?? intake.technicalCompliance ?? "";
   const ordText = intake.order_profile ?? intake.orderProfile ?? "";
 
-  const dom1 = detectDomain(reqText);
-  const dom2 = detectDomain(compText);
-  const dom3 = detectDomain(ordText);
+  const reqDomains = detectAllDomains(reqText);
+  const compDomains = detectAllDomains(compText);
+  const ordDomains = detectAllDomains(ordText);
 
-  const activeDomains = [dom1, dom2, dom3].filter((d) => d !== "generic");
-  const uniqueDomains = Array.from(new Set(activeDomains));
+  const dom1 = reqDomains[0] ?? "generic";
+  const dom2 = compDomains[0] ?? "generic";
+  const dom3 = ordDomains[0] ?? "generic";
+
+  const domainLabels: Record<string, string> = {
+    water_heater: "industrial_water_heater",
+    poultry: "poultry_food_product",
+    reverse_osmosis: "reverse_osmosis_systems",
+    pump: "industrial_pumps",
+    coffee: "agricultural_coffee",
+  };
+
   const conflicts: IntakeCoherenceConflict[] = [];
 
-  if (uniqueDomains.length > 1) {
+  // 1. Explicit multi-product conflict within Box 1
+  if (reqDomains.length > 1) {
     errors.push(
-      `Cross-domain intake contamination detected: Box 1 domain '${dom1}', Box 2 domain '${dom2}', Box 3 domain '${dom3}'. Domains cannot be mixed across intake boxes.`,
+      `Explicit multi-product request detected in Box 1 (${reqDomains.join(", ")}). Unrelated product requests must be submitted separately.`,
     );
+    conflicts.push({
+      fields: ["product_requirement"],
+      product_families: reqDomains.map((d) => domainLabels[d] ?? d),
+      primary_product_family: domainLabels[reqDomains[0]!] ?? reqDomains[0]!,
+      conflicting_product_family:
+        domainLabels[reqDomains[1]!] ?? reqDomains[1]!,
+      explanation:
+        "The request specifies multiple unrelated product families in the product requirement. Please submit separate research requests for each product family.",
+    });
+  }
 
-    const conflictingFields: string[] = [];
-    if (dom1 !== "generic") conflictingFields.push("product_requirement");
-    if (dom2 !== "generic" && dom2 !== dom1)
-      conflictingFields.push("technical_quality_trade_requirements");
-    if (dom3 !== "generic" && dom3 !== dom1 && dom3 !== dom2)
-      conflictingFields.push("order_supplier_profile");
-
-    const domainLabels: Record<string, string> = {
-      water_heater: "industrial_water_heater",
-      poultry: "poultry_food_product",
-      reverse_osmosis: "reverse_osmosis_systems",
-      pump: "industrial_pumps",
-      coffee: "agricultural_coffee",
-    };
-
-    let explanation =
-      "The request contains materially conflicting product requirements.";
-    if (dom1 === "water_heater" && (dom2 === "poultry" || dom3 === "poultry")) {
-      explanation =
-        "Poultry slaughter and SFDA poultry-establishment constraints do not apply to an industrial electric water heater.";
-    } else if (
-      dom1 === "poultry" &&
-      (dom2 === "water_heater" || dom3 === "water_heater")
-    ) {
-      explanation =
-        "Water heater electrical/pressure vessel standards do not apply to a poultry food procurement request.";
-    } else {
-      explanation = `Requirements for ${dom2} do not apply to a ${dom1} request.`;
+  // 2. Cross-box contamination checks
+  const allActiveDomains = Array.from(
+    new Set([...reqDomains, ...compDomains, ...ordDomains]),
+  );
+  if (allActiveDomains.length > 1) {
+    for (const compDom of compDomains) {
+      if (dom1 !== "generic" && compDom !== dom1) {
+        errors.push(
+          `Cross-domain intake contamination: Box 1 defines '${dom1}' but Box 2 contains '${compDom}' requirements.`,
+        );
+        let explanation = `Technical requirements for ${domainLabels[compDom] ?? compDom} do not apply to ${domainLabels[dom1] ?? dom1}.`;
+        if (dom1 === "water_heater" && compDom === "poultry") {
+          explanation =
+            "Poultry slaughter and poultry-establishment requirements do not apply to an industrial electric water heater.";
+        } else if (dom1 === "poultry" && compDom === "water_heater") {
+          explanation =
+            "Water heater electrical and pressure vessel standards do not apply to a poultry food procurement request.";
+        }
+        conflicts.push({
+          fields: [
+            "product_requirement",
+            "technical_quality_trade_requirements",
+          ],
+          product_families: [
+            domainLabels[dom1] ?? dom1,
+            domainLabels[compDom] ?? compDom,
+          ],
+          primary_product_family: domainLabels[dom1] ?? dom1,
+          conflicting_product_family: domainLabels[compDom] ?? compDom,
+          explanation,
+        });
+      }
     }
 
-    conflicts.push({
-      fields: conflictingFields.length
-        ? conflictingFields
-        : ["product_requirement", "technical_quality_trade_requirements"],
-      product_families: uniqueDomains.map((d) => domainLabels[d] ?? d),
-      explanation,
-    });
+    for (const ordDom of ordDomains) {
+      if (
+        dom1 !== "generic" &&
+        ordDom !== dom1 &&
+        !compDomains.includes(ordDom)
+      ) {
+        errors.push(
+          `Cross-domain intake contamination: Box 1 defines '${dom1}' but Box 3 contains '${ordDom}' profile.`,
+        );
+        conflicts.push({
+          fields: ["product_requirement", "order_supplier_profile"],
+          product_families: [
+            domainLabels[dom1] ?? dom1,
+            domainLabels[ordDom] ?? ordDom,
+          ],
+          primary_product_family: domainLabels[dom1] ?? dom1,
+          conflicting_product_family: domainLabels[ordDom] ?? ordDom,
+          explanation: `Order profile for ${domainLabels[ordDom] ?? ordDom} does not apply to a ${domainLabels[dom1] ?? dom1} request.`,
+        });
+      }
+    }
+
+    if (
+      dom1 === "generic" &&
+      dom2 !== "generic" &&
+      dom3 !== "generic" &&
+      dom2 !== dom3
+    ) {
+      errors.push(
+        `Cross-domain intake contamination between Box 2 ('${dom2}') and Box 3 ('${dom3}').`,
+      );
+      conflicts.push({
+        fields: [
+          "technical_quality_trade_requirements",
+          "order_supplier_profile",
+        ],
+        product_families: [
+          domainLabels[dom2] ?? dom2,
+          domainLabels[dom3] ?? dom3,
+        ],
+        primary_product_family: domainLabels[dom2] ?? dom2,
+        conflicting_product_family: domainLabels[dom3] ?? dom3,
+        explanation: `Conflicting requirements between ${domainLabels[dom2] ?? dom2} and ${domainLabels[dom3] ?? dom3}.`,
+      });
+    }
   }
 
   const isCoherent = errors.length === 0;

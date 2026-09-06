@@ -86,12 +86,27 @@ export default function ConsultantWorkflowPage() {
   const [activeDraftSession, setActiveDraftSession] = useState<any>(null);
   const [draftId, setDraftId] = useState<string>("");
   const [draftVersion, setDraftVersion] = useState<number>(1);
+  const [hydrationState, setHydrationState] = useState<
+    | "unresolved"
+    | "loading"
+    | "hydrated"
+    | "not_found"
+    | "forbidden"
+    | "invalidated"
+    | "error"
+  >("unresolved");
+  const [invalidationDetail, setInvalidationDetail] = useState<{
+    runId: string;
+    reason: string;
+  } | null>(null);
   const [coherenceError, setCoherenceError] = useState<{
     code: string;
     message: string;
     conflicts?: Array<{
       fields: string[];
       product_families: string[];
+      primary_product_family?: string;
+      conflicting_product_family?: string;
       explanation: string;
     }>;
     recoverable?: boolean;
@@ -152,12 +167,13 @@ export default function ConsultantWorkflowPage() {
     const urlDraftId = searchParams.get("draft_id");
     const action = searchParams.get("action");
 
-    if (urlRunId && !runId) {
+    if (urlRunId) {
       void loadExistingSession(urlRunId);
     } else if (urlDraftId) {
       void loadExistingDraft(urlDraftId);
     } else if (action === "resume") {
       void handleOpenResumeModal();
+      setHydrationState("hydrated");
     } else {
       // Check if current tab has an active draft in sessionStorage
       const storedDraftId = sessionStorage.getItem("matchbase_active_draft_id");
@@ -176,6 +192,7 @@ export default function ConsultantWorkflowPage() {
       (userSession.tier !== "consultant" && userSession.tier !== "admin")
     )
       return;
+    if (hydrationState !== "hydrated") return; // Prevent overwriting before server hydration
     if (runId) return; // Do not overwrite draft once a run is submitted
     if (!productRequirement && !technicalCompliance && !orderProfile) {
       setDraftStatus("idle");
@@ -238,6 +255,7 @@ export default function ConsultantWorkflowPage() {
     draftId,
     draftVersion,
     userSession,
+    hydrationState,
   ]);
 
   // Set contextual page title (F13)
@@ -338,6 +356,7 @@ export default function ConsultantWorkflowPage() {
             "",
             `/consultant/workflow?draft_id=${data.draft_id}`,
           );
+          setHydrationState("hydrated");
           return;
         }
       }
@@ -358,9 +377,11 @@ export default function ConsultantWorkflowPage() {
         `/consultant/workflow?draft_id=${fallbackId}`,
       );
     }
+    setHydrationState("hydrated");
   }
 
   async function loadExistingDraft(targetDraftId: string) {
+    setHydrationState("loading");
     try {
       const res = await fetch(
         `/api/v1/consultant/workflow?draft_id=${encodeURIComponent(targetDraftId)}`,
@@ -370,12 +391,26 @@ export default function ConsultantWorkflowPage() {
         const data = await res.json();
         if (data.draft) {
           const d = data.draft;
+          if (d.current_run_id) {
+            await loadExistingSession(d.current_run_id);
+            return;
+          }
           setDraftId(d.draft_id);
           setDraftVersion(d.draft_version ?? 1);
           if (d.draft_data) {
-            setProductRequirement(d.draft_data.productRequirement ?? "");
-            setTechnicalCompliance(d.draft_data.technicalCompliance ?? "");
-            setOrderProfile(d.draft_data.orderProfile ?? "");
+            setProductRequirement(
+              d.draft_data.productRequirement ??
+                d.draft_data.product_requirement ??
+                "",
+            );
+            setTechnicalCompliance(
+              d.draft_data.technicalCompliance ??
+                d.draft_data.technical_compliance ??
+                "",
+            );
+            setOrderProfile(
+              d.draft_data.orderProfile ?? d.draft_data.order_profile ?? "",
+            );
           }
           sessionStorage.setItem("matchbase_active_draft_id", d.draft_id);
           window.history.replaceState(
@@ -383,6 +418,7 @@ export default function ConsultantWorkflowPage() {
             "",
             `/consultant/workflow?draft_id=${d.draft_id}`,
           );
+          setHydrationState("hydrated");
           return;
         }
       }
@@ -390,6 +426,7 @@ export default function ConsultantWorkflowPage() {
       console.error("Failed to load draft:", err);
     }
     await handleCreateNewDraft();
+    setHydrationState("hydrated");
   }
 
   async function handleAbandonDraft(idToAbandon: string) {
@@ -416,17 +453,45 @@ export default function ConsultantWorkflowPage() {
 
   async function loadExistingSession(targetRunId: string) {
     setIsLoading(true);
+    setHydrationState("loading");
     try {
       const res = await fetch(
         `/api/v1/consultant/workflow?run_id=${encodeURIComponent(targetRunId)}`,
         { cache: "no-store" },
       );
+      if (res.status === 410) {
+        const data = await res.json();
+        setInvalidationDetail({
+          runId: targetRunId,
+          reason:
+            data.details?.invalidation_reason ||
+            data.error ||
+            "Audit non-compliance",
+        });
+        setHydrationState("invalidated");
+        return;
+      }
+      if (res.status === 403) {
+        setHydrationState("forbidden");
+        return;
+      }
+      if (res.status === 404) {
+        setHydrationState("not_found");
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         if (data.session) {
           const s = data.session;
           setRunId(s.run_id);
           setWorkflowState(s.state);
+          const dId = data.draft?.draft_id ?? s.draft_id;
+          const dVer = data.draft?.draft_version ?? s.draft_version ?? 1;
+          if (dId) {
+            setDraftId(dId);
+            setDraftVersion(dVer);
+            sessionStorage.setItem("matchbase_active_draft_id", dId);
+          }
           if (s.intake) {
             setProductRequirement(s.intake.product_requirement ?? "");
             setTechnicalCompliance(s.intake.technical_compliance ?? "");
@@ -441,7 +506,11 @@ export default function ConsultantWorkflowPage() {
             setAdvisoryContext(s.step2_advisory);
           }
           if (s.step3_deep_prompt) {
-            setStep3Prompt(s.step3_deep_prompt.prompt_text ?? "");
+            setStep3Prompt(
+              s.step3_deep_prompt.prompt_text ??
+                s.step3_deep_prompt.promptText ??
+                "",
+            );
           }
           if (s.output) {
             setOutput(s.output);
@@ -449,18 +518,21 @@ export default function ConsultantWorkflowPage() {
           if (typeof s.revealed_count === "number") {
             setRevealedCount(s.revealed_count);
           }
-          window.history.replaceState(
-            {},
-            "",
-            `/consultant/workflow?run_id=${s.run_id}`,
-          );
+          const canonicalUrl = dId
+            ? `/consultant/workflow?draft_id=${dId}&run_id=${s.run_id}`
+            : `/consultant/workflow?run_id=${s.run_id}`;
+          window.history.replaceState({}, "", canonicalUrl);
+          setHydrationState("hydrated");
           triggerToast(
             `Workflow session restored (Run ID: ${s.run_id.slice(-8)})`,
           );
         }
+      } else {
+        setHydrationState("error");
       }
     } catch (err) {
       console.error("Failed to load session:", err);
+      setHydrationState("error");
     } finally {
       setIsLoading(false);
     }
@@ -538,14 +610,12 @@ export default function ConsultantWorkflowPage() {
           data.session.step1_interpretation.english_translation,
         );
         setAdvisoryContext(data.session.step2_advisory);
-        setStep3Prompt(data.session.step3_deep_prompt?.prompt_text ?? "");
         setDraftStatus("idle");
         setCoherenceError(null);
-        window.history.replaceState(
-          {},
-          "",
-          `/consultant/workflow?run_id=${data.session.run_id}`,
-        );
+        const canonicalUrl = draftId
+          ? `/consultant/workflow?draft_id=${draftId}&run_id=${data.session.run_id}`
+          : `/consultant/workflow?run_id=${data.session.run_id}`;
+        window.history.replaceState({}, "", canonicalUrl);
         triggerToast(
           "Intake submitted and persisted. Review English Interpretation (Step 1).",
         );
@@ -729,6 +799,65 @@ export default function ConsultantWorkflowPage() {
             </Link>
           </div>
         </main>
+      </div>
+    );
+  }
+
+  if (hydrationState === "invalidated") {
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100 p-8 flex items-center justify-center font-sans">
+        <a href="#main-content" className="sr-only focus:not-sr-only">
+          Skip to main content
+        </a>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="max-w-lg w-full bg-slate-800 border-2 border-rose-600 rounded-xl p-6 text-center space-y-4 shadow-2xl"
+        >
+          <div className="text-rose-400 font-bold uppercase text-xs tracking-wider">
+            Research Run Invalidated (MB-410)
+          </div>
+          <h1 className="text-xl font-bold text-white">
+            Run Invalidated Due to Audit Non-Compliance
+          </h1>
+          <p className="text-sm text-slate-300">
+            {invalidationDetail?.reason ||
+              "This research run has been invalidated due to audit non-compliance."}
+          </p>
+          {invalidationDetail?.runId && (
+            <div className="text-xs text-slate-400 font-mono bg-slate-950/60 p-2 rounded border border-slate-700">
+              Run ID: {invalidationDetail.runId}
+            </div>
+          )}
+          <div className="pt-3 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={handleStartNew}
+              className="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-lg transition-colors shadow"
+            >
+              Start New Research Request
+            </button>
+            <Link
+              href="/runs"
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-lg transition-colors border border-slate-600"
+            >
+              &larr; Return to Run Directory
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (hydrationState === "loading") {
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100 p-8 flex items-center justify-center font-sans">
+        <div className="text-center space-y-3">
+          <div className="inline-block w-8 h-8 border-4 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm text-slate-400">
+            Loading and hydrating workflow session...
+          </p>
+        </div>
       </div>
     );
   }
@@ -1964,28 +2093,43 @@ export default function ConsultantWorkflowPage() {
               </h3>
               {incompleteSessions.length > 0 ? (
                 <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
-                  {incompleteSessions.map((session) => (
-                    <div
-                      key={session.run_id}
-                      className="bg-slate-800/60 hover:bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-lg p-3 flex items-center justify-between transition-colors"
-                    >
-                      <div>
-                        <div className="text-xs font-mono font-bold text-sky-400">
-                          {session.run_id.slice(-8)}
-                        </div>
-                        <div className="text-xs text-slate-300 capitalize">
-                          State: {session.state?.replace(/_/g, " ")}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleResumeSession(session.run_id)}
-                        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded border border-slate-600 transition-colors"
+                  {incompleteSessions.map((session) => {
+                    const reqSnippet =
+                      session.original_intake?.product_requirement ||
+                      session.original_intake?.productRequirement ||
+                      session.draft_revision?.english_translation ||
+                      "Consultant Sourcing Request";
+                    const stateLabel =
+                      session.current_state?.replace(/_/g, " ") ??
+                      session.state?.replace(/_/g, " ");
+                    return (
+                      <div
+                        key={session.run_id}
+                        className="bg-slate-800/60 hover:bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-lg p-3 flex items-center justify-between gap-3 transition-colors"
                       >
-                        Resume Run
-                      </button>
-                    </div>
-                  ))}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-mono font-bold text-sky-400">
+                              Run {session.run_id.slice(-8)}
+                            </span>
+                            <span className="text-[10px] uppercase font-semibold bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
+                              {stateLabel}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-200 line-clamp-1">
+                            {reqSnippet}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleResumeSession(session.run_id)}
+                          className="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded shadow transition-colors whitespace-nowrap"
+                        >
+                          Resume Run
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-xs text-slate-400 bg-slate-800/40 rounded-lg p-3 border border-slate-800 italic">

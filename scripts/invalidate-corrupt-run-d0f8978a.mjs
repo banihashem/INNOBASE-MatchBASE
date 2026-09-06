@@ -193,12 +193,82 @@ try {
   const pdfRes = await client.query(
     `UPDATE consultant_pdf_report_ledger
      SET filename = CASE WHEN filename LIKE 'INVALIDATED_%' THEN filename ELSE 'INVALIDATED_' || filename END
-     WHERE run_id = $1 OR run_id = '9fc5885f-8e5b-43cb-bdc7-7e0b87c854e6'
+     WHERE run_id = $1 OR run_id = '9fc5885f-8e5b-43cb-bdc7-7e0b87c854e6' OR run_id = 'b4039944-9647-4640-9c7d-b103f3ab2439'
      RETURNING report_id;`,
     [targetRunId],
   );
   console.log(
     `consultant_pdf_report_ledger updated: ${pdfRes.rowCount} row(s)`,
+  );
+
+  // 5. Invalidate L05 contaminated run b4039944-9647-4640-9c7d-b103f3ab2439 per MB-UX-REM-004 L03
+  const l05RunId = "b4039944-9647-4640-9c7d-b103f3ab2439";
+  const l05DraftId = "5f229871-3732-478f-8219-316a943e4c78";
+  const l05RunAudit = {
+    invalidated_at: new Date().toISOString(),
+    invalidation_state: "failed",
+    detection_activity: "MB-UX-UAT-003 L05",
+    remediation_activity: "MB-UX-REM-004 L03",
+    invalidation_reasons: [
+      "semantic coherence failure",
+      "water-heater/poultry cross-domain contamination",
+      "incoherent request accepted",
+      "wrong product interpretation",
+      "wrong product result completed",
+    ],
+    audit_verdict: "EVALUATION_FAILED_SUPERSEDED",
+  };
+
+  await client.query(
+    `UPDATE consultant_workflow_session
+     SET is_invalidated = true,
+         current_state = 'invalidated',
+         invalidation_reason = 'semantic coherence failure: water-heater/poultry cross-domain contamination',
+         advisory_output = jsonb_set(
+           COALESCE(consultant_workflow_session.advisory_output, '{}'::jsonb),
+           '{invalidation_audit}',
+           $1::jsonb
+         ),
+         updated_at = NOW()
+     WHERE run_id = $2;`,
+    [JSON.stringify(l05RunAudit), l05RunId],
+  );
+
+  await client.query(
+    `UPDATE consultant_output_v3
+     SET is_invalidated = true,
+         research_status = 'failed',
+         invalidation_reason = 'semantic coherence failure: water-heater/poultry cross-domain contamination',
+         document_payload = jsonb_set(
+           document_payload,
+           '{invalidation_audit}',
+           $1::jsonb
+         )
+     WHERE run_id = $2;`,
+    [JSON.stringify(l05RunAudit), l05RunId],
+  );
+
+  await client.query(
+    `UPDATE consultant_draft_session
+     SET status = 'abandoned',
+         draft_data = jsonb_set(
+           draft_data,
+           '{invalidation_audit}',
+           $1::jsonb
+         ),
+         updated_at = NOW()
+     WHERE draft_id = $2;`,
+    [JSON.stringify(l05RunAudit), l05DraftId],
+  );
+
+  await client.query(
+    `UPDATE research_run
+     SET state = 'failed'
+     WHERE run_id = $1;`,
+    [l05RunId],
+  );
+  console.log(
+    `Successfully invalidated L05 contaminated run ${l05RunId} and draft ${l05DraftId}`,
   );
 
   await client.query("COMMIT");

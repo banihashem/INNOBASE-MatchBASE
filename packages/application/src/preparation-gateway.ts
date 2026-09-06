@@ -83,21 +83,19 @@ export function detectDomainFromText(
 
   if (
     lower.includes("آبگرمکن") ||
+    lower.includes("ابگرمکن") ||
+    lower.includes("آب‌گرم‌کن") ||
     lower.includes("water heater") ||
     lower.includes("water-heater") ||
     lower.includes("calorifier") ||
     lower.includes("boiler") ||
     lower.includes("electric water") ||
-    lower.includes("500l") ||
-    lower.includes("500 l") ||
-    lower.includes("500-litre") ||
-    lower.includes("500 liter") ||
+    lower.includes("سخان") ||
+    lower.includes("سخانات") ||
     lower.includes("10 bar") ||
     lower.includes("three-phase") ||
     lower.includes("3-phase") ||
-    lower.includes("سه فاز") ||
-    lower.includes("دبی") ||
-    lower.includes("dubai")
+    lower.includes("سه فاز")
   ) {
     return "water_heater";
   }
@@ -114,8 +112,12 @@ export class PreparationModelGateway {
     technical_compliance: string;
     order_profile: string;
   }): Promise<Step1InterpretationResult> {
-    const combined = `${intake.product_requirement} ${intake.technical_compliance} ${intake.order_profile}`;
-    const domain = detectDomainFromText(combined);
+    // Priority 1: Anchor on Box 1 (Product Requirement)
+    let domain = detectDomainFromText(intake.product_requirement);
+    if (domain === "generic") {
+      const combined = `${intake.product_requirement} ${intake.technical_compliance} ${intake.order_profile}`;
+      domain = detectDomainFromText(combined);
+    }
 
     if (domain === "water_heater") {
       return this.generateWaterHeaterStep1(intake);

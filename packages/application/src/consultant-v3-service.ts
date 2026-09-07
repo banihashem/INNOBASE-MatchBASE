@@ -12,9 +12,12 @@ import {
 import {
   type ConsultantResearchOutputV3,
   type ProductClassificationRecord,
+  type Step1FidelityValidationResult,
   validateIntakeSemanticCoherence,
   validateConsultantOutputV3SemanticCoherence,
+  validateStep1RequirementFidelity,
 } from "@matchbase/contracts";
+import { ApplicationFault } from "./types.js";
 import {
   type ConsultantWorkflowState,
   assertValidWorkflowTransition,
@@ -64,6 +67,7 @@ export interface WorkflowSession {
     ambiguities: readonly string[];
     unknowns: readonly string[];
     suggested_clarifications: readonly string[];
+    fidelity_validation?: Step1FidelityValidationResult | null;
     is_approved: boolean;
   };
   classification: ProductClassificationRecord | null;
@@ -346,6 +350,34 @@ export async function approveInterpretationStep(
     editedTranslation && editedTranslation.trim().length > 0
       ? editedTranslation.trim()
       : session.step1_interpretation.english_translation;
+
+  // Enforce Step 1 explicit requirement fidelity gate
+  if (session.intake) {
+    const fidelityCheck = validateStep1RequirementFidelity(
+      {
+        product_requirement: session.intake.product_requirement || "",
+        technical_compliance: session.intake.technical_compliance || "",
+        order_profile: session.intake.order_profile || "",
+      },
+      {
+        english_translation: effectiveTranslation,
+        mandatory_requirements:
+          session.step1_interpretation.mandatory_requirements || [],
+        explicit_requirements:
+          session.step1_interpretation.explicit_requirements,
+      },
+    );
+
+    if (!fidelityCheck.valid) {
+      throw new ApplicationFault(
+        422,
+        "fidelity-failed",
+        "MB-422-FIDELITY-FAILED",
+        `Cannot approve Step 1: explicit requirement fidelity failed (${fidelityCheck.mutated_count} mutated, ${fidelityCheck.omitted_count} omitted). ${fidelityCheck.explanation || ""}`,
+      );
+    }
+    session.step1_interpretation.fidelity_validation = fidelityCheck;
+  }
 
   session.step1_interpretation.english_translation = effectiveTranslation;
   session.step1_interpretation.is_approved = true;

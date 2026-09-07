@@ -92,12 +92,17 @@ export function synthesizeConsultantOutputV3(
         pricing_volatile: false,
         product_attributes: {
           capacity_litres: 500,
-          pressure_bar: 10,
+          pressure_bar: "Minimum 10 bar",
           max_outer_diameter_cm: 85,
           electrical: "Three-phase 380-415V 50Hz",
+          installation_environment: "Indoor mechanical room installation",
+          thermal_insulation: "Documented thermal insulation",
+          safety_compliance: "Safety-valve compatibility",
+          controls: "BMS-compatible thermostat",
           destination: "Dubai, United Arab Emirates",
           incoterm: "DDP Dubai",
           quantity: 10,
+          warranty: "Two-year UAE warranty (24 months)",
         },
         normalized_requirements: [
           {
@@ -106,13 +111,33 @@ export function synthesizeConsultantOutputV3(
             requirement_level: "mandatory",
           },
           {
-            name: "Working Pressure 10 bar",
-            value: "10 bar",
+            name: "Working Pressure Minimum 10 bar",
+            value: "Minimum 10 bar",
             requirement_level: "mandatory",
           },
           {
             name: "Outer Diameter <= 85 cm",
             value: "<=85cm",
+            requirement_level: "mandatory",
+          },
+          {
+            name: "Indoor Installation",
+            value: "Mechanical room indoor",
+            requirement_level: "mandatory",
+          },
+          {
+            name: "Documented Thermal Insulation",
+            value: true,
+            requirement_level: "mandatory",
+          },
+          {
+            name: "Safety-Valve Compatibility",
+            value: true,
+            requirement_level: "mandatory",
+          },
+          {
+            name: "BMS-Compatible Thermostat",
+            value: true,
             requirement_level: "mandatory",
           },
           {
@@ -126,8 +151,8 @@ export function synthesizeConsultantOutputV3(
             requirement_level: "mandatory",
           },
           {
-            name: "5-Year Tank Warranty & Local Spares",
-            value: true,
+            name: "Two-Year UAE Warranty & Local Spares",
+            value: "2-year UAE warranty",
             requirement_level: "mandatory",
           },
           {
@@ -135,14 +160,21 @@ export function synthesizeConsultantOutputV3(
             value: "DDP Dubai",
             requirement_level: "mandatory",
           },
+          {
+            name: "Order Quantity: Exactly 10 Units",
+            value: "10 units",
+            requirement_level: "mandatory",
+          },
         ],
         mandatory_constraints: [
-          "500L capacity, 10 bar rating, <=85cm outer diameter",
+          "500L capacity, minimum 10 bar rating, <=85cm outer diameter, indoor installation",
+          "Documented thermal insulation, safety-valve compatibility, BMS-compatible thermostat",
           "CE / PED certification and UAE MoIAT compliance",
-          "5-year tank warranty, installation support, and local spare parts",
+          "Two-year UAE warranty, installation support, and local spare parts",
+          "DDP Dubai delivery terms, exactly 10 units",
         ],
         preferred_constraints: [
-          "Direct manufacturer or authorized regional distributor",
+          "Original manufacturer or authorized UAE distributor",
         ],
         excluded_constraints: [
           "Residential single-phase heaters",

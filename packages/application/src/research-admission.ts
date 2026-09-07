@@ -46,7 +46,7 @@ export function createServerOwnedResearchAdmission(input: {
     openrouter: boolean;
   }>;
   readonly eligibleTiers: readonly PersistedTier[];
-  readonly now?: () => Date;
+  readonly now?: (() => Date) | undefined;
 }): ServerOwnedResearchAdmission {
   const policy: ResearchRoutePolicyV1 = validateResearchRoutePolicy(
     input.policy,

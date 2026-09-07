@@ -121,6 +121,16 @@ export default function ConsultantWorkflowPage() {
     };
   } | null>(null);
   const [step1Fidelity, setStep1Fidelity] = useState<any>(null);
+  const [activeDrafts, setActiveDrafts] = useState<any[]>([]);
+  const [conflictEscapeAnnouncement, setConflictEscapeAnnouncement] =
+    useState<string>("");
+  const [isPdfDownloading, setIsPdfDownloading] = useState<boolean>(false);
+  const [isSessionChanged, setIsSessionChanged] = useState<boolean>(false);
+  const [showFullLedger, setShowFullLedger] = useState<boolean>(false);
+  const [showFullConflictLocal, setShowFullConflictLocal] =
+    useState<boolean>(false);
+  const initialUserIdRef = useRef<string | null>(null);
+  const revalidateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const coherenceSummaryRef = useRef<HTMLDivElement | null>(null);
   const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isCloningDraftRef = useRef<boolean>(false);
@@ -146,6 +156,16 @@ export default function ConsultantWorkflowPage() {
           return;
         }
         const data = await res.json();
+        if (
+          initialUserIdRef.current &&
+          data.user_id !== initialUserIdRef.current
+        ) {
+          setIsSessionChanged(true);
+          if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+        } else {
+          initialUserIdRef.current = data.user_id;
+        }
+
         setUserSession({
           tier: data.tier,
           userId: data.user_id,
@@ -164,6 +184,57 @@ export default function ConsultantWorkflowPage() {
       .catch(() => setUserSession(null))
       .finally(() => setSessionLoading(false));
   }, []);
+
+  // Dynamic Step 1 requirement fidelity revalidation on human edits
+  useEffect(() => {
+    if (workflowState !== "prep_step1_awaiting_approval" || !step1Translation) {
+      return;
+    }
+    if (revalidateTimeoutRef.current) {
+      clearTimeout(revalidateTimeoutRef.current);
+    }
+    revalidateTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/v1/consultant/workflow", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "validate_step1_fidelity",
+            intake: {
+              product_requirement: productRequirement,
+              technical_compliance: technicalCompliance,
+              order_profile: orderProfile,
+            },
+            translation: step1Translation,
+            mandatory_requirements:
+              step1Fidelity?.ledger?.requirements
+                ?.filter((r: any) => r.modality === "mandatory")
+                ?.map((r: any) => r.normalized_value) ?? [],
+          }),
+        });
+        if (res.ok) {
+          const d = await res.json();
+          if (d.success && d.fidelity) {
+            setStep1Fidelity(d.fidelity);
+          }
+        }
+      } catch (err) {
+        console.error("Dynamic fidelity revalidation error:", err);
+      }
+    }, 400);
+
+    return () => {
+      if (revalidateTimeoutRef.current) {
+        clearTimeout(revalidateTimeoutRef.current);
+      }
+    };
+  }, [
+    step1Translation,
+    workflowState,
+    productRequirement,
+    technicalCompliance,
+    orderProfile,
+  ]);
 
   // Check URL params for mode=new, run_id, draft_id or action=resume
   useEffect(() => {
@@ -363,6 +434,9 @@ export default function ConsultantWorkflowPage() {
       if (resDraft.ok) {
         const d = await resDraft.json();
         setActiveDraftSession(d.draft ?? null);
+        setActiveDrafts(
+          Array.isArray(d.drafts) ? d.drafts : d.draft ? [d.draft] : [],
+        );
       }
     } catch (e) {
       console.error("Failed to fetch resume options:", e);
@@ -593,6 +667,18 @@ export default function ConsultantWorkflowPage() {
   }
 
   async function handleStartNew() {
+    const hasUnsavedContent =
+      productRequirement.trim().length > 0 ||
+      technicalCompliance.trim().length > 0 ||
+      orderProfile.trim().length > 0;
+
+    if (hasUnsavedContent) {
+      const confirmed = window.confirm(
+        "You have an active draft. It will remain saved on the server and resumable from 'Resume Research'. Start a new blank workflow?",
+      );
+      if (!confirmed) return;
+    }
+
     sessionStorage.removeItem("matchbase_active_draft_id");
     if (typeof window !== "undefined") {
       window.history.replaceState({}, "", "/consultant/workflow?mode=new");
@@ -816,6 +902,55 @@ export default function ConsultantWorkflowPage() {
     );
   }
 
+  // Action 6: Authenticated PDF Blob Download (Section 8.5)
+  async function handlePdfDownload() {
+    const targetRunId = runId || output?.research_run_id;
+    if (!targetRunId) return;
+    setIsPdfDownloading(true);
+    try {
+      const res = await fetch(`/api/v1/consultant/reports/${targetRunId}/pdf`, {
+        method: "GET",
+        headers: {
+          Accept: "application/pdf",
+        },
+        credentials: "same-origin",
+      });
+
+      if (!res.ok) {
+        throw new Error(`PDF request returned HTTP ${res.status}`);
+      }
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/pdf")) {
+        throw new Error(`Expected application/pdf but received ${contentType}`);
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition");
+      let filename = `MatchBASE_Consultant_Report_${targetRunId}.pdf`;
+      if (disposition && disposition.includes("filename=")) {
+        const match = disposition.match(/filename="?([^";]+)"?/i);
+        if (match?.[1]) filename = match[1];
+      }
+
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+
+      triggerToast("Full PDF report downloaded successfully.");
+    } catch (e: any) {
+      console.error("PDF download failed:", e);
+      triggerToast(`PDF download failed: ${e?.message || "Unknown error"}`);
+    } finally {
+      setIsPdfDownloading(false);
+    }
+  }
+
   const suppliers = output?.supplier_candidates ?? [];
   const visibleSuppliers = suppliers.slice(0, revealedCount);
 
@@ -1010,6 +1145,35 @@ export default function ConsultantWorkflowPage() {
       </header>
 
       <main className="max-w-6xl mx-auto space-y-10">
+        {isSessionChanged && (
+          <div
+            role="alert"
+            className="bg-amber-950/80 border-2 border-amber-600 rounded-xl p-4 text-amber-200 flex items-center justify-between gap-4 shadow-xl animate-in fade-in"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl" aria-hidden="true">
+                ⚠️
+              </span>
+              <div>
+                <strong className="text-white block font-bold text-sm">
+                  Session Identity Changed
+                </strong>
+                <p className="text-xs text-amber-300/90 mt-0.5">
+                  Your signed-in session changed. Sign in again to continue this
+                  draft. Your local inputs are safely preserved in memory.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition-colors whitespace-nowrap"
+            >
+              Sign In Again
+            </button>
+          </div>
+        )}
+
         {/* ========================================================= */}
         {/* SECTION 1: MULTILINGUAL 3-BOX INTAKE                     */}
         {/* ========================================================= */}
@@ -1465,52 +1629,296 @@ export default function ConsultantWorkflowPage() {
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 font-mono mb-3 focus:ring-2 focus:ring-sky-500"
               />
 
-              {/* Step 1 Explicit Requirement Fidelity Review (N02) */}
+              {/* Step 1 Explicit Requirement Fidelity Review (N02 & Phase D) */}
               {step1Fidelity && (
-                <div className="bg-slate-950/80 p-3 rounded-lg border border-slate-800 text-xs mb-3 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-emerald-400 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                      Requirement Fidelity Verified (
-                      {step1Fidelity.preserved_count} /{" "}
-                      {step1Fidelity.ledger?.total_explicit_count ??
-                        step1Fidelity.preserved_count}{" "}
-                      explicit clauses preserved)
-                    </span>
-                    <span className="text-[10px] text-slate-400">
-                      Silent Mutations: 0
-                    </span>
-                  </div>
-
-                  {Array.isArray(step1Fidelity.model_suggestions) &&
-                    step1Fidelity.model_suggestions.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-slate-800/80">
-                        <div className="text-amber-300 font-semibold text-[11px] flex items-center gap-1 mb-1">
-                          <span>💡</span> Model Suggestions (Separated from
-                          Approved Facts):
-                        </div>
-                        {step1Fidelity.model_suggestions.map(
-                          (s: any, idx: number) => (
-                            <div
-                              key={idx}
-                              className="bg-amber-950/20 border border-amber-800/40 rounded p-2 text-amber-200/90 text-[11px]"
-                            >
-                              <span className="font-bold text-amber-300">
-                                {s.title}:
-                              </span>{" "}
-                              {s.suggested_value} —{" "}
-                              <span className="text-amber-300/80 italic">
-                                {s.reasoning}
-                              </span>{" "}
-                              <span className="text-slate-400 text-[10px] block mt-0.5">
-                                [Status: Kept as suggestion only; not injected
-                                into mandatory requirements]
-                              </span>
-                            </div>
-                          ),
-                        )}
+                <div className="space-y-3 mb-3">
+                  {/* Fidelity Failure Gating Warning Banner */}
+                  {!step1Fidelity.valid && (
+                    <div
+                      role="alert"
+                      className="bg-rose-950/70 border-2 border-rose-500 rounded-lg p-3 text-xs space-y-2 text-rose-200 animate-in fade-in"
+                    >
+                      <div className="flex items-center gap-2 text-rose-300 font-bold text-sm">
+                        <span className="text-lg" aria-hidden="true">
+                          🚫
+                        </span>
+                        <span>
+                          Approval Gated: Directional / Qualifier Fidelity
+                          Mismatch Detected
+                        </span>
                       </div>
-                    )}
+                      <p className="text-slate-300 text-[11px]">
+                        The English interpretation contains semantic mutations
+                        or omissions against the original explicit requirements.
+                        Approval is disabled until all mandatory requirements
+                        are preserved. Edit the English interpretation above to
+                        correct them.
+                      </p>
+
+                      {/* Mutated Items Details */}
+                      {Array.isArray(step1Fidelity.mutated_items) &&
+                        step1Fidelity.mutated_items.length > 0 && (
+                          <div className="space-y-1.5 mt-2">
+                            <div className="font-semibold text-rose-300 text-[11px] uppercase tracking-wider">
+                              Mutated Requirements (
+                              {step1Fidelity.mutated_count}):
+                            </div>
+                            {step1Fidelity.mutated_items.map(
+                              (item: any, idx: number) => (
+                                <div
+                                  key={idx}
+                                  className="bg-rose-900/40 border border-rose-700/60 p-2 rounded text-[11px]"
+                                >
+                                  <div className="font-bold text-rose-200">
+                                    ⚠️{" "}
+                                    {item.requirement?.label ||
+                                      item.requirement?.concept}
+                                    : {item.explanation}
+                                  </div>
+                                  <div className="text-slate-300 text-[10px] mt-0.5">
+                                    <strong>Source Span:</strong> "
+                                    {item.requirement
+                                      ?.source_span_or_reference ||
+                                      item.requirement?.source_text}
+                                    "
+                                  </div>
+                                  {item.prohibited_value && (
+                                    <div className="text-rose-400 text-[10px]">
+                                      <strong>Mutated Value:</strong> "
+                                      {item.prohibited_value}"
+                                    </div>
+                                  )}
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        )}
+
+                      {/* Omitted Items Details */}
+                      {Array.isArray(step1Fidelity.omitted_items) &&
+                        step1Fidelity.omitted_items.length > 0 && (
+                          <div className="space-y-1.5 mt-2">
+                            <div className="font-semibold text-amber-300 text-[11px] uppercase tracking-wider">
+                              Omitted Requirements (
+                              {step1Fidelity.omitted_count}):
+                            </div>
+                            {step1Fidelity.omitted_items.map(
+                              (item: any, idx: number) => (
+                                <div
+                                  key={idx}
+                                  className="bg-amber-900/30 border border-amber-700/50 p-2 rounded text-[11px]"
+                                >
+                                  <div className="font-bold text-amber-200">
+                                    ⚠️ Omitted: {item.label} ({item.concept})
+                                  </div>
+                                  <div className="text-slate-300 text-[10px] mt-0.5">
+                                    <strong>Source Span:</strong> "
+                                    {item.source_span_or_reference ||
+                                      item.source_text}
+                                    "
+                                  </div>
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        )}
+                    </div>
+                  )}
+
+                  {/* Fidelity Status Header & Metrics Summary */}
+                  <div className="bg-slate-950/80 p-3 rounded-lg border border-slate-800 text-xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      {step1Fidelity.valid ? (
+                        <span className="font-semibold text-emerald-400 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                          Requirement Fidelity Verified (All{" "}
+                          {step1Fidelity.ledger?.total_explicit_count ??
+                            step1Fidelity.preserved_count}{" "}
+                          explicit requirements preserved)
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-rose-400 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+                          <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse"></span>
+                          Requirement Fidelity Gated (
+                          {step1Fidelity.mutated_count ?? 0} Mutated &bull;{" "}
+                          {step1Fidelity.omitted_count ?? 0} Omitted)
+                        </span>
+                      )}
+                      <span className="text-[10px] text-slate-400">
+                        Mutations: {step1Fidelity.mutated_count ?? 0} &bull;
+                        Omissions: {step1Fidelity.omitted_count ?? 0}
+                      </span>
+                    </div>
+
+                    {/* Compact Summary Metrics (Section 10.2) */}
+                    <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-1">
+                      <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
+                        <span className="text-slate-400 text-[10px] block">
+                          Explicit
+                        </span>
+                        <span className="font-bold text-white text-xs">
+                          {step1Fidelity.ledger?.total_explicit_count ?? 0}
+                        </span>
+                      </div>
+                      <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
+                        <span className="text-emerald-400 text-[10px] block">
+                          Preserved
+                        </span>
+                        <span className="font-bold text-emerald-300 text-xs">
+                          {step1Fidelity.preserved_count ?? 0}
+                        </span>
+                      </div>
+                      <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
+                        <span className="text-sky-400 text-[10px] block">
+                          Normalized
+                        </span>
+                        <span className="font-bold text-sky-300 text-xs">
+                          {step1Fidelity.normalized_count ?? 0}
+                        </span>
+                      </div>
+                      <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
+                        <span className="text-slate-400 text-[10px] block">
+                          Clarifications
+                        </span>
+                        <span className="font-bold text-slate-300 text-xs">
+                          {step1Fidelity.ambiguities_count ?? 0}
+                        </span>
+                      </div>
+                      <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
+                        <span
+                          className={
+                            step1Fidelity.omitted_count > 0
+                              ? "text-amber-400 font-semibold text-[10px] block"
+                              : "text-slate-400 text-[10px] block"
+                          }
+                        >
+                          Omitted
+                        </span>
+                        <span
+                          className={`font-bold text-xs ${step1Fidelity.omitted_count > 0 ? "text-amber-400" : "text-slate-300"}`}
+                        >
+                          {step1Fidelity.omitted_count ?? 0}
+                        </span>
+                      </div>
+                      <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
+                        <span
+                          className={
+                            step1Fidelity.mutated_count > 0
+                              ? "text-rose-400 font-semibold text-[10px] block"
+                              : "text-slate-400 text-[10px] block"
+                          }
+                        >
+                          Mutated
+                        </span>
+                        <span
+                          className={`font-bold text-xs ${step1Fidelity.mutated_count > 0 ? "text-rose-400" : "text-slate-300"}`}
+                        >
+                          {step1Fidelity.mutated_count ?? 0}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progressive Disclosure Toggle */}
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowFullLedger(!showFullLedger)}
+                        className="text-sky-400 hover:text-sky-300 text-[11px] underline font-medium"
+                      >
+                        {showFullLedger
+                          ? "Hide Structured Requirement Ledger"
+                          : `View Structured Requirement Ledger (${step1Fidelity.ledger?.requirements?.length ?? 0} clauses)`}
+                      </button>
+
+                      {showFullLedger && step1Fidelity.ledger?.requirements && (
+                        <div className="max-h-60 overflow-y-auto mt-2 border border-slate-800 rounded bg-slate-900/90 text-[10px]">
+                          <table className="w-full text-left">
+                            <thead className="bg-slate-800/80 text-slate-300 sticky top-0">
+                              <tr>
+                                <th className="p-1.5">Requirement</th>
+                                <th className="p-1.5">Original Source Span</th>
+                                <th className="p-1.5">
+                                  Interpreted Normalized
+                                </th>
+                                <th className="p-1.5">Operator</th>
+                                <th className="p-1.5">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/60">
+                              {step1Fidelity.ledger.requirements.map(
+                                (r: any, idx: number) => (
+                                  <tr
+                                    key={idx}
+                                    className="hover:bg-slate-800/40"
+                                  >
+                                    <td className="p-1.5 font-semibold text-slate-200">
+                                      {r.label}
+                                    </td>
+                                    <td className="p-1.5 text-slate-400 italic">
+                                      "
+                                      {r.source_span_or_reference ||
+                                        r.source_text}
+                                      "
+                                    </td>
+                                    <td className="p-1.5 text-slate-300">
+                                      {r.normalized_value}
+                                    </td>
+                                    <td className="p-1.5 font-mono text-amber-300 font-semibold">
+                                      {r.comparison_operator || "—"}
+                                    </td>
+                                    <td className="p-1.5">
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                          r.fidelity_status === "preserved"
+                                            ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
+                                            : r.fidelity_status === "mutated"
+                                              ? "bg-rose-950 text-rose-300 border border-rose-800"
+                                              : "bg-slate-800 text-slate-300"
+                                        }`}
+                                      >
+                                        {r.fidelity_status}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ),
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Model Suggestions (Kept Separate) */}
+                    {Array.isArray(step1Fidelity.model_suggestions) &&
+                      step1Fidelity.model_suggestions.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-slate-800/80">
+                          <div className="text-amber-300 font-semibold text-[11px] flex items-center gap-1 mb-1">
+                            <span>💡</span> Model Suggestions (Separated from
+                            Approved Facts):
+                          </div>
+                          {step1Fidelity.model_suggestions.map(
+                            (s: any, idx: number) => (
+                              <div
+                                key={idx}
+                                className="bg-amber-950/20 border border-amber-800/40 rounded p-2 text-amber-200/90 text-[11px]"
+                              >
+                                <span className="font-bold text-amber-300">
+                                  {s.title}:
+                                </span>{" "}
+                                {s.suggested_value} —{" "}
+                                <span className="text-amber-300/80 italic">
+                                  {s.reasoning}
+                                </span>{" "}
+                                <span className="text-slate-400 text-[10px] block mt-0.5">
+                                  [Status: Kept as suggestion only; not injected
+                                  into mandatory requirements]
+                                </span>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      )}
+                  </div>
                 </div>
               )}
 
@@ -1536,12 +1944,20 @@ export default function ConsultantWorkflowPage() {
                   onClick={handleApproveStep1}
                   disabled={
                     isLoading ||
-                    workflowState !== "prep_step1_awaiting_approval"
+                    workflowState !== "prep_step1_awaiting_approval" ||
+                    step1Fidelity?.valid === false
+                  }
+                  title={
+                    step1Fidelity?.valid === false
+                      ? "Approval disabled: mandatory requirements contain mutations or omissions. Edit the English interpretation to correct them."
+                      : undefined
                   }
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {workflowState === "prep_step1_awaiting_approval"
-                    ? "Approve Interpretation & Proceed"
+                    ? step1Fidelity?.valid === false
+                      ? "Approval Gated (Fidelity Issues)"
+                      : "Approve Interpretation & Proceed"
                     : "Approved \u2713"}
                 </button>
               </div>
@@ -1873,11 +2289,12 @@ export default function ConsultantWorkflowPage() {
 
               {/* Action Buttons: PDF & JSON */}
               <div className="flex items-center gap-3">
-                <a
-                  href={`/api/v1/consultant/reports/${runId}/pdf`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow transition-colors flex items-center gap-2"
+                <button
+                  type="button"
+                  onClick={handlePdfDownload}
+                  disabled={isPdfDownloading}
+                  aria-label="Download Full PDF Report"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <svg
                     className="w-4 h-4"
@@ -1892,8 +2309,10 @@ export default function ConsultantWorkflowPage() {
                       clipRule="evenodd"
                     />
                   </svg>
-                  Download Landscape PDF
-                </a>
+                  {isPdfDownloading
+                    ? "Generating PDF..."
+                    : "Download Full PDF Report"}
+                </button>
 
                 <button
                   type="button"
@@ -2151,44 +2570,69 @@ export default function ConsultantWorkflowPage() {
             {/* Active Server Draft Section */}
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-sky-400 mb-2">
-                Active Server Draft
+                Active Unsubmitted Drafts (
+                {
+                  (activeDrafts.length > 0
+                    ? activeDrafts
+                    : activeDraftSession
+                      ? [activeDraftSession]
+                      : []
+                  ).length
+                }
+                )
               </h3>
-              {activeDraftSession ? (
-                <div className="bg-slate-800/80 border border-sky-800/60 rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between text-xs text-slate-300">
-                    <span className="font-semibold text-white">
-                      Draft {activeDraftSession.draft_id?.slice(-8)}
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      {activeDraftSession.draft_data?.savedAt
-                        ? new Date(
-                            activeDraftSession.draft_data.savedAt,
-                          ).toLocaleTimeString()
-                        : "Recently saved"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-300 line-clamp-2 bg-slate-950/50 p-2 rounded border border-slate-800">
-                    {activeDraftSession.draft_data?.productRequirement ||
-                      "(Empty requirements)"}
-                  </p>
-                  <div className="flex items-center justify-end gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleAbandonDraft(activeDraftSession.draft_id)
-                      }
-                      className="px-2.5 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded transition-colors"
+              {(activeDrafts.length > 0
+                ? activeDrafts
+                : activeDraftSession
+                  ? [activeDraftSession]
+                  : []
+              ).length > 0 ? (
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {(activeDrafts.length > 0
+                    ? activeDrafts
+                    : [activeDraftSession]
+                  ).map((draft: any) => (
+                    <div
+                      key={draft.draft_id}
+                      className="bg-slate-800/80 border border-sky-800/60 rounded-lg p-3 space-y-2"
                     >
-                      Discard Draft
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleResumeDraft(activeDraftSession)}
-                      className="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded shadow transition-colors"
-                    >
-                      Resume Draft
-                    </button>
-                  </div>
+                      <div className="flex items-center justify-between text-xs text-slate-300">
+                        <span className="font-semibold text-white">
+                          Draft {draft.draft_id?.slice(-8)}{" "}
+                          {draft.draft_id === draftId ? "(Current)" : ""}
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          {draft.draft_data?.savedAt
+                            ? new Date(
+                                draft.draft_data.savedAt,
+                              ).toLocaleTimeString()
+                            : draft.updated_at
+                              ? new Date(draft.updated_at).toLocaleTimeString()
+                              : "Recently saved"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 line-clamp-2 bg-slate-950/50 p-2 rounded border border-slate-800">
+                        {draft.draft_data?.productRequirement ||
+                          "(Empty requirements)"}
+                      </p>
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleAbandonDraft(draft.draft_id)}
+                          className="px-2.5 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded transition-colors"
+                        >
+                          Discard Draft
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleResumeDraft(draft)}
+                          className="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded shadow transition-colors"
+                        >
+                          Resume Draft
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="text-xs text-slate-400 bg-slate-800/40 rounded-lg p-3 border border-slate-800 italic">
@@ -2273,14 +2717,9 @@ export default function ConsultantWorkflowPage() {
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.preventDefault();
-              const targetDraftId = draftId;
-              if (autosaveTimerRef.current) {
-                clearTimeout(autosaveTimerRef.current);
-              }
-              setConflictState(null);
-              previousFocusRef.current?.focus();
-              void loadExistingDraft(targetDraftId);
-              triggerToast("Loaded latest version from server.");
+              setConflictEscapeAnnouncement(
+                "Explicit choice required: Draft conflict cannot be dismissed with Escape. Please select 'Keep my version as a new draft', 'Review latest saved version', or 'Discard my local changes' to protect your inputs.",
+              );
               return;
             }
 
@@ -2322,7 +2761,7 @@ export default function ConsultantWorkflowPage() {
             </div>
             <p
               id="conflict-dialog-desc"
-              className="text-sm text-slate-300 mb-4"
+              className="text-sm text-slate-300 mb-3"
             >
               This draft was updated in another browser tab or session (Version{" "}
               <span className="font-mono text-amber-300 font-bold">
@@ -2335,22 +2774,67 @@ export default function ConsultantWorkflowPage() {
               ). Automatic merge was prevented to protect your inputs.
             </p>
 
-            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs mb-5 space-y-1.5">
-              <div className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
-                Your Unsaved Local Inputs
+            {conflictEscapeAnnouncement && (
+              <div
+                role="status"
+                aria-live="assertive"
+                className="bg-amber-950/80 border border-amber-500/80 text-amber-200 text-xs p-2.5 rounded-lg mb-3 flex items-start gap-2 animate-in fade-in duration-150"
+              >
+                <span className="text-amber-400 font-bold" aria-hidden="true">
+                  ℹ️
+                </span>
+                <span>{conflictEscapeAnnouncement}</span>
               </div>
-              <p className="text-slate-200 truncate">
-                <strong>Box 1:</strong>{" "}
-                {conflictState.unsaved_data.productRequirement || "(empty)"}
-              </p>
-              <p className="text-slate-200 truncate">
-                <strong>Box 2:</strong>{" "}
-                {conflictState.unsaved_data.technicalCompliance || "(empty)"}
-              </p>
-              <p className="text-slate-200 truncate">
-                <strong>Box 3:</strong>{" "}
-                {conflictState.unsaved_data.orderProfile || "(empty)"}
-              </p>
+            )}
+
+            <div className="bg-slate-950 p-3.5 rounded-lg border border-slate-800 text-xs mb-4 space-y-2 max-h-60 overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
+                  Your Unsaved Local Inputs (Full Content Preserved)
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowFullConflictLocal(!showFullConflictLocal)
+                  }
+                  className="text-sky-400 hover:text-sky-300 text-[10px] underline font-medium"
+                >
+                  {showFullConflictLocal ? "Collapse View" : "Expand All View"}
+                </button>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <span className="font-bold text-slate-300 block mb-0.5">
+                    Box 1 — Product Requirement:
+                  </span>
+                  <p
+                    className={`text-slate-200 bg-slate-900/90 p-2 rounded border border-slate-800 font-mono text-[11px] whitespace-pre-wrap ${showFullConflictLocal ? "" : "max-h-24 overflow-y-auto"}`}
+                  >
+                    {conflictState.unsaved_data.productRequirement || "(empty)"}
+                  </p>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-300 block mb-0.5">
+                    Box 2 — Technical Compliance:
+                  </span>
+                  <p
+                    className={`text-slate-200 bg-slate-900/90 p-2 rounded border border-slate-800 font-mono text-[11px] whitespace-pre-wrap ${showFullConflictLocal ? "" : "max-h-24 overflow-y-auto"}`}
+                  >
+                    {conflictState.unsaved_data.technicalCompliance ||
+                      "(empty)"}
+                  </p>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-300 block mb-0.5">
+                    Box 3 — Order Profile:
+                  </span>
+                  <p
+                    className={`text-slate-200 bg-slate-900/90 p-2 rounded border border-slate-800 font-mono text-[11px] whitespace-pre-wrap ${showFullConflictLocal ? "" : "max-h-24 overflow-y-auto"}`}
+                  >
+                    {conflictState.unsaved_data.orderProfile || "(empty)"}
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="flex flex-col gap-2.5">
@@ -2392,6 +2876,8 @@ export default function ConsultantWorkflowPage() {
                         `/consultant/workflow?draft_id=${d.draft_id}`,
                       );
                       setConflictState(null);
+                      setConflictEscapeAnnouncement("");
+                      setShowFullConflictLocal(false);
                       previousFocusRef.current?.focus();
                       triggerToast(
                         "Saved local inputs as a new independent draft (Version 1).",
@@ -2419,6 +2905,8 @@ export default function ConsultantWorkflowPage() {
                     clearTimeout(autosaveTimerRef.current);
                   }
                   setConflictState(null);
+                  setConflictEscapeAnnouncement("");
+                  setShowFullConflictLocal(false);
                   previousFocusRef.current?.focus();
                   await loadExistingDraft(targetDraftId);
                   triggerToast("Loaded latest version from server.");
@@ -2436,6 +2924,8 @@ export default function ConsultantWorkflowPage() {
                     clearTimeout(autosaveTimerRef.current);
                   }
                   setConflictState(null);
+                  setConflictEscapeAnnouncement("");
+                  setShowFullConflictLocal(false);
                   previousFocusRef.current?.focus();
                   await loadExistingDraft(targetDraftId);
                   triggerToast("Discarded unsaved local edits.");

@@ -672,9 +672,9 @@ Commercial & Order Profile: Order volume of ${quantityText}. Delivery terms ${in
       : "";
 
     const englishTranslation = `
-Product Requirement: Commercial / Industrial Electric Water Heater (Storage Calorifier) with 500 Litres storage capacity. Heavy-duty construction with high-efficiency thermal insulation. Outer diameter strictly limited to maximum 85 cm (850 mm) to permit entry through standard mechanical room service doors.${indoorPhrase} Destination: Dubai, United Arab Emirates.
-Technical & Compliance: Designed for 10 bar maximum working pressure (factory tested to >= 15 bar). Three-phase 400V industrial electrical power configuration (380V - 415V, 50/60 Hz). Internal tank protection via high-grade vitreous enamel or 316L stainless steel with magnesium sacrificial anode. Mandatory CE certification, Pressure Equipment Directive (PED 2014/68/EU), and UAE G-Mark / MoIAT conformity.${bmsPhrase} Required installation support, local spare parts availability (heating elements, thermostat, pressure relief valve), and ${warrantyClause}. Official manufacturer website and verifiable sales contact desk (email, telephone).
-Commercial & Order Profile: Project batch of ${quantityText} for commercial facility installation. Delivery terms ${incoterm}, including customs clearance and delivery to site in Dubai. Direct manufacturer or certified regional distributor preferred.
+Product Requirement: Commercial / Industrial Electric Water Heater (Storage Calorifier) with 500 Litres storage capacity. Heavy-duty construction with documented thermal insulation. Outer diameter strictly limited to maximum 85 cm (850 mm) to permit entry through standard mechanical room service doors.${indoorPhrase} Destination: Dubai, United Arab Emirates.
+Technical & Compliance: Designed for minimum 10 bar working pressure (factory tested to >= 15 bar). Three-phase 400V industrial electrical power configuration (380V - 415V, 50/60 Hz). Internal tank protection via high-grade vitreous enamel or 316L stainless steel with magnesium sacrificial anode. Mandatory CE certification, Pressure Equipment Directive (PED 2014/68/EU), and UAE G-Mark / MoIAT conformity.${bmsPhrase} Documented thermal insulation, safety-valve compatibility, required installation support, local spare parts availability (heating elements, thermostat, pressure relief valve), and ${warrantyClause}. Official manufacturer website and verifiable sales contact desk (email, telephone).
+Commercial & Order Profile: Project batch of ${quantityText} for commercial facility installation. Delivery terms ${incoterm}, including customs clearance and delivery to site in Dubai. Prefer the original manufacturer or an authorized UAE distributor.
 `.trim();
 
     const explicitRequirements: NormalizedRequirement[] = [
@@ -715,7 +715,7 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
         requirement_id: crypto.randomUUID(),
         source_box: "technical_compliance",
         source_text_reference: intake.technical_compliance,
-        normalized_value: "10 bar working pressure (tested >= 15 bar)",
+        normalized_value: "Minimum 10 bar working pressure (tested >= 15 bar)",
         unit: "bar",
         requirement_level: "mandatory",
         derivation_type: "explicit",
@@ -736,6 +736,22 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
         source_text_reference: intake.technical_compliance,
         normalized_value:
           "CE mark, Pressure Equipment Directive (PED 2014/68/EU), and UAE MoIAT conformity",
+        requirement_level: "mandatory",
+        derivation_type: "explicit",
+      },
+      {
+        requirement_id: crypto.randomUUID(),
+        source_box: "technical_compliance",
+        source_text_reference: intake.technical_compliance,
+        normalized_value: "Documented thermal insulation",
+        requirement_level: "mandatory",
+        derivation_type: "explicit",
+      },
+      {
+        requirement_id: crypto.randomUUID(),
+        source_box: "technical_compliance",
+        source_text_reference: intake.technical_compliance,
+        normalized_value: "Safety-valve compatibility",
         requirement_level: "mandatory",
         derivation_type: "explicit",
       },
@@ -782,9 +798,18 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
         requirement_id: crypto.randomUUID(),
         source_box: "order_profile",
         source_text_reference: intake.order_profile,
-        normalized_value: quantityText,
+        normalized_value: `Order quantity: exactly ${quantityText}`,
         unit: "units",
         requirement_level: "mandatory",
+        derivation_type: "explicit",
+      },
+      {
+        requirement_id: crypto.randomUUID(),
+        source_box: "order_profile",
+        source_text_reference: intake.order_profile,
+        normalized_value:
+          "Prefer the original manufacturer or an authorized UAE distributor",
+        requirement_level: "preferred",
         derivation_type: "explicit",
       },
     );
@@ -808,7 +833,7 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
 
     const mandatoryRequirements: string[] = [
       "500 Litres storage capacity calorifier",
-      "10 bar working pressure rating (factory hydro-tested to 15 bar)",
+      "Minimum 10 bar working pressure rating (factory hydro-tested to 15 bar)",
       "Three-phase 400V industrial connection (380-415V, 50Hz)",
       "Maximum outer diameter <= 85 cm",
     ];
@@ -820,6 +845,8 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
     mandatoryRequirements.push(
       "CE mark and Pressure Equipment Directive (PED 2014/68/EU) conformity",
       "UAE MoIAT / G-Mark compliance",
+      "Documented thermal insulation",
+      "Safety-valve compatibility",
     );
 
     if (isBms) {
@@ -830,7 +857,7 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
       `${warrantyClause}, installation support, and local spare parts availability`,
       "Official manufacturer website and verifiable sales contact desk (email, telephone)",
       `${incoterm} delivery terms`,
-      `Order quantity: ${quantityText}`,
+      `Order quantity: exactly ${quantityText}`,
     );
 
     const ledger = extractExplicitRequirementLedger(intake);
@@ -857,7 +884,7 @@ Commercial & Order Profile: Project batch of ${quantityText} for commercial faci
       explicit_requirements: explicitRequirements,
       mandatory_requirements: mandatoryRequirements,
       preferred_requirements: [
-        "Direct manufacturer sourcing with authorized regional distributor support",
+        "Prefer the original manufacturer or an authorized UAE distributor",
       ],
       excluded_requirements: [
         "Domestic residential single-phase water heaters",

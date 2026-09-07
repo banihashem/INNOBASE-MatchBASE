@@ -355,9 +355,31 @@ export function generateConsultantLandscapeHtml(
                 </div>`
               : domain === "water_heater"
                 ? `<div style="background: #f0fdf4; border: 1px solid #86efac; color: #166534; padding: 4px 6px; border-radius: 4px; font-size: 7pt; margin-top: 3px;">
-                    <strong>Corridor Alignment:</strong> DDP Dubai delivery terms confirmed with CE marking, 10 bar tested rating, and &le;85 cm outer diameter.
+                    <strong>Corridor Alignment:</strong> DDP Dubai delivery terms confirmed with CE / PED marking, minimum 10 bar pressure rating, and &le;85 cm outer diameter.
                   </div>`
                 : ""
+          }
+          <div class="card-title" style="margin-top: 8px;">Approved Request Requirements</div>
+          ${
+            domain === "water_heater"
+              ? `<ul class="findings-list" style="margin-top: 4px;">
+                  <li><strong>Storage Capacity:</strong> 500 L nominal capacity</li>
+                  <li><strong>Electrical Power:</strong> Three-phase 400V supply (50/60 Hz)</li>
+                  <li><strong>Working Pressure:</strong> Minimum 10 bar working pressure (tested &ge;15 bar)</li>
+                  <li><strong>Dimensions:</strong> Maximum 85 cm (850 mm) external diameter</li>
+                  <li><strong>Environment:</strong> Indoor mechanical room installation</li>
+                  <li><strong>Automation &amp; Controls:</strong> BMS-compatible thermostat integration</li>
+                  <li><strong>Thermal Insulation:</strong> Documented thermal insulation</li>
+                  <li><strong>Safety Compliance:</strong> Safety-valve compatibility, CE mark &amp; PED 2014/68/EU, UAE MoIAT / G-Mark</li>
+                  <li><strong>Services:</strong> Local installation support &amp; spare-parts availability</li>
+                  <li><strong>Warranty:</strong> Two-year UAE warranty (24 months)</li>
+                  <li><strong>Order &amp; Delivery:</strong> Exactly 10 units, DDP Dubai</li>
+                  <li><strong>Supplier Profile:</strong> Original manufacturer or authorized UAE distributor</li>
+                  <li><strong>Live Sourcing Channels:</strong> Official website, business email, and telephone required</li>
+                </ul>`
+              : `<ul class="findings-list" style="margin-top: 4px;">
+                  ${output.request_snapshot.mandatory_constraints.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}
+                </ul>`
           }
           <div class="card-title" style="margin-top: 8px;">Research Coverage &amp; Confidence</div>
           <p style="font-size: 8pt;"><strong>Coverage Status:</strong> ${escapeHtml(output.executive_summary.research_coverage_status)} &bull; <strong>Confidence:</strong> ${escapeHtml(output.executive_summary.confidence_assessment)}</p>
@@ -528,9 +550,10 @@ export function generateConsultantLandscapeHtml(
               `
               : domain === "water_heater"
                 ? `
-          <p style="font-size: 8pt;"><strong>Commercial Scope:</strong> Commercial Electric Water Heater (500L Storage Calorifier), 10 units.</p>
+          <p style="font-size: 8pt;"><strong>Commercial Scope:</strong> Commercial Electric Water Heater (500L Storage Calorifier), exactly 10 units.</p>
           <p style="font-size: 8pt;"><strong>Indicative DDP Range:</strong> $2,100 &ndash; $2,850 per unit (delivered on-site Dubai, including customs clearance and technical documentation).</p>
-          <p style="font-size: 8pt;"><strong>Warranty &amp; Spares:</strong> 5-year tank warranty, immersion element spares stocked in UAE, local commissioning support.</p>
+          <p style="font-size: 8pt;"><strong>Requested Warranty:</strong> Two-year UAE warranty (24 months), local installation support, spare parts availability.</p>
+          <p style="font-size: 7.5pt; color: #475569;"><em>Observed Supplier Term (Illustrative Offer): 5-year tank warranty offered by European manufacturers as an extended illustrative option.</em></p>
                 `
                 : `
           <p style="font-size: 8pt;"><strong>Commercial Scope:</strong> Direct manufacturer pricing subject to technical specification sign-off and quantity confirmation.</p>
@@ -549,10 +572,10 @@ export function generateConsultantLandscapeHtml(
               `
               : domain === "water_heater"
                 ? `
-          <p style="font-size: 8pt;"><strong>Capacity &amp; Pressure:</strong> 500 Litres, 10 bar working pressure (tested &ge;15 bar).</p>
-          <p style="font-size: 8pt;"><strong>Dimensions:</strong> Outer diameter strictly capped at &le;85 cm for mechanical room service door entry.</p>
-          <p style="font-size: 8pt;"><strong>Electrical:</strong> Three-phase industrial supply (380V&ndash;415V, 50/60 Hz).</p>
-          <p style="font-size: 8pt;"><strong>Standards:</strong> CE, Pressure Equipment Directive (PED 2014/68/EU), UAE MoIAT / G-Mark.</p>
+          <p style="font-size: 8pt;"><strong>Capacity &amp; Pressure:</strong> 500 Litres storage capacity, minimum 10 bar working pressure (tested &ge;15 bar).</p>
+          <p style="font-size: 8pt;"><strong>Dimensions &amp; Environment:</strong> Outer diameter strictly capped at &le;85 cm (850 mm), indoor mechanical room installation.</p>
+          <p style="font-size: 8pt;"><strong>Controls &amp; Insulation:</strong> BMS-compatible thermostat, documented thermal insulation, safety-valve compatibility.</p>
+          <p style="font-size: 8pt;"><strong>Electrical &amp; Standards:</strong> Three-phase industrial supply (380V&ndash;415V, 50/60 Hz), CE / PED 2014/68/EU conformity, UAE MoIAT / G-Mark.</p>
                 `
                 : `
           <p style="font-size: 8pt;"><strong>Standard Parameters:</strong> Compliance with applicable regional import regulations and industrial manufacturing standards.</p>

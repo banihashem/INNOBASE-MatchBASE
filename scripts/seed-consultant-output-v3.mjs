@@ -1,15 +1,13 @@
 #!/usr/bin/env node
+import { resolveScriptDatabaseUrl } from "./lib/database-config.mjs";
 import { createHash } from "node:crypto";
 import { GOLDEN_SCENARIOS_V3 } from "../packages/contracts/dist/src/index.js";
 import { standardCompleteResultDocumentSha256 } from "../packages/application/dist/index.js";
 
-const databaseUrl =
-  process.env.MATCHBASE_DATABASE_URL ??
-  process.env.DATABASE_URL ??
-  "postgresql://matchbase_test:local-synthetic-db-only@127.0.0.1:55432/matchbase_slice1";
+const databaseUrl = resolveScriptDatabaseUrl();
 
 console.log("=== Seeding Consultant Output V3 (4 Golden UAT Scenarios) ===");
-console.log(`Connecting to: ${databaseUrl.replace(/:[^:@]+@/, ":***@")}`);
+console.log("Connecting to the configured PostgreSQL database...");
 
 let pg;
 try {

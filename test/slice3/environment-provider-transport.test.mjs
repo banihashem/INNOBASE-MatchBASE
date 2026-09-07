@@ -262,6 +262,7 @@ test("OpenRouter transport audits in-band served identity without a secondary me
         openrouter_metadata: {
           requested: "google/gemini-3.6-flash",
           strategy: "direct",
+          is_byok: true,
           attempt: 1,
           endpoints: {
             total: 1,
@@ -283,7 +284,6 @@ test("OpenRouter transport audits in-band served identity without a secondary me
           pipeline: [],
           region: null,
           summary: "direct",
-          is_byok: false,
           params: {},
         },
         usage: { prompt_tokens: 12, completion_tokens: 8, cost: 0.000078 },

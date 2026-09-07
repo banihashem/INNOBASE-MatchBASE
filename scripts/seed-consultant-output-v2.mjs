@@ -1,3 +1,4 @@
+import { resolveScriptDatabaseUrl } from "./lib/database-config.mjs";
 import { writeFileSync as fsWrite, mkdirSync as fsMkdir } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
@@ -9,6 +10,7 @@ import {
 import { standardCompleteResultDocumentSha256 } from "../packages/application/dist/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const databaseUrl = resolveScriptDatabaseUrl();
 
 console.log(
   "=== Seeding Consultant Deep-Research Output V2 Golden Scenarios ===",
@@ -30,14 +32,7 @@ fsWrite(fixturePath, JSON.stringify(GOLDEN_SCENARIOS, null, 2), "utf8");
 console.log(`✔ Written offline JSON fixtures to: ${fixturePath}`);
 
 // 3. PostgreSQL database seeding
-const databaseUrl =
-  process.env.MATCHBASE_DATABASE_URL ??
-  process.env.DATABASE_URL ??
-  "postgresql://matchbase_test:local-synthetic-db-only@127.0.0.1:55432/matchbase_slice1";
-
-console.log(
-  `Connecting to PostgreSQL at ${databaseUrl.replace(/:[^:@]+@/, ":***@")}...`,
-);
+console.log("Connecting to the configured PostgreSQL database...");
 
 let pg;
 try {

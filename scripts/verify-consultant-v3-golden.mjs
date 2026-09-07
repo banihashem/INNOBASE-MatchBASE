@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { resolveScriptDatabaseUrl } from "./lib/database-config.mjs";
 import assert from "node:assert/strict";
 import pg from "../packages/data/node_modules/pg/lib/index.js";
 import {
@@ -10,9 +11,7 @@ import {
 } from "../packages/contracts/dist/src/index.js";
 
 const BASE_URL = process.env.MATCHBASE_BASE_URL || "http://localhost:3000";
-const DB_URL =
-  process.env.DATABASE_URL ||
-  "postgresql://matchbase_test:local-synthetic-db-only@127.0.0.1:55432/matchbase_slice1";
+const DB_URL = resolveScriptDatabaseUrl();
 
 console.log("=== MatchBASE Consultant V3 Golden Suite Verification ===");
 

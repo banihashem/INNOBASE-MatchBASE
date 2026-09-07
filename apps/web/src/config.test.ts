@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { consultantProjectionConfigSha256 } from "@matchbase/data";
 import { loadWebConfig } from "./config";
 
@@ -7,6 +7,76 @@ const base = {
   MATCHBASE_DIGEST_KEY: "synthetic-config-key-material-32-bytes",
   MATCHBASE_ORIGIN: "https://matchbase.example.test",
 };
+
+describe("application database connection configuration", () => {
+  const mockPool = { query: vi.fn(), connect: vi.fn(), end: vi.fn() };
+  const createPool = vi.fn(() => mockPool);
+
+  beforeEach(() => {
+    vi.resetModules();
+    createPool.mockClear();
+    vi.stubEnv("MATCHBASE_DATABASE_URL", undefined);
+    vi.stubEnv("DATABASE_URL", undefined);
+    vi.doMock("@matchbase/data", () => ({ createPool }));
+  });
+
+  afterEach(() => {
+    vi.doUnmock("@matchbase/data");
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("prefers the canonical database and reuses its pool", async () => {
+    vi.stubEnv("MATCHBASE_DATABASE_URL", "postgresql://canonical.invalid/app");
+    vi.stubEnv("DATABASE_URL", "postgresql://fallback.invalid/app");
+    const { getAppDatabasePool } = await import("./db-client");
+
+    expect(getAppDatabasePool()).toBe(mockPool);
+    expect(getAppDatabasePool()).toBe(mockPool);
+    expect(createPool).toHaveBeenCalledExactlyOnceWith({
+      connectionString: "postgresql://canonical.invalid/app",
+      max: 10,
+    });
+  });
+
+  it.each([undefined, "", "  "])(
+    "uses DATABASE_URL when the canonical value is %s",
+    async (canonical) => {
+      vi.stubEnv("MATCHBASE_DATABASE_URL", canonical);
+      vi.stubEnv("DATABASE_URL", "postgresql://fallback.invalid/app");
+      const { getAppDatabasePool } = await import("./db-client");
+
+      expect(getAppDatabasePool()).toBe(mockPool);
+      expect(createPool).toHaveBeenCalledExactlyOnceWith({
+        connectionString: "postgresql://fallback.invalid/app",
+        max: 10,
+      });
+    },
+  );
+
+  it.each([undefined, "", " \t "])(
+    "refuses absent or blank configuration without creating a pool: %s",
+    async (missing) => {
+      vi.stubEnv("MATCHBASE_DATABASE_URL", missing);
+      vi.stubEnv("DATABASE_URL", missing);
+      const { getAppDatabasePool } = await import("./db-client");
+
+      expect(() => getAppDatabasePool()).toThrow(
+        "Database configuration missing: set MATCHBASE_DATABASE_URL or DATABASE_URL.",
+      );
+      expect(createPool).not.toHaveBeenCalled();
+      vi.stubEnv(
+        "MATCHBASE_DATABASE_URL",
+        "postgresql://configured.invalid/app",
+      );
+      expect(getAppDatabasePool()).toBe(mockPool);
+      expect(createPool).toHaveBeenCalledExactlyOnceWith({
+        connectionString: "postgresql://configured.invalid/app",
+        max: 10,
+      });
+    },
+  );
+});
 
 describe("production identity configuration", () => {
   it("refuses a production Node runtime when MatchBASE identity is omitted or local", () => {

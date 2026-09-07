@@ -1,5 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { fetchPrimaryEvidenceText } from "./live-source-fetch.js";
+import {
+  auditOpenRouterByok,
+  getConfiguredProviderRoute,
+  OpenRouterByokError,
+  type OpenRouterByokAudit,
+} from "./openrouter-byok-policy.js";
 
 export interface OpenRouterMessage {
   readonly role: "system" | "user" | "assistant";
@@ -37,7 +43,7 @@ export interface OpenRouterCitation {
   readonly original_url?: string;
   readonly content_sha256?: string;
 }
-export interface OpenRouterCompletionResult {
+export interface OpenRouterCompletionResult extends Partial<OpenRouterByokAudit> {
   readonly model: string;
   readonly text: string;
   readonly input_tokens: number;
@@ -62,8 +68,9 @@ export interface OpenRouterModelCapabilities {
   readonly supported_parameters: readonly string[];
   readonly structured_outputs: boolean;
   readonly reasoning: boolean;
+  readonly served_model_ids?: readonly string[];
 }
-export interface LiveResearchCheckpoint {
+export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
   readonly checkpoint_id: string;
   readonly request_id: string;
   readonly phase: string;
@@ -107,11 +114,25 @@ export interface LiveCallOptions {
   ) => void | Promise<void>;
   readonly signal?: AbortSignal;
 }
+function byokCheckpointFields(
+  result: OpenRouterCompletionResult,
+): Partial<OpenRouterByokAudit> {
+  if (!result.requested_provider) return {};
+  return {
+    requested_provider: result.requested_provider,
+    actual_provider: result.actual_provider ?? null,
+    is_byok: result.is_byok ?? null,
+    upstream_inference_cost: result.upstream_inference_cost ?? null,
+    byok_verification_source: result.byok_verification_source ?? "unverified",
+    generation_metadata_attempts: result.generation_metadata_attempts ?? 0,
+  };
+}
 export class LiveResearchError extends Error {
   constructor(
     readonly code: string,
     message: string,
     readonly retryable = false,
+    readonly audited_response?: OpenRouterCompletionResult,
   ) {
     super(`${code}: ${message}`);
     this.name = "LiveResearchError";
@@ -147,6 +168,13 @@ let catalogCache:
       models: readonly OpenRouterModelCapabilities[];
     }
   | undefined;
+const endpointCapabilityCache = new Map<
+  string,
+  {
+    expires: number;
+    capabilities: OpenRouterModelCapabilities;
+  }
+>();
 export async function getOpenRouterModelCapabilities(
   model: string,
 ): Promise<OpenRouterModelCapabilities> {
@@ -211,7 +239,88 @@ export async function getOpenRouterModelCapabilities(
       "MB-422-MODEL-UNAVAILABLE",
       "Configured model is absent from the current provider catalog.",
     );
-  return capabilities;
+  const provider = getConfiguredProviderRoute(model);
+  const cacheKey = `${fingerprint}:${model}:${provider}`;
+  const cachedEndpoint = endpointCapabilityCache.get(cacheKey);
+  if (cachedEndpoint && cachedEndpoint.expires > Date.now())
+    return cachedEndpoint.capabilities;
+  const response = await fetch(
+    `https://openrouter.ai/api/v1/models/${model.split("/").map(encodeURIComponent).join("/")}/endpoints`,
+    {
+      signal: AbortSignal.timeout(15000),
+      redirect: "error",
+      cache: "no-store",
+    },
+  );
+  if (!response.ok)
+    throw new LiveResearchError(
+      "MB-503-MODEL-CATALOG",
+      `Provider endpoint catalog returned HTTP ${response.status}.`,
+      true,
+    );
+  const body = (await response.json()) as {
+    data?: {
+      endpoints?: {
+        name?: unknown;
+        model_id?: unknown;
+        tag?: unknown;
+        supported_parameters?: unknown;
+      }[];
+    };
+  };
+  const endpoints = body.data?.endpoints;
+  const matches = Array.isArray(endpoints)
+    ? endpoints.filter(
+        (entry) =>
+          typeof entry.tag === "string" &&
+          (entry.tag === provider ||
+            (entry.tag.startsWith(`${provider}/`) &&
+              !/\/(flex|fast|priority)$/.test(entry.tag))) &&
+          Array.isArray(entry.supported_parameters),
+      )
+    : [];
+  if (!matches.length)
+    throw new LiveResearchError(
+      "MB-422-MODEL-CAPABILITY",
+      "Configured provider has no supported endpoint for the eligible model.",
+    );
+  // The authenticated catalog establishes model eligibility. Parameter support
+  // comes from the selected provider, never from a different aggregated endpoint.
+  const supported = (matches[0]!.supported_parameters as unknown[]).filter(
+    (parameter): parameter is string =>
+      typeof parameter === "string" &&
+      matches.every((entry) =>
+        (entry.supported_parameters as unknown[]).includes(parameter),
+      ),
+  );
+  const selectedCapabilities: OpenRouterModelCapabilities = {
+    id: model,
+    supported_parameters: supported,
+    structured_outputs: supported.includes("structured_outputs"),
+    reasoning: supported.includes("reasoning"),
+    served_model_ids: [
+      ...new Set([
+        model,
+        ...matches.flatMap((entry) => {
+          const dated =
+            typeof entry.name === "string"
+              ? entry.name.split(" | ")[1]?.trim()
+              : undefined;
+          return entry.model_id === model &&
+            dated &&
+            dated.startsWith(`${model}-`)
+            ? [dated]
+            : [];
+        }),
+      ]),
+    ],
+  };
+  if (endpointCapabilityCache.size >= 100) endpointCapabilityCache.clear();
+  endpointCapabilityCache.set(cacheKey, {
+    expires: Date.now() + 300000,
+    capabilities: selectedCapabilities,
+  });
+  return selectedCapabilities;
 }
 export async function validateLiveModelConfiguration() {
   if (!getOpenRouterApiKey())
@@ -220,6 +329,14 @@ export async function validateLiveModelConfiguration() {
       "Server OpenRouter credential is not configured.",
     );
   const models = getConfiguredLiveModels();
+  let providers: string[];
+  try {
+    providers = Object.values(models).map(getConfiguredProviderRoute);
+  } catch (error) {
+    if (error instanceof OpenRouterByokError)
+      throw new LiveResearchError(error.code, error.message);
+    throw error;
+  }
   if (
     !models.lane_gemini.startsWith("google/gemini-") ||
     !models.lane_openai.startsWith("openai/")
@@ -241,7 +358,7 @@ export async function validateLiveModelConfiguration() {
         "Preparation and synthesis require structured output support.",
       );
   }
-  return { models, capabilities };
+  return { models, capabilities, providers };
 }
 export function safePublicEvidenceUrl(value: string): string | null {
   try {
@@ -274,8 +391,16 @@ export function safePublicEvidenceUrl(value: string): string | null {
 function finiteNonnegative(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
-function providerErrorCategory(body: string): string {
-  const normalized = body.toLowerCase();
+function providerErrorCategory(body: string, model: string): string {
+  const normalized = body.toLowerCase().replace(/\\"/g, '"');
+  if (
+    model.startsWith("openai/") &&
+    /\btool\s+["']?web_search_preview["']?\s+(?:is\s+)?disabled for this organization\b/.test(
+      normalized,
+    ) &&
+    normalized.includes("hosted-tools")
+  )
+    return "OpenAI organization permissions disable the hosted web_search_preview tool";
   if (
     /zero.?data.?retention|\bzdr\b|privacy.*polic|data.*polic/.test(normalized)
   )
@@ -317,7 +442,9 @@ export async function callOpenRouterCompletion(
   const signal = params.signal
     ? AbortSignal.any([params.signal, timeout])
     : timeout;
+  let auditedResponse: OpenRouterCompletionResult | undefined;
   try {
+    const provider = getConfiguredProviderRoute(params.model);
     const capabilities = await getOpenRouterModelCapabilities(params.model);
     const supported = new Set(capabilities.supported_parameters);
     const tokenParameter = supported.has("max_completion_tokens")
@@ -339,6 +466,7 @@ export async function callOpenRouterCompletion(
           Authorization: `Bearer ${apiKey}`,
           "HTTP-Referer": "https://innobase.matchbase.internal",
           "X-Title": "MatchBASE Consultant Research",
+          "X-OpenRouter-Metadata": "enabled",
         },
         body: JSON.stringify({
           model: params.model,
@@ -352,7 +480,12 @@ export async function callOpenRouterCompletion(
             ? { response_format: params.response_format }
             : {}),
           ...(params.reasoning ? { reasoning: params.reasoning } : {}),
-          provider: { require_parameters: true, allow_fallbacks: false },
+          provider: {
+            only: [provider],
+            order: [provider],
+            require_parameters: true,
+            allow_fallbacks: false,
+          },
         }),
         signal,
       },
@@ -361,15 +494,24 @@ export async function callOpenRouterCompletion(
     if (!response.ok) {
       const category = providerErrorCategory(
         await response.text().catch(() => ""),
+        params.model,
       );
+      const webPermissionDenied =
+        category ===
+        "OpenAI organization permissions disable the hosted web_search_preview tool";
       throw new LiveResearchError(
-        "MB-502-LIVE-PROVIDER",
+        webPermissionDenied
+          ? "MB-403-LIVE-WEB-PERMISSION"
+          : "MB-502-LIVE-PROVIDER",
         `Provider returned HTTP ${response.status}: ${category}.`,
-        response.status === 429 || response.status >= 500,
+        !webPermissionDenied &&
+          (response.status === 429 || response.status >= 500),
       );
     }
     const data = (await response.json()) as {
       id?: string;
+      provider?: unknown;
+      openrouter_metadata?: unknown;
       model?: string;
       error?: unknown;
       choices?: {
@@ -390,21 +532,11 @@ export async function callOpenRouterCompletion(
         prompt_tokens?: unknown;
         completion_tokens?: unknown;
         cost?: unknown;
+        cost_details?: unknown;
       };
     };
     const choice = data.choices?.[0];
     const text = choice?.message?.content;
-    if (
-      data.error ||
-      typeof text !== "string" ||
-      !text.trim() ||
-      (choice?.finish_reason && choice.finish_reason !== "stop")
-    )
-      throw new LiveResearchError(
-        "MB-502-LIVE-RESPONSE",
-        "Provider returned an empty, incomplete, or refused response.",
-        true,
-      );
     const citations: OpenRouterCitation[] = [];
     for (const annotation of choice?.message?.annotations ?? []) {
       const citation = annotation.url_citation;
@@ -428,14 +560,15 @@ export async function callOpenRouterCompletion(
     }
     const usage = data.usage;
     const costReported = finiteNonnegative(usage?.cost);
-    return {
+    const bodyGenerationId = typeof data.id === "string" ? data.id : null;
+    const headerGenerationId = response.headers.get("x-generation-id");
+    const generationId = bodyGenerationId ?? headerGenerationId;
+    auditedResponse = {
       model: typeof data.model === "string" ? data.model : params.model,
       requested_model: params.model,
       request_id: requestId,
-      ...(typeof data.id === "string"
-        ? { provider_generation_id: data.id }
-        : {}),
-      text,
+      ...(generationId ? { provider_generation_id: generationId } : {}),
+      text: typeof text === "string" ? text : "",
       citations,
       input_tokens: finiteNonnegative(usage?.prompt_tokens)
         ? usage.prompt_tokens
@@ -451,7 +584,48 @@ export async function callOpenRouterCompletion(
       latency_ms: Date.now() - startTime,
       live_api_invoked: true,
     };
+    if (
+      bodyGenerationId &&
+      headerGenerationId &&
+      bodyGenerationId !== headerGenerationId
+    )
+      throw new LiveResearchError(
+        "MB-502-LIVE-PROVIDER-DRIFT",
+        "Response generation identities differ.",
+        false,
+        auditedResponse,
+      );
+    const audit = await auditOpenRouterByok({
+      envelope: data,
+      generation_id: generationId,
+      requested_model: params.model,
+      allowed_model_ids: capabilities.served_model_ids ?? [params.model],
+      requested_provider: provider,
+      api_key: apiKey,
+      signal,
+    });
+    auditedResponse = { ...auditedResponse, ...audit };
+    if (
+      data.error ||
+      typeof text !== "string" ||
+      !text.trim() ||
+      (choice?.finish_reason && choice.finish_reason !== "stop")
+    )
+      throw new LiveResearchError(
+        "MB-502-LIVE-RESPONSE",
+        "Provider returned an empty, incomplete, or refused response.",
+        true,
+        auditedResponse,
+      );
+    return auditedResponse;
   } catch (error) {
+    if (error instanceof OpenRouterByokError)
+      throw new LiveResearchError(
+        error.code,
+        error.message,
+        false,
+        auditedResponse ? { ...auditedResponse, ...error.audit } : undefined,
+      );
     if (error instanceof LiveResearchError) throw error;
     throw new LiveResearchError(
       "MB-503-LIVE-TRANSPORT",
@@ -459,6 +633,7 @@ export async function callOpenRouterCompletion(
         ? "Provider request was cancelled or timed out."
         : "Provider transport or response decoding failed.",
       true,
+      auditedResponse,
     );
   }
 }
@@ -519,6 +694,12 @@ export async function runLiveCompletion(
     checkpoint = {
       ...checkpoint,
       reasoning_effort: capabilities.reasoning ? "high" : "unsupported",
+      requested_provider: getConfiguredProviderRoute(request.model),
+      actual_provider: null,
+      is_byok: null,
+      upstream_inference_cost: null,
+      byok_verification_source: "unverified",
+      generation_metadata_attempts: 0,
     };
     await options.on_checkpoint?.(checkpoint);
     let result = await callOpenRouterCompletion({
@@ -594,6 +775,7 @@ export async function runLiveCompletion(
       input_tokens: result.input_tokens,
       output_tokens: result.output_tokens,
       cost_usd: result.cost_usd,
+      ...byokCheckpointFields(result),
       usage_reported: result.usage_reported ?? false,
       cost_reported: result.cost_reported ?? false,
       response_content: result.text.slice(0, 200000),
@@ -613,13 +795,17 @@ export async function runLiveCompletion(
     });
     return result;
   } catch (error) {
+    if (error instanceof LiveResearchError && error.audited_response)
+      auditedResponse = error.audited_response;
     const safeError =
       error instanceof LiveResearchError
         ? error
-        : new LiveResearchError(
-            "MB-503-LIVE-CHECKPOINT",
-            "Live research preflight or checkpoint persistence failed.",
-          );
+        : error instanceof OpenRouterByokError
+          ? new LiveResearchError(error.code, error.message)
+          : new LiveResearchError(
+              "MB-503-LIVE-CHECKPOINT",
+              "Live research preflight or checkpoint persistence failed.",
+            );
     await options.on_checkpoint?.({
       ...checkpoint,
       state: "failed",
@@ -634,6 +820,8 @@ export async function runLiveCompletion(
             input_tokens: auditedResponse.input_tokens,
             output_tokens: auditedResponse.output_tokens,
             cost_usd: auditedResponse.cost_usd,
+            provider_generation_id: auditedResponse.provider_generation_id,
+            ...byokCheckpointFields(auditedResponse),
             evidence_urls: (auditedResponse.citations ?? []).map(
               (citation) => citation.url,
             ),

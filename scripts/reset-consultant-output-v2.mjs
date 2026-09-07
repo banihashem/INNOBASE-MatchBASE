@@ -1,31 +1,24 @@
+import {
+  assertLocalDatabaseUrl,
+  resolveScriptDatabaseUrl,
+} from "./lib/database-config.mjs";
 console.log(
   "=== Resetting Consultant Deep-Research Output V2 Golden Scenarios ===",
 );
 
 // Safety guard: refuse to run against staging or production environments
-const env =
-  process.env.NODE_ENV ?? process.env.MATCHBASE_ENVIRONMENT ?? "development";
-if (env === "production" || env === "staging") {
-  console.error(`❌ Reset refused: unsafe environment "${env}".`);
+const unsafeEnvironment = [
+  process.env.NODE_ENV,
+  process.env.MATCHBASE_ENVIRONMENT,
+].find((value) => value === "production" || value === "staging");
+if (unsafeEnvironment) {
+  console.error(`❌ Reset refused: unsafe environment "${unsafeEnvironment}".`);
   process.exit(1);
 }
 
-const databaseUrl =
-  process.env.MATCHBASE_DATABASE_URL ??
-  process.env.DATABASE_URL ??
-  "postgresql://matchbase_test:local-synthetic-db-only@127.0.0.1:55432/matchbase_slice1";
+const databaseUrl = resolveScriptDatabaseUrl();
 
-// Ensure URL points to local host only
-if (
-  !databaseUrl.includes("127.0.0.1") &&
-  !databaseUrl.includes("localhost") &&
-  !databaseUrl.includes("postgres")
-) {
-  console.error(
-    "❌ Reset refused: target database host is not a local synthetic instance.",
-  );
-  process.exit(1);
-}
+assertLocalDatabaseUrl(databaseUrl);
 
 let pg;
 try {

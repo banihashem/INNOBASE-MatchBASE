@@ -23,6 +23,8 @@ const modelVariables = [
   "MATCHBASE_MODEL_OPENAI",
   "MATCHBASE_MODEL_PREPARATION",
   "MATCHBASE_MODEL_SYNTHESIS",
+  "MATCHBASE_PROVIDER_GOOGLE",
+  "MATCHBASE_PROVIDER_OPENAI",
 ];
 const originalModels = Object.fromEntries(
   modelVariables.map((name) => [name, process.env[name]]),
@@ -89,7 +91,21 @@ function respond(payload, annotations = [citation], extra = {}) {
   return new Response(
     JSON.stringify({
       id: "generation-test",
-      model: "openai/gpt-5.2",
+      model: requests.at(-1)?.model ?? "openai/gpt-5.2",
+      openrouter_metadata: {
+        is_byok: true,
+        endpoints: {
+          available: [
+            {
+              selected: true,
+              model: requests.at(-1)?.model ?? "openai/gpt-5.2",
+              provider: requests.at(-1)?.model.startsWith("google/")
+                ? "Google AI Studio"
+                : "OpenAI",
+            },
+          ],
+        },
+      },
       choices: [
         {
           finish_reason: "stop",
@@ -100,7 +116,12 @@ function respond(payload, annotations = [citation], extra = {}) {
           },
         },
       ],
-      usage: { prompt_tokens: 10, completion_tokens: 20, cost: 0.01 },
+      usage: {
+        prompt_tokens: 10,
+        completion_tokens: 20,
+        cost: 0.01,
+        cost_details: { upstream_inference_cost: 0.02 },
+      },
       ...extra,
     }),
     { status: 200 },
@@ -122,8 +143,41 @@ beforeEach(() => {
   process.env.MATCHBASE_OPENROUTER_API_KEY = randomUUID();
   delete process.env.OPENROUTER_API_KEY;
   for (const name of modelVariables) delete process.env[name];
+  process.env.MATCHBASE_PROVIDER_GOOGLE = "google-ai-studio";
+  process.env.MATCHBASE_PROVIDER_OPENAI = "openai";
   dispatch = () => respond(discovery());
   globalThis.fetch = async (target, options) => {
+    if (String(target).endsWith("/endpoints"))
+      return new Response(
+        JSON.stringify({
+          data: {
+            endpoints: [
+              {
+                tag: String(target).includes("/google/")
+                  ? "google-ai-studio"
+                  : "openai",
+                supported_parameters: [
+                  "structured_outputs",
+                  "reasoning",
+                  "max_tokens",
+                ],
+              },
+            ],
+          },
+        }),
+      );
+    if (String(target).includes("/generation?"))
+      return new Response(
+        JSON.stringify({
+          data: {
+            id: "generation-test",
+            model: requests.at(-1)?.model ?? "openai/gpt-5.2",
+            provider_name: "OpenAI",
+            is_byok: true,
+            upstream_inference_cost: 0.02,
+          },
+        }),
+      );
     if (String(target).endsWith("/models/user"))
       return new Response(
         JSON.stringify({
@@ -222,7 +276,7 @@ test("live requires five actual verification calls after both native web discove
     requests
       .filter((body) => body.model.startsWith("openai/"))
       .every(
-        (body) => body.max_completion_tokens && body.max_tokens === undefined,
+        (body) => body.max_tokens && body.max_completion_tokens === undefined,
       ),
   );
   assert.equal(result.total_input_tokens, 80);
@@ -275,6 +329,78 @@ test("transport errors redact provider bodies and preserve a failed checkpoint",
   assert.equal(events.at(-1).state, "failed");
   assert.ok(!JSON.stringify(events).includes("Sensitive echoed"));
 });
+test("known OpenAI hosted-web permission denial has a safe nonretryable diagnosis", async () => {
+  const rawMessage =
+    "Tool 'web_search_preview' disabled for this organization. You can enable it here: https://platform.openai.com/settings/organization/data-controls/hosted-tools . private-organization-and-secret-sentinel";
+  dispatch = () =>
+    new Response(
+      JSON.stringify({
+        error: {
+          metadata: { raw: JSON.stringify({ error: { message: rawMessage } }) },
+        },
+      }),
+      { status: 400 },
+    );
+  const events = [];
+  await assert.rejects(
+    runLiveCompletion(
+      {
+        model: "openai/gpt-5.2",
+        messages: [{ role: "user", content: "Research the request." }],
+      },
+      { phase: "advisory", loop: 1, require_web: true },
+      { on_checkpoint: (event) => events.push(event) },
+    ),
+    (error) => {
+      assert.match(error.message, /MB-403-LIVE-WEB-PERMISSION/);
+      assert.match(error.message, /OpenAI organization permissions disable/);
+      assert.equal(error.retryable, false);
+      return true;
+    },
+  );
+  assert.equal(requests.length, 1);
+  assert.equal(events.at(-1).state, "failed");
+  assert.doesNotMatch(
+    JSON.stringify(events),
+    /private-organization-and-secret-sentinel/,
+  );
+});
+
+test("related generic provider errors are not mislabeled as organization hosted-web permission failures", async () => {
+  for (const [model, body] of [
+    [
+      "openai/gpt-5.2",
+      "Tool web_search_preview unsupported; consult hosted-tools.",
+    ],
+    [
+      "openai/gpt-5.2",
+      "Tool web_search_preview disabled for this project; consult hosted-tools.",
+    ],
+    [
+      "openai/gpt-5.2",
+      "Tool web_search_preview disabled for this organization.",
+    ],
+    [
+      "google/gemini-3.8-flash",
+      "Tool web_search_preview disabled for this organization; consult hosted-tools.",
+    ],
+  ]) {
+    dispatch = () => new Response(body, { status: 400 });
+    await assert.rejects(
+      callOpenRouterCompletion({
+        model,
+        messages: [{ role: "user", content: "Research the request." }],
+      }),
+      (error) => {
+        assert.equal(error.code, "MB-502-LIVE-PROVIDER");
+        assert.doesNotMatch(error.message, /MB-403-LIVE-WEB-PERMISSION/);
+        return true;
+      },
+    );
+  }
+  assert.equal(requests.length, 4);
+});
+
 test("missing provider token and cost usage is explicit rather than estimated", async () => {
   dispatch = () => respond("{}", [], { usage: {} });
   const result = await callOpenRouterCompletion({
@@ -328,7 +454,7 @@ test("advisory executes exactly three native web loops and prompt generation nev
           [],
         )
       : respond(
-          "Evidence-backed product application advisory. Current quote remains unknown; confirm before procurement.",
+          "Evidence-backed product application advisory. Current quote remains unknown; confirm before procurement.\n\nA controller label named canonical_snapshot is not a certification. Confirm 24 V DC and 3-5 bar before procurement. Supported voltage options [24, 48] V require verification.",
         );
   const gateway = new LivePreparationModelGateway();
   const approved = {
@@ -338,6 +464,10 @@ test("advisory executes exactly three native web loops and prompt generation nev
     product_name: "Process pumps",
     key_specifications: ["Stainless steel"],
     approved_at: new Date().toISOString(),
+    canonical_snapshot: {
+      fact_ids: ["internal-fact-id"],
+      revision_id: randomUUID(),
+    },
   };
   const classification = {
     classification_id: randomUUID(),
@@ -359,6 +489,23 @@ test("advisory executes exactly three native web loops and prompt generation nev
   assert.deepEqual(advisory.sourcing_risks, []);
   assert.equal(requests.length, 3);
   assert.ok(requests.every((body) => body.plugins[0].engine === "native"));
+  assert.match(advisory.loop2_regulatory, /\n\nA controller label/);
+  assert.deepEqual(
+    advisory.sources.map((source) => source.url),
+    [url],
+  );
+  for (const request of requests) {
+    const context = JSON.parse(request.messages[1].content);
+    assert.equal(context.approved_request_text, approved.english_translation);
+    assert.ok(!request.messages[1].content.includes("internal-fact-id"));
+    assert.equal(context.canonical_snapshot, undefined);
+    assert.equal(context.approved_request, undefined);
+    assert.equal(context.prior_advisory, undefined);
+  }
+  assert.equal(
+    JSON.parse(requests[1].messages[1].content).earlier_briefings[0],
+    advisory.loop1_trade_lane,
+  );
   const generated = await gateway.generateDeepResearchPrompt(
     approved,
     advisory,
@@ -367,6 +514,57 @@ test("advisory executes exactly three native web loops and prompt generation nev
   assert.equal(requests.length, 4);
   assert.equal(requests[3].plugins, undefined);
   assert.ok(generated.prompt_text.includes(approved.english_translation));
+});
+test("advisory rejects request-envelope echoes before publication while retaining raw provider audit", async () => {
+  const approved = {
+    revision_id: randomUUID(),
+    english_translation: "A stainless steel process pump, 24 V DC, 3-5 bar.",
+    product_category: "Pumps",
+    product_name: "Process pump",
+    key_specifications: ["24 V DC", "3-5 bar"],
+    approved_at: new Date().toISOString(),
+    canonical_snapshot: { fact_ids: ["original-fact-id"] },
+  };
+  const before = structuredClone(approved);
+  const classification = {
+    scheme: "CUSTOM_MATCHBASE",
+    code: "UNCLASSIFIED",
+    label: "Pumps",
+    confidence: "low",
+  };
+  for (const raw of [
+    'Approved request (verbatim; unchanged)\n```json\n{"canonical_snapshot":{"fact_ids":["original-fact-id"]},"prior_advisory":["Earlier full text"]}\n```\nCheck the official approval registry.',
+    'Approved request: {"canonical_snapshot":{"fact_ids":["original-fact-id"]}}\nCheck the official approval registry.',
+    '{"approved_request_text":"A stainless steel process pump, 24 V DC, 3-5 bar.","earlier_briefings":["Earlier full text"]}\nCheck the official approval registry.',
+    'Current findings:\n```json\n{"analysis":"Check the official approval registry."}\n```',
+    '{"analysis":"Check the official approval registry."}',
+    '[{"analysis":"Check the official approval registry."}]',
+  ]) {
+    requests = [];
+    const events = [];
+    dispatch = () =>
+      respond(requests.length === 1 ? "Confirm current product scope." : raw);
+    const gateway = new LivePreparationModelGateway({
+      on_checkpoint: (event) => events.push(event),
+    });
+    await assert.rejects(
+      gateway.generateAdvisoryLoops(approved, classification),
+      (error) => {
+        assert.equal(error.code, "MB-422-LIVE-ADVISORY-FORMAT");
+        assert.equal(error.retryable, false);
+        assert.ok(!error.message.includes("original-fact-id"));
+        return true;
+      },
+    );
+    assert.equal(requests.length, 2);
+    const rawAudit = events.find(
+      (event) => event.loop === 2 && event.state === "completed",
+    );
+    assert.equal(rawAudit.response_content, raw);
+    assert.equal(rawAudit.response_truncated, false);
+    assert.deepEqual(rawAudit.evidence_urls, [url]);
+    assert.deepEqual(approved, before);
+  }
 });
 test("demonstration mode reports zero actual verification loops and no provider usage", async () => {
   const result = await executeDualLaneResearch(intake, {

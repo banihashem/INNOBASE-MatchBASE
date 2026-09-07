@@ -1,12 +1,10 @@
 #!/usr/bin/env node
+import { resolveScriptDatabaseUrl } from "./lib/database-config.mjs";
 /**
  * Invalidate corrupt run d0f8978a-8260-446e-83f6-0f7a3957875e
  * Persists audit metadata explaining invalidation reasons per MB-UX-REM-004 directive.
  */
-const databaseUrl =
-  process.env.MATCHBASE_DATABASE_URL ??
-  process.env.DATABASE_URL ??
-  "postgresql://matchbase_test:local-synthetic-db-only@127.0.0.1:55432/matchbase_slice1";
+const databaseUrl = resolveScriptDatabaseUrl();
 
 let pg;
 try {

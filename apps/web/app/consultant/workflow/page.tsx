@@ -11,6 +11,14 @@ import { SupplierDossierModal } from "../../../components/consultant/SupplierDos
 
 import { ApprovedRequestSummary } from "../../../components/consultant/ApprovedRequestSummary";
 
+import { errorMessage } from "../../../components/consultant/workflow-response";
+import { useWorkflowPolling } from "../../../components/consultant/useWorkflowPolling";
+import { useStep1Fidelity } from "../../../components/consultant/useStep1Fidelity";
+import { InterpretationApprovalStep } from "../../../components/consultant/InterpretationApprovalStep";
+import { useConsultantReportDownloads } from "../../../components/consultant/useConsultantReportDownloads";
+import { ConsultantResultsSection } from "../../../components/consultant/ConsultantResultsSection";
+import { NewDraftTransitionModal } from "../../../components/consultant/NewDraftTransitionModal";
+
 const DEMONSTRATION_EXAMPLES = {
   poultry: {
     label:
@@ -102,8 +110,6 @@ export default function ConsultantWorkflowPage() {
   const lastSavedDraftRef = useRef<{ id: string; fingerprint: string } | null>(
     null,
   );
-  const newDraftModalRef = useRef<HTMLDivElement | null>(null);
-  const newDraftPreviousFocusRef = useRef<HTMLElement | null>(null);
   const intakeRef = useRef({
     productRequirement,
     technicalCompliance,
@@ -115,9 +121,6 @@ export default function ConsultantWorkflowPage() {
   const [approvedSnapshot, setApprovedSnapshot] =
     useState<ApprovedRequestSnapshotV3 | null>(null);
   const [retryAction, setRetryAction] = useState<string | null>(null);
-  const [isFidelityValidating, setIsFidelityValidating] = useState(false);
-  const validationSequenceRef = useRef(0);
-  const [validationRetry, setValidationRetry] = useState(0);
 
   function updateDraftId(id: string) {
     draftIdRef.current = id;
@@ -126,11 +129,6 @@ export default function ConsultantWorkflowPage() {
   function updateDraftVersion(version: number) {
     draftVersionRef.current = version;
     setDraftVersion(version);
-  }
-  function errorMessage(data: any, fallback: string): string {
-    return typeof data?.error === "string"
-      ? data.error
-      : data?.error?.message || data?.message || fallback;
   }
   function acceptProgress(session: any) {
     if (session.approved_request_revision?.canonical_snapshot)
@@ -186,23 +184,35 @@ export default function ConsultantWorkflowPage() {
       orderProfile: string;
     };
   } | null>(null);
-  const [step1Fidelity, setStep1Fidelity] = useState<any>(null);
   const [activeDrafts, setActiveDrafts] = useState<any[]>([]);
   const [conflictEscapeAnnouncement, setConflictEscapeAnnouncement] =
     useState<string>("");
-  const [isPdfDownloading, setIsPdfDownloading] = useState<boolean>(false);
   const [isSessionChanged, setIsSessionChanged] = useState<boolean>(false);
   const [showFullLedger, setShowFullLedger] = useState<boolean>(false);
   const [showFullConflictLocal, setShowFullConflictLocal] =
     useState<boolean>(false);
   const initialUserIdRef = useRef<string | null>(null);
-  const revalidateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const coherenceSummaryRef = useRef<HTMLDivElement | null>(null);
   const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isCloningDraftRef = useRef<boolean>(false);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const conflictModalRef = useRef<HTMLDivElement | null>(null);
   const conflictPrimaryBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  const {
+    step1Fidelity,
+    setStep1Fidelity,
+    isFidelityValidating,
+    setIsFidelityValidating,
+    setValidationRetry,
+  } = useStep1Fidelity({
+    workflowState,
+    step1Translation,
+    productRequirement,
+    technicalCompliance,
+    orderProfile,
+    setWorkflowError,
+  });
 
   // Session verification & purge old localStorage
   useEffect(() => {
@@ -250,83 +260,6 @@ export default function ConsultantWorkflowPage() {
       .catch(() => setUserSession(null))
       .finally(() => setSessionLoading(false));
   }, []);
-
-  // Dynamic Step 1 requirement fidelity revalidation on human edits
-  useEffect(() => {
-    if (workflowState !== "prep_step1_awaiting_approval" || !step1Translation) {
-      return;
-    }
-    const sequence = ++validationSequenceRef.current;
-    const controller = new AbortController();
-    setIsFidelityValidating(true);
-    if (revalidateTimeoutRef.current) {
-      clearTimeout(revalidateTimeoutRef.current);
-    }
-    revalidateTimeoutRef.current = setTimeout(async () => {
-      setStep1Fidelity(null);
-      try {
-        const res = await fetch("/api/v1/consultant/workflow", {
-          method: "POST",
-          signal: controller.signal,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "validate_step1_fidelity",
-            intake: {
-              product_requirement: productRequirement,
-              technical_compliance: technicalCompliance,
-              order_profile: orderProfile,
-            },
-            translation: step1Translation,
-          }),
-        });
-        if (!res.ok)
-          throw new Error(
-            "Interpretation validation could not complete. Retry before approving.",
-          );
-        if (
-          res.ok &&
-          sequence === validationSequenceRef.current &&
-          !controller.signal.aborted
-        ) {
-          const d = await res.json();
-          if (
-            d.success &&
-            d.fidelity &&
-            sequence === validationSequenceRef.current
-          ) {
-            setStep1Fidelity(d.fidelity);
-          }
-        }
-      } catch (err) {
-        if (!controller.signal.aborted)
-          setWorkflowError(
-            err instanceof Error
-              ? err.message
-              : "Interpretation validation failed.",
-          );
-      } finally {
-        if (
-          sequence === validationSequenceRef.current &&
-          !controller.signal.aborted
-        )
-          setIsFidelityValidating(false);
-      }
-    }, 400);
-
-    return () => {
-      controller.abort();
-      if (revalidateTimeoutRef.current) {
-        clearTimeout(revalidateTimeoutRef.current);
-      }
-    };
-  }, [
-    step1Translation,
-    workflowState,
-    productRequirement,
-    technicalCompliance,
-    orderProfile,
-    validationRetry,
-  ]);
 
   // Check URL params once, including React Strict Mode effect replay.
   useEffect(() => {
@@ -503,73 +436,15 @@ export default function ConsultantWorkflowPage() {
     isSavingNewDraft,
   ]);
 
-  useEffect(() => {
-    if (!showNewDraftModal) return;
-    newDraftPreviousFocusRef.current = document.activeElement as HTMLElement;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    newDraftModalRef.current
-      ?.querySelector<HTMLButtonElement>("#stay-in-draft-btn")
-      ?.focus();
-    function keepFocus(event: FocusEvent) {
-      if (!newDraftModalRef.current?.contains(event.target as Node))
-        newDraftModalRef.current?.focus();
-    }
-    document.addEventListener("focusin", keepFocus);
-    return () => {
-      document.removeEventListener("focusin", keepFocus);
-      document.body.style.overflow = previousOverflow;
-      newDraftPreviousFocusRef.current?.focus();
-    };
-  }, [showNewDraftModal]);
-
-  useEffect(() => {
-    if (
-      !runId ||
-      output ||
-      workflowState === "workflow_failed" ||
-      workflowState === "invalidated" ||
-      workflowState === "workflow_complete" ||
-      workflowState === "progressive_reveal_ready" ||
-      workflowState === "intake_draft" ||
-      workflowState === "prep_step1_awaiting_approval" ||
-      workflowState === "prep_step3_prompt_awaiting_approval" ||
-      workflowState === "prep_step3_prompt_approved" ||
-      workflowState === "prep_step2_advisory_ready"
-    )
-      return;
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
-      try {
-        const res = await fetch(
-          `/api/v1/consultant/workflow?run_id=${encodeURIComponent(runId!)}`,
-          { cache: "no-store", signal: controller.signal },
-        );
-        const data = await res.json();
-        if (controller.signal.aborted) return;
-        if (!res.ok)
-          throw new Error(
-            errorMessage(data, "Could not refresh workflow progress."),
-          );
-        if (data.session) acceptProgress(data.session);
-        const result = data.output ?? data.session?.output;
-        if (result) {
-          setOutput(result);
-          setRevealedCount(data.session?.revealed_count ?? 5);
-          return;
-        }
-      } catch (error: any) {
-        if (!controller.signal.aborted) setWorkflowError(error.message);
-      }
-      if (!controller.signal.aborted) timer = setTimeout(poll, 2000);
-    }
-    void poll();
-    return () => {
-      controller.abort();
-      clearTimeout(timer);
-    };
-  }, [runId, workflowState, output]);
+  useWorkflowPolling({
+    runId,
+    workflowState,
+    output,
+    acceptProgress,
+    setOutput,
+    setRevealedCount,
+    setWorkflowError,
+  });
 
   // N04: Trap initial focus into conflict modal and store previous active element
   useEffect(() => {
@@ -1195,70 +1070,8 @@ export default function ConsultantWorkflowPage() {
     }
   }
 
-  // Action 5: JSON Export with toast confirmation (F14)
-  function handleJsonExport() {
-    if (!output) return;
-    const jsonStr = JSON.stringify(output, null, 2);
-    const blob = new Blob([jsonStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `MatchBASE_Consultant_Output_V3_${output.research_run_id}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    triggerToast(
-      "Structured JSON output exported successfully. Remember to re-validate registry listings prior to commercial contracts.",
-    );
-  }
-
-  // Action 6: Authenticated PDF Blob Download (Section 8.5)
-  async function handlePdfDownload() {
-    const targetRunId = runId || output?.research_run_id;
-    if (!targetRunId) return;
-    setIsPdfDownloading(true);
-    try {
-      const res = await fetch(`/api/v1/consultant/reports/${targetRunId}/pdf`, {
-        method: "GET",
-        headers: {
-          Accept: "application/pdf",
-        },
-        credentials: "same-origin",
-      });
-
-      if (!res.ok) {
-        throw new Error(`PDF request returned HTTP ${res.status}`);
-      }
-
-      const contentType = res.headers.get("content-type") || "";
-      if (!contentType.includes("application/pdf")) {
-        throw new Error(`Expected application/pdf but received ${contentType}`);
-      }
-
-      const blob = await res.blob();
-      const disposition = res.headers.get("content-disposition");
-      let filename = `MatchBASE_Consultant_Report_${targetRunId}.pdf`;
-      if (disposition && disposition.includes("filename=")) {
-        const match = disposition.match(/filename="?([^";]+)"?/i);
-        if (match?.[1]) filename = match[1];
-      }
-
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-
-      triggerToast("PDF prepared and handed to your browser for saving.");
-    } catch (e: any) {
-      console.error("PDF download failed:", e);
-      triggerToast(`PDF download failed: ${e?.message || "Unknown error"}`);
-    } finally {
-      setIsPdfDownloading(false);
-    }
-  }
+  const { isPdfDownloading, handleJsonExport, handlePdfDownload } =
+    useConsultantReportDownloads(output, runId, triggerToast);
 
   const suppliers = [...(output?.supplier_candidates ?? [])]
     .sort(
@@ -2005,391 +1818,21 @@ export default function ConsultantWorkflowPage() {
               </p>
             </div>
 
-            {/* Step 1: English Interpretation Gate */}
-            <div className="bg-slate-900/80 p-5 rounded-lg border border-slate-700">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="bg-sky-900/80 text-sky-300 text-xs font-bold px-2 py-0.5 rounded border border-sky-700">
-                    Step 1
-                  </span>
-                  <h3 className="font-bold text-white text-sm">
-                    English Interpretation &amp; Tariff Classification Gate
-                  </h3>
-                </div>
-              </div>
-
-              <p className="text-xs text-slate-300 mb-2">
-                The intake has been translated and normalized into international
-                commercial English. You may edit this interpretation before
-                approving (edits will automatically propagate downstream):
-              </p>
-
-              <textarea
-                id="step1-translation-input"
-                aria-label="Editable English Interpretation"
-                disabled={
-                  isLoading || workflowState !== "prep_step1_awaiting_approval"
-                }
-                rows={4}
-                value={step1Translation}
-                onChange={(e) => {
-                  setIsFidelityValidating(true);
-                  setStep1Translation(e.target.value);
-                }}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 font-mono mb-3 focus:ring-2 focus:ring-sky-500"
-              />
-
-              {/* Step 1 Explicit Requirement Fidelity Review (N02 & Phase D) */}
-              {isFidelityValidating && (
-                <p role="status" className="text-xs text-sky-300 my-2">
-                  Checking the current interpretation against your submitted
-                  requirements...
-                </p>
-              )}
-              {workflowState === "prep_step1_awaiting_approval" &&
-                !isFidelityValidating &&
-                !step1Fidelity && (
-                  <button
-                    type="button"
-                    onClick={() => setValidationRetry((value) => value + 1)}
-                    className="my-2 px-3 py-2 bg-sky-800 rounded text-xs text-white"
-                  >
-                    Retry interpretation check
-                  </button>
-                )}
-              {step1Fidelity && !isFidelityValidating && (
-                <div className="space-y-3 mb-3">
-                  {/* Fidelity Failure Gating Warning Banner */}
-                  {!step1Fidelity.valid && (
-                    <div
-                      role="alert"
-                      className="bg-rose-950/70 border-2 border-rose-500 rounded-lg p-3 text-xs space-y-2 text-rose-200 animate-in fade-in"
-                    >
-                      <div className="flex items-center gap-2 text-rose-300 font-bold text-sm">
-                        <span className="text-lg" aria-hidden="true">
-                          🚫
-                        </span>
-                        <span>
-                          Approval Gated: Directional / Qualifier Fidelity
-                          Mismatch Detected
-                        </span>
-                      </div>
-                      <p className="text-slate-300 text-[11px]">
-                        The English interpretation contains semantic mutations
-                        or omissions against the original explicit requirements.
-                        Approval is disabled until all mandatory requirements
-                        are preserved. Edit the English interpretation above to
-                        correct them.
-                      </p>
-
-                      {/* Mutated Items Details */}
-                      {Array.isArray(step1Fidelity.mutated_items) &&
-                        step1Fidelity.mutated_items.length > 0 && (
-                          <div className="space-y-1.5 mt-2">
-                            <div className="font-semibold text-rose-300 text-[11px] uppercase tracking-wider">
-                              Mutated Requirements (
-                              {step1Fidelity.mutated_count}):
-                            </div>
-                            {step1Fidelity.mutated_items.map(
-                              (item: any, idx: number) => (
-                                <div
-                                  key={idx}
-                                  className="bg-rose-900/40 border border-rose-700/60 p-2 rounded text-[11px]"
-                                >
-                                  <div className="font-bold text-rose-200">
-                                    ⚠️{" "}
-                                    {item.requirement?.label ||
-                                      item.requirement?.concept}
-                                    : {item.explanation}
-                                  </div>
-                                  <div className="text-slate-300 text-[10px] mt-0.5">
-                                    <strong>Source Span:</strong> "
-                                    {item.requirement
-                                      ?.source_span_or_reference ||
-                                      item.requirement?.source_text}
-                                    "
-                                  </div>
-                                  {item.prohibited_value && (
-                                    <div className="text-rose-400 text-[10px]">
-                                      <strong>Mutated Value:</strong> "
-                                      {item.prohibited_value}"
-                                    </div>
-                                  )}
-                                </div>
-                              ),
-                            )}
-                          </div>
-                        )}
-
-                      {/* Omitted Items Details */}
-                      {Array.isArray(step1Fidelity.omitted_items) &&
-                        step1Fidelity.omitted_items.length > 0 && (
-                          <div className="space-y-1.5 mt-2">
-                            <div className="font-semibold text-amber-300 text-[11px] uppercase tracking-wider">
-                              Omitted Requirements (
-                              {step1Fidelity.omitted_count}):
-                            </div>
-                            {step1Fidelity.omitted_items.map(
-                              (item: any, idx: number) => (
-                                <div
-                                  key={idx}
-                                  className="bg-amber-900/30 border border-amber-700/50 p-2 rounded text-[11px]"
-                                >
-                                  <div className="font-bold text-amber-200">
-                                    ⚠️ Omitted: {item.label} ({item.concept})
-                                  </div>
-                                  <div className="text-slate-300 text-[10px] mt-0.5">
-                                    <strong>Source Span:</strong> "
-                                    {item.source_span_or_reference ||
-                                      item.source_text}
-                                    "
-                                  </div>
-                                </div>
-                              ),
-                            )}
-                          </div>
-                        )}
-                    </div>
-                  )}
-
-                  {/* Fidelity Status Header & Metrics Summary */}
-                  <div className="bg-slate-950/80 p-3 rounded-lg border border-slate-800 text-xs space-y-2">
-                    <div className="flex items-center justify-between">
-                      {step1Fidelity.valid ? (
-                        <span className="font-semibold text-emerald-400 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                          Requirement Fidelity Verified (All{" "}
-                          {step1Fidelity.ledger?.total_explicit_count ??
-                            step1Fidelity.preserved_count}{" "}
-                          explicit requirements preserved)
-                        </span>
-                      ) : (
-                        <span className="font-semibold text-rose-400 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-                          <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse"></span>
-                          Requirement Fidelity Gated (
-                          {step1Fidelity.mutated_count ?? 0} Mutated &bull;{" "}
-                          {step1Fidelity.omitted_count ?? 0} Omitted)
-                        </span>
-                      )}
-                      <span className="text-[10px] text-slate-400">
-                        Mutations: {step1Fidelity.mutated_count ?? 0} &bull;
-                        Omissions: {step1Fidelity.omitted_count ?? 0}
-                      </span>
-                    </div>
-
-                    {/* Compact Summary Metrics (Section 10.2) */}
-                    <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-1">
-                      <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
-                        <span className="text-slate-400 text-[10px] block">
-                          Explicit
-                        </span>
-                        <span className="font-bold text-white text-xs">
-                          {step1Fidelity.ledger?.total_explicit_count ?? 0}
-                        </span>
-                      </div>
-                      <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
-                        <span className="text-emerald-400 text-[10px] block">
-                          Preserved
-                        </span>
-                        <span className="font-bold text-emerald-300 text-xs">
-                          {step1Fidelity.preserved_count ?? 0}
-                        </span>
-                      </div>
-                      <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
-                        <span className="text-sky-400 text-[10px] block">
-                          Normalized
-                        </span>
-                        <span className="font-bold text-sky-300 text-xs">
-                          {step1Fidelity.normalized_count ?? 0}
-                        </span>
-                      </div>
-                      <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
-                        <span className="text-slate-400 text-[10px] block">
-                          Clarifications
-                        </span>
-                        <span className="font-bold text-slate-300 text-xs">
-                          {step1Fidelity.ambiguities_count ?? 0}
-                        </span>
-                      </div>
-                      <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
-                        <span
-                          className={
-                            step1Fidelity.omitted_count > 0
-                              ? "text-amber-400 font-semibold text-[10px] block"
-                              : "text-slate-400 text-[10px] block"
-                          }
-                        >
-                          Omitted
-                        </span>
-                        <span
-                          className={`font-bold text-xs ${step1Fidelity.omitted_count > 0 ? "text-amber-400" : "text-slate-300"}`}
-                        >
-                          {step1Fidelity.omitted_count ?? 0}
-                        </span>
-                      </div>
-                      <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
-                        <span
-                          className={
-                            step1Fidelity.mutated_count > 0
-                              ? "text-rose-400 font-semibold text-[10px] block"
-                              : "text-slate-400 text-[10px] block"
-                          }
-                        >
-                          Mutated
-                        </span>
-                        <span
-                          className={`font-bold text-xs ${step1Fidelity.mutated_count > 0 ? "text-rose-400" : "text-slate-300"}`}
-                        >
-                          {step1Fidelity.mutated_count ?? 0}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Progressive Disclosure Toggle */}
-                    <div className="pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setShowFullLedger(!showFullLedger)}
-                        className="text-sky-400 hover:text-sky-300 text-[11px] underline font-medium"
-                      >
-                        {showFullLedger
-                          ? "Hide Structured Requirement Ledger"
-                          : `View Structured Requirement Ledger (${step1Fidelity.ledger?.requirements?.length ?? 0} clauses)`}
-                      </button>
-
-                      {showFullLedger && step1Fidelity.ledger?.requirements && (
-                        <div className="max-h-60 overflow-y-auto mt-2 border border-slate-800 rounded bg-slate-900/90 text-[10px]">
-                          <table className="w-full text-left">
-                            <thead className="bg-slate-800/80 text-slate-300 sticky top-0">
-                              <tr>
-                                <th className="p-1.5">Requirement</th>
-                                <th className="p-1.5">Original Source Span</th>
-                                <th className="p-1.5">
-                                  Interpreted Normalized
-                                </th>
-                                <th className="p-1.5">Operator</th>
-                                <th className="p-1.5">Status</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-800/60">
-                              {step1Fidelity.ledger.requirements.map(
-                                (r: any, idx: number) => (
-                                  <tr
-                                    key={idx}
-                                    className="hover:bg-slate-800/40"
-                                  >
-                                    <td className="p-1.5 font-semibold text-slate-200">
-                                      {r.label}
-                                    </td>
-                                    <td className="p-1.5 text-slate-400 italic">
-                                      "
-                                      {r.source_span_or_reference ||
-                                        r.source_text}
-                                      "
-                                    </td>
-                                    <td className="p-1.5 text-slate-300">
-                                      {r.normalized_value}
-                                    </td>
-                                    <td className="p-1.5 font-mono text-amber-300 font-semibold">
-                                      {r.comparison_operator || "—"}
-                                    </td>
-                                    <td className="p-1.5">
-                                      <span
-                                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                          r.fidelity_status === "preserved"
-                                            ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
-                                            : r.fidelity_status === "mutated"
-                                              ? "bg-rose-950 text-rose-300 border border-rose-800"
-                                              : "bg-slate-800 text-slate-300"
-                                        }`}
-                                      >
-                                        {r.fidelity_status}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                ),
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Model Suggestions (Kept Separate) */}
-                    {Array.isArray(step1Fidelity.model_suggestions) &&
-                      step1Fidelity.model_suggestions.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-slate-800/80">
-                          <div className="text-amber-300 font-semibold text-[11px] flex items-center gap-1 mb-1">
-                            <span>💡</span> Model Suggestions (Separated from
-                            Approved Facts):
-                          </div>
-                          {step1Fidelity.model_suggestions.map(
-                            (s: any, idx: number) => (
-                              <div
-                                key={idx}
-                                className="bg-amber-950/20 border border-amber-800/40 rounded p-2 text-amber-200/90 text-[11px]"
-                              >
-                                <span className="font-bold text-amber-300">
-                                  {s.title}:
-                                </span>{" "}
-                                {s.suggested_value} —{" "}
-                                <span className="text-amber-300/80 italic">
-                                  {s.reasoning}
-                                </span>{" "}
-                                <span className="text-slate-400 text-[10px] block mt-0.5">
-                                  [Status: Kept as suggestion only; not injected
-                                  into mandatory requirements]
-                                </span>
-                              </div>
-                            ),
-                          )}
-                        </div>
-                      )}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-emerald-400 flex items-center gap-1">
-                  <svg
-                    className="w-4 h-4"
-                    width={16}
-                    height={16}
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  Harmonized Tariff System Classification &amp; Normalized Specs
-                </span>
-                <button
-                  type="button"
-                  onClick={handleApproveStep1}
-                  disabled={
-                    isLoading ||
-                    workflowState !== "prep_step1_awaiting_approval" ||
-                    isFidelityValidating ||
-                    step1Fidelity?.valid !== true
-                  }
-                  title={
-                    step1Fidelity?.valid === false
-                      ? "Approval disabled: mandatory requirements contain mutations or omissions. Edit the English interpretation to correct them."
-                      : undefined
-                  }
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {workflowState === "prep_step1_awaiting_approval"
-                    ? step1Fidelity?.valid === false
-                      ? "Approval Gated (Fidelity Issues)"
-                      : "Approve Interpretation & Proceed"
-                    : "Approved \u2713"}
-                </button>
-              </div>
-            </div>
+            <InterpretationApprovalStep
+              workflowState={workflowState}
+              isLoading={isLoading}
+              step1Translation={step1Translation}
+              step1Fidelity={step1Fidelity}
+              isFidelityValidating={isFidelityValidating}
+              showFullLedger={showFullLedger}
+              setShowFullLedger={setShowFullLedger}
+              onTranslationChange={(value) => {
+                setIsFidelityValidating(true);
+                setStep1Translation(value);
+              }}
+              onRetryValidation={() => setValidationRetry((value) => value + 1)}
+              handleApproveStep1={handleApproveStep1}
+            />
 
             {/* Step 2: 3-Loop Advisory Context */}
             {advisoryContext && (
@@ -2408,7 +1851,7 @@ export default function ConsultantWorkflowPage() {
                     <div className="font-bold text-sky-400 mb-1">
                       Loop 1: Trade Lane Dynamics
                     </div>
-                    <p className="text-slate-300 leading-relaxed">
+                    <p className="text-slate-300 leading-relaxed whitespace-pre-line break-words">
                       {advisoryContext.loop1_trade_lane}
                     </p>
                   </div>
@@ -2416,7 +1859,7 @@ export default function ConsultantWorkflowPage() {
                     <div className="font-bold text-amber-400 mb-1">
                       Loop 2: Regulatory &amp; Standards
                     </div>
-                    <p className="text-slate-300 leading-relaxed">
+                    <p className="text-slate-300 leading-relaxed whitespace-pre-line break-words">
                       {advisoryContext.loop2_regulatory}
                     </p>
                   </div>
@@ -2424,7 +1867,7 @@ export default function ConsultantWorkflowPage() {
                     <div className="font-bold text-emerald-400 mb-1">
                       Loop 3: Supply Concentration
                     </div>
-                    <p className="text-slate-300 leading-relaxed">
+                    <p className="text-slate-300 leading-relaxed whitespace-pre-line break-words">
                       {advisoryContext.loop3_supply_structure}
                     </p>
                   </div>
@@ -2675,257 +2118,21 @@ export default function ConsultantWorkflowPage() {
         {/* SECTION 3: DUAL-LANE RESULTS & PROGRESSIVE REVELATION     */}
         {/* ========================================================= */}
         {output && (
-          <section
-            aria-labelledby="section-3-heading"
-            className="bg-slate-800/60 rounded-xl border border-slate-700 p-6 shadow-lg backdrop-blur space-y-6"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-700 pb-4">
-              <div>
-                <h2
-                  id="section-3-heading"
-                  className="text-xl font-bold text-white flex items-center gap-2"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center font-bold"
-                  >
-                    3
-                  </span>
-                  Section 3: Ranked Supplier Candidates &amp; Dossiers
-                </h2>
-                <p className="text-xs text-slate-400 mt-1">
-                  Showing {visibleSuppliers.length} of {suppliers.length}{" "}
-                  assessed candidate profiles.
-                </p>
-              </div>
-
-              {/* Action Buttons: PDF & JSON */}
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handlePdfDownload}
-                  disabled={isPdfDownloading}
-                  aria-label="Download Full PDF Report"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    width={16}
-                    height={16}
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  {isPdfDownloading
-                    ? "Generating PDF..."
-                    : "Download Full PDF Report"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleJsonExport}
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold rounded-lg border border-slate-600 transition-colors flex items-center gap-2"
-                >
-                  <svg
-                    className="w-4 h-4 text-slate-400"
-                    width={16}
-                    height={16}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                    />
-                  </svg>
-                  Export Structured JSON
-                </button>
-              </div>
-            </div>
-
-            <ApprovedRequestSummary
-              snapshot={output.approved_request_snapshot}
-            />
-            {/* Candidate Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {visibleSuppliers.map((supp) => {
-                const isIllustrative =
-                  output.research_mode === "fixture" ||
-                  supp.legal_name.includes("[Illustrative]") ||
-                  supp.candidate_id.startsWith("cand-demo-");
-                const isDirectRoute =
-                  !isIllustrative &&
-                  supp.manufacturer_status === "direct_manufacturer";
-                return (
-                  <div
-                    key={supp.candidate_id}
-                    className="bg-slate-900/90 rounded-xl border border-slate-700 p-5 hover:border-slate-500 transition-all shadow-md flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-extrabold text-sky-400">
-                              Rank #{supp.assessment.rank}
-                            </span>
-                            <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide ${
-                                isIllustrative
-                                  ? "bg-amber-950 text-amber-200 border border-amber-800"
-                                  : isDirectRoute
-                                    ? "bg-emerald-950 text-emerald-300 border border-emerald-700"
-                                    : "bg-amber-950 text-amber-200 border border-amber-800"
-                              }`}
-                            >
-                              {isIllustrative
-                                ? "Illustrative Profile"
-                                : isDirectRoute
-                                  ? "Direct Manufacturer"
-                                  : "Supplier Profile"}
-                            </span>
-                          </div>
-                          <h3 className="text-base font-bold text-white">
-                            {supp.legal_name}
-                          </h3>
-                          {supp.brand_names.length > 0 && (
-                            <p className="text-xs text-slate-400">
-                              Brands: {supp.brand_names.join(", ")}
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <div className="text-2xl font-black text-sky-400 leading-none">
-                            {supp.assessment.compatibility_score}
-                          </div>
-                          <div className="text-[10px] text-slate-400 uppercase font-semibold mt-1">
-                            {isIllustrative
-                              ? "Illustrative Score"
-                              : supp.assessment.fit_band}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Details row */}
-                      <div className="text-xs space-y-1 my-3 bg-slate-800/60 p-2.5 rounded border border-slate-700/60">
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">
-                            Country / Origin:
-                          </span>
-                          <span className="font-mono font-medium text-slate-200">
-                            {supp.country_of_registration}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">
-                            Capacity &amp; MOQ:
-                          </span>
-                          <span className="text-slate-200 truncate max-w-[200px]">
-                            {supp.commercial.production_capacity ?? "Not found"}{" "}
-                            &bull; {supp.commercial.moq ?? "Not found"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">
-                            {isIllustrative ? "Fixture ID:" : "Website:"}
-                          </span>
-                          {isIllustrative ? (
-                            <span className="font-mono text-slate-300">
-                              {supp.candidate_id}
-                            </span>
-                          ) : (
-                            <a
-                              href={
-                                supp.website &&
-                                /^https?:\/\//i.test(supp.website)
-                                  ? supp.website
-                                  : undefined
-                              }
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-sky-400 hover:text-sky-300 underline truncate max-w-[200px]"
-                            >
-                              {supp.primary_domain}
-                            </a>
-                          )}
-                        </div>
-                        {isIllustrative && (
-                          <div className="flex justify-between">
-                            <span className="text-slate-400">
-                              Public Website:
-                            </span>
-                            <span className="italic text-slate-500">
-                              Not applicable — illustrative entity
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      <p className="text-xs text-slate-300 line-clamp-2 mb-4">
-                        {supp.assessment.positive_drivers.join("; ")}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-                      <span className="text-[11px] text-slate-400">
-                        Next:{" "}
-                        <strong className="text-slate-200">
-                          {supp.assessment.recommended_next_action}
-                        </strong>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedSupplier(supp);
-                          setIsModalOpen(true);
-                        }}
-                        className="px-3 py-1.5 bg-slate-800 hover:bg-sky-600 text-slate-200 hover:text-white rounded-md text-xs font-bold transition-colors border border-slate-700"
-                      >
-                        View Full Dossier &rarr;
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Progressive Revelation Button */}
-            {revealedCount < suppliers.length && (
-              <div className="text-center pt-4">
-                <button
-                  type="button"
-                  onClick={handleRevealMore}
-                  disabled={isLoading}
-                  className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-sky-400 font-bold text-sm rounded-lg border border-sky-800/80 transition-all shadow-md hover:border-sky-600 flex items-center gap-2 mx-auto"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    width={16}
-                    height={16}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                  Reveal 5 More Candidates ({visibleSuppliers.length} of{" "}
-                  {suppliers.length} shown)
-                </button>
-              </div>
-            )}
-          </section>
+          <ConsultantResultsSection
+            output={output}
+            suppliers={suppliers}
+            visibleSuppliers={visibleSuppliers}
+            revealedCount={revealedCount}
+            isLoading={isLoading}
+            isPdfDownloading={isPdfDownloading}
+            handlePdfDownload={handlePdfDownload}
+            handleJsonExport={handleJsonExport}
+            handleRevealMore={handleRevealMore}
+            onSelectSupplier={(supplier) => {
+              setSelectedSupplier(supplier);
+              setIsModalOpen(true);
+            }}
+          />
         )}
       </main>
 
@@ -2942,163 +2149,15 @@ export default function ConsultantWorkflowPage() {
         }}
       />
 
-      {/* Safe New Transition Modal (Workstream C - L08-N04) */}
-      {showNewDraftModal && (
-        <div
-          role="dialog"
-          ref={newDraftModalRef}
-          tabIndex={-1}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.stopPropagation();
-              if (!transitionRef.current) setShowNewDraftModal(false);
-            }
-            if (event.key !== "Tab") return;
-            const buttons = Array.from(
-              event.currentTarget.querySelectorAll<HTMLElement>(
-                'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), [tabindex="0"]',
-              ),
-            );
-            const first = buttons[0];
-            const last = buttons[buttons.length - 1];
-            if (!first || !last) {
-              event.preventDefault();
-              event.currentTarget.focus();
-              return;
-            }
-            if (
-              event.shiftKey &&
-              (document.activeElement === first ||
-                document.activeElement === event.currentTarget)
-            ) {
-              event.preventDefault();
-              last.focus();
-            } else if (
-              !event.shiftKey &&
-              (document.activeElement === last ||
-                document.activeElement === event.currentTarget)
-            ) {
-              event.preventDefault();
-              first.focus();
-            }
-          }}
-          aria-modal="true"
-          aria-labelledby="new-draft-modal-title"
-          aria-describedby="new-draft-modal-desc"
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !isSavingNewDraft) {
-              setShowNewDraftModal(false);
-            }
-          }}
-        >
-          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4 text-slate-100 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h2
-                id="new-draft-modal-title"
-                className="text-base font-bold text-white flex items-center gap-2"
-              >
-                <span>Save Unsaved Changes?</span>
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowNewDraftModal(false)}
-                disabled={isSavingNewDraft}
-                className="text-slate-400 hover:text-white p-1 rounded-md transition-colors"
-                aria-label="Close dialog"
-              >
-                <svg
-                  className="w-5 h-5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <p
-              id="new-draft-modal-desc"
-              className="text-xs text-slate-300 leading-relaxed"
-            >
-              You have active inputs in your current draft that have not yet
-              been confirmed on the server. How would you like to proceed?
-            </p>
-
-            {newDraftError && (
-              <div className="p-2.5 bg-red-950/60 border border-red-800 rounded text-xs text-red-200">
-                {newDraftError}
-              </div>
-            )}
-
-            <div className="flex flex-col gap-2 pt-2">
-              <button
-                type="button"
-                id="save-and-start-new-btn"
-                data-testid="save-and-start-new"
-                disabled={isSavingNewDraft}
-                onClick={handleSaveAndStartNew}
-                className="w-full py-2 px-3 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow transition-colors flex items-center justify-center gap-2"
-              >
-                {isSavingNewDraft ? (
-                  <>
-                    <svg
-                      className="animate-spin h-3.5 w-3.5 text-white"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v8H4z"
-                      />
-                    </svg>
-                    Saving on Server...
-                  </>
-                ) : (
-                  "Save & Start New"
-                )}
-              </button>
-
-              <button
-                type="button"
-                id="stay-in-draft-btn"
-                data-testid="stay-in-draft"
-                disabled={isSavingNewDraft}
-                onClick={() => setShowNewDraftModal(false)}
-                className="w-full py-2 px-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
-              >
-                Stay &amp; Continue Editing
-              </button>
-
-              <button
-                type="button"
-                id="discard-and-start-new-btn"
-                data-testid="discard-and-start-new"
-                disabled={isSavingNewDraft}
-                onClick={handleDiscardAndStartNew}
-                className="w-full py-2 px-3 bg-red-950/40 hover:bg-red-900/60 disabled:opacity-50 text-red-300 text-xs font-semibold rounded-lg border border-red-800/60 transition-colors"
-              >
-                Discard Unsaved Inputs &amp; Start New
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <NewDraftTransitionModal
+        showNewDraftModal={showNewDraftModal}
+        isSavingNewDraft={isSavingNewDraft}
+        newDraftError={newDraftError}
+        transitionRef={transitionRef}
+        onDismiss={() => setShowNewDraftModal(false)}
+        handleSaveAndStartNew={handleSaveAndStartNew}
+        handleDiscardAndStartNew={handleDiscardAndStartNew}
+      />
 
       {/* Resume Research Modal */}
       {isResumeModalOpen && (

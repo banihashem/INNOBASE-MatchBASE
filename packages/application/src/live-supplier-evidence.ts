@@ -204,12 +204,31 @@ export interface LiveEvidenceRecord {
   source: EvidenceSourceV3;
   native_citation: OpenRouterCitation;
   authoritative_text: string;
+  verified_excerpts?: readonly {
+    excerpt: string;
+    authoritative_text: string;
+    source_type: EvidenceSourceV3["source_type"];
+  }[];
 }
 export interface RetrievedPrimaryEvidence {
   readonly url: string;
   readonly text: string;
   readonly content_sha256: string;
   readonly retrieved_at: string;
+}
+function conservativeSourceType(
+  previous: EvidenceSourceV3["source_type"] | undefined,
+  next: EvidenceSourceV3["source_type"],
+): EvidenceSourceV3["source_type"] {
+  if (!previous || previous === next) return next;
+  const authority = (type: EvidenceSourceV3["source_type"]): number =>
+    type === "official_registry" || type === "government_trade_portal"
+      ? 2
+      : type === "official_website" || type === "catalog_pdf"
+        ? 1
+        : 0;
+  // A later batch must not upgrade the authority of an earlier excerpt.
+  return authority(previous) <= authority(next) ? previous : next;
 }
 export function stableCandidateKey(candidate: LiveCandidateRecord): string {
   const website = candidate.website && safePublicEvidenceUrl(candidate.website);
@@ -244,6 +263,35 @@ export function ingestLiveEvidence(
     )
       continue;
     const id = `evidence-${createHash("sha256").update(url).digest("hex").slice(0, 20)}`;
+    const previous = evidence.get(url);
+    const verifiedExcerpts = [
+      ...(previous?.verified_excerpts ??
+        (previous
+          ? [
+              {
+                excerpt: previous.source.excerpt_summary,
+                authoritative_text: previous.authoritative_text,
+                source_type: previous.source.source_type,
+              },
+            ]
+          : [])),
+    ];
+    if (
+      !verifiedExcerpts.some(
+        (item) =>
+          item.excerpt === entry.excerpt &&
+          item.authoritative_text === authoritative &&
+          item.source_type === entry.source_type,
+      )
+    )
+      verifiedExcerpts.push({
+        excerpt: entry.excerpt,
+        authoritative_text: authoritative,
+        source_type: entry.source_type,
+      });
+    const publishedExcerpts = [
+      ...new Set(verifiedExcerpts.map((item) => item.excerpt)),
+    ];
     evidence.set(url, {
       source: {
         evidence_id: id,
@@ -251,16 +299,28 @@ export function ingestLiveEvidence(
         source_url: url,
         source_title: entry.title || citation.title,
         publisher: entry.publisher || new URL(url).hostname,
-        source_type: entry.source_type,
+        source_type: conservativeSourceType(
+          previous?.source.source_type,
+          entry.source_type,
+        ),
         retrieved_at: new Date().toISOString(),
         freshness_status: "current",
         verification_status: "externally_verified",
-        excerpt_summary: entry.excerpt,
+        excerpt_summary:
+          publishedExcerpts.length === 1
+            ? publishedExcerpts[0]!
+            : publishedExcerpts
+                .map(
+                  (excerpt, index) =>
+                    `Verified excerpt ${index + 1}:\n${excerpt}`,
+                )
+                .join("\n\n"),
         supports_claim_ids: [],
         contradicts_claim_ids: [],
       },
       native_citation: citation,
       authoritative_text: authoritative,
+      verified_excerpts: verifiedExcerpts,
     });
   }
 }
@@ -280,13 +340,22 @@ function proofSources(
   return proof.source_urls.flatMap((raw) => {
     const url = safePublicEvidenceUrl(raw);
     const record = url ? evidence.get(url) : undefined;
+    if (!record || !primaryTypes.has(record.source.source_type)) return [];
+    const excerpts = record.verified_excerpts ?? [
+      {
+        excerpt: record.source.excerpt_summary,
+        authoritative_text: record.authoritative_text,
+        source_type: record.source.source_type,
+      },
+    ];
     if (
-      !record ||
-      !primaryTypes.has(record.source.source_type) ||
-      !normalize(record.source.excerpt_summary).includes(normalize(proof.quote))
+      !excerpts.some(
+        (item) =>
+          primaryTypes.has(item.source_type) &&
+          normalize(item.excerpt).includes(normalize(proof.quote)) &&
+          normalize(item.authoritative_text).includes(normalize(proof.quote)),
+      )
     )
-      return [];
-    if (!normalize(record.authoritative_text).includes(normalize(proof.quote)))
       return [];
     return [record.source];
   });

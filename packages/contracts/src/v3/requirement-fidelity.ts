@@ -189,6 +189,13 @@ export function validateStep1RequirementFidelity(
   const mutated: MutatedRequirementReport[] = [];
   let preserved = 0;
   const equivalent = (a: ApprovedRequestFactV3, b: ApprovedRequestFactV3) => {
+    // Inventing a supplier base or operating presence is a mutation just as
+    // removing one is. Other concept-specific qualifier behavior is unchanged.
+    const qualifierKeys =
+      a.concept === "supplier_profile" ||
+      a.concept === "supplier_operational_presence"
+        ? new Set([...Object.keys(a.qualifiers), ...Object.keys(b.qualifiers)])
+        : new Set(Object.keys(a.qualifiers));
     const valueMatches =
       typeof a.value === "number" && typeof b.value === "number"
         ? Math.abs(a.value - b.value) <= 0.000001
@@ -200,10 +207,10 @@ export function validateStep1RequirementFidelity(
       a.operator === b.operator &&
       a.modality === b.modality &&
       a.upper_bound === b.upper_bound &&
-      Object.entries(a.qualifiers).every(
-        ([key, value]) =>
+      [...qualifierKeys].every(
+        (key) =>
           normalizeRequirementText(b.qualifiers[key] ?? "").toLowerCase() ===
-          normalizeRequirementText(value).toLowerCase(),
+          normalizeRequirementText(a.qualifiers[key] ?? "").toLowerCase(),
       )
     );
   };

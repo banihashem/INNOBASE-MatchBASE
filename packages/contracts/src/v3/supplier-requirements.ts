@@ -24,13 +24,26 @@ function jurisdiction(
   last: number,
 ): string | undefined {
   const following = text.slice(last);
-  const inPlace = following.match(
-    /(?:\b(?:in|within|across|throughout)\s+|در\s+)([^;؛,.]+)/iu,
-  );
+  // A place must modify this role/presence phrase directly. Searching the rest
+  // of the clause attaches shipment routes and service venues to the supplier.
+  const inPlace =
+    following.match(
+      /^\s*(?:(?:who|that|which|که)\s+)?(?:(?:(?:must\s+)?(?:be|is|are)|not|active|based|located|registered|established|headquartered|operating|operational|local|مستقر|فعال|عملیاتی|واقع|ثبت\s+شده)\s+){0,5}(?:\b(?:in|within|across|throughout)\s+|در\s+)([^;؛,.]+)/iu,
+    ) ??
+    following.match(
+      /(?:\band\s+(?:(?:is|are|must\s+be)\s+)?(?:based|located|registered|established|headquartered)\s+in\s+|\sو\s+(?:مستقر|واقع|ثبت\s+شده)\s+در\s+)([^;؛,.]+)/iu,
+    );
   const locationText = inPlace?.[1]
-    ?.split(/\b(?:with|for|and|or|must|having)\b|\s(?:با|برای|و|یا)\s/iu)[0]
+    ?.split(
+      /\b(?:with|for|to|and|or|must|having|that|which|capable)\b|\s(?:با|برای|و|یا|دارای|جهت|که)\s/iu,
+    )[0]
     ?.trim();
-  if (locationText) {
+  if (
+    locationText &&
+    !/^(?:(?:the\s+)?(?:transit|charge\s+of|order|handling|arranging|coordinating|shipping|transporting|performing|providing)\b|(?:مسیر|حمل|انجام|هماهنگی)(?=\s|$))/iu.test(
+      locationText,
+    )
+  ) {
     return (
       locations.find(([, pattern]) => pattern.test(locationText))?.[0] ??
       locationText.replace(/^the\s+/iu, "").toLowerCase()
@@ -38,7 +51,7 @@ function jurisdiction(
   }
   // Also support attributive locations, such as "Oman operational network".
   const preceding = text.slice(Math.max(0, first - 50), first);
-  return locations.find(([, pattern]) => {
+  const namedLocation = locations.find(([, pattern]) => {
     const match = preceding.match(pattern);
     return (
       match &&
@@ -47,6 +60,15 @@ function jurisdiction(
       )
     );
   })?.[0];
+  if (namedLocation) return namedLocation;
+  // Preserve explicit non-GCC attributive bases without assigning a service's
+  // place to the supplier or treating arbitrary preceding prose as a place.
+  return preceding
+    .match(
+      /([\p{Lu}][\p{L}.-]*(?:\s+[\p{Lu}][\p{L}.-]*){0,3})[ -]based\s*$/u,
+    )?.[1]
+    ?.replace(/^(?:a|an|the)\s+/iu, "")
+    ?.toLowerCase();
 }
 
 function requirementOperator(text: string): ApprovedFactOperator {

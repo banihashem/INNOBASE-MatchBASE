@@ -226,7 +226,7 @@ export async function executeDualLaneResearch(
       },
       callback,
     );
-    calls.push(extracted.result);
+    calls.push(...extracted.results);
     return { result, parsed: extracted.parsed };
   };
   const discovery = await Promise.allSettled([

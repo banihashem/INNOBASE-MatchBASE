@@ -218,7 +218,27 @@ beforeEach(() => {
         [],
       );
     }
-    return dispatch(body);
+    const response = await dispatch(body);
+    if (
+      body.response_format?.json_schema?.name ===
+        "matchbase_native_candidate_index" &&
+      response.ok
+    ) {
+      const envelope = await response.json();
+      const payload = JSON.parse(envelope.choices[0].message.content);
+      envelope.choices[0].message.content = JSON.stringify({
+        candidates: payload.candidates.map((item) => ({
+          legal_name: item.legal_name,
+          anchor_quote: quote,
+          source_urls: [url],
+        })),
+        remaining_gaps: payload.remaining_gaps,
+        evidence_exhausted: payload.evidence_exhausted,
+        summary: payload.summary,
+      });
+      return Response.json(envelope);
+    }
+    return response;
   };
 });
 after(() => {
@@ -247,7 +267,7 @@ test("live requires five actual verification calls after both native web discove
     mode: "live",
     on_checkpoint: async (event) => events.push(event),
   });
-  assert.equal(requests.length, 15);
+  assert.equal(requests.length, 22);
   assert.equal(result.verification_loops_completed, 5);
   assert.equal(result.candidates.length, 1);
   assert.equal(result.candidates[0].entity_basis, "live_verified");
@@ -275,6 +295,13 @@ test("live requires five actual verification calls after both native web discove
   assert.ok(nativeCalls.every((body) => body.plugins[0].engine === "native"));
   assert.ok(nativeCalls.every((body) => body.response_format === undefined));
   assert.equal(extractionCalls.length, 7);
+  const indexCalls = requests.filter(
+    (body) =>
+      body.response_format?.json_schema?.name ===
+      "matchbase_native_candidate_index",
+  );
+  assert.equal(indexCalls.length, 7);
+  assert.ok(indexCalls.every((body) => body.plugins === undefined));
   assert.ok(extractionCalls.every((body) => body.plugins === undefined));
   assert.equal(requests.at(-1).plugins, undefined);
   assert.equal(result.synthesis_result.model, "openai/gpt-5.2");
@@ -287,9 +314,9 @@ test("live requires five actual verification calls after both native web discove
         (body) => body.max_tokens && body.max_completion_tokens === undefined,
       ),
   );
-  assert.equal(result.total_input_tokens, 150);
-  assert.equal(result.total_output_tokens, 300);
-  assert.ok(Math.abs(result.total_cost_usd - 0.15) < 1e-9);
+  assert.equal(result.total_input_tokens, 220);
+  assert.equal(result.total_output_tokens, 440);
+  assert.ok(Math.abs(result.total_cost_usd - 0.22) < 1e-9);
   assert.equal(result.usage_complete, true);
 });
 test("provider prose or unannotated links cannot become live verified suppliers", async () => {
@@ -317,7 +344,7 @@ test("adaptive verification stops at fifteen actual loops and never pads a short
     { mode: "live" },
   );
   assert.equal(result.verification_loops_completed, 15);
-  assert.equal(requests.length, 35);
+  assert.equal(requests.length, 52);
   assert.equal(result.candidates.length, 1);
   assert.equal(result.stop_reason, "loop_limit");
 });

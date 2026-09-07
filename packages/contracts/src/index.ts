@@ -32,3 +32,4 @@ export * from "./v3/adapter.js";
 export * from "./v3/integrity-validator.js";
 export * from "./v3/semantic-coherence-validator.js";
 export * from "./v3/requirement-fidelity.js";
+export * from "./v3/approved-request.js";

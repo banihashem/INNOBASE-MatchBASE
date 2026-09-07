@@ -169,6 +169,13 @@ export async function saveConsultantOutputV3(
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
     ON CONFLICT (account_id, run_id)
     DO UPDATE SET
+      execution_id = EXCLUDED.execution_id,
+      classification_id = EXCLUDED.classification_id,
+      user_profile_id = EXCLUDED.user_profile_id,
+      generated_at = EXCLUDED.generated_at,
+      as_of_date = EXCLUDED.as_of_date,
+      research_mode = EXCLUDED.research_mode,
+      research_status = EXCLUDED.research_status,
       title = EXCLUDED.title,
       subtitle = EXCLUDED.subtitle,
       document_payload = EXCLUDED.document_payload,
@@ -197,6 +204,15 @@ export async function saveConsultantOutputV3(
   );
 
   // 4. Save individual supplier entities for fast querying / filtering
+  await db.query(
+    `DELETE FROM consultant_supplier_entity_v3 WHERE account_id=$1 AND run_id=$2
+    AND NOT (candidate_id = ANY($3::text[]))`,
+    [
+      account_id,
+      output.research_run_id,
+      output.supplier_candidates.map((supplier) => supplier.candidate_id),
+    ],
+  );
   for (const supp of output.supplier_candidates) {
     await db.query(
       `INSERT INTO consultant_supplier_entity_v3 (
@@ -376,6 +392,7 @@ export interface ConsultantWorkflowSessionRecord {
   readonly classification?: Record<string, unknown> | null;
   readonly execution_id?: string | null;
   readonly last_checkpoint?: string | null;
+  readonly workflow_metadata?: Record<string, unknown>;
   readonly is_invalidated?: boolean;
   readonly invalidation_reason?: string | null;
   readonly created_at?: string;
@@ -405,8 +422,9 @@ export async function saveConsultantWorkflowSession(
       last_checkpoint,
       is_invalidated,
       invalidation_reason,
+      workflow_metadata,
       updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, clock_timestamp())
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, clock_timestamp())
     ON CONFLICT (account_id, run_id)
     DO UPDATE SET
       current_state = EXCLUDED.current_state,
@@ -422,7 +440,9 @@ export async function saveConsultantWorkflowSession(
       last_checkpoint = EXCLUDED.last_checkpoint,
       is_invalidated = EXCLUDED.is_invalidated,
       invalidation_reason = EXCLUDED.invalidation_reason,
-      updated_at = clock_timestamp();`,
+      workflow_metadata = EXCLUDED.workflow_metadata,
+      updated_at = clock_timestamp()
+    WHERE NOT consultant_workflow_session.is_invalidated;`,
     [
       session.session_id,
       session.account_id,
@@ -447,6 +467,7 @@ export async function saveConsultantWorkflowSession(
       session.last_checkpoint ?? null,
       session.is_invalidated ?? false,
       session.invalidation_reason ?? null,
+      JSON.stringify(session.workflow_metadata ?? {}),
     ],
   );
 }
@@ -472,6 +493,7 @@ export async function getConsultantWorkflowSessionByRunId(
     classification: Record<string, unknown> | string | null;
     execution_id: string | null;
     last_checkpoint: string | null;
+    workflow_metadata: Record<string, unknown>;
     created_at: Date;
     updated_at: Date;
   }>(
@@ -507,6 +529,7 @@ export async function getConsultantWorkflowSessionByRunId(
     classification: row.classification ? parseJson(row.classification) : null,
     execution_id: row.execution_id,
     last_checkpoint: row.last_checkpoint,
+    workflow_metadata: row.workflow_metadata ?? {},
     is_invalidated: Boolean((row as any).is_invalidated),
     invalidation_reason: (row as any).invalidation_reason ?? null,
     created_at: row.created_at.toISOString(),
@@ -753,9 +776,10 @@ export async function saveConsultantDraftSession(
     draft_version: number;
     account_id: string;
     status: string;
+    user_profile_id: string;
     draft_data: Record<string, unknown> | string;
   }>(
-    `SELECT draft_id, draft_version, account_id, status, draft_data
+    `SELECT draft_id, draft_version, account_id, user_profile_id, status, draft_data
      FROM consultant_draft_session
      WHERE draft_id = $1;`,
     [draft.draft_id],
@@ -763,7 +787,10 @@ export async function saveConsultantDraftSession(
 
   const existing = checkRes.rows[0];
   if (existing) {
-    if (existing.account_id !== draft.account_id) {
+    if (
+      existing.account_id !== draft.account_id ||
+      existing.user_profile_id !== draft.user_profile_id
+    ) {
       const err = new Error("Unauthorized to modify this draft.");
       (err as any).status = 403;
       (err as any).code = "MB-403-FORBIDDEN";
@@ -785,7 +812,7 @@ export async function saveConsultantDraftSession(
     }
 
     const nextVersion = existing.draft_version + 1;
-    await db.query(
+    const updated = await db.query<{ draft_id: string; draft_version: number }>(
       `UPDATE consultant_draft_session
        SET current_run_id = $2,
            snapshot_id = $3,
@@ -793,7 +820,9 @@ export async function saveConsultantDraftSession(
            status = $5,
            draft_data = $6,
            updated_at = clock_timestamp()
-       WHERE draft_id = $1 AND account_id = $7;`,
+       WHERE draft_id = $1 AND account_id = $7 AND user_profile_id=$8
+         AND draft_version=$9 AND (status='active' OR $5 <> 'active')
+       RETURNING draft_id, draft_version;`,
       [
         draft.draft_id,
         draft.current_run_id ?? null,
@@ -802,17 +831,42 @@ export async function saveConsultantDraftSession(
         draft.status,
         JSON.stringify(draft.draft_data),
         draft.account_id,
+        draft.user_profile_id,
+        expectedVersion ?? existing.draft_version,
       ],
     );
-    return { draft_id: draft.draft_id, draft_version: nextVersion };
+    if (!updated.rows[0]) {
+      const latest = await getConsultantDraftSessionById(
+        db,
+        draft.account_id,
+        draft.user_profile_id,
+        draft.draft_id,
+      );
+      const error = Object.assign(
+        new Error("This draft was updated or submitted in another request."),
+        {
+          status: 409,
+          code: "MB-409-DRAFT-CONFLICT",
+          current_version: latest?.draft_version ?? existing.draft_version,
+          submitted_version: expectedVersion ?? existing.draft_version,
+          recoverable: true,
+        },
+      );
+      throw error;
+    }
+    return updated.rows[0];
   } else {
     // New draft insertion
     const initialVersion = draft.draft_version || 1;
-    await db.query(
+    const inserted = await db.query<{
+      draft_id: string;
+      draft_version: number;
+    }>(
       `INSERT INTO consultant_draft_session (
         draft_id, account_id, user_profile_id, tier, current_run_id,
         snapshot_id, draft_version, status, draft_data, updated_at, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp(), clock_timestamp());`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp(), clock_timestamp())
+      ON CONFLICT (draft_id) DO NOTHING RETURNING draft_id,draft_version;`,
       [
         draft.draft_id,
         draft.account_id,
@@ -825,7 +879,18 @@ export async function saveConsultantDraftSession(
         JSON.stringify(draft.draft_data),
       ],
     );
-    return { draft_id: draft.draft_id, draft_version: initialVersion };
+    if (!inserted.rows[0]) {
+      throw Object.assign(
+        new Error("This draft was created by another request."),
+        {
+          status: 409,
+          code: "MB-409-DRAFT-CONFLICT",
+          submitted_version: expectedVersion ?? 1,
+          recoverable: true,
+        },
+      );
+    }
+    return inserted.rows[0];
   }
 }
 

@@ -1,10 +1,20 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { SupplierEntityV3 } from "@matchbase/contracts";
+import type {
+  SupplierEntityV3,
+  EvidenceSourceV3,
+  ClaimV3,
+  ApprovedRequestSnapshotV3,
+} from "@matchbase/contracts";
+
+import { ApprovedRequestSummary } from "./ApprovedRequestSummary";
 
 export interface SupplierDossierModalProps {
   readonly supplier: SupplierEntityV3 | null;
+  readonly approvedRequest?: ApprovedRequestSnapshotV3 | undefined;
+  readonly evidenceSources?: readonly EvidenceSourceV3[];
+  readonly claims?: readonly ClaimV3[];
   readonly isOpen: boolean;
   readonly onClose: () => void;
 }
@@ -13,54 +23,90 @@ export function SupplierDossierModal({
   supplier,
   isOpen,
   onClose,
+  approvedRequest,
+  evidenceSources = [],
+  claims = [],
 }: SupplierDossierModalProps) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (isOpen) {
-      previousActiveElement.current =
-        document.activeElement as HTMLElement | null;
-      document.body.style.overflow = "hidden";
-      setTimeout(() => {
-        closeBtnRef.current?.focus();
-      }, 50);
-    } else {
-      document.body.style.overflow = "";
-      if (previousActiveElement.current) {
-        previousActiveElement.current.focus();
+    if (!isOpen) return;
+    previousActiveElement.current =
+      document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeBtnRef.current?.focus();
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
       }
-    }
-
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && isOpen) {
-        onClose();
+      if (event.key !== "Tab") return;
+      const items = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], [tabindex="0"]',
+        ) ?? [],
+      );
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousOverflow;
+      previousActiveElement.current?.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen || !supplier) return null;
 
   const assessment = supplier.assessment;
   const isIllustrative =
     supplier.legal_name.includes("[Illustrative]") ||
-    supplier.candidate_id.startsWith("cand-v3-") ||
     supplier.candidate_id.startsWith("cand-demo-") ||
     supplier.entity_basis === "synthetic_fixture" ||
     supplier.verification_status === "illustrative" ||
     (Boolean(supplier.website) &&
       (supplier.website!.includes("matchbase.internal") ||
         supplier.website!.includes("example.internal")));
-  const isDirect = !isIllustrative && assessment.rank <= 4;
+  const isDirect =
+    !isIllustrative && supplier.manufacturer_status === "direct_manufacturer";
+  const supplierClaims = claims.filter(
+    (claim) => claim.supplier_entity_id === supplier.supplier_entity_id,
+  );
+  const evidenceIds = new Set([
+    ...supplier.identity_evidence_ids,
+    ...(supplier.contacts?.contact_evidence_ids ?? []),
+    ...supplier.offering.product_evidence_ids,
+    ...supplier.commercial.commercial_evidence_ids,
+    ...(supplier.packaging_and_logistics?.logistics_evidence_ids ?? []),
+    ...supplier.certifications.flatMap((item) => item.evidence_ids),
+    ...assessment.mandatory_constraint_results.flatMap(
+      (item) => item.evidence_ids,
+    ),
+    ...supplierClaims.flatMap((claim) => claim.evidence_ids),
+  ]);
+  const sources = evidenceSources.filter((source) =>
+    evidenceIds.has(source.evidence_id),
+  );
+  const publicUrl = (value?: string | null) =>
+    value && /^https?:\/\//i.test(value) ? value : undefined;
 
   return (
     <div
       role="dialog"
+      ref={dialogRef}
       aria-modal="true"
       aria-labelledby="dossier-modal-title"
       className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
@@ -88,8 +134,8 @@ export function SupplierDossierModal({
                 {isIllustrative
                   ? "Illustrative Profile"
                   : isDirect
-                    ? "Active Direct Route"
-                    : "Conditional / Development"}
+                    ? "Direct Manufacturer"
+                    : "Supplier Profile"}
               </span>
             </div>
             <h2
@@ -179,7 +225,7 @@ export function SupplierDossierModal({
                   {supplier.manufacturing_locations.join(", ") ||
                     (isIllustrative
                       ? "Synthetic Test Facility"
-                      : "Validated Facilities")}
+                      : "Not found in inspected sources")}
                 </dd>
 
                 <dt className="text-slate-500 font-medium">Website:</dt>
@@ -190,12 +236,14 @@ export function SupplierDossierModal({
                     </span>
                   ) : (
                     <a
-                      href={supplier.website ?? undefined}
+                      href={publicUrl(supplier.website)}
                       target="_blank"
                       rel="noreferrer"
                       className="underline text-sky-600 hover:text-sky-800"
                     >
-                      {supplier.primary_domain ?? "Official Website"}
+                      {supplier.primary_domain ??
+                        supplier.website ??
+                        "Not found in inspected sources"}
                     </a>
                   )}
                 </dd>
@@ -216,7 +264,7 @@ export function SupplierDossierModal({
                 </svg>
                 {isIllustrative
                   ? "Entity Verification & Status"
-                  : "Verified Commercial Contacts"}
+                  : "Public Commercial Contacts"}
               </h3>
               <dl className="grid grid-cols-3 gap-2 text-xs">
                 <dt className="text-slate-500 font-medium">Sales Desk:</dt>
@@ -224,16 +272,17 @@ export function SupplierDossierModal({
                   {isIllustrative
                     ? "Not applicable — illustrative profile"
                     : (supplier.contacts?.sales_email ??
-                      (supplier.primary_domain
-                        ? `export@${supplier.primary_domain}`
-                        : "Not provided"))}
+                      supplier.contacts?.export_email ??
+                      supplier.contacts?.general_email ??
+                      "Not found in inspected sources")}
                 </dd>
 
                 <dt className="text-slate-500 font-medium">Phone:</dt>
                 <dd className="col-span-2 text-slate-800">
                   {isIllustrative
                     ? "Not applicable — illustrative profile"
-                    : (supplier.contacts?.phone ?? "Official Corporate Desk")}
+                    : (supplier.contacts?.phone ??
+                      "Not found in inspected sources")}
                 </dd>
 
                 <dt className="text-slate-500 font-medium">Verification:</dt>
@@ -247,13 +296,16 @@ export function SupplierDossierModal({
                   >
                     {isIllustrative
                       ? "Demonstration Profile (Not Externally Verified)"
-                      : "Verified Public Corporate Channel"}
+                      : (
+                          supplier.contacts?.verification_status ?? "unverified"
+                        ).replaceAll("_", " ")}
                   </span>
                 </dd>
               </dl>
             </div>
           </div>
 
+          <ApprovedRequestSummary snapshot={approvedRequest} />
           {/* Section 2: 6-Dimension Score Radar / Table */}
           <div className="bg-white p-4 rounded-lg border border-slate-200">
             <h3 className="font-bold text-slate-800 mb-3 text-base">
@@ -347,7 +399,7 @@ export function SupplierDossierModal({
                   <span className="text-slate-500">Production Capacity:</span>
                   <span className="font-medium text-slate-800">
                     {supplier.commercial.production_capacity ??
-                      "Large industrial export"}
+                      "Not found in inspected sources"}
                   </span>
                 </div>
                 <div className="flex justify-between border-b border-slate-100 py-0.5">
@@ -355,33 +407,229 @@ export function SupplierDossierModal({
                     Minimum Order Quantity (MOQ):
                   </span>
                   <span className="font-medium text-slate-800">
-                    {supplier.commercial.moq ?? "Standard Industrial MOQ"}
+                    {supplier.commercial.moq ??
+                      "Not found in inspected sources"}
                   </span>
                 </div>
-                {supplier.commercial.price_min && (
+                {supplier.commercial.price_min !== undefined && (
                   <div className="flex justify-between border-b border-slate-100 py-0.5">
-                    <span className="text-slate-500">
-                      Indicative Price Range:
-                    </span>
+                    <span className="text-slate-500">Source Price Range:</span>
                     <span className="font-bold text-emerald-700">
-                      ${supplier.commercial.price_min} - $
-                      {supplier.commercial.price_max}{" "}
-                      {supplier.commercial.currency} /{" "}
-                      {supplier.commercial.unit}
+                      {supplier.commercial.currency ?? "Currency not stated"}{" "}
+                      {supplier.commercial.price_min}
+                      {supplier.commercial.price_max !== undefined
+                        ? ` - ${supplier.commercial.price_max}`
+                        : ""}
+                      {supplier.commercial.unit
+                        ? ` / ${supplier.commercial.unit}`
+                        : ""}
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between border-b border-slate-100 py-0.5">
+                  <span className="text-slate-500">Price Type:</span>
+                  <span>{supplier.commercial.price_type ?? "Not stated"}</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-100 py-0.5">
+                  <span className="text-slate-500">Price Validity:</span>
+                  <span>
+                    {supplier.commercial.price_validity ?? "Not stated"}
+                  </span>
+                </div>
+                <div className="flex justify-between border-b border-slate-100 py-0.5">
                   <span className="text-slate-500">Lead Time & Inco:</span>
                   <span className="font-medium text-slate-800">
-                    {supplier.commercial.lead_time ?? "30-45 days"} &bull;{" "}
+                    {supplier.commercial.lead_time ??
+                      "Not found in inspected sources"}{" "}
+                    &bull;{" "}
                     {supplier.commercial.incoterm ??
-                      "Standard International Terms"}
+                      "Not found in inspected sources"}
                   </span>
                 </div>
               </div>
             </div>
           </div>
+
+          {assessment.mandatory_constraint_results.length > 0 && (
+            <section className="border border-slate-200 rounded-lg p-4 space-y-3">
+              <h3 className="font-bold">Mandatory Constraint Assessment</h3>
+              <div className="overflow-x-auto">
+                <table
+                  aria-label="Mandatory constraint assessment"
+                  className="w-full text-xs text-left"
+                >
+                  <thead>
+                    <tr>
+                      <th className="p-2">Requirement</th>
+                      <th className="p-2">Assessment</th>
+                      <th className="p-2">Evidence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {assessment.mandatory_constraint_results.map(
+                      (item, index) => (
+                        <tr key={index} className="border-t border-slate-200">
+                          <td className="p-2">{item.constraint}</td>
+                          <td className="p-2">
+                            {item.satisfied ? "Supported" : "Not demonstrated"}
+                          </td>
+                          <td className="p-2">
+                            {item.evidence_ids.length
+                              ? item.evidence_ids.map((id) => {
+                                  const source = evidenceSources.find(
+                                    (entry) => entry.evidence_id === id,
+                                  );
+                                  return source ? (
+                                    <a
+                                      key={id}
+                                      href={publicUrl(source.source_url)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="block underline text-sky-700"
+                                    >
+                                      {source.source_title}
+                                    </a>
+                                  ) : (
+                                    <span key={id} className="block">
+                                      Evidence unavailable ({id})
+                                    </span>
+                                  );
+                                })
+                              : "No linked evidence"}
+                          </td>
+                        </tr>
+                      ),
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          <section className="border border-slate-200 rounded-lg p-4 space-y-3">
+            <h3 className="font-bold">Certification, Logistics & Evidence</h3>
+            <p className="text-xs">
+              Identity confidence: {supplier.identity_confidence}. Evidence
+              confidence: {assessment.evidence_confidence}. Data completeness:{" "}
+              {assessment.data_completeness}%.
+            </p>
+            <p className="text-xs">
+              Payment terms:{" "}
+              {supplier.commercial.payment_terms ??
+                "Not found in inspected sources"}
+              . Commercial confidence:{" "}
+              {supplier.commercial.commercial_confidence}.
+            </p>
+            {supplier.certifications.length ? (
+              <ul className="list-disc pl-5 text-xs space-y-1">
+                {supplier.certifications.map((cert, index) => (
+                  <li key={index}>
+                    {cert.certification_name} — {cert.status};{" "}
+                    {cert.verification_status}; scope: {cert.scope ?? "unknown"}
+                    ; issuer: {cert.issuer ?? "unknown"}; expires:{" "}
+                    {cert.valid_until ?? "unknown"}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs">
+                No supporting certification record found.
+              </p>
+            )}
+            {supplier.packaging_and_logistics && (
+              <dl className="grid grid-cols-2 gap-2 text-xs">
+                {Object.entries(supplier.packaging_and_logistics)
+                  .filter(([key]) => !key.endsWith("_ids"))
+                  .map(([key, value]) => (
+                    <div key={key}>
+                      <dt className="font-semibold capitalize">
+                        {key.replaceAll("_", " ")}
+                      </dt>
+                      <dd>
+                        {Array.isArray(value)
+                          ? value.join(", ")
+                          : String(value ?? "Unknown")}
+                      </dd>
+                    </div>
+                  ))}
+              </dl>
+            )}
+            {supplier.contacts?.contact_page_url && (
+              <a
+                href={publicUrl(supplier.contacts.contact_page_url)}
+                target="_blank"
+                rel="noreferrer"
+                className="block underline text-sky-700 text-xs"
+              >
+                Official contact page
+              </a>
+            )}
+            {supplier.contacts?.linkedin_company_url && (
+              <a
+                href={publicUrl(supplier.contacts.linkedin_company_url)}
+                target="_blank"
+                rel="noreferrer"
+                className="block underline text-sky-700 text-xs"
+              >
+                Company LinkedIn page
+              </a>
+            )}
+            <h4 className="font-semibold text-sm">Sources inspected</h4>
+            {sources.length ? (
+              <ul className="list-disc pl-5 text-xs space-y-2">
+                {sources.map((source) => (
+                  <li key={source.evidence_id}>
+                    <a
+                      href={publicUrl(source.source_url)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline text-sky-700"
+                    >
+                      {source.source_title}
+                    </a>{" "}
+                    — {source.publisher};{" "}
+                    {source.source_type.replaceAll("_", " ")};{" "}
+                    {source.verification_status}; retrieved{" "}
+                    {source.retrieved_at}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs">
+                No linked evidence available for this supplier.
+              </p>
+            )}
+            {supplierClaims.length > 0 && (
+              <ul className="text-xs space-y-2">
+                {supplierClaims.map((claim) => (
+                  <li key={claim.claim_id}>
+                    {claim.claim_text} — {claim.status}, {claim.confidence}{" "}
+                    confidence; conflict: {claim.conflict_status}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {[
+              ...assessment.risk_flags,
+              ...assessment.unknowns,
+              ...assessment.required_validation,
+            ].length > 0 && (
+              <div>
+                <h4 className="font-semibold text-sm">
+                  Risks, Unknowns & Required Validation
+                </h4>
+                <ul className="list-disc pl-5 text-xs">
+                  {[
+                    ...assessment.risk_flags,
+                    ...assessment.unknowns,
+                    ...assessment.required_validation,
+                  ].map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
 
           {/* Section 4: Strategic Recommendations & Action */}
           <div className="bg-sky-50 border-l-4 border-sky-600 p-4 rounded-r-lg">
@@ -412,7 +660,7 @@ export function SupplierDossierModal({
           <span className="text-xs text-slate-500">
             {isIllustrative
               ? "Demonstration Profile: Illustrative fixture candidate for workflow evaluation. Not live market evidence."
-              : "Source Trace: Grounded in official trade registries and verified supplier documentation"}
+              : "Evidence status and source limitations are listed in this dossier."}
           </span>
           <button
             type="button"

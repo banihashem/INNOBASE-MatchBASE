@@ -1,11 +1,12 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import {
   ApplicationFault,
   authorizeConsultantRunResourceRead,
   submitConsultantIntake,
   approveInterpretationStep,
   approveDeepPromptStep,
-  executeConsultantWorkflowResearch,
+  queueConsultantWorkflowStep,
+  runNextConsultantWorkflowJob,
   revealMoreCandidates,
   getWorkflowSession,
   getOrRestoreWorkflowSession,
@@ -18,6 +19,7 @@ import {
   listActiveConsultantDraftSessions,
   abandonConsultantDraftSession,
   getConsultantDraftSessionByRunId,
+  failExpiredConsultantWorkflowJobs,
 } from "@matchbase/data";
 import { validateStep1RequirementFidelity } from "@matchbase/contracts";
 import { getAppDatabasePool } from "../../../../../src/db-client";
@@ -71,7 +73,6 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     const body = (await req.json()) as Record<string, unknown>;
     const action = body.action as string;
-    console.log("--> POST ACTION:", action, "USER:", context.userId);
 
     // Action: Create New Independent Server Draft
     if (action === "create_draft") {
@@ -123,6 +124,14 @@ export async function POST(req: Request): Promise<NextResponse> {
           ? rawDraftId
           : crypto.randomUUID();
       const current_run_id = (body.current_run_id as string) || null;
+      if (current_run_id) {
+        await authorizeConsultantRunResourceRead({
+          context,
+          runId: current_run_id,
+          pool,
+          resourceKind: "run_detail",
+        });
+      }
       const snapshot_id = (body.snapshot_id as string) || null;
       const draft_version =
         typeof body.draft_version === "number" ? body.draft_version : 1;
@@ -161,6 +170,17 @@ export async function POST(req: Request): Promise<NextResponse> {
     if (action === "abandon_draft") {
       const draft_id = body.draft_id as string;
       if (draft_id) {
+        const ownedDraft = await getConsultantDraftSessionById(
+          pool,
+          context.accountId,
+          context.userId,
+          draft_id,
+        );
+        if (!ownedDraft)
+          return NextResponse.json(
+            { error: "Draft not found", code: "MB-404-DRAFT" },
+            { status: 404 },
+          );
         await abandonConsultantDraftSession(pool, context.accountId, draft_id);
       } else {
         await abandonConsultantDraftSession(
@@ -205,6 +225,7 @@ export async function POST(req: Request): Promise<NextResponse> {
           order_profile,
         },
         pool,
+        { mode: body.mode === "demonstration" ? "demonstration" : "live" },
       );
 
       // Save server-side draft linked to the created session
@@ -248,9 +269,10 @@ export async function POST(req: Request): Promise<NextResponse> {
     if (action === "approve_step1") {
       const run_id = body.run_id as string;
       const edited_translation =
-        (body.edited_translation as string | undefined) ||
-        ((body.interpretation as any)?.english_translation as
-          string | undefined);
+        typeof body.edited_translation === "string"
+          ? body.edited_translation
+          : ((body.interpretation as any)?.english_translation as
+              string | undefined);
 
       // Verify session ownership
       const existingSession = await getOrRestoreWorkflowSession(
@@ -270,8 +292,19 @@ export async function POST(req: Request): Promise<NextResponse> {
           run_id,
           edited_translation,
           pool,
+          { defer_generation: true },
         );
-        return NextResponse.json({ success: true, session });
+        const job = await queueConsultantWorkflowStep(pool, run_id, "prepare");
+        if (job.status === "queued")
+          after(() => runNextConsultantWorkflowJob(pool, job.job_id));
+        return NextResponse.json(
+          {
+            success: true,
+            processing: job.status === "queued" || job.status === "running",
+            session,
+          },
+          { status: 202 },
+        );
       } catch (err: any) {
         if (
           err instanceof ApplicationFault ||
@@ -315,8 +348,6 @@ export async function POST(req: Request): Promise<NextResponse> {
     // Action: Execute Research
     if (action === "execute_research") {
       const run_id = body.run_id as string;
-      const mode =
-        (body.mode as "live" | "demonstration" | "hybrid") || "demonstration";
 
       // Verify session ownership
       const existingSession = await getOrRestoreWorkflowSession(
@@ -331,11 +362,47 @@ export async function POST(req: Request): Promise<NextResponse> {
         );
       }
 
-      const output = await executeConsultantWorkflowResearch(pool, run_id, {
-        mode,
-      });
+      const job = await queueConsultantWorkflowStep(pool, run_id, "research");
+      if (job.status === "queued")
+        after(() => runNextConsultantWorkflowJob(pool, job.job_id));
       const session = getWorkflowSession(run_id);
-      return NextResponse.json({ success: true, session, output });
+      return NextResponse.json(
+        {
+          success: true,
+          processing: job.status === "queued" || job.status === "running",
+          session,
+        },
+        { status: 202 },
+      );
+    }
+
+    if (action === "retry_workflow") {
+      const run_id = String(body.run_id ?? "");
+      const session = await getOrRestoreWorkflowSession(
+        pool,
+        context.accountId,
+        run_id,
+      );
+      if (!session?.retry_action || session.state !== "workflow_failed") {
+        return NextResponse.json(
+          {
+            error: "No failed execution is available to retry.",
+            code: "MB-409-NO-RETRY",
+          },
+          { status: 409 },
+        );
+      }
+      const job = await queueConsultantWorkflowStep(
+        pool,
+        run_id,
+        session.retry_action,
+        true,
+      );
+      after(() => runNextConsultantWorkflowJob(pool, job.job_id));
+      return NextResponse.json(
+        { success: true, processing: true, session },
+        { status: 202 },
+      );
     }
 
     // Action: Reveal More Candidates
@@ -547,6 +614,7 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   // Authorize run read access
   try {
+    await failExpiredConsultantWorkflowJobs(pool);
     const authorized = await authorizeConsultantRunResourceRead({
       context,
       runId,
@@ -584,7 +652,10 @@ export async function GET(req: Request): Promise<NextResponse> {
           draft_id: draft?.draft_id ?? null,
           draft_version: draft?.draft_version ?? 1,
           state: "workflow_complete",
-          revealed_count: authorized.output.supplier_candidates.length,
+          revealed_count: Math.min(
+            5,
+            authorized.output.supplier_candidates.length,
+          ),
           output: authorized.output,
         },
         draft,

@@ -66,6 +66,8 @@ export const MIGRATIONS: readonly MigrationDefinition[] = Object.freeze([
   Object.freeze({
     id: CONSULTANT_V3_FIXTURE_TRUTH_RELAXATION_MIGRATION_ID,
   }),
+  Object.freeze({ id: "0018_consultant_live_execution" }),
+  Object.freeze({ id: "0019_consultant_honest_execution_metadata" }),
 ]);
 
 export const LATEST_MIGRATION_ID =

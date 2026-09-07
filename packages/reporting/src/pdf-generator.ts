@@ -118,7 +118,7 @@ export class ConsultantPdfRenderer {
       .digest("hex")
       .slice(0, 16);
     // Derived immutable key: runId + contentHash + template version + locale
-    const artifactKey = `${runId}_${contentHash}_v1_en`;
+    const artifactKey = `${runId}_${contentHash}_v3_approved_en`;
     const cacheDir = this.getCacheDir();
     const cacheFilePath = path.join(cacheDir, `${artifactKey}.pdf`);
 
@@ -134,17 +134,6 @@ export class ConsultantPdfRenderer {
       console.warn("Could not read from PDF cache:", cacheReadErr);
     }
 
-    // Also check legacy naming for backwards compatibility
-    const legacyPath = path.join(cacheDir, `${runId}_${contentHash}.pdf`);
-    try {
-      if (fs.existsSync(legacyPath)) {
-        const cachedBuf = fs.readFileSync(legacyPath);
-        if (this.isValidPdf(cachedBuf)) {
-          return cachedBuf;
-        }
-      }
-    } catch {}
-
     // 2. Single-flight rendering deduplication
     const existingInFlight = this.inFlightRenders.get(artifactKey);
     if (existingInFlight) {
@@ -159,10 +148,24 @@ export class ConsultantPdfRenderer {
           const page = await browser.newPage();
           try {
             await page.setContent(html, { waitUntil: "load", timeout: 25000 });
+            const footerRunId = runId.replace(
+              /[&<>"']/g,
+              (char) =>
+                ({
+                  "&": "&amp;",
+                  "<": "&lt;",
+                  ">": "&gt;",
+                  '"': "&quot;",
+                  "'": "&#39;",
+                })[char]!,
+            );
             const pdfUint8 = await page.pdf({
               format: "A4",
               landscape: true,
               printBackground: true,
+              displayHeaderFooter: true,
+              headerTemplate: "<div></div>",
+              footerTemplate: `<div style="font:8px Arial,sans-serif;color:#52626c;width:100%;padding:0 15mm;display:flex;justify-content:space-between"><span>MatchBASE | Run ${footerRunId}</span><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>`,
               margin: {
                 top: "12mm",
                 right: "15mm",

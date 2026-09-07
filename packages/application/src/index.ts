@@ -14,6 +14,8 @@ export * from "./service.js";
 export * from "./types.js";
 export * from "./worker-readiness.js";
 export * from "./worker-runtime.js";
+export * from "./consultant-workflow-worker.js";
+export * from "./live-preparation.js";
 export * from "./standard-authorization.js";
 export * from "./standard-dto.js";
 export * from "./standard-types.js";

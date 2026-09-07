@@ -8,6 +8,11 @@ import {
   saveConsultantIntakeSnapshot,
   computeIntakeContentHash,
   type ConsultantWorkflowSessionRecord,
+  appendConsultantWorkflowEvent,
+  enqueueConsultantWorkflowJob,
+  inTransaction,
+  type ConnectionPool,
+  type ConsultantWorkflowJob,
 } from "@matchbase/data";
 import {
   type ConsultantResearchOutputV3,
@@ -16,6 +21,9 @@ import {
   validateIntakeSemanticCoherence,
   validateConsultantOutputV3SemanticCoherence,
   validateStep1RequirementFidelity,
+  createApprovedRequestSnapshotV3,
+  parseConsultantResearchOutputV3,
+  validateConsultantOutputV3Integrity,
 } from "@matchbase/contracts";
 import { ApplicationFault } from "./types.js";
 import {
@@ -30,6 +38,17 @@ import {
 } from "./preparation-gateway.js";
 import { executeDualLaneResearch } from "./dual-lane-orchestrator.js";
 import { synthesizeConsultantOutputV3 } from "./synthesis-engine.js";
+import { LivePreparationModelGateway } from "./live-preparation.js";
+import { LiveResearchError } from "./openrouter-model-policy.js";
+
+export type ConsultantExecutionMode = "live" | "demonstration" | "hybrid";
+export interface ConsultantWorkflowProgress {
+  phase: string;
+  loop: number;
+  max_loops: number;
+  message: string;
+  updated_at: string;
+}
 
 export interface ConsultantIntakeSubmission {
   readonly user_profile_id: string;
@@ -44,8 +63,11 @@ export interface WorkflowSession {
   readonly run_id: string;
   readonly user_profile_id: string;
   readonly account_id: string;
-  readonly execution_id: string;
+  execution_id: string;
   readonly classification_id: string;
+  mode: ConsultantExecutionMode;
+  progress?: ConsultantWorkflowProgress | undefined;
+  retry_action?: "prepare" | "research" | null | undefined;
   state: ConsultantWorkflowState;
   readonly intake: ConsultantIntakeSubmission;
   request_revision_id: string;
@@ -88,14 +110,21 @@ export interface WorkflowSession {
   }[];
   revealed_count: number;
   output: ConsultantResearchOutputV3 | null;
-  error?: string;
+  error?: string | undefined;
   last_checkpoint?: string;
 }
 
 // In-memory active workflow session registry (keyed by run_id)
 const activeSessions = new Map<string, WorkflowSession>();
 
-const gateway = new PreparationModelGateway();
+function preparationGateway(
+  mode: ConsultantExecutionMode,
+  on_checkpoint?: (event: any) => Promise<void>,
+) {
+  return mode === "demonstration"
+    ? new PreparationModelGateway()
+    : new LivePreparationModelGateway(on_checkpoint ? { on_checkpoint } : {});
+}
 
 export function getWorkflowSession(runId: string): WorkflowSession | null {
   return activeSessions.get(runId) ?? null;
@@ -106,11 +135,8 @@ export async function getOrRestoreWorkflowSession(
   accountId: string,
   runId: string,
 ): Promise<WorkflowSession | null> {
-  const existing = activeSessions.get(runId);
-  if (existing) return existing;
-
   const dbRow = await getConsultantWorkflowSessionByRunId(db, accountId, runId);
-  if (!dbRow) return null;
+  if (!dbRow || dbRow.is_invalidated) return null;
 
   const restored = mapRecordToSession(dbRow);
   if (
@@ -120,7 +146,10 @@ export async function getOrRestoreWorkflowSession(
     const dbOutput = await getConsultantOutputV3ByRunId(db, accountId, runId);
     if (dbOutput) {
       restored.output = dbOutput;
-      restored.revealed_count = dbOutput.supplier_candidates.length;
+      restored.revealed_count = Math.min(
+        restored.revealed_count,
+        dbOutput.supplier_candidates.length,
+      );
     }
   }
   activeSessions.set(runId, restored);
@@ -168,6 +197,17 @@ function mapSessionToRecord(
     > | null,
     execution_id: session.execution_id,
     last_checkpoint: session.last_checkpoint ?? session.state,
+    workflow_metadata: {
+      mode: session.mode,
+      classification_id: session.classification_id,
+      step1_interpretation: session.step1_interpretation,
+      advisory_version_id: session.advisory_version_id,
+      research_prompt_version_id: session.research_prompt_version_id,
+      revealed_count: session.revealed_count,
+      progress: session.progress,
+      error: session.error,
+      retry_action: session.retry_action,
+    },
   };
 }
 
@@ -187,6 +227,7 @@ function mapRecordToSession(
     record.classification as ProductClassificationRecord | null;
   const advisory = record.advisory_output as Step2AdvisoryResult | null;
   const prompt = record.deep_prompt_revision as any | null;
+  const metadata = record.workflow_metadata ?? {};
 
   return {
     session_id: record.session_id,
@@ -194,13 +235,21 @@ function mapRecordToSession(
     user_profile_id: record.user_profile_id,
     account_id: record.account_id,
     execution_id: record.execution_id ?? crypto.randomUUID(),
-    classification_id: classification?.classification_id ?? crypto.randomUUID(),
+    classification_id:
+      classification?.classification_id ??
+      String(metadata.classification_id ?? record.run_id),
+    mode:
+      (metadata.mode as ConsultantExecutionMode | undefined) ?? "demonstration",
+    progress: metadata.progress as ConsultantWorkflowProgress | undefined,
+    error: metadata.error as string | undefined,
+    retry_action: metadata.retry_action as WorkflowSession["retry_action"],
     state: record.current_state as ConsultantWorkflowState,
     intake,
     request_revision_id: draft.revision_id,
     draft_revision: draft,
     approved_request_revision: approvedReq,
-    step1_interpretation: {
+    step1_interpretation: (metadata.step1_interpretation as
+      WorkflowSession["step1_interpretation"] | undefined) ?? {
       english_translation:
         approvedReq?.english_translation ?? draft.english_translation,
       product_category: approvedReq?.product_category ?? "General",
@@ -216,12 +265,15 @@ function mapRecordToSession(
       is_approved: !!approvedReq,
     },
     classification,
-    advisory_version_id: advisory ? crypto.randomUUID() : null,
+    advisory_version_id:
+      (metadata.advisory_version_id as string | undefined) ?? null,
     step2_advisory: advisory,
-    research_prompt_version_id: prompt ? crypto.randomUUID() : null,
+    research_prompt_version_id:
+      (metadata.research_prompt_version_id as string | undefined) ?? null,
     step3_deep_prompt: prompt,
     approvals: (record.approvals as any) ?? [],
-    revealed_count: 5,
+    revealed_count:
+      typeof metadata.revealed_count === "number" ? metadata.revealed_count : 5,
     output: null,
     last_checkpoint: record.last_checkpoint ?? record.current_state,
   };
@@ -234,11 +286,14 @@ function mapRecordToSession(
 export async function submitConsultantIntake(
   submission: ConsultantIntakeSubmission,
   db?: Queryable,
+  options?: { mode?: ConsultantExecutionMode },
 ): Promise<WorkflowSession> {
   const session_id = crypto.randomUUID();
   const run_id = crypto.randomUUID();
   const execution_id = crypto.randomUUID();
   const revision_id = crypto.randomUUID();
+  const classification_id = crypto.randomUUID();
+  const mode = options?.mode ?? "live";
 
   // Validate intake semantic coherence (reject cross-request / cross-domain mixing)
   const intakeCoherence = validateIntakeSemanticCoherence({
@@ -258,12 +313,86 @@ export async function submitConsultantIntake(
     throw err;
   }
 
-  // Run Step 1 interpretation through PreparationModelGateway
-  const step1 = await gateway.extractAndInterpret({
-    product_requirement: submission.product_requirement,
-    technical_compliance: submission.technical_compliance,
-    order_profile: submission.order_profile,
-  });
+  const identity = {
+    account_id: submission.account_id,
+    user_profile_id: submission.user_profile_id,
+    run_id,
+    execution_id,
+    classification_id,
+  };
+  const initialRecord: ConsultantWorkflowSessionRecord = {
+    ...identity,
+    session_id,
+    current_state: "prep_step1_interpreting",
+    original_intake: submission as unknown as Record<string, unknown>,
+    draft_revision: {
+      revision_id,
+      english_translation: "",
+      created_at: new Date().toISOString(),
+    },
+    workflow_metadata: { mode, classification_id, revealed_count: 5 },
+  };
+  if (db) {
+    await saveConsultantIntakeSnapshot(db, {
+      ...identity,
+      snapshot_id: crypto.randomUUID(),
+      revision_number: 1,
+      product_requirement: submission.product_requirement,
+      technical_compliance: submission.technical_compliance,
+      order_profile: submission.order_profile,
+      content_hash: computeIntakeContentHash(
+        submission.product_requirement,
+        submission.technical_compliance,
+        submission.order_profile,
+      ),
+    });
+    await saveConsultantWorkflowSession(db, initialRecord);
+  }
+  // An interpretation failure remains traceable even before the first user approval.
+  const step1 = await preparationGateway(mode, async (event) => {
+    if (db)
+      await appendConsultantWorkflowEvent(
+        db,
+        identity,
+        String(event.phase ?? "interpretation"),
+        event,
+      );
+  })
+    .extractAndInterpret({
+      product_requirement: submission.product_requirement,
+      technical_compliance: submission.technical_compliance,
+      order_profile: submission.order_profile,
+    })
+    .then((result) => ({
+      ...result,
+      classification: { ...result.classification, classification_id },
+    }))
+    .catch(async (error: unknown) => {
+      const code =
+        error && typeof error === "object" && "code" in error
+          ? String(error.code)
+          : "MB-502-INTERPRETATION";
+      if (db) {
+        await appendConsultantWorkflowEvent(db, identity, "failed", {
+          stage: "interpretation",
+          code,
+        });
+        await saveConsultantWorkflowSession(db, {
+          ...initialRecord,
+          current_state: "workflow_failed",
+          workflow_metadata: {
+            ...initialRecord.workflow_metadata,
+            error: `Interpretation failed (${code}). Execution ID: ${execution_id}.`,
+          },
+        });
+      }
+      throw new ApplicationFault(
+        Number(code.match(/^MB-(\d{3})/)?.[1] ?? 502),
+        "interpretation-failed",
+        code,
+        `Interpretation could not complete (${code}). Your intake is saved. Execution ID: ${execution_id}.`,
+      );
+    });
 
   const session: WorkflowSession = {
     session_id,
@@ -272,6 +401,7 @@ export async function submitConsultantIntake(
     account_id: submission.account_id,
     execution_id,
     classification_id: step1.classification.classification_id,
+    mode,
     state: "prep_step1_awaiting_approval",
     intake: submission,
     request_revision_id: revision_id,
@@ -309,23 +439,6 @@ export async function submitConsultantIntake(
   activeSessions.set(run_id, session);
 
   if (db) {
-    const snapshotId = crypto.randomUUID();
-    const contentHash = computeIntakeContentHash(
-      submission.product_requirement,
-      submission.technical_compliance,
-      submission.order_profile,
-    );
-    await saveConsultantIntakeSnapshot(db, {
-      snapshot_id: snapshotId,
-      account_id: submission.account_id,
-      user_profile_id: submission.user_profile_id,
-      run_id,
-      revision_number: 1,
-      product_requirement: submission.product_requirement,
-      technical_compliance: submission.technical_compliance,
-      order_profile: submission.order_profile,
-      content_hash: contentHash,
-    });
     await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
   }
 
@@ -340,14 +453,40 @@ export async function approveInterpretationStep(
   runId: string,
   editedTranslation?: string,
   db?: Queryable,
+  options?: { defer_generation?: boolean },
 ): Promise<WorkflowSession> {
   const session = activeSessions.get(runId);
   if (!session) throw new Error(`Workflow session ${runId} not found.`);
 
+  if (editedTranslation !== undefined && !editedTranslation.trim()) {
+    throw new ApplicationFault(
+      422,
+      "translation-required",
+      "MB-422-TRANSLATION-REQUIRED",
+      "The edited English request must not be empty.",
+    );
+  }
+
+  if (session.approved_request_revision) {
+    if (
+      editedTranslation?.trim() &&
+      editedTranslation.trim() !==
+        session.approved_request_revision.english_translation
+    ) {
+      throw new ApplicationFault(
+        409,
+        "revision-approved",
+        "MB-409-REVISION-APPROVED",
+        "This request revision is already approved. Create a new request to change it.",
+      );
+    }
+    return session;
+  }
+
   assertValidWorkflowTransition(session.state, "prep_step1_approved");
 
   const effectiveTranslation =
-    editedTranslation && editedTranslation.trim().length > 0
+    editedTranslation !== undefined
       ? editedTranslation.trim()
       : session.step1_interpretation.english_translation;
 
@@ -394,6 +533,14 @@ export async function approveInterpretationStep(
     product_name: session.step1_interpretation.product_name,
     key_specifications: session.step1_interpretation.key_specifications,
     approved_at: new Date().toISOString(),
+    canonical_snapshot: createApprovedRequestSnapshotV3({
+      revision_id: approvedRevisionId,
+      approved_translation: effectiveTranslation,
+      product_name: session.step1_interpretation.product_name,
+      product_category: session.step1_interpretation.product_category,
+      intake: session.intake,
+      approved_at: new Date().toISOString(),
+    }),
   };
 
   session.approved_request_revision = approvedRevision;
@@ -406,14 +553,42 @@ export async function approveInterpretationStep(
     },
   ];
 
-  // Transition to Step 2 advisory ready and generate 3 loops based on the approved revision
-  session.state = "prep_step2_advisory_ready";
+  session.state = "prep_step1_approved";
+  session.last_checkpoint = session.state;
+  if (db) await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
+  if (options?.defer_generation) return session;
+  return generateApprovedConsultantPreparation(runId, db);
+}
+
+/** Preparation uses only the immutable human-approved revision. */
+export async function generateApprovedConsultantPreparation(
+  runId: string,
+  db?: Queryable,
+  assertLease?: () => Promise<void>,
+): Promise<WorkflowSession> {
+  const session = activeSessions.get(runId);
+  if (!session?.approved_request_revision || !session.classification)
+    throw new Error("An approved request is required.");
+  const approvedRevision = session.approved_request_revision;
+  session.state = "prep_step2_advisory_generating";
+  session.error = undefined;
+  session.retry_action = "prepare";
+  const checkpoint = createWorkflowCheckpoint(session, db, assertLease);
+  await checkpoint({
+    phase: "advisory",
+    loop: 0,
+    max_loops: 3,
+    message: "Researching product and trade guidance.",
+  });
+  const gateway = preparationGateway(session.mode, checkpoint);
   const advisory = await gateway.generateAdvisoryLoops(
     approvedRevision,
     session.classification!,
   );
   session.advisory_version_id = crypto.randomUUID();
   session.step2_advisory = advisory;
+  session.state = "prep_step3_prompt_synthesizing";
+  if (db) await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
 
   // Generate Step 3 prompt using the approved revision (F01: human edit propagates downstream!)
   const promptResult = await gateway.generateDeepResearchPrompt(
@@ -430,7 +605,15 @@ export async function approveInterpretationStep(
     is_approved: false,
   };
 
-  session.last_checkpoint = "prep_step2_advisory_ready";
+  session.state = "prep_step3_prompt_awaiting_approval";
+  session.last_checkpoint = session.state;
+  session.retry_action = null;
+  await checkpoint({
+    phase: "prompt_ready",
+    loop: 3,
+    max_loops: 3,
+    message: "Review and approve the research prompt.",
+  });
 
   if (db) {
     await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
@@ -449,6 +632,36 @@ export async function approveDeepPromptStep(
 ): Promise<WorkflowSession> {
   const session = activeSessions.get(runId);
   if (!session) throw new Error(`Workflow session ${runId} not found.`);
+  if (editedPrompt !== undefined && !editedPrompt.trim()) {
+    throw new ApplicationFault(
+      422,
+      "prompt-required",
+      "MB-422-PROMPT-REQUIRED",
+      "The edited research prompt must not be empty.",
+    );
+  }
+  if (!session.step3_deep_prompt?.prompt_text.trim()) {
+    throw new ApplicationFault(
+      409,
+      "prompt-not-ready",
+      "MB-409-PROMPT-NOT-READY",
+      "The research prompt is not ready for approval.",
+    );
+  }
+  if (session.step3_deep_prompt.is_approved) {
+    if (
+      editedPrompt !== undefined &&
+      editedPrompt.trim() !== session.step3_deep_prompt.prompt_text
+    ) {
+      throw new ApplicationFault(
+        409,
+        "prompt-approved",
+        "MB-409-PROMPT-APPROVED",
+        "This research prompt is already approved.",
+      );
+    }
+    return session;
+  }
 
   if (session.state === "prep_step2_advisory_ready") {
     session.state = "prep_step3_prompt_awaiting_approval";
@@ -497,13 +710,43 @@ export async function approveDeepPromptStep(
 export async function executeConsultantWorkflowResearch(
   db: Queryable,
   runId: string,
-  options?: { mode?: "live" | "demonstration" | "hybrid" },
+  options?: {
+    mode?: ConsultantExecutionMode;
+    assertLease?: () => Promise<void>;
+  },
 ): Promise<ConsultantResearchOutputV3> {
   const session = activeSessions.get(runId);
   if (!session) throw new Error(`Workflow session ${runId} not found.`);
+  if (
+    !session.approved_request_revision ||
+    !session.step3_deep_prompt?.is_approved
+  ) {
+    throw new ApplicationFault(
+      409,
+      "approval-required",
+      "MB-409-APPROVAL-REQUIRED",
+      "Approve the request and research prompt before starting research.",
+    );
+  }
+  const mode = options?.mode ?? session.mode;
+  if (mode !== session.mode)
+    throw new Error("Execution mode cannot change after request preparation.");
 
   assertValidWorkflowTransition(session.state, "research_dispatching");
   session.state = "research_dispatching";
+  session.error = undefined;
+  session.retry_action = "research";
+  const checkpoint = createWorkflowCheckpoint(
+    session,
+    db,
+    options?.assertLease,
+  );
+  await checkpoint({
+    phase: "discovery",
+    loop: 0,
+    max_loops: 15,
+    message: "Searching Gemini and OpenAI in parallel.",
+  });
 
   // Dispatch Dual Lane Research
   session.state = "lane_gemini_running";
@@ -513,8 +756,13 @@ export async function executeConsultantWorkflowResearch(
       technical_compliance: session.intake.technical_compliance,
       order_profile: session.intake.order_profile,
       deep_prompt: session.step3_deep_prompt?.prompt_text ?? "",
+      mandatory_requirements: session.step3_deep_prompt.discovery_criteria
+        .length
+        ? session.step3_deep_prompt.discovery_criteria
+        : session.approved_request_revision.key_specifications,
+      target_supplier_count: 20,
     },
-    { mode: options?.mode ?? "demonstration" },
+    { mode, on_checkpoint: checkpoint },
   );
 
   session.state = "lanes_converged";
@@ -531,8 +779,22 @@ export async function executeConsultantWorkflowResearch(
     product_category: session.step1_interpretation.product_category,
     dual_lane_result: dualResult,
     approved_translation: session.step1_interpretation.english_translation,
+    ...(session.approved_request_revision.canonical_snapshot
+      ? {
+          approved_request_snapshot:
+            session.approved_request_revision.canonical_snapshot,
+        }
+      : {}),
+    primary_classification: session.classification!,
     intake: session.intake,
   });
+
+  parseConsultantResearchOutputV3(output);
+  const integrity = validateConsultantOutputV3Integrity(output);
+  if (!integrity.isValid)
+    throw new Error(
+      `Output evidence integrity failed: ${integrity.errors.join("; ")}`,
+    );
 
   // Mode-aware and semantic-coherence validation gate
   const coherence = validateConsultantOutputV3SemanticCoherence(output);
@@ -545,19 +807,31 @@ export async function executeConsultantWorkflowResearch(
     throw err;
   }
 
-  // Persist to PostgreSQL database (consultant_output_v3 + supplier entities)
-  await saveConsultantOutputV3(db, {
-    account_id: session.account_id,
-    output,
-  });
+  if (options?.assertLease) await options.assertLease();
 
   session.output = output;
-  session.revealed_count = 5; // Progressive reveal: top 5 revealed first
+  session.revealed_count = Math.min(5, output.supplier_candidates.length);
   session.state = "progressive_reveal_ready";
   session.last_checkpoint = "progressive_reveal_ready";
+  session.retry_action = null;
+  session.progress = {
+    phase: "completed",
+    loop: dualResult.verification_loops_completed,
+    max_loops: 15,
+    message: `${output.supplier_candidates.length} supplier dossiers saved.`,
+    updated_at: new Date().toISOString(),
+  };
 
-  // Persist completed session
-  await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
+  // Persist the complete output and all suppliers atomically, independent of reveal pagination.
+  const persist = async (client: Queryable) => {
+    await saveConsultantOutputV3(client, {
+      account_id: session.account_id,
+      output,
+    });
+    await saveConsultantWorkflowSession(client, mapSessionToRecord(session));
+  };
+  if ("connect" in db) await inTransaction(db as ConnectionPool, persist);
+  else await persist(db);
 
   return output;
 }
@@ -572,8 +846,12 @@ export async function revealMoreCandidates(
 ): Promise<number> {
   const session = activeSessions.get(runId);
   if (!session) throw new Error(`Workflow session ${runId} not found.`);
-  const total = session.output?.supplier_candidates.length ?? 20;
-  session.revealed_count = Math.min(session.revealed_count + increment, total);
+  if (!session.output) throw new Error("Research results are not ready.");
+  const total = session.output.supplier_candidates.length;
+  session.revealed_count = Math.min(
+    session.revealed_count + (increment > 0 ? 5 : 0),
+    total,
+  );
   if (
     session.revealed_count >= total &&
     session.state === "progressive_reveal_ready"
@@ -586,4 +864,109 @@ export async function revealMoreCandidates(
   }
 
   return session.revealed_count;
+}
+
+function createWorkflowCheckpoint(
+  session: WorkflowSession,
+  db?: Queryable,
+  assertLease?: () => Promise<void>,
+) {
+  let pending = Promise.resolve();
+  return (event: any): Promise<void> => {
+    pending = pending.then(async () => {
+      if (assertLease) await assertLease();
+      const phase = String(event.phase ?? event.stage ?? "research");
+      const loop = Number(event.loop ?? event.loop_number ?? 0);
+      session.progress = {
+        phase,
+        loop,
+        max_loops: Number(
+          event.max_loops ?? (phase.includes("advisory") ? 3 : 15),
+        ),
+        message: String(event.message ?? "Research in progress."),
+        updated_at: new Date().toISOString(),
+      };
+      if (phase.includes("verification"))
+        session.state = "verification_loop_running";
+      if (phase.includes("synthesis") && !phase.includes("prompt"))
+        session.state = "synthesis_running";
+      session.last_checkpoint = `${phase}:${loop}`;
+      if (db) {
+        await appendConsultantWorkflowEvent(db, session, phase, event);
+        await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
+      }
+    });
+    return pending;
+  };
+}
+
+export async function queueConsultantWorkflowStep(
+  db: Queryable,
+  runId: string,
+  stage: "prepare" | "research",
+  retry = false,
+): Promise<ConsultantWorkflowJob> {
+  const session = activeSessions.get(runId);
+  if (!session?.approved_request_revision)
+    throw new Error("An approved request is required.");
+  if (retry) {
+    if (session.state !== "workflow_failed" || session.retry_action !== stage)
+      throw new Error("This workflow cannot be retried at that stage.");
+    session.execution_id = crypto.randomUUID();
+    session.error = undefined;
+  }
+  if (stage === "research" && !session.step3_deep_prompt?.is_approved)
+    throw new Error("An approved research prompt is required.");
+  const persist = async (client: Queryable) => {
+    const job = await enqueueConsultantWorkflowJob(
+      client,
+      session,
+      stage,
+      session.mode,
+    );
+    if (job.stage !== stage) return job;
+    if (job.status === "queued") {
+      session.execution_id = job.execution_id;
+      session.state =
+        stage === "prepare"
+          ? "prep_step2_advisory_generating"
+          : "research_dispatching";
+      session.retry_action = stage;
+      session.progress = {
+        phase: "queued",
+        loop: 0,
+        max_loops: stage === "prepare" ? 3 : 15,
+        message: "Your request is queued for research.",
+        updated_at: new Date().toISOString(),
+      };
+      await saveConsultantWorkflowSession(client, mapSessionToRecord(session));
+    }
+    return job;
+  };
+  return "connect" in db
+    ? inTransaction(db as ConnectionPool, persist)
+    : persist(db);
+}
+
+export async function markConsultantWorkflowFailed(
+  db: Queryable,
+  runId: string,
+  stage: "prepare" | "research",
+  error: unknown,
+): Promise<void> {
+  const session = activeSessions.get(runId);
+  if (!session) return;
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String(error.code).slice(0, 100)
+      : "provider-or-execution-failed";
+  session.state = "workflow_failed";
+  session.retry_action = stage;
+  const detail =
+    error instanceof LiveResearchError
+      ? error.message
+      : `Research could not complete (${code}).`;
+  session.error = `${detail} Your approved request is saved. Execution ID: ${session.execution_id}.`;
+  await appendConsultantWorkflowEvent(db, session, "failed", { stage, code });
+  await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
 }

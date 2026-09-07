@@ -5,8 +5,11 @@ import Link from "next/link";
 import type {
   ConsultantResearchOutputV3,
   SupplierEntityV3,
+  ApprovedRequestSnapshotV3,
 } from "@matchbase/contracts";
 import { SupplierDossierModal } from "../../../components/consultant/SupplierDossierModal";
+
+import { ApprovedRequestSummary } from "../../../components/consultant/ApprovedRequestSummary";
 
 const DEMONSTRATION_EXAMPLES = {
   poultry: {
@@ -64,7 +67,7 @@ export default function ConsultantWorkflowPage() {
     "idle",
   );
   const [researchMode, setResearchMode] = useState<"demonstration" | "live">(
-    "demonstration",
+    "live",
   );
 
   function triggerToast(msg: string) {
@@ -89,7 +92,66 @@ export default function ConsultantWorkflowPage() {
   const [incompleteSessions, setIncompleteSessions] = useState<any[]>([]);
   const [activeDraftSession, setActiveDraftSession] = useState<any>(null);
   const [draftId, setDraftId] = useState<string>("");
-  const [draftVersion, setDraftVersion] = useState<number>(1);
+  const [, setDraftVersion] = useState<number>(1);
+  const draftVersionRef = useRef(1);
+  const draftIdRef = useRef("");
+  const hydrationStartedRef = useRef(false);
+  const draftSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const transitionRef = useRef(false);
+  const draftConflictRef = useRef(false);
+  const lastSavedDraftRef = useRef<{ id: string; fingerprint: string } | null>(
+    null,
+  );
+  const newDraftModalRef = useRef<HTMLDivElement | null>(null);
+  const newDraftPreviousFocusRef = useRef<HTMLElement | null>(null);
+  const intakeRef = useRef({
+    productRequirement,
+    technicalCompliance,
+    orderProfile,
+  });
+  intakeRef.current = { productRequirement, technicalCompliance, orderProfile };
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
+  const [workflowProgress, setWorkflowProgress] = useState<any>(null);
+  const [approvedSnapshot, setApprovedSnapshot] =
+    useState<ApprovedRequestSnapshotV3 | null>(null);
+  const [retryAction, setRetryAction] = useState<string | null>(null);
+  const [isFidelityValidating, setIsFidelityValidating] = useState(false);
+  const validationSequenceRef = useRef(0);
+  const [validationRetry, setValidationRetry] = useState(0);
+
+  function updateDraftId(id: string) {
+    draftIdRef.current = id;
+    setDraftId(id);
+  }
+  function updateDraftVersion(version: number) {
+    draftVersionRef.current = version;
+    setDraftVersion(version);
+  }
+  function errorMessage(data: any, fallback: string): string {
+    return typeof data?.error === "string"
+      ? data.error
+      : data?.error?.message || data?.message || fallback;
+  }
+  function acceptProgress(session: any) {
+    if (session.approved_request_revision?.canonical_snapshot)
+      setApprovedSnapshot(session.approved_request_revision.canonical_snapshot);
+    if (session.state) setWorkflowState(session.state);
+    setWorkflowProgress(session.progress ?? null);
+    setWorkflowError(
+      session.error
+        ? errorMessage(
+            { error: session.error },
+            "Workflow stopped. Retry the failed stage.",
+          )
+        : null,
+    );
+    setRetryAction(session.retry_action ?? null);
+    if (session.mode === "live" || session.mode === "demonstration")
+      setResearchMode(session.mode);
+    if (session.step2_advisory) setAdvisoryContext(session.step2_advisory);
+    if (session.step3_deep_prompt?.prompt_text)
+      setStep3Prompt(session.step3_deep_prompt.prompt_text);
+  }
   const [hydrationState, setHydrationState] = useState<
     | "unresolved"
     | "loading"
@@ -194,13 +256,18 @@ export default function ConsultantWorkflowPage() {
     if (workflowState !== "prep_step1_awaiting_approval" || !step1Translation) {
       return;
     }
+    const sequence = ++validationSequenceRef.current;
+    const controller = new AbortController();
+    setIsFidelityValidating(true);
     if (revalidateTimeoutRef.current) {
       clearTimeout(revalidateTimeoutRef.current);
     }
     revalidateTimeoutRef.current = setTimeout(async () => {
+      setStep1Fidelity(null);
       try {
         const res = await fetch("/api/v1/consultant/workflow", {
           method: "POST",
+          signal: controller.signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "validate_step1_fidelity",
@@ -212,18 +279,42 @@ export default function ConsultantWorkflowPage() {
             translation: step1Translation,
           }),
         });
-        if (res.ok) {
+        if (!res.ok)
+          throw new Error(
+            "Interpretation validation could not complete. Retry before approving.",
+          );
+        if (
+          res.ok &&
+          sequence === validationSequenceRef.current &&
+          !controller.signal.aborted
+        ) {
           const d = await res.json();
-          if (d.success && d.fidelity) {
+          if (
+            d.success &&
+            d.fidelity &&
+            sequence === validationSequenceRef.current
+          ) {
             setStep1Fidelity(d.fidelity);
           }
         }
       } catch (err) {
-        console.error("Dynamic fidelity revalidation error:", err);
+        if (!controller.signal.aborted)
+          setWorkflowError(
+            err instanceof Error
+              ? err.message
+              : "Interpretation validation failed.",
+          );
+      } finally {
+        if (
+          sequence === validationSequenceRef.current &&
+          !controller.signal.aborted
+        )
+          setIsFidelityValidating(false);
       }
     }, 400);
 
     return () => {
+      controller.abort();
       if (revalidateTimeoutRef.current) {
         clearTimeout(revalidateTimeoutRef.current);
       }
@@ -234,11 +325,13 @@ export default function ConsultantWorkflowPage() {
     productRequirement,
     technicalCompliance,
     orderProfile,
+    validationRetry,
   ]);
 
-  // Check URL params for mode=new, run_id, draft_id or action=resume
+  // Check URL params once, including React Strict Mode effect replay.
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || hydrationStartedRef.current) return;
+    hydrationStartedRef.current = true;
     const searchParams = new URLSearchParams(window.location.search);
     const mode = searchParams.get("mode");
     const urlRunId = searchParams.get("run_id");
@@ -284,90 +377,199 @@ export default function ConsultantWorkflowPage() {
     }
   }, []);
 
-  // Server-side debounced draft auto-save with optimistic concurrency
+  function clearAutosaveTimer() {
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = null;
+  }
+
+  function saveDraftSnapshot(
+    snapshot: typeof intakeRef.current,
+    id = draftIdRef.current,
+  ): Promise<void> {
+    const fingerprint = JSON.stringify(snapshot);
+    const operation = draftSaveQueueRef.current
+      .catch(() => {})
+      .then(async () => {
+        if (id !== draftIdRef.current) return;
+        if (draftConflictRef.current)
+          throw new Error("Resolve the draft conflict before saving.");
+        if (
+          lastSavedDraftRef.current?.id === id &&
+          lastSavedDraftRef.current.fingerprint === fingerprint
+        )
+          return;
+        const version = draftVersionRef.current;
+        const res = await fetch("/api/v1/consultant/workflow", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "save_draft",
+            draft_id: id,
+            draft_version: version,
+            expected_version: version,
+            draft_data: snapshot,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (id !== draftIdRef.current) return;
+        if (res.status === 409) {
+          draftConflictRef.current = true;
+          setConflictState({
+            current_version:
+              data.current_version ??
+              data.error?.current_version ??
+              version + 1,
+            submitted_version: version,
+            unsaved_data: { ...intakeRef.current },
+          });
+          setShowNewDraftModal(false);
+          throw new Error(
+            "The server draft changed. Review the conflict before continuing.",
+          );
+        }
+        if (!res.ok || !data.draft_version)
+          throw new Error(
+            errorMessage(
+              data,
+              "Draft save failed. Your input is still on this page.",
+            ),
+          );
+        updateDraftVersion(data.draft_version);
+        lastSavedDraftRef.current = { id, fingerprint };
+        if (JSON.stringify(intakeRef.current) === fingerprint)
+          setDraftStatus("saved");
+      });
+    draftSaveQueueRef.current = operation;
+    return operation;
+  }
+
+  // Each acknowledged save supplies the next request's expected version.
   useEffect(() => {
+    draftConflictRef.current = Boolean(conflictState);
     if (
       !userSession ||
-      (userSession.tier !== "consultant" && userSession.tier !== "admin")
+      !["consultant", "admin"].includes(userSession.tier) ||
+      hydrationState !== "hydrated" ||
+      runId ||
+      !draftId ||
+      conflictState ||
+      isCloningDraftRef.current ||
+      showNewDraftModal ||
+      isSavingNewDraft
     )
       return;
-    if (hydrationState !== "hydrated") return; // Prevent overwriting before server hydration
-    if (runId) return; // Do not overwrite draft once a run is submitted
-    if (isCloningDraftRef.current) return; // Freeze autosave during clone transition (N03)
-    if (conflictState) return; // Freeze autosave while in conflict state (N03)
-    if (!productRequirement && !technicalCompliance && !orderProfile) {
-      setDraftStatus("idle");
+    const snapshot = { productRequirement, technicalCompliance, orderProfile };
+    const fingerprint = JSON.stringify(snapshot);
+    if (
+      lastSavedDraftRef.current?.id === draftId &&
+      lastSavedDraftRef.current.fingerprint === fingerprint
+    ) {
+      setDraftStatus("saved");
       return;
     }
-    if (!draftId) return;
-
+    if (
+      !productRequirement &&
+      !technicalCompliance &&
+      !orderProfile &&
+      !lastSavedDraftRef.current
+    )
+      return;
     setDraftStatus("saving");
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
-    }
+    clearAutosaveTimer();
     autosaveTimerRef.current = setTimeout(() => {
-      if (isCloningDraftRef.current || conflictState) return;
-      void fetch("/api/v1/consultant/workflow", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "save_draft",
-          draft_id: draftId,
-          draft_version: draftVersion,
-          expected_version: draftVersion,
-          draft_data: {
-            productRequirement,
-            technicalCompliance,
-            orderProfile,
-            savedAt: new Date().toISOString(),
-          },
-        }),
-      })
-        .then(async (res) => {
-          if (res.status === 409) {
-            const errData = await res.json();
-            setDraftStatus("idle");
-            setConflictState({
-              current_version:
-                errData.error?.current_version ?? draftVersion + 1,
-              submitted_version: draftVersion,
-              unsaved_data: {
-                productRequirement,
-                technicalCompliance,
-                orderProfile,
-              },
-            });
-            return;
-          }
-          if (res.ok) {
-            const data = await res.json();
-            if (data.draft_version) {
-              setDraftVersion(data.draft_version);
-            }
-            setDraftStatus("saved");
-          } else {
-            setDraftStatus("idle");
-          }
-        })
-        .catch(() => setDraftStatus("idle"));
+      autosaveTimerRef.current = null;
+      if (
+        transitionRef.current ||
+        isCloningDraftRef.current ||
+        draftConflictRef.current
+      )
+        return;
+      void saveDraftSnapshot(snapshot, draftId).catch((error) => {
+        setDraftStatus("idle");
+        setWorkflowError(error.message);
+      });
     }, 800);
-
-    return () => {
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current);
-      }
-    };
+    return clearAutosaveTimer;
   }, [
     productRequirement,
     technicalCompliance,
     orderProfile,
     runId,
     draftId,
-    draftVersion,
     userSession,
     hydrationState,
     conflictState,
+    showNewDraftModal,
+    isSavingNewDraft,
   ]);
+
+  useEffect(() => {
+    if (!showNewDraftModal) return;
+    newDraftPreviousFocusRef.current = document.activeElement as HTMLElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    newDraftModalRef.current
+      ?.querySelector<HTMLButtonElement>("#stay-in-draft-btn")
+      ?.focus();
+    function keepFocus(event: FocusEvent) {
+      if (!newDraftModalRef.current?.contains(event.target as Node))
+        newDraftModalRef.current?.focus();
+    }
+    document.addEventListener("focusin", keepFocus);
+    return () => {
+      document.removeEventListener("focusin", keepFocus);
+      document.body.style.overflow = previousOverflow;
+      newDraftPreviousFocusRef.current?.focus();
+    };
+  }, [showNewDraftModal]);
+
+  useEffect(() => {
+    if (
+      !runId ||
+      output ||
+      workflowState === "workflow_failed" ||
+      workflowState === "invalidated" ||
+      workflowState === "workflow_complete" ||
+      workflowState === "progressive_reveal_ready" ||
+      workflowState === "intake_draft" ||
+      workflowState === "prep_step1_awaiting_approval" ||
+      workflowState === "prep_step3_prompt_awaiting_approval" ||
+      workflowState === "prep_step3_prompt_approved" ||
+      workflowState === "prep_step2_advisory_ready"
+    )
+      return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      try {
+        const res = await fetch(
+          `/api/v1/consultant/workflow?run_id=${encodeURIComponent(runId!)}`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        const data = await res.json();
+        if (controller.signal.aborted) return;
+        if (!res.ok)
+          throw new Error(
+            errorMessage(data, "Could not refresh workflow progress."),
+          );
+        if (data.session) acceptProgress(data.session);
+        const result = data.output ?? data.session?.output;
+        if (result) {
+          setOutput(result);
+          setRevealedCount(data.session?.revealed_count ?? 5);
+          return;
+        }
+      } catch (error: any) {
+        if (!controller.signal.aborted) setWorkflowError(error.message);
+      }
+      if (!controller.signal.aborted) timer = setTimeout(poll, 2000);
+    }
+    void poll();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [runId, workflowState, output]);
 
   // N04: Trap initial focus into conflict modal and store previous active element
   useEffect(() => {
@@ -410,7 +612,7 @@ export default function ConsultantWorkflowPage() {
         if (isResumeModalOpen) {
           setIsResumeModalOpen(false);
         }
-        if (showNewDraftModal) {
+        if (showNewDraftModal && !transitionRef.current) {
           setShowNewDraftModal(false);
         }
       }
@@ -457,8 +659,8 @@ export default function ConsultantWorkflowPage() {
       setProductRequirement(draft.draft_data.productRequirement ?? "");
       setTechnicalCompliance(draft.draft_data.technicalCompliance ?? "");
       setOrderProfile(draft.draft_data.orderProfile ?? "");
-      setDraftId(draft.draft_id);
-      setDraftVersion(draft.draft_version ?? 1);
+      updateDraftId(draft.draft_id);
+      updateDraftVersion(draft.draft_version ?? 1);
       if (typeof window !== "undefined") {
         sessionStorage.setItem("matchbase_active_draft_id", draft.draft_id);
         window.history.replaceState(
@@ -482,8 +684,8 @@ export default function ConsultantWorkflowPage() {
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.draft_id) {
-          setDraftId(data.draft_id);
-          setDraftVersion(data.draft_version ?? 1);
+          updateDraftId(data.draft_id);
+          updateDraftVersion(data.draft_version ?? 1);
           sessionStorage.setItem("matchbase_active_draft_id", data.draft_id);
           window.history.replaceState(
             {},
@@ -501,8 +703,8 @@ export default function ConsultantWorkflowPage() {
       typeof crypto !== "undefined" && crypto.randomUUID
         ? crypto.randomUUID()
         : "draft-" + Date.now();
-    setDraftId(fallbackId);
-    setDraftVersion(1);
+    updateDraftId(fallbackId);
+    updateDraftVersion(1);
     if (typeof window !== "undefined") {
       sessionStorage.setItem("matchbase_active_draft_id", fallbackId);
       window.history.replaceState(
@@ -529,8 +731,8 @@ export default function ConsultantWorkflowPage() {
             await loadExistingSession(d.current_run_id);
             return;
           }
-          setDraftId(d.draft_id);
-          setDraftVersion(d.draft_version ?? 1);
+          updateDraftId(d.draft_id);
+          updateDraftVersion(d.draft_version ?? 1);
           if (d.draft_data) {
             setProductRequirement(
               d.draft_data.productRequirement ??
@@ -617,13 +819,14 @@ export default function ConsultantWorkflowPage() {
         const data = await res.json();
         if (data.session) {
           const s = data.session;
+          acceptProgress(s);
           setRunId(s.run_id);
           setWorkflowState(s.state);
           const dId = data.draft?.draft_id ?? s.draft_id;
           const dVer = data.draft?.draft_version ?? s.draft_version ?? 1;
           if (dId) {
-            setDraftId(dId);
-            setDraftVersion(dVer);
+            updateDraftId(dId);
+            updateDraftVersion(dVer);
             sessionStorage.setItem("matchbase_active_draft_id", dId);
           }
           if (s.intake) {
@@ -675,115 +878,105 @@ export default function ConsultantWorkflowPage() {
     }
   }
 
-  async function executeStartNewBlankDraft() {
-    sessionStorage.removeItem("matchbase_active_draft_id");
-    if (typeof window !== "undefined") {
-      window.history.replaceState({}, "", "/consultant/workflow?mode=new");
-    }
-    setRunId(null);
-    setWorkflowState("intake_draft");
-    setProductRequirement("");
-    setTechnicalCompliance("");
-    setOrderProfile("");
-    setStep1Translation("");
-    setStep3Prompt("");
-    setAdvisoryContext(null);
-    setOutput(null);
-    setRevealedCount(5);
-    setDraftStatus("idle");
-    setCoherenceError(null);
-    setConflictState(null);
-    setStep1Fidelity(null);
-    await handleCreateNewDraft();
-    triggerToast("Started new blank sourcing workflow.");
-  }
-
-  async function handleSaveAndStartNew() {
+  async function executeStartNewBlankDraft(saveCurrent = false) {
+    if (transitionRef.current) return;
+    transitionRef.current = true;
     setIsSavingNewDraft(true);
     setNewDraftError(null);
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
-    }
+    clearAutosaveTimer();
     try {
+      // A sent autosave must settle before the old identity is replaced.
+      await draftSaveQueueRef.current.catch(() => {});
+      if (saveCurrent) await saveDraftSnapshot({ ...intakeRef.current });
+      if (draftConflictRef.current)
+        throw new Error(
+          "Resolve the draft conflict before starting another draft.",
+        );
       const res = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "save_draft",
-          draft_id: draftId,
-          draft_version: draftVersion,
-          expected_version: draftVersion,
-          draft_data: {
-            productRequirement,
-            technicalCompliance,
-            orderProfile,
-            savedAt: new Date().toISOString(),
-          },
-        }),
+        body: JSON.stringify({ action: "create_draft" }),
       });
-
-      if (res.status === 409) {
-        const errData = await res.json();
-        setShowNewDraftModal(false);
-        setConflictState({
-          current_version: errData.error?.current_version ?? draftVersion + 1,
-          submitted_version: draftVersion,
-          unsaved_data: {
-            productRequirement,
-            technicalCompliance,
-            orderProfile,
-          },
-        });
-        return;
-      }
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        setNewDraftError(
-          errData.error ||
-            "Save failed. Your input has been preserved locally.",
-        );
-        return;
-      }
-
       const data = await res.json();
-      if (data.draft_version) {
-        setDraftVersion(data.draft_version);
-      }
-      setDraftStatus("saved");
+      if (!res.ok || !data.draft_id)
+        throw new Error(
+          errorMessage(
+            data,
+            "Could not create a new draft. Your current input is preserved.",
+          ),
+        );
+      updateDraftId(data.draft_id);
+      updateDraftVersion(data.draft_version ?? 1);
+      const blank = {
+        productRequirement: "",
+        technicalCompliance: "",
+        orderProfile: "",
+      };
+      intakeRef.current = blank;
+      lastSavedDraftRef.current = {
+        id: data.draft_id,
+        fingerprint: JSON.stringify(blank),
+      };
+      sessionStorage.setItem("matchbase_active_draft_id", data.draft_id);
+      window.history.replaceState(
+        {},
+        "",
+        `/consultant/workflow?draft_id=${data.draft_id}`,
+      );
+      setRunId(null);
+      setWorkflowState("intake_draft");
+      setProductRequirement("");
+      setTechnicalCompliance("");
+      setOrderProfile("");
+      setStep1Translation("");
+      setStep3Prompt("");
+      setAdvisoryContext(null);
+      setOutput(null);
+      setRevealedCount(5);
+      setDraftStatus("idle");
+      setCoherenceError(null);
+      setStep1Fidelity(null);
+      setWorkflowProgress(null);
+      setApprovedSnapshot(null);
+      setWorkflowError(null);
+      setRetryAction(null);
       setShowNewDraftModal(false);
-      await executeStartNewBlankDraft();
-    } catch {
+      setHydrationState("hydrated");
+      triggerToast(
+        "New blank draft created. Previous saved drafts remain in Resume Research.",
+      );
+    } catch (error: any) {
+      if (!draftConflictRef.current) setShowNewDraftModal(true);
       setNewDraftError(
-        "Network error while saving draft. Your input is retained.",
+        error.message || "Transition failed. Your input is preserved.",
       );
     } finally {
+      transitionRef.current = false;
       setIsSavingNewDraft(false);
     }
   }
-
-  async function handleDiscardAndStartNew() {
-    setShowNewDraftModal(false);
-    await executeStartNewBlankDraft();
+  async function handleSaveAndStartNew() {
+    await executeStartNewBlankDraft(true);
   }
-
+  async function handleDiscardAndStartNew() {
+    await executeStartNewBlankDraft(false);
+  }
   async function handleStartNew() {
-    const hasUnsavedContent =
-      productRequirement.trim().length > 0 ||
-      technicalCompliance.trim().length > 0 ||
-      orderProfile.trim().length > 0;
-
-    if (hasUnsavedContent) {
-      const isDirty =
-        draftStatus !== "saved" || autosaveTimerRef.current !== null;
-      if (isDirty) {
-        setNewDraftError(null);
-        setShowNewDraftModal(true);
-        return;
-      }
+    if (transitionRef.current || isLoading) return;
+    clearAutosaveTimer();
+    const snapshot = intakeRef.current;
+    const hasContent = Object.values(snapshot).some(
+      (value) => value.length > 0,
+    );
+    const saved =
+      lastSavedDraftRef.current?.id === draftId &&
+      lastSavedDraftRef.current.fingerprint === JSON.stringify(snapshot);
+    if (!runId && (hasContent || lastSavedDraftRef.current) && !saved) {
+      setNewDraftError(null);
+      setShowNewDraftModal(true);
+      return;
     }
-
-    await executeStartNewBlankDraft();
+    await executeStartNewBlankDraft(false);
   }
 
   // Load demonstration examples (F12)
@@ -801,12 +994,17 @@ export default function ConsultantWorkflowPage() {
     e.preventDefault();
     setIsLoading(true);
     setCoherenceError(null);
+    setWorkflowError(null);
+    clearAutosaveTimer();
     try {
+      await draftSaveQueueRef.current.catch(() => {});
+      await saveDraftSnapshot({ ...intakeRef.current });
       const res = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "submit_intake",
+          mode: researchMode,
           draft_id: draftId,
           product_requirement: productRequirement,
           technical_compliance: technicalCompliance,
@@ -835,7 +1033,7 @@ export default function ConsultantWorkflowPage() {
       }
       if (data.success && data.session) {
         setRunId(data.session.run_id);
-        setWorkflowState(data.session.state);
+        acceptProgress(data.session);
         setStep1Translation(
           data.session.step1_interpretation.english_translation,
         );
@@ -853,11 +1051,13 @@ export default function ConsultantWorkflowPage() {
           "Intake submitted and persisted. Review English Interpretation (Step 1).",
         );
       } else {
-        alert(data.error || "Failed to submit intake");
+        setWorkflowError(errorMessage(data, "Failed to submit intake"));
       }
     } catch (err) {
       console.error(err);
-      alert("Network error submitting intake");
+      setWorkflowError(
+        err instanceof Error ? err.message : "Network error submitting intake",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -865,7 +1065,8 @@ export default function ConsultantWorkflowPage() {
 
   // Action 2: Approve Step 1 Interpretation (Propagates edit downstream - F01)
   async function handleApproveStep1() {
-    if (!runId) return;
+    if (!runId || isFidelityValidating || step1Fidelity?.valid !== true) return;
+    setWorkflowError(null);
     setIsLoading(true);
     try {
       const res = await fetch("/api/v1/consultant/workflow", {
@@ -879,16 +1080,15 @@ export default function ConsultantWorkflowPage() {
       });
       const data = await res.json();
       if (data.success && data.session) {
-        setWorkflowState(data.session.state);
-        setAdvisoryContext(data.session.step2_advisory);
+        acceptProgress(data.session);
         if (data.session.step3_deep_prompt) {
           setStep3Prompt(data.session.step3_deep_prompt.prompt_text);
         }
         triggerToast(
-          "Step 1 Approved. Edits propagated to Stage 2 & 3. Review Advisory Context.",
+          "English interpretation approved. Preparing the three advisory loops and research prompt.",
         );
       } else {
-        alert(data.error || "Failed to approve Step 1");
+        setWorkflowError(errorMessage(data, "Failed to approve Step 1"));
       }
     } catch (err) {
       console.error(err);
@@ -899,12 +1099,11 @@ export default function ConsultantWorkflowPage() {
 
   // Action 3: Approve Step 3 Prompt & Launch Research
   async function handleApproveStep3AndExecute() {
-    if (!runId) return;
+    if (!runId || isLoading) return;
     setIsLoading(true);
-    setWorkflowState("research_dispatching");
+    setWorkflowError(null);
     try {
-      // 1. Approve prompt
-      await fetch("/api/v1/consultant/workflow", {
+      const approval = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -913,8 +1112,15 @@ export default function ConsultantWorkflowPage() {
           edited_prompt: step3Prompt,
         }),
       });
-
-      // 2. Launch research
+      const approved = await approval.json();
+      if (!approval.ok || !approved.success)
+        throw new Error(
+          errorMessage(
+            approved,
+            "Prompt approval failed. Research has not started.",
+          ),
+        );
+      if (approved.session) acceptProgress(approved.session);
       const res = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -925,19 +1131,37 @@ export default function ConsultantWorkflowPage() {
         }),
       });
       const data = await res.json();
-      if (data.success && data.output) {
+      if (!res.ok || !data.success)
+        throw new Error(errorMessage(data, "Research could not start."));
+      if (data.session) acceptProgress(data.session);
+      else setWorkflowState("research_dispatching");
+      if (data.output) {
         setOutput(data.output);
         setWorkflowState("progressive_reveal_ready");
         setRevealedCount(5);
-        triggerToast(
-          "Autonomous research complete! Top verified suppliers revealed.",
-        );
-      } else {
-        alert(data.error || "Research execution failed");
       }
-    } catch (err) {
-      console.error(err);
-      alert("Error executing research");
+    } catch (error: any) {
+      setWorkflowError(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleRetryWorkflow() {
+    if (!runId || isLoading) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/v1/consultant/workflow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "retry_workflow", run_id: runId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success)
+        throw new Error(errorMessage(data, "Retry could not start."));
+      if (data.session) acceptProgress(data.session);
+    } catch (error: any) {
+      setWorkflowError(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -1027,7 +1251,7 @@ export default function ConsultantWorkflowPage() {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 
-      triggerToast("Full PDF report downloaded successfully.");
+      triggerToast("PDF prepared and handed to your browser for saving.");
     } catch (e: any) {
       console.error("PDF download failed:", e);
       triggerToast(`PDF download failed: ${e?.message || "Unknown error"}`);
@@ -1036,7 +1260,13 @@ export default function ConsultantWorkflowPage() {
     }
   }
 
-  const suppliers = output?.supplier_candidates ?? [];
+  const suppliers = [...(output?.supplier_candidates ?? [])]
+    .sort(
+      (a, b) =>
+        b.assessment.compatibility_score - a.assessment.compatibility_score ||
+        a.assessment.rank - b.assessment.rank,
+    )
+    .slice(0, 20);
   const visibleSuppliers = suppliers.slice(0, revealedCount);
 
   // Entitlement gate: deny standard or unauthenticated users from viewing or manipulating consultant drafts
@@ -1115,6 +1345,7 @@ export default function ConsultantWorkflowPage() {
             <button
               type="button"
               onClick={handleStartNew}
+              disabled={isSavingNewDraft || isLoading}
               className="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-lg transition-colors shadow"
             >
               Start New Research Request
@@ -1202,6 +1433,7 @@ export default function ConsultantWorkflowPage() {
               <button
                 type="button"
                 onClick={handleStartNew}
+                disabled={isSavingNewDraft || isLoading}
                 className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-lg shadow transition-colors"
               >
                 + New Consultant Research
@@ -1209,6 +1441,7 @@ export default function ConsultantWorkflowPage() {
               <button
                 type="button"
                 onClick={handleOpenResumeModal}
+                disabled={isLoading || isSavingNewDraft}
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
               >
                 Resume Research
@@ -1229,7 +1462,11 @@ export default function ConsultantWorkflowPage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto space-y-10">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="max-w-6xl mx-auto space-y-10"
+      >
         {isSessionChanged && (
           <div
             role="alert"
@@ -1260,6 +1497,56 @@ export default function ConsultantWorkflowPage() {
         )}
 
         {/* ========================================================= */}
+        {workflowError && (
+          <div
+            role="alert"
+            className="rounded-lg border border-amber-700 bg-amber-950/50 p-4 text-sm text-amber-100"
+          >
+            <p>{workflowError}</p>
+            {retryAction && workflowState === "workflow_failed" && (
+              <button
+                type="button"
+                onClick={handleRetryWorkflow}
+                disabled={isLoading}
+                className="mt-3 px-4 py-2 rounded bg-sky-700 text-white disabled:opacity-50"
+              >
+                Retry failed{" "}
+                {retryAction === "prepare" ? "preparation" : "research"} stage
+              </button>
+            )}
+          </div>
+        )}
+        {workflowProgress && !output && (
+          <section
+            aria-label="Workflow progress"
+            role="status"
+            aria-live="polite"
+            className="rounded-xl border border-sky-800 bg-slate-900 p-5 text-slate-200"
+          >
+            <h2 className="font-bold text-white">
+              {workflowProgress.phase?.replaceAll("_", " ") ||
+                "Workflow progress"}
+            </h2>
+            <p className="text-sm mt-2">{workflowProgress.message}</p>
+            {typeof workflowProgress.loop === "number" && (
+              <p className="text-xs mt-2">
+                Loop {workflowProgress.loop}
+                {workflowProgress.max_loops
+                  ? ` of up to ${workflowProgress.max_loops}`
+                  : ""}
+              </p>
+            )}
+            {workflowProgress.updated_at && (
+              <p className="text-xs text-slate-400 mt-1">
+                Last server update:{" "}
+                {new Date(workflowProgress.updated_at).toLocaleTimeString()}
+              </p>
+            )}
+          </section>
+        )}
+        {approvedSnapshot && !output && (
+          <ApprovedRequestSummary snapshot={approvedSnapshot} />
+        )}
         {/* SECTION 1: MULTILINGUAL 3-BOX INTAKE                     */}
         {/* ========================================================= */}
         <section
@@ -1291,8 +1578,8 @@ export default function ConsultantWorkflowPage() {
                 )}
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Enter requirements in any language (Persian, Arabic, English,
-                Portuguese). Strict input isolation ensures clean translation.
+                Enter requirements in any language. Review the English
+                interpretation before approving the three preparation loops.
               </p>
             </div>
 
@@ -1304,6 +1591,7 @@ export default function ConsultantWorkflowPage() {
               <button
                 type="button"
                 onClick={() => handleLoadExample("poultry")}
+                disabled={isLoading || isSavingNewDraft || Boolean(runId)}
                 className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded border border-slate-600 transition-colors"
               >
                 A: Brazilian Poultry
@@ -1311,6 +1599,7 @@ export default function ConsultantWorkflowPage() {
               <button
                 type="button"
                 onClick={() => handleLoadExample("water_heaters")}
+                disabled={isLoading || isSavingNewDraft || Boolean(runId)}
                 className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded border border-slate-600 transition-colors"
               >
                 B: UAE Water Heaters
@@ -1335,6 +1624,29 @@ export default function ConsultantWorkflowPage() {
 
             return (
               <form onSubmit={handleSubmitIntake} className="space-y-6">
+                <label className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
+                  Research mode
+                  <select
+                    aria-label="Research mode"
+                    value={researchMode}
+                    disabled={Boolean(runId) || isLoading || isSavingNewDraft}
+                    onChange={(event) =>
+                      setResearchMode(
+                        event.target.value as "live" | "demonstration",
+                      )
+                    }
+                    className="bg-slate-950 border border-slate-700 rounded p-2 text-white"
+                  >
+                    <option value="live">Live web research</option>
+                    <option value="demonstration">
+                      Demonstration fixtures
+                    </option>
+                  </select>
+                  <span>
+                    Preparation starts after submitting. Supplier research
+                    starts only after prompt approval.
+                  </span>
+                </label>
                 {coherenceError && (
                   <div
                     id="coherence-error-summary"
@@ -1428,8 +1740,7 @@ export default function ConsultantWorkflowPage() {
                       htmlFor="input-box-1"
                       className="text-sm font-semibold text-slate-200"
                     >
-                      Box 1: Product Requirement (Specification, Grade,
-                      Dimensions, Form)
+                      Product Requirement
                     </label>
                     <button
                       ref={popoverBtnRef1}
@@ -1466,15 +1777,17 @@ export default function ConsultantWorkflowPage() {
                       aria-labelledby="help-btn-1"
                       className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150"
                     >
-                      <strong>Guidance:</strong> Specify exact product
-                      attributes: dimensions, capacity, materials, grades, and
-                      packaging configurations. Avoid commercial terms or prices
-                      here.
+                      Describe the exact product, form, grade, dimensions or
+                      capacity, material, packaging, shelf life and intended
+                      use. Preserve units and distinguish mandatory limits from
+                      preferences.
                     </div>
                   )}
 
                   <textarea
                     id="input-box-1"
+                    disabled={isSavingNewDraft || isLoading || Boolean(runId)}
+                    dir="auto"
                     rows={3}
                     value={productRequirement}
                     onChange={(e) => {
@@ -1494,7 +1807,7 @@ export default function ConsultantWorkflowPage() {
                       htmlFor="input-box-2"
                       className="text-sm font-semibold text-slate-200"
                     >
-                      Box 2: Technical, Quality &amp; Trade Regulatory Standards
+                      Technical, Quality &amp; Trade Requirements
                     </label>
                     <button
                       ref={popoverBtnRef2}
@@ -1531,14 +1844,18 @@ export default function ConsultantWorkflowPage() {
                       aria-labelledby="help-btn-2"
                       className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150"
                     >
-                      <strong>Guidance:</strong> Specify mandatory regulatory
-                      clearances, quality certifications (e.g. CE, SFDA, Halal,
-                      ISO, PED), and technical testing regimes.
+                      State quality tolerances, operating conditions,
+                      certifications, test reports, traceability, labeling,
+                      product or plant approvals, and origin or destination
+                      trade restrictions. Name acceptable issuing bodies and
+                      required supporting documents.
                     </div>
                   )}
 
                   <textarea
                     id="input-box-2"
+                    disabled={isSavingNewDraft || isLoading || Boolean(runId)}
+                    dir="auto"
                     rows={3}
                     value={technicalCompliance}
                     onChange={(e) => {
@@ -1558,8 +1875,7 @@ export default function ConsultantWorkflowPage() {
                       htmlFor="input-box-3"
                       className="text-sm font-semibold text-slate-200"
                     >
-                      Box 3: Order &amp; Commercial Profile (Volume, Terms,
-                      Port, Lead Time)
+                      Order &amp; Supplier Profile
                     </label>
                     <button
                       ref={popoverBtnRef3}
@@ -1596,15 +1912,18 @@ export default function ConsultantWorkflowPage() {
                       aria-labelledby="help-btn-3"
                       className="bg-slate-700 text-slate-200 text-xs p-3 rounded-lg border border-slate-600 mb-2 shadow-lg animate-in fade-in duration-150"
                     >
-                      <strong>Guidance:</strong> Specify order volumes (trial vs
-                      recurring), Incoterms (CIF, CFR, FOB, DDP), target
-                      destination ports, and supplier relationship tier (direct
-                      manufacturer vs trader).
+                      Specify trial and recurring quantities, destination,
+                      Incoterm, timing, budget or payment constraints, and
+                      acceptable supplier type. Include manufacturer or
+                      distributor authorization, capacity, market experience,
+                      warranty and local support needs.
                     </div>
                   )}
 
                   <textarea
                     id="input-box-3"
+                    disabled={isSavingNewDraft || isLoading || Boolean(runId)}
+                    dir="auto"
                     rows={3}
                     value={orderProfile}
                     onChange={(e) => {
@@ -1620,7 +1939,7 @@ export default function ConsultantWorkflowPage() {
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    disabled={isLoading}
+                    disabled={isLoading || isSavingNewDraft || Boolean(runId)}
                     className="px-6 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-sm transition-all shadow-md hover:shadow-sky-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {isLoading ? (
@@ -1708,14 +2027,37 @@ export default function ConsultantWorkflowPage() {
               <textarea
                 id="step1-translation-input"
                 aria-label="Editable English Interpretation"
+                disabled={
+                  isLoading || workflowState !== "prep_step1_awaiting_approval"
+                }
                 rows={4}
                 value={step1Translation}
-                onChange={(e) => setStep1Translation(e.target.value)}
+                onChange={(e) => {
+                  setIsFidelityValidating(true);
+                  setStep1Translation(e.target.value);
+                }}
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 font-mono mb-3 focus:ring-2 focus:ring-sky-500"
               />
 
               {/* Step 1 Explicit Requirement Fidelity Review (N02 & Phase D) */}
-              {step1Fidelity && (
+              {isFidelityValidating && (
+                <p role="status" className="text-xs text-sky-300 my-2">
+                  Checking the current interpretation against your submitted
+                  requirements...
+                </p>
+              )}
+              {workflowState === "prep_step1_awaiting_approval" &&
+                !isFidelityValidating &&
+                !step1Fidelity && (
+                  <button
+                    type="button"
+                    onClick={() => setValidationRetry((value) => value + 1)}
+                    className="my-2 px-3 py-2 bg-sky-800 rounded text-xs text-white"
+                  >
+                    Retry interpretation check
+                  </button>
+                )}
+              {step1Fidelity && !isFidelityValidating && (
                 <div className="space-y-3 mb-3">
                   {/* Fidelity Failure Gating Warning Banner */}
                   {!step1Fidelity.valid && (
@@ -2030,7 +2372,8 @@ export default function ConsultantWorkflowPage() {
                   disabled={
                     isLoading ||
                     workflowState !== "prep_step1_awaiting_approval" ||
-                    step1Fidelity?.valid === false
+                    isFidelityValidating ||
+                    step1Fidelity?.valid !== true
                   }
                   title={
                     step1Fidelity?.valid === false
@@ -2091,7 +2434,7 @@ export default function ConsultantWorkflowPage() {
                   advisoryContext.sources.length > 0 && (
                     <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-3">
                       <span className="font-bold uppercase text-slate-500">
-                        Verified Registries Consulted:
+                        Preparation sources:
                       </span>
                       {advisoryContext.sources.map((s: any, idx: number) => (
                         <a
@@ -2118,18 +2461,17 @@ export default function ConsultantWorkflowPage() {
                       Step 3
                     </span>
                     <h3 className="font-bold text-white text-sm">
-                      Synthesized Deep-Research Prompt &amp; Agent Dispatch Gate
+                      Research Prompt &amp; Approval
                     </h3>
                   </div>
                   <span className="text-xs text-sky-400 font-mono">
-                    Target: Up to 20 Verified Candidates
+                    Target: Up to 20 Assessed Candidates
                   </span>
                 </div>
 
                 <p className="text-xs text-slate-300 mb-2">
-                  Review and edit the autonomous research directives sent to
-                  Independent Research Stream 1 and Independent Research Stream
-                  2:
+                  Review and edit the research prompt. Supplier discovery and
+                  verification will begin only after you approve this version.
                 </p>
 
                 <textarea
@@ -2137,6 +2479,14 @@ export default function ConsultantWorkflowPage() {
                   aria-label="Editable Synthesized Research Prompt"
                   rows={5}
                   value={step3Prompt}
+                  disabled={
+                    isLoading ||
+                    ![
+                      "prep_step2_advisory_ready",
+                      "prep_step3_prompt_awaiting_approval",
+                      "prep_step3_prompt_approved",
+                    ].includes(workflowState)
+                  }
                   onChange={(e) => setStep3Prompt(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 font-mono mb-3 focus:ring-2 focus:ring-sky-500"
                 />
@@ -2157,7 +2507,7 @@ export default function ConsultantWorkflowPage() {
                         clipRule="evenodd"
                       />
                     </svg>
-                    Research Launch Summary &amp; Governance Disclosures
+                    Research Summary
                   </div>
 
                   {/* Explicit Execution Mode Selection */}
@@ -2177,6 +2527,7 @@ export default function ConsultantWorkflowPage() {
                           <input
                             type="radio"
                             name="research_mode"
+                            disabled={Boolean(runId)}
                             value="demonstration"
                             checked={researchMode === "demonstration"}
                             onChange={() => setResearchMode("demonstration")}
@@ -2187,9 +2538,8 @@ export default function ConsultantWorkflowPage() {
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-400 pl-5">
-                          Under 5 seconds, simulated dual-lane fixture with
-                          verified structure. Ideal for UAT qualification and
-                          evaluations.
+                          Explicit synthetic fixtures for workflow regression
+                          checks. No live supplier evidence.
                         </p>
                       </label>
                       <label
@@ -2203,18 +2553,19 @@ export default function ConsultantWorkflowPage() {
                           <input
                             type="radio"
                             name="research_mode"
+                            disabled={Boolean(runId)}
                             value="live"
                             checked={researchMode === "live"}
                             onChange={() => setResearchMode("live")}
                             className="text-sky-500 focus:ring-sky-500"
                           />
                           <span className="font-bold text-xs text-white">
-                            Live Web Research (OpenRouter)
+                            Live Web Research
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-400 pl-5">
-                          Live dual-lane search via Gemini Flash + GPT-4o.
-                          ~$0.50 budget cap, 30&ndash;60s duration.
+                          Research actual web sources in 5 to 15 verification
+                          loops. Duration depends on source availability.
                         </p>
                       </label>
                     </div>
@@ -2236,7 +2587,7 @@ export default function ConsultantWorkflowPage() {
                         Target Candidates
                       </div>
                       <div className="font-semibold text-slate-100 text-xs">
-                        Up to 20 Verified Suppliers
+                        Up to 20 Assessed Suppliers
                       </div>
                     </div>
                     <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
@@ -2246,17 +2597,17 @@ export default function ConsultantWorkflowPage() {
                       <div className="font-semibold text-slate-100 text-xs">
                         {researchMode === "demonstration"
                           ? "5 Structure Checks"
-                          : "Up to 15 Deep Checks"}
+                          : "5 to 15 verification loops"}
                       </div>
                     </div>
                     <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
                       <div className="text-[10px] text-slate-400 uppercase font-bold">
-                        Cost Budget Cap
+                        Evidence Basis
                       </div>
                       <div className="font-semibold text-emerald-400 text-xs">
                         {researchMode === "demonstration"
-                          ? "$0.00 (Zero Spend)"
-                          : "$0.50 USD Maximum"}
+                          ? "Synthetic fixtures"
+                          : "Live web sources"}
                       </div>
                     </div>
                   </div>
@@ -2271,27 +2622,6 @@ export default function ConsultantWorkflowPage() {
                     entities.
                   </div>
                 </div>
-
-                {/* Collapsible Technical Details (F11) */}
-                <details className="bg-slate-950/60 p-3 rounded border border-slate-800 text-xs text-slate-400 mb-4">
-                  <summary className="cursor-pointer font-semibold text-slate-300 hover:text-white">
-                    Technical Model &amp; Routing Details
-                  </summary>
-                  <div className="mt-2 space-y-1 pl-2">
-                    <div>
-                      &bull; Dual-stream multi-provider execution (Independent
-                      Stream 1 &amp; Stream 2)
-                    </div>
-                    <div>
-                      &bull; Four-ID Lineage Tracking: Request Version &bull;
-                      Confirmation ID &bull; Run ID &bull; Execution Trace
-                    </div>
-                    <div>
-                      &bull; Confidential Server-Side Key Vault &bull; Zero
-                      client-side credential exposure
-                    </div>
-                  </div>
-                </details>
 
                 <div className="flex justify-end">
                   <button
@@ -2329,13 +2659,10 @@ export default function ConsultantWorkflowPage() {
                             d="M4 12a8 8 0 018-8v8H4z"
                           />
                         </svg>
-                        Executing Dual-Lane Research...
+                        Submitting approved prompt...
                       </>
                     ) : (
-                      <>
-                        Approve Directives &amp; Launch Dual-Lane Research
-                        &rarr;
-                      </>
+                      <>Approve Prompt &amp; Start Research &rarr;</>
                     )}
                   </button>
                 </div>
@@ -2364,11 +2691,11 @@ export default function ConsultantWorkflowPage() {
                   >
                     3
                   </span>
-                  Section 3: Verified Supplier Candidates &amp; Dossiers
+                  Section 3: Ranked Supplier Candidates &amp; Dossiers
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
                   Showing {visibleSuppliers.length} of {suppliers.length}{" "}
-                  verified candidate profiles.
+                  assessed candidate profiles.
                 </p>
               </div>
 
@@ -2424,16 +2751,19 @@ export default function ConsultantWorkflowPage() {
               </div>
             </div>
 
+            <ApprovedRequestSummary
+              snapshot={output.approved_request_snapshot}
+            />
             {/* Candidate Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {visibleSuppliers.map((supp) => {
                 const isIllustrative =
                   output.research_mode === "fixture" ||
                   supp.legal_name.includes("[Illustrative]") ||
-                  supp.candidate_id.startsWith("cand-v3-") ||
                   supp.candidate_id.startsWith("cand-demo-");
                 const isDirectRoute =
-                  !isIllustrative && supp.assessment.rank <= 4;
+                  !isIllustrative &&
+                  supp.manufacturer_status === "direct_manufacturer";
                 return (
                   <div
                     key={supp.candidate_id}
@@ -2458,8 +2788,8 @@ export default function ConsultantWorkflowPage() {
                               {isIllustrative
                                 ? "Illustrative Profile"
                                 : isDirectRoute
-                                  ? "Active Direct Route"
-                                  : "Conditional / Development"}
+                                  ? "Direct Manufacturer"
+                                  : "Supplier Profile"}
                             </span>
                           </div>
                           <h3 className="text-base font-bold text-white">
@@ -2498,9 +2828,8 @@ export default function ConsultantWorkflowPage() {
                             Capacity &amp; MOQ:
                           </span>
                           <span className="text-slate-200 truncate max-w-[200px]">
-                            {supp.commercial.production_capacity ??
-                              "Industrial export"}{" "}
-                            &bull; {supp.commercial.moq ?? "Standard MOQ"}
+                            {supp.commercial.production_capacity ?? "Not found"}{" "}
+                            &bull; {supp.commercial.moq ?? "Not found"}
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -2513,7 +2842,12 @@ export default function ConsultantWorkflowPage() {
                             </span>
                           ) : (
                             <a
-                              href={supp.website ?? undefined}
+                              href={
+                                supp.website &&
+                                /^https?:\/\//i.test(supp.website)
+                                  ? supp.website
+                                  : undefined
+                              }
                               target="_blank"
                               rel="noreferrer"
                               className="text-sky-400 hover:text-sky-300 underline truncate max-w-[200px]"
@@ -2598,6 +2932,9 @@ export default function ConsultantWorkflowPage() {
       {/* Supplier Dossier Modal / Drawer */}
       <SupplierDossierModal
         supplier={selectedSupplier}
+        approvedRequest={output?.approved_request_snapshot}
+        evidenceSources={output?.evidence_sources ?? []}
+        claims={output?.claims ?? []}
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
@@ -2609,6 +2946,42 @@ export default function ConsultantWorkflowPage() {
       {showNewDraftModal && (
         <div
           role="dialog"
+          ref={newDraftModalRef}
+          tabIndex={-1}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.stopPropagation();
+              if (!transitionRef.current) setShowNewDraftModal(false);
+            }
+            if (event.key !== "Tab") return;
+            const buttons = Array.from(
+              event.currentTarget.querySelectorAll<HTMLElement>(
+                'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), [tabindex="0"]',
+              ),
+            );
+            const first = buttons[0];
+            const last = buttons[buttons.length - 1];
+            if (!first || !last) {
+              event.preventDefault();
+              event.currentTarget.focus();
+              return;
+            }
+            if (
+              event.shiftKey &&
+              (document.activeElement === first ||
+                document.activeElement === event.currentTarget)
+            ) {
+              event.preventDefault();
+              last.focus();
+            } else if (
+              !event.shiftKey &&
+              (document.activeElement === last ||
+                document.activeElement === event.currentTarget)
+            ) {
+              event.preventDefault();
+              first.focus();
+            }
+          }}
           aria-modal="true"
           aria-labelledby="new-draft-modal-title"
           aria-describedby="new-draft-modal-desc"
@@ -3071,8 +3444,8 @@ export default function ConsultantWorkflowPage() {
                     });
                     const d = await res.json();
                     if (d.success && d.draft_id) {
-                      setDraftId(d.draft_id);
-                      setDraftVersion(d.draft_version ?? 1);
+                      updateDraftId(d.draft_id);
+                      updateDraftVersion(d.draft_version ?? 1);
                       sessionStorage.setItem(
                         "matchbase_active_draft_id",
                         d.draft_id,

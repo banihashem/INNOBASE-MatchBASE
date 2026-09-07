@@ -1,685 +1,288 @@
-import type {
-  ConsultantResearchOutputV3,
-  SupplierEntityV3,
+import {
+  formatApprovedFactV3,
+  type ConsultantResearchOutputV3,
+  type SupplierEntityV3,
 } from "@matchbase/contracts";
 
+const esc = (value: unknown): string =>
+  String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+const display = (value: unknown): string =>
+  value === undefined || value === null || value === ""
+    ? "Unknown / not evidenced"
+    : Array.isArray(value)
+      ? value.length
+        ? value.map(esc).join("; ")
+        : "Not recorded"
+      : esc(value);
+const link = (url: string | undefined | null, label?: string): string =>
+  url && /^https?:\/\//i.test(url)
+    ? `<a href="${esc(url)}">${esc(label || url)}</a>`
+    : display(url);
+const list = (items: readonly string[] | undefined): string =>
+  items?.length
+    ? `<ul>${items.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>`
+    : '<p class="muted">Not recorded.</p>';
+const rows = (items: readonly (readonly [string, unknown])[]): string =>
+  `<table class="facts"><tbody>${items.map(([label, value]) => `<tr><th>${esc(label)}</th><td>${display(value)}</td></tr>`).join("")}</tbody></table>`;
+const refs = (ids: readonly string[] | undefined): string =>
+  ids?.length
+    ? ids
+        .map((id) => `<a href="#evidence-${esc(id)}">[${esc(id)}]</a>`)
+        .join(" ")
+    : '<span class="muted">No linked evidence</span>';
+const price = (s: SupplierEntityV3): string => {
+  const c = s.commercial;
+  if (c.price_min === undefined && c.price_max === undefined)
+    return "Unknown / quotation required";
+  return `${c.price_min ?? "?"}${c.price_max !== undefined && c.price_max !== c.price_min ? ` - ${c.price_max}` : ""} ${c.currency ?? "currency unknown"} / ${c.unit ?? "unit unknown"}`;
+};
+
+/** Full supplier landscape, rendered from run-bound approved facts and observed evidence only. */
 export function generateConsultantLandscapeHtml(
   output: ConsultantResearchOutputV3,
 ): string {
-  const escapeHtml = (val: string | undefined | null) =>
-    (val ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
+  const suppliers = output.supplier_candidates ?? [];
+  const approved = output.approved_request_snapshot;
+  const demo = output.research_mode === "fixture";
+  const sections: string[] = [];
+  const banner = demo
+    ? '<div class="notice">DEMONSTRATION - Illustrative profiles and commercial observations. External supplier capability has not been verified.</div>'
+    : '<div class="live">LIVE RESEARCH - Read the evidence status and unresolved gaps for each claim.</div>';
+  const section = (title: string, content: string, id: string): void => {
+    sections.push(
+      `<section class="page" id="${esc(id)}"><header><span>INNOBASE / MatchBASE</span><span>${esc(output.as_of_date)} / ${esc(output.research_status)}</span></header>${banner}<h1>${esc(title)}</h1>${content}<footer>Run ${esc(output.research_run_id)} | ${approved ? `Approved revision ${esc(approved.revision_id)}` : "Approved request lineage unavailable"}</footer></section>`,
+    );
+  };
 
-  const suppliers: readonly SupplierEntityV3[] =
-    output.supplier_candidates ?? [];
-  const domain = output.primary_classification.code.startsWith("0207")
-    ? "poultry"
-    : output.primary_classification.code.startsWith("8516")
-      ? "water_heater"
-      : "generic";
+  section(
+    "Supplier Landscape and Procurement Assessment",
+    `<div class="cover-title">${esc(output.request_snapshot.product_name || output.title)}</div><p class="lead">${esc(output.executive_summary.direct_answer)}</p><div class="metrics"><div><b>${suppliers.length}</b><span>Distinct supplier profiles</span></div><div><b>${output.evidence_sources.length}</b><span>Recorded evidence sources</span></div><div><b>${output.claims.length}</b><span>Recorded claims</span></div><div><b>${esc(output.executive_summary.confidence_assessment)}</b><span>Evidence confidence</span></div></div><h2>Executive findings</h2>${list(output.executive_summary.key_findings)}<h2>Reading this report</h2><p>The approved request defines the buyer's requirements. The landscape and detailed supplier dossiers describe observed offerings. Compatibility, evidence confidence and unresolved commercial questions are presented separately.</p><ol><li><a href="#approved-request">Approved request and traceability</a></li><li><a href="#methodology">Evaluation method and evidence boundaries</a></li><li><a href="#landscape-0">Complete supplier landscape</a></li><li><a href="#supplier-0">Detailed supplier dossiers and claim evidence</a></li><li><a href="#rfq">RFQ and due diligence plan</a></li><li><a href="#source-register">Source register and disclosures</a></li></ol>`,
+    "executive-summary",
+  );
 
-  const attrs = (output.request_snapshot.product_attributes ?? {}) as Record<
-    string,
-    any
-  >;
-  const capacity = attrs.capacity_litres
-    ? `${attrs.capacity_litres} L`
-    : "500 L";
-  const pressure = attrs.pressure_bar
-    ? String(attrs.pressure_bar)
-    : "Minimum 10 bar";
-  const diameter = attrs.max_outer_diameter_cm
-    ? `Maximum ${attrs.max_outer_diameter_cm} cm (${Number(attrs.max_outer_diameter_cm) * 10} mm)`
-    : "Maximum 85 cm (850 mm)";
-  const electrical = attrs.electrical
-    ? String(attrs.electrical)
-    : "Three-phase 400V supply (50/60 Hz)";
-  const destination = attrs.destination ? String(attrs.destination) : "Dubai";
-  const incoterm = attrs.incoterm ? String(attrs.incoterm) : "DDP";
-  const quantity = attrs.quantity ? `${attrs.quantity} units` : "10 units";
-  const warranty = attrs.warranty
-    ? String(attrs.warranty)
-    : "Two-year UAE warranty (24 months)";
+  const factRows =
+    approved?.facts
+      .map(
+        (fact) =>
+          `<tr><td>${esc(fact.label)}</td><td>${esc(formatApprovedFactV3(fact))}</td><td>${esc(fact.operator)}</td><td>${esc(fact.source_clause)}</td></tr>`,
+      )
+      .join("") ?? "";
+  section(
+    "Approved Request and Traceability",
+    approved
+      ? `${rows([
+          ["Approved revision", approved.revision_id],
+          ["Approved at", approved.approved_at],
+          ["Content SHA-256", approved.content_hash],
+          ["Source intake SHA-256", approved.source_intake_hash],
+          [
+            "Product classification",
+            `${output.primary_classification.scheme} ${output.primary_classification.code} - ${output.primary_classification.label} (${output.primary_classification.confidence})`,
+          ],
+        ])}<h2>Approved interpretation - complete text</h2><div class="approved-text">${esc(approved.approved_translation)}</div><h2>Structured buyer requirements</h2>${factRows ? `<table><thead><tr><th>Requirement</th><th>Approved value</th><th>Operator</th><th>Provenance in approved text</th></tr></thead><tbody>${factRows}</tbody></table>` : "<p>No typed facts were extracted. The complete approved interpretation remains authoritative; no values have been substituted.</p>"}${approved.unparsed_clauses.length ? `<h2>Additional approved clauses</h2><p>These clauses remain part of the request even where a typed projection is unavailable.</p>${list(approved.unparsed_clauses)}` : ""}`
+      : '<div class="notice">This historical record has no trustworthy approved request snapshot. Buyer facts are unknown. Historical template values have not been backfilled.</div>',
+    "approved-request",
+  );
 
-  const matrixPagesCount =
-    suppliers.length === 0 ? 1 : Math.ceil(suppliers.length / 5);
-  const totalPages = 4 + matrixPagesCount; // Cover (1) + Exec/Facts (2) + Matrix (N) + Commercial/Specs (N+1) + Lineage/Disclosures (N+2)
+  section(
+    "Evaluation Method and Evidence Boundaries",
+    `<p>This report uses the actual supplier assessments and linked source records from this run. ${demo ? "Demonstration scores are sample values and do not establish a match to the approved request." : "A fit score is an assessment, not independent proof of a supplier claim."}</p><h2>MatchBASE comparison dimensions</h2>${rows(
+      [
+        ["Category and product fit", "25%"],
+        ["Compliance and certification fit", "20%"],
+        ["Volume and capacity fit", "15%"],
+        ["Price tier fit", "15%"],
+        ["Positioning and brand fit", "15%"],
+        ["Geographic reach fit", "10%"],
+      ],
+    )}<h2>Evidence rules</h2><ul><li>Company identity, exact product, contact details, authorization and commercial terms require their own supporting sources.</li><li>Supplier claims, inferred observations, unknown values and corroborated facts retain their separate status.</li><li>Currency, unit, Incoterm, place, date, quantity basis and quotation validity must align before prices are compared.</li><li>Missing evidence does not prove a supplier is ineligible; it remains an unresolved validation item.</li><li>Stock signals do not establish available quantity, current warehouse stock or export acceptance.</li></ul>${rows(
+      [
+        ["Research mode", output.research_mode],
+        ["Research status", output.research_status],
+        [
+          "Verification loops recorded",
+          output.telemetry.verification_loops_count,
+        ],
+        ["Source cut-off", output.as_of_date],
+        ["Coverage", output.executive_summary.research_coverage_status],
+      ],
+    )}`,
+    "methodology",
+  );
 
-  const isDemo =
-    output.research_mode === "fixture" ||
-    output.telemetry.synthesis_model_id === "deterministic-fixture-engine.v3" ||
-    output.telemetry.total_cost_usd === 0;
-
-  const demoBannerHtml = isDemo
-    ? `<div class="demo-banner">DEMONSTRATION RESEARCH &bull; SYNTHETIC ILLUSTRATIVE ENTITIES &bull; NOT LIVE MARKET EVIDENCE &bull; NOT FOR COMMERCIAL RELIANCE</div>`
-    : "";
-
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>${escapeHtml(output.title)}</title>
-  <style>
-    @page {
-      size: A4 landscape;
-      margin: 10mm 14mm 12mm 14mm;
-    }
-    *, *::before, *::after {
-      box-sizing: border-box;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      color: #0f172a;
-      background: #ffffff;
-      margin: 0;
-      padding: 0;
-      font-size: 9.5pt;
-      line-height: 1.35;
-    }
-    .page {
-      page-break-after: always;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-    .page:last-child {
-      page-break-after: avoid;
-    }
-
-    /* Demonstration Notice Banner */
-    .demo-banner {
-      background: #C41E3A;
-      color: #ffffff;
-      font-size: 7pt;
-      font-weight: 800;
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
-      text-align: center;
-      padding: 3px 8px;
-      border-radius: 4px;
-      margin-bottom: 6px;
-    }
-
-    header.report-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 2px solid #C41E3A;
-      padding-bottom: 5px;
-      margin-bottom: 10px;
-    }
-    .brand-title {
-      font-size: 11pt;
-      font-weight: 800;
-      color: #C41E3A;
-      letter-spacing: 0.5px;
-    }
-    .report-badge {
-      background: #fdf2f4;
-      color: #C41E3A;
-      font-size: 7.5pt;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 4px;
-      text-transform: uppercase;
-      border: 1px solid #fecdd3;
-    }
-    .report-badge-demo {
-      background: #fff1f2;
-      color: #9f1239;
-      border: 1px solid #f43f5e;
-    }
-    footer.report-footer {
-      display: flex;
-      justify-content: space-between;
-      border-top: 1px solid #e2e8f0;
-      padding-top: 5px;
-      margin-top: 10px;
-      font-size: 7pt;
-      color: #64748b;
-    }
-
-    /* Cover Page */
-    .cover-page {
-      justify-content: center;
-      text-align: left;
-      padding: 20px 16px;
-    }
-    .cover-title {
-      font-size: 22pt;
-      font-weight: 900;
-      color: #0f172a;
-      line-height: 1.15;
-      margin: 0 0 6px 0;
-    }
-    .cover-subtitle {
-      font-size: 12pt;
-      color: #475569;
-      margin: 0 0 18px 0;
-      font-weight: 500;
-    }
-    .trace-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      padding: 12px;
-      border-radius: 6px;
-      margin-bottom: 18px;
-    }
-    .trace-item {
-      font-size: 8pt;
-    }
-    .trace-label {
-      font-weight: 700;
-      color: #64748b;
-      text-transform: uppercase;
-      font-size: 6.5pt;
-    }
-    .trace-value {
-      font-family: monospace;
-      color: #0f172a;
-      font-size: 8pt;
-      word-break: break-all;
-    }
-    .disclaimer-box {
-      background: #fff5f5;
-      border-left: 4px solid #C41E3A;
-      padding: 8px 12px;
-      font-size: 7.5pt;
-      color: #881337;
-      border-radius: 0 4px 4px 0;
-    }
-
-    /* Section Headings */
-    h2.section-heading {
-      font-size: 13pt;
-      font-weight: 800;
-      color: #0f172a;
-      margin: 0 0 8px 0;
-    }
-
-    /* Executive Summary Grid */
-    .summary-grid {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 12px;
-    }
-    .card {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 10px;
-    }
-    .card-title {
-      font-size: 10pt;
-      font-weight: 700;
-      color: #C41E3A;
-      margin-bottom: 5px;
-    }
-    .findings-list {
-      margin: 0;
-      padding-left: 14px;
-    }
-    .findings-list li {
-      margin-bottom: 4px;
-      font-size: 8.5pt;
-    }
-
-    /* Sourcing Table */
-    table.data-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 7pt;
-      margin-top: 5px;
-    }
-    table.data-table th {
-      background: #1e293b;
-      color: #ffffff;
-      padding: 5px 6px;
-      text-align: left;
-      font-weight: 600;
-    }
-    table.data-table td {
-      padding: 5px 6px;
-      border-bottom: 1px solid #e2e8f0;
-      vertical-align: top;
-    }
-    table.data-table tr:nth-child(even) {
-      background: #f8fafc;
-    }
-    .status-badge {
-      display: inline-block;
-      padding: 2px 4px;
-      border-radius: 3px;
-      font-size: 6pt;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-    .badge-active {
-      background: #dcfce7;
-      color: #15803d;
-    }
-    .badge-conditional {
-      background: #fef3c7;
-      color: #b45309;
-    }
-    .badge-low-fit {
-      background: #fee2e2;
-      color: #b91c1c;
-    }
-    .score-pill {
-      font-weight: 800;
-      font-size: 8pt;
-      color: #C41E3A;
-    }
-    .fixture-id-tag {
-      font-family: monospace;
-      font-size: 6.5pt;
-      background: #f1f5f9;
-      color: #475569;
-      padding: 1px 4px;
-      border-radius: 3px;
-      display: inline-block;
-      margin-top: 2px;
-    }
-    .mismatch-alert {
-      background: #fff1f2;
-      border: 1px solid #fecdd3;
-      color: #9f1239;
-      padding: 4px 6px;
-      border-radius: 4px;
-      font-size: 7pt;
-      margin-top: 3px;
-    }
-  </style>
-</head>
-<body>
-
-  <!-- PAGE 1: COVER SLIDE -->
-  <section class="page cover-page">
-    ${demoBannerHtml}
-    <div style="margin-bottom: 12px; display: flex; gap: 8px;">
-      <span class="report-badge">MatchBASE Consultant-Tier Intelligence Dossier</span>
-      ${isDemo ? '<span class="report-badge report-badge-demo">Demonstration Research &bull; Illustrative Profiles</span>' : ""}
-    </div>
-    <h1 class="cover-title">${escapeHtml(output.title)}</h1>
-    <p class="cover-subtitle">${escapeHtml(output.subtitle ?? "Structured Sourcing Landscape & Supplier Discovery")}</p>
-    
-    <div class="trace-grid">
-      <div class="trace-item">
-        <div class="trace-label">Research Run ID (UUID)</div>
-        <div class="trace-value">${escapeHtml(output.research_run_id)}</div>
-      </div>
-      <div class="trace-item">
-        <div class="trace-label">Execution ID (UUID)</div>
-        <div class="trace-value">${escapeHtml(output.execution_id)}</div>
-      </div>
-      <div class="trace-item">
-        <div class="trace-label">Classification ID (UUID)</div>
-        <div class="trace-value">${escapeHtml(output.classification_id)}</div>
-      </div>
-      <div class="trace-item">
-        <div class="trace-label">Tariff Code / Scheme</div>
-        <div class="trace-value">${escapeHtml(output.primary_classification.code)} (${escapeHtml(output.primary_classification.scheme)}) - ${escapeHtml(output.primary_classification.label)}</div>
-      </div>
-      <div class="trace-item">
-        <div class="trace-label">As of Date / Generation Timestamp</div>
-        <div class="trace-value">${escapeHtml(output.as_of_date)} / ${escapeHtml(output.generated_at)}</div>
-      </div>
-      <div class="trace-item">
-        <div class="trace-label">Dual-Lane Research Engine & Synthesis Model</div>
-        <div class="trace-value">Lanes: [${output.telemetry.lanes_executed.join(", ")}] &bull; Synthesis: ${escapeHtml(output.telemetry.synthesis_model_id)} &bull; Loops: ${output.telemetry.verification_loops_count}</div>
-      </div>
-    </div>
-
-    <div class="disclaimer-box">
-      <strong>Corporate Integrity Notice:</strong> Demonstration dataset &mdash; not live market evidence. Illustrative supplier profiles synthesized for workflow validation and structural verification under MatchBASE Policy A. Not for commercial reliance, binding procurement commitments, or contract execution.
-    </div>
-    <footer class="report-footer">
-      <div>Run ID: ${escapeHtml(output.research_run_id)}</div>
-      <div>Page 1 of ${totalPages}</div>
-    </footer>
-  </section>
-
-  <!-- PAGE 2: EXECUTIVE SUMMARY & REQUEST FACTS VS SOURCING BASIS -->
-  <section class="page">
-    ${demoBannerHtml}
-    <header class="report-header">
-      <div class="brand-title">MatchBASE / Consultant Landscape</div>
-      <div class="report-badge">Executive Summary &amp; Request Alignment</div>
-    </header>
-    <div>
-      <h2 class="section-heading">Strategic Overview &amp; Approved Request Alignment</h2>
-      <div class="summary-grid">
-        <div class="card">
-          <div class="card-title">Executive Summary</div>
-          <p style="font-size: 8.5pt; margin-top: 0;">${escapeHtml(output.executive_summary.direct_answer)}</p>
-          <div class="card-title" style="margin-top: 8px;">Key Sourcing Findings</div>
-          <ul class="findings-list">
-            ${output.executive_summary.key_findings.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}
-          </ul>
-        </div>
-        <div class="card">
-          <div class="card-title">Approved Request Facts vs. Observed Sourcing Basis</div>
-          <p style="font-size: 8pt;"><strong>Product:</strong> ${escapeHtml(output.request_snapshot.product_name)} (${escapeHtml(output.request_snapshot.product_category)})</p>
-          <p style="font-size: 8pt;"><strong>Requested Delivery Terms:</strong> ${escapeHtml(output.request_snapshot.mandatory_constraints.find((c) => c.includes("CFR") || c.includes("CIF") || c.includes("DDP")) ?? "As specified in request")}</p>
-          <p style="font-size: 8pt;"><strong>Target Candidates:</strong> ${output.total_candidates_found} found (Target: ${output.target_candidates_count})</p>
-          ${
-            domain === "poultry"
-              ? `<div class="mismatch-alert">
-                  <strong>Commercial Lineage Note:</strong> Buyer intake requested CFR terms. Supplier market quotations reflect observed CIF basis; ocean freight and marine insurance reconciliation required prior to final PO.
-                </div>`
-              : domain === "water_heater"
-                ? `<div style="background: #f0fdf4; border: 1px solid #86efac; color: #166534; padding: 4px 6px; border-radius: 4px; font-size: 7pt; margin-top: 3px;">
-                    <strong>Corridor Alignment:</strong> ${escapeHtml(incoterm)} ${escapeHtml(destination)} delivery terms confirmed with CE / PED marking, ${escapeHtml(pressure)} rating, and &le;${escapeHtml(String(attrs.max_outer_diameter_cm ?? 85))} cm outer diameter.
-                  </div>`
-                : ""
-          }
-          <div class="card-title" style="margin-top: 8px;">Approved Request Requirements</div>
-          ${
-            domain === "water_heater"
-              ? `<ul class="findings-list" style="margin-top: 4px;">
-                  <li><strong>Storage Capacity:</strong> ${escapeHtml(capacity)} nominal capacity</li>
-                  <li><strong>Electrical Power:</strong> ${escapeHtml(electrical)}</li>
-                  <li><strong>Working Pressure:</strong> ${escapeHtml(pressure)} working pressure (tested &ge;15 bar)</li>
-                  <li><strong>Dimensions:</strong> ${escapeHtml(diameter)}</li>
-                  <li><strong>Environment:</strong> Indoor mechanical room installation</li>
-                  <li><strong>Automation &amp; Controls:</strong> BMS-compatible thermostat integration</li>
-                  <li><strong>Thermal Insulation:</strong> Documented thermal insulation</li>
-                  <li><strong>Safety Compliance:</strong> Safety-valve compatibility, CE mark &amp; PED 2014/68/EU, UAE MoIAT / G-Mark</li>
-                  <li><strong>Services:</strong> Local installation support &amp; spare-parts availability</li>
-                  <li><strong>Warranty:</strong> ${escapeHtml(warranty)}</li>
-                  <li><strong>Order &amp; Delivery:</strong> Exactly ${escapeHtml(quantity)}, ${escapeHtml(incoterm)} ${escapeHtml(destination)}</li>
-                  <li><strong>Supplier Profile:</strong> Original manufacturer or authorized UAE distributor</li>
-                  <li><strong>Live Sourcing Channels:</strong> Official website, business email, and telephone required</li>
-                </ul>`
-              : `<ul class="findings-list" style="margin-top: 4px;">
-                  ${output.request_snapshot.mandatory_constraints.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}
-                </ul>`
-          }
-          <div class="card-title" style="margin-top: 8px;">Research Coverage &amp; Confidence</div>
-          <p style="font-size: 8pt;"><strong>Coverage Status:</strong> ${escapeHtml(output.executive_summary.research_coverage_status)} &bull; <strong>Confidence:</strong> ${escapeHtml(output.executive_summary.confidence_assessment)}</p>
-        </div>
-      </div>
-    </div>
-    <footer class="report-footer">
-      <div>Run ID: ${escapeHtml(output.research_run_id)}</div>
-      <div>Page 2 of ${totalPages}</div>
-    </footer>
-  </section>
-
-  <!-- PAGES 3 TO (2 + matrixPagesCount): SOURCING MATRIX OR ZERO-MATCH GUIDANCE -->
-  ${
-    suppliers.length === 0
-      ? `
-  <section class="page">
-    ${demoBannerHtml}
-    <header class="report-header">
-      <div class="brand-title">MatchBASE / Sourcing Discovery</div>
-      <div class="report-badge">Zero Candidates Qualified</div>
-    </header>
-    <div>
-      <h2 class="section-heading">No Strong Match Analysis &amp; Constraint Relaxation Guidance</h2>
-      <div class="card" style="margin-bottom: 12px; background: #fff5f5; border: 1px solid #fecdd3;">
-        <div class="card-title" style="color: #9f1239;">Incompatible Technical Constraint Envelope Detected</div>
-        <p style="font-size: 8.5pt; color: #881337;">
-          Zero suppliers met 100% of the mandatory criteria concurrently. The combination of ultra-narrow envelope (&le;40cm diameter), ultra-high pressure (&ge;25 bar), and hazardous location certification (ATEX Zone 0) is physically non-standard for ${escapeHtml(capacity)} cylindrical water calorifiers.
-        </p>
-      </div>
-      <div class="summary-grid">
-        <div class="card">
-          <div class="card-title">Constraint Relaxation Pathways</div>
-          <ul class="findings-list">
-            <li><strong>Relax Diameter Constraint:</strong> Expanding diameter envelope from 40 cm to standard commercial 85 cm opens qualified European and regional calorifier manufacturers.</li>
-            <li><strong>Decouple ATEX Enclosure:</strong> Procure a standard 10&ndash;16 bar commercial calorifier and place immersion control electronics in an external explosion-proof panel.</li>
-            <li><strong>Pressure Re-evaluation:</strong> Verify if municipal supply pressure actually requires 25 bar or if a pressure-reducing valve (PRV) allows standard 10 bar operation.</li>
-          </ul>
-        </div>
-        <div class="card">
-          <div class="card-title">Recommended Next Steps</div>
-          <ul class="findings-list">
-            <li>Re-run MatchBASE intake with revised 85 cm diameter threshold.</li>
-            <li>Consult MEP engineering contractor regarding mechanical room clearance.</li>
-            <li>Review alternative split-system or modular calorifier topologies.</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-    <footer class="report-footer">
-      <div>Run ID: ${escapeHtml(output.research_run_id)}</div>
-      <div>Page 3 of ${totalPages}</div>
-    </footer>
-  </section>
-      `
-      : Array.from({ length: matrixPagesCount })
-          .map((_, pageIdx) => {
-            const startIdx = pageIdx * 5;
-            const slice = suppliers.slice(startIdx, startIdx + 5);
-            return `
-  <section class="page">
-    ${demoBannerHtml}
-    <header class="report-header">
-      <div class="brand-title">MatchBASE / Sourcing Matrix</div>
-      <div class="report-badge">Candidates ${startIdx + 1} to ${startIdx + slice.length} of ${suppliers.length}</div>
-    </header>
-    <div>
-      <h2 class="section-heading">Supplier Candidate Profiles (Batch ${pageIdx + 1})</h2>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th style="width: 32px;">Rank</th>
-            <th style="width: 140px;">Company &amp; Fixture ID</th>
-            <th style="width: 70px;">Status</th>
-            <th style="width: 75px;">Facilities</th>
-            <th style="width: 90px;">${isDemo ? "Country / Entity Type" : "Country / Domain"}</th>
-            <th style="width: 80px;">Capacity / MOQ</th>
-            <th style="width: 40px;">Score</th>
-            <th>Strategic Rationale &amp; Observed Basis</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${slice
-            .map(
-              (s) => `
-          <tr>
-            <td><span class="score-pill">#${s.assessment.rank}</span></td>
-            <td>
-              <strong>${escapeHtml(s.legal_name)}</strong>
-              <div><span class="fixture-id-tag">ID: ${escapeHtml(s.candidate_id)}</span></div>
-              ${s.brand_names.length ? `<small style="color: #64748b;">Brands: ${escapeHtml(s.brand_names.join(", "))}</small>` : ""}
-            </td>
-            <td>
-              <span class="status-badge ${
-                s.assessment.compatibility_score >= 80
-                  ? "badge-active"
-                  : s.assessment.compatibility_score >= 60
-                    ? "badge-conditional"
-                    : "badge-low-fit"
-              }">
-                ${escapeHtml(s.assessment.fit_band)}
-              </span>
-            </td>
-            <td>${escapeHtml(s.manufacturing_locations.join(", ") || "Verified Facility")}</td>
-            <td>
-              ${escapeHtml(s.country_of_registration)}<br>
-              <small style="color: ${s.primary_domain ? "#C41E3A" : "#64748b"};">${escapeHtml(s.primary_domain ?? (isDemo ? "Illustrative Entity" : "Not Provided"))}</small>
-            </td>
-            <td>
-              <small>${escapeHtml(s.commercial.production_capacity ?? "Commercial capacity")}</small><br>
-              <small style="color: #64748b;">MOQ: ${escapeHtml(s.commercial.moq ?? "1 order")}</small>
-            </td>
-            <td><span class="score-pill">${s.assessment.compatibility_score}</span></td>
-            <td>
-              <div style="font-size: 6.5pt; color: #334155;">${escapeHtml(s.assessment.positive_drivers.slice(0, 2).join(". "))}</div>
-              ${s.assessment.limiting_gaps.length ? `<div style="font-size: 6.5pt; color: #b91c1c; margin-top: 2px;"><strong>Risk/Gap:</strong> ${escapeHtml(s.assessment.limiting_gaps[0])}</div>` : ""}
-              <div style="font-size: 6.5pt; color: #C41E3A; margin-top: 2px;"><strong>Next:</strong> ${escapeHtml(s.assessment.recommended_next_action)}</div>
-            </td>
-          </tr>
-          `,
-            )
-            .join("")}
-        </tbody>
-      </table>
-    </div>
-    <footer class="report-footer">
-      <div>Run ID: ${escapeHtml(output.research_run_id)}</div>
-      <div>Page ${3 + pageIdx} of ${totalPages}</div>
-    </footer>
-  </section>
-        `;
-          })
-          .join("")
+  for (let offset = 0; offset < Math.max(suppliers.length, 1); offset += 5) {
+    const group = suppliers.slice(offset, offset + 5);
+    section(
+      `Supplier Landscape - ${offset + 1} to ${Math.min(offset + 5, suppliers.length)} of ${suppliers.length}`,
+      group.length
+        ? `<table class="landscape"><thead><tr><th>Rank / supplier</th><th>Country / role</th><th>Product / model</th><th>Fit / evidence</th><th>Observed price / terms</th><th>Principal gap</th></tr></thead><tbody>${group.map((s, i) => `<tr><td><a href="#supplier-${offset + i}">${s.assessment.rank}. ${esc(s.legal_name)}</a></td><td>${esc(s.country_of_registration)}<br>${esc(s.manufacturer_status)}</td><td>${esc(s.offering.product_name)}<br>${display(s.offering.model_or_sku)}</td><td>${esc(s.assessment.compatibility_score)} / ${esc(s.assessment.fit_band)}<br>Evidence: ${esc(s.assessment.evidence_confidence)}</td><td>${esc(price(s))}<br>${display(s.commercial.incoterm)} ${display(s.commercial.incoterm_location)}</td><td>${display(s.assessment.limiting_gaps[0] ?? s.assessment.unknowns[0])}</td></tr>`).join("")}</tbody></table>`
+        : "<p>No supplier candidates were returned. Buyer requirements remain available above; no company profiles have been invented.</p>",
+      `landscape-${offset}`,
+    );
   }
 
-  <!-- PAGE (totalPages - 1): COMMERCIAL BENCHMARKS & SPECIFICATIONS -->
-  <section class="page">
-    ${demoBannerHtml}
-    <header class="report-header">
-      <div class="brand-title">MatchBASE / Commercial Intelligence</div>
-      <div class="report-badge">Commercial Parameters</div>
-    </header>
-    <div>
-      <h2 class="section-heading">Commercial Benchmarks &amp; Sourcing Specifications</h2>
-      <div class="summary-grid">
-        <div class="card">
-          <div class="card-title">Commercial Terms &amp; Indicative Pricing</div>
-          ${
-            domain === "poultry"
-              ? `
-          <table class="data-table" style="margin-bottom: 8px;">
-            <thead>
-              <tr>
-                <th>Product SKU</th>
-                <th>Indicative CIF (USD / MT)</th>
-                <th>Basis</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Frozen Whole Chicken Grade A (1000g-1200g)</td>
-                <td><strong>$1,620 - $1,740</strong></td>
-                <td>Metric Ton / Observed CIF</td>
-              </tr>
-            </tbody>
-          </table>
-          <p style="font-size: 7.5pt; color: #475569;"><em>Note: Benchmarks reflect containerized 40ft reefer spot indications. Payment terms typically 10-30% advance, balance against B/L copy, or 100% irrevocable LC at sight. Requested CFR basis requires freight reconciliation.</em></p>
-              `
-              : domain === "water_heater"
-                ? `
-          <p style="font-size: 8pt;"><strong>Commercial Scope:</strong> Commercial Electric Water Heater (${escapeHtml(capacity)} Storage Calorifier), exactly ${escapeHtml(quantity)}.</p>
-          <p style="font-size: 8pt;"><strong>Indicative ${escapeHtml(incoterm)} Range:</strong> $2,100 &ndash; $2,850 per unit (delivered on-site ${escapeHtml(destination)}, including customs clearance and technical documentation).</p>
-          <p style="font-size: 8pt;"><strong>Requested Warranty:</strong> ${escapeHtml(warranty)}, local installation support, spare parts availability.</p>
-          <p style="font-size: 7.5pt; color: #475569;"><em>Observed Supplier Term (Illustrative Offer): 5-year tank warranty offered by European manufacturers as an extended illustrative option.</em></p>
-                `
-                : `
-          <p style="font-size: 8pt;"><strong>Commercial Scope:</strong> Direct manufacturer pricing subject to technical specification sign-off and quantity confirmation.</p>
-                `
-          }
-        </div>
-        <div class="card">
-          <div class="card-title">Technical &amp; Logistics Parameters</div>
-          ${
-            domain === "poultry"
-              ? `
-          <p style="font-size: 8pt;"><strong>Packaging:</strong> 10kg master export carton with 4 &times; 2.5kg inner polybags.</p>
-          <p style="font-size: 8pt;"><strong>Temperature:</strong> Continuous deep freeze at -18&deg;C throughout transport and containerization.</p>
-          <p style="font-size: 8pt;"><strong>Shelf Life:</strong> 12 months minimum from production date (SFDA standard: &ge;70% remaining upon arrival).</p>
-          <p style="font-size: 8pt;"><strong>Volume:</strong> 4 &times; 40ft High-Cube reefer containers (~108 MT total).</p>
-              `
-              : domain === "water_heater"
-                ? `
-          <p style="font-size: 8pt;"><strong>Capacity &amp; Pressure:</strong> ${escapeHtml(capacity)} storage capacity, ${escapeHtml(pressure)} working pressure (tested &ge;15 bar).</p>
-          <p style="font-size: 8pt;"><strong>Dimensions &amp; Environment:</strong> Outer diameter strictly capped at &le;${escapeHtml(String(attrs.max_outer_diameter_cm ?? 85))} cm, indoor mechanical room installation.</p>
-          <p style="font-size: 8pt;"><strong>Controls &amp; Insulation:</strong> BMS-compatible thermostat, documented thermal insulation, safety-valve compatibility.</p>
-          <p style="font-size: 8pt;"><strong>Approved Electrical Supply:</strong> ${escapeHtml(electrical)}, CE / PED 2014/68/EU conformity, UAE MoIAT / G-Mark.</p>
-          <p style="font-size: 7.5pt; color: #475569;"><em>Observed Supplier Electrical Capability: Typical commercial models accommodate 380V&ndash;415V three-phase 50/60 Hz tolerance range.</em></p>
-                `
-                : `
-          <p style="font-size: 8pt;"><strong>Standard Parameters:</strong> Compliance with applicable regional import regulations and industrial manufacturing standards.</p>
-                `
-          }
-        </div>
-      </div>
-    </div>
-    <footer class="report-footer">
-      <div>Run ID: ${escapeHtml(output.research_run_id)}</div>
-      <div>Page ${totalPages - 1} of ${totalPages}</div>
-    </footer>
-  </section>
-
-  <!-- PAGE totalPages: VERIFICATION LINEAGE & DISCLOSURES -->
-  <section class="page">
-    ${demoBannerHtml}
-    <header class="report-header">
-      <div class="brand-title">MatchBASE / Governance &amp; Lineage</div>
-      <div class="report-badge">Lineage &amp; Disclosures</div>
-    </header>
-    <div>
-      <h2 class="section-heading">Evidence Lineage &amp; Regulatory Disclosures</h2>
-      
-      <!-- Regulatory Context Sources (Separated from Candidate Evidence) -->
-      <div class="card" style="margin-bottom: 8px;">
-        <div class="card-title">Trade Lane &amp; Category Regulatory References</div>
-        <p style="font-size: 7.5pt; color: #475569; margin-top: 0; margin-bottom: 4px;">
-          <em>Note: The following official regulatory portals and standards directories provide category and jurisdiction context. They do NOT constitute counterparty accreditation records for synthetic illustrative entities.</em>
-        </p>
-        <ul class="findings-list">
-          ${output.evidence_sources
-            .filter(
-              (e) =>
-                e.source_type === "official_registry" ||
-                e.source_type === "trade_directory",
+  suppliers.forEach((s, index) => {
+    const c = s.contacts;
+    section(
+      `${s.assessment.rank}. ${s.legal_name}`,
+      `<div class="profile-top"><strong>${esc(s.assessment.fit_band)} / ${esc(s.assessment.compatibility_score)} fit score</strong><span>Evidence ${esc(s.assessment.evidence_confidence)} | Identity ${esc(s.identity_confidence)} | Completeness ${esc(s.assessment.data_completeness)}%</span></div><div class="columns"><div><h2>Company identity and direct contact</h2>${rows(
+        [
+          [
+            "Trading name / brands",
+            [s.trading_name, ...s.brand_names].filter(Boolean),
+          ],
+          [
+            "Country / company role",
+            `${s.country_of_registration} / ${s.supplier_type} / ${s.manufacturer_status}`,
+          ],
+          ["Registered headquarters", s.headquarters_address],
+          ["Manufacturing locations", s.manufacturing_locations],
+          [
+            "Registry identifiers",
+            s.registry_identifiers
+              ? Object.entries(s.registry_identifiers).map(
+                  ([k, v]) => `${k}: ${v}`,
+                )
+              : undefined,
+          ],
+        ],
+      )}<p><b>Official website:</b> ${link(s.website)}</p><p><b>Official contact page:</b> ${link(c?.contact_page_url)}</p>${rows(
+        [
+          [
+            "Sales / export email",
+            c?.sales_email ?? c?.export_email ?? c?.general_email,
+          ],
+          ["Telephone", c?.phone],
+          ["Contact verification", c?.verification_status],
+        ],
+      )}<p>${refs(s.identity_evidence_ids)} ${refs(c?.contact_evidence_ids)}</p></div><div><h2>Observed offering</h2>${rows(
+        [
+          ["Product", s.offering.product_name],
+          [
+            "Family / brand",
+            `${s.offering.product_family} / ${s.offering.brand ?? "Unknown"}`,
+          ],
+          ["Model / SKU", s.offering.model_or_sku],
+          ["Description", s.offering.description],
+          [
+            "Origin / manufacturing site",
+            `${s.offering.country_of_origin} / ${s.offering.manufacturing_site ?? "Unknown"}`,
+          ],
+          ["Use cases", s.offering.use_cases],
+        ],
+      )}<h3>Observed specifications</h3>${rows(Object.entries(s.offering.specifications))}<p>${refs(s.offering.product_evidence_ids)}</p></div></div><div class="columns"><div><h2>Commercial observation</h2>${rows(
+        [
+          ["Observed price", price(s)],
+          [
+            "Price type / confidence",
+            `${s.commercial.price_type ?? "Unknown"} / ${s.commercial.commercial_confidence}`,
+          ],
+          [
+            "Incoterm / named place",
+            `${s.commercial.incoterm ?? "Unknown"} / ${s.commercial.incoterm_location ?? "Unknown"}`,
+          ],
+          [
+            "MOQ / production capacity",
+            `${s.commercial.moq ?? "Unknown"} / ${s.commercial.production_capacity ?? "Unknown"}`,
+          ],
+          ["Lead time", s.commercial.lead_time],
+          ["Payment terms", s.commercial.payment_terms],
+          ["Price validity", s.commercial.price_validity],
+        ],
+      )}<p>${refs(s.commercial.commercial_evidence_ids)}</p></div><div><h2>Decision notes</h2><h3>Positive drivers</h3>${list(s.assessment.positive_drivers)}<h3>Limiting gaps and unknowns</h3>${list([...s.assessment.limiting_gaps, ...s.assessment.unknowns])}<h3>Required next validation</h3>${list(s.assessment.required_validation)}<p>${esc(s.assessment.recommended_next_action)}</p></div></div>`,
+      `supplier-${index}`,
+    );
+    const claims = output.claims.filter(
+      (claim) => claim.supplier_entity_id === s.supplier_entity_id,
+    );
+    section(
+      `${s.legal_name} - Verification Dossier`,
+      `<h2>Buyer requirement reference</h2><p>${approved ? `Approved revision ${esc(approved.revision_id)} / SHA-256 ${esc(approved.content_hash)}. Assessments below must be read against the complete approved request.` : "Approved request lineage is unavailable; current buyer compliance cannot be inferred."}</p><h2>Mandatory constraint results</h2>${s.assessment.mandatory_constraint_results.length ? `<table><thead><tr><th>Constraint</th><th>Recorded result</th><th>Evidence</th></tr></thead><tbody>${s.assessment.mandatory_constraint_results.map((r) => `<tr><td>${esc(r.constraint)}</td><td>${demo ? "Illustrative / not evaluated for this request" : r.satisfied ? "Recorded as satisfied - inspect evidence" : "Not established / validation required"}</td><td>${refs(r.evidence_ids)}</td></tr>`).join("")}</tbody></table>` : "<p>No constraint-level result is recorded.</p>"}<div class="columns"><div><h2>Certificates and compliance scope</h2>${
+        s.certifications.length
+          ? s.certifications
+              .map(
+                (cert) =>
+                  `<article><h3>${esc(cert.certification_name)}</h3>${rows([
+                    [
+                      "Issuer / certificate",
+                      `${cert.issuer ?? "Unknown"} / ${cert.certificate_number ?? "Unknown"}`,
+                    ],
+                    ["Scope", cert.scope],
+                    [
+                      "Status / verification",
+                      `${cert.status} / ${cert.verification_status}`,
+                    ],
+                    [
+                      "Validity",
+                      `${cert.valid_from ?? "Unknown"} to ${cert.valid_until ?? "Unknown"}`,
+                    ],
+                    [
+                      "Destination relevance",
+                      cert.destination_market_relevance,
+                    ],
+                  ])}<p>${refs(cert.evidence_ids)}</p></article>`,
+              )
+              .join("")
+          : "<p>No certificate evidence is recorded.</p>"
+      }<h2>Risk flags</h2>${list(s.assessment.risk_flags)}</div><div><h2>Packaging and logistics</h2>${
+        s.packaging_and_logistics
+          ? rows(
+              Object.entries(s.packaging_and_logistics)
+                .filter(([key]) => key !== "logistics_evidence_ids")
+                .map(([key, val]) => [key.replaceAll("_", " "), val] as const),
             )
-            .slice(0, 4)
+          : "<p>Unknown / not evidenced.</p>"
+      }<p>${refs(s.packaging_and_logistics?.logistics_evidence_ids)}</p><h2>Dimension scores</h2>${rows(Object.entries(s.assessment.dimension_scores).map(([key, value]) => [key.replaceAll("_", " "), value] as const))}</div></div><h2>Claim-level evidence</h2>${claims.length ? `<table><thead><tr><th>Claim</th><th>Status / confidence / conflict</th><th>Evidence</th></tr></thead><tbody>${claims.map((claim) => `<tr><td>${esc(claim.claim_text)}</td><td>${esc(claim.status)} / ${esc(claim.confidence)} / ${esc(claim.conflict_status)}</td><td>${refs(claim.evidence_ids)}</td></tr>`).join("")}</tbody></table>` : "<p>No supplier-specific claim records are linked. Treat uncited fields according to their recorded uncertainty.</p>"}`,
+      `dossier-${index}`,
+    );
+  });
+
+  section(
+    "RFQ and Due Diligence Plan",
+    `<p>This section defines validation work; it does not record supplier contact, purchase approval or transaction execution.</p><h2>Comparable RFQ packet</h2><ol><li>Attach the complete approved requirement and revision. Ask for exact model/SKU, drawings, quantities, specification deviations and named manufacturing site.</li><li>Request a signed quotation stating currency, unit, quantity basis, Incoterms 2020 term and named place, exclusions, delivery schedule, validity and payment terms.</li><li>Collect current certificates with issuer, scope, plant identification and expiry; verify the issuing source and destination requirements.</li><li>Obtain written stock or production allocation, warranty scope, local service/spares arrangements and shipment acceptance.</li><li>Verify the contracting entity, public corporate registry and beneficiary independently before contractual commitment.</li></ol><h2>Supplier-specific validation queue</h2><table><thead><tr><th>Supplier</th><th>Required validation</th><th>Next recorded action</th></tr></thead><tbody>${suppliers.map((s) => `<tr><td>${esc(s.legal_name)}</td><td>${display(s.assessment.required_validation)}</td><td>${esc(s.assessment.recommended_next_action)}</td></tr>`).join("")}</tbody></table><h2>Evidence-based sequencing</h2><p>Resolve critical identity, product and market-access gaps first. Compare commercial offers only after technical deviations and Incoterm scope have been reconciled. Release an RFQ or order only through the buyer's approval process.</p>`,
+    "rfq",
+  );
+
+  section(
+    "Source Register and Disclosures",
+    `<h2>Evidence sources</h2>${
+      output.evidence_sources.length
+        ? output.evidence_sources
             .map(
-              (e) =>
-                `<li><strong>${escapeHtml(e.publisher)}:</strong> ${escapeHtml(e.source_title)} &mdash; <em>${escapeHtml(e.excerpt_summary)}</em> [Classification: Regulatory Context / Status: ${escapeHtml(e.verification_status)}]</li>`,
+              (source) =>
+                `<article id="evidence-${esc(source.evidence_id)}" class="source"><h3>[${esc(source.evidence_id)}] ${esc(source.source_title)}</h3><p>${link(source.source_url)}</p>${rows(
+                  [
+                    [
+                      "Publisher / type",
+                      `${source.publisher} / ${source.source_type}`,
+                    ],
+                    [
+                      "Retrieved / published",
+                      `${source.retrieved_at} / ${source.published_at ?? "Unknown"}`,
+                    ],
+                    [
+                      "Verification / freshness",
+                      `${source.verification_status} / ${source.freshness_status}`,
+                    ],
+                    ["Summary", source.excerpt_summary],
+                    ["Supports claims", source.supports_claim_ids],
+                    ["Contradicts claims", source.contradicts_claim_ids],
+                  ],
+                )}</article>`,
             )
-            .join("")}
-        </ul>
-      </div>
+            .join("")
+        : "<p>No source records are available for this run. This absence is not a verification result.</p>"
+    }<h2>Limitations and disclosures</h2>${output.limitations_and_disclosures.map((item) => `<article><h3>${esc(item.title)} (${esc(item.severity)})</h3><p>${esc(item.description)}</p></article>`).join("")}`,
+    "source-register",
+  );
 
-      <!-- Demonstration Synthetic Fixture Disclosure -->
-      <div class="card" style="margin-bottom: 8px;">
-        <div class="card-title">Demonstration Fixture Definitions &amp; Lineage</div>
-        <ul class="findings-list">
-          ${output.evidence_sources
-            .filter((e) => e.source_type === "synthetic_fixture")
-            .map(
-              (e) =>
-                `<li><strong>${escapeHtml(e.publisher)}:</strong> ${escapeHtml(e.source_title)} &mdash; <em>${escapeHtml(e.excerpt_summary)}</em> [Status: ${escapeHtml(e.verification_status)}]</li>`,
-            )
-            .join("")}
-          ${
-            output.evidence_sources.filter(
-              (e) => e.source_type === "synthetic_fixture",
-            ).length === 0
-              ? `<li><strong>MatchBASE Platform Governance:</strong> Policy A Synthetic Demonstration Dataset Specification &mdash; <em>Governed illustrative candidate parameters.</em> [Status: illustrative]</li>`
-              : ""
-          }
-        </ul>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Limitations &amp; Advisory Boundaries</div>
-        <ul class="findings-list">
-          ${output.limitations_and_disclosures.map((lim) => `<li><strong>${escapeHtml(lim.title)}:</strong> ${escapeHtml(lim.description)}</li>`).join("")}
-        </ul>
-      </div>
-    </div>
-    <footer class="report-footer">
-      <div>Run ID: ${escapeHtml(output.research_run_id)}</div>
-      <div>Page ${totalPages} of ${totalPages}</div>
-    </footer>
-  </section>
-
-</body>
-</html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(output.title)}</title><style>
+  @page{size:A4 landscape}*{box-sizing:border-box}body{margin:0;font:8.5pt/1.25 Arial,Helvetica,sans-serif;color:#172b3a;background:#fff}a{color:#155e75;text-decoration:none;overflow-wrap:anywhere}h1{font-size:17pt;line-height:1.15;margin:8px 0 10px;letter-spacing:-.4px}h2{font-size:10.5pt;color:#123e55;margin:9px 0 5px}h3{font-size:9pt;margin:6px 0 3px}p{margin:4px 0 6px}ul,ol{margin:4px 0 8px;padding-left:19px}li{margin:2px 0}.page{break-before:page;padding:0}.page:first-child{break-before:auto}header{display:flex;justify-content:space-between;border-bottom:2px solid #0d766e;padding-bottom:8px;color:#164e63;font-size:9pt;font-weight:bold}footer{border-top:1px solid #ccd8dd;margin-top:12px;padding-top:6px;font-size:8pt;color:#475b67;overflow-wrap:anywhere}.notice,.live{padding:5px 8px;font-size:8pt;margin-top:8px;border-left:4px solid #b7791f;background:#fffbeb;color:#713f12}.live{border-color:#0f766e;background:#f0fdfa;color:#115e59}.cover-title{font-size:23pt;color:#0f4b60;margin:16px 0 10px;font-weight:bold;line-height:1.2}.lead{font-size:10pt;max-width:95%}.metrics{display:flex;gap:15px;margin:16px 0}.metrics>div{flex:1;background:#f0f6f8;border-top:3px solid #0f766e;padding:10px}.metrics b{display:block;font-size:20pt}.metrics span{display:block;font-size:9pt}.columns{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:6px 0;align-items:start}.profile-top{display:flex;justify-content:space-between;background:#eaf4f5;padding:7px;gap:12px}.approved-text{white-space:pre-wrap;border-left:3px solid #0f766e;padding:12px;background:#f8fafc;overflow-wrap:anywhere}.muted{color:#5b6871}table{width:100%;border-collapse:collapse;table-layout:fixed;margin:6px 0 8px;font-size:8pt}th,td{text-align:left;vertical-align:top;padding:2px 5px;border:1px solid #d5dfe3;overflow-wrap:anywhere}th{background:#e9f1f4;font-weight:bold}thead{display:table-header-group}tr{break-inside:avoid}.facts th{width:34%;color:#29434f}.facts td{background:#fff}.landscape th:nth-child(1){width:19%}.landscape th:nth-child(3){width:20%}.source{break-inside:avoid;border-bottom:1px solid #d5dfe3;margin:12px 0;padding-bottom:7px}h1,h2,h3{break-after:avoid}article{margin:10px 0}p,li{orphans:3;widows:3}
+  .page[id^="dossier-"] h1{font-size:15pt;margin-bottom:6px}.page[id^="dossier-"] h2{margin-top:6px}.page[id^="dossier-"] .columns{margin:4px 0}footer{display:none}
+  </style></head><body>${sections.join("\n")}</body></html>`;
 }

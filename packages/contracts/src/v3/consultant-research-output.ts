@@ -8,6 +8,8 @@ import type {
   SupplierTypeV2,
   VerificationStatusV2,
 } from "../v2/consultant-research-output.js";
+import type { ApprovedRequestSnapshotV3 } from "./approved-request.js";
+import { verifyApprovedRequestSnapshotV3 } from "./approved-request.js";
 
 export const CONSULTANT_RESEARCH_OUTPUT_V3_SCHEMA_VERSION =
   "consultant-research-output.v3" as const;
@@ -273,6 +275,7 @@ export interface AdvancedSearchQueryFilters {
 }
 
 export interface ConsultantResearchOutputV3 extends FourIdTrace {
+  readonly approved_request_snapshot?: ApprovedRequestSnapshotV3;
   readonly schema_version: typeof CONSULTANT_RESEARCH_OUTPUT_V3_SCHEMA_VERSION;
   readonly schema_contract_version: typeof CONSULTANT_RESEARCH_OUTPUT_V3_VERSION;
   readonly title: string;
@@ -363,6 +366,202 @@ export function parseConsultantResearchOutputV3(
       "Consultant research output v3 requires a supplier_candidates array.",
     );
   }
+
+  const object = (v: unknown, path: string): Record<string, unknown> => {
+    if (!v || typeof v !== "object" || Array.isArray(v))
+      throw new Error(`${path} must be an object.`);
+    return v as Record<string, unknown>;
+  };
+  const string = (v: unknown, path: string): void => {
+    if (typeof v !== "string" || !v.trim())
+      throw new Error(`${path} must be non-empty text.`);
+  };
+  const array = (v: unknown, path: string): unknown[] => {
+    if (!Array.isArray(v)) throw new Error(`${path} must be an array.`);
+    return v;
+  };
+  const strings = (v: unknown, path: string): void => {
+    array(v, path).forEach((item) => string(item, path));
+  };
+  const score = (v: unknown, path: string): void => {
+    if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 100)
+      throw new Error(`${path} must be a finite score between 0 and 100.`);
+  };
+  for (const key of ["title", "generated_at", "as_of_date", "research_status"])
+    string(root[key], key);
+  if (!["live", "hybrid", "fixture"].includes(String(root.research_mode)))
+    throw new Error("Unsupported research mode.");
+  object(root.request_snapshot, "request_snapshot");
+  const summary = object(root.executive_summary, "executive_summary");
+  strings(summary.key_findings, "executive_summary.key_findings");
+  const classification = object(
+    root.primary_classification,
+    "primary_classification",
+  );
+  string(classification.code, "primary_classification.code");
+  string(
+    classification.classification_id,
+    "primary_classification.classification_id",
+  );
+  array(root.secondary_classifications, "secondary_classifications");
+  if (
+    root.approved_request_snapshot !== undefined &&
+    !verifyApprovedRequestSnapshotV3(root.approved_request_snapshot)
+  )
+    throw new Error("Approved request snapshot hash or structure is invalid.");
+  if (root.research_mode === "live" && !root.approved_request_snapshot)
+    throw new Error(
+      "Live output requires a trustworthy approved request snapshot.",
+    );
+  if (
+    root.target_candidates_count !== 20 ||
+    root.total_candidates_found !== root.supplier_candidates.length ||
+    summary.candidate_count !== root.supplier_candidates.length
+  )
+    throw new Error(
+      "Candidate counts disagree with the actual supplier population.",
+    );
+  const seen = new Set<string>();
+  for (const raw of root.supplier_candidates) {
+    const supplier = object(raw, "supplier");
+    for (const key of [
+      "supplier_entity_id",
+      "candidate_id",
+      "legal_name",
+      "country_of_registration",
+      "supplier_type",
+      "manufacturer_status",
+    ])
+      string(supplier[key], `supplier.${key}`);
+    for (const key of ["supplier_entity_id", "candidate_id"]) {
+      const id = `${key}:${supplier[key]}`;
+      if (seen.has(id)) throw new Error(`Duplicate supplier identity: ${id}`);
+      seen.add(id);
+    }
+    for (const key of [
+      "brand_names",
+      "aliases",
+      "manufacturing_locations",
+      "identity_evidence_ids",
+    ])
+      strings(supplier[key], `supplier.${key}`);
+    array(supplier.digital_assets, "supplier.digital_assets");
+    const offering = object(supplier.offering, "supplier.offering");
+    for (const key of ["product_name", "product_family", "country_of_origin"])
+      string(offering[key], `offering.${key}`);
+    object(offering.specifications, "offering.specifications");
+    strings(offering.use_cases, "offering.use_cases");
+    strings(offering.product_evidence_ids, "offering.product_evidence_ids");
+    const commercial = object(supplier.commercial, "supplier.commercial");
+    strings(
+      commercial.commercial_evidence_ids,
+      "commercial.commercial_evidence_ids",
+    );
+    for (const field of ["price_min", "price_max"])
+      if (
+        commercial[field] !== undefined &&
+        (typeof commercial[field] !== "number" ||
+          !Number.isFinite(commercial[field]) ||
+          commercial[field] < 0)
+      )
+        throw new Error(`Invalid ${field}.`);
+    if (
+      typeof commercial.price_min === "number" &&
+      typeof commercial.price_max === "number" &&
+      commercial.price_min > commercial.price_max
+    )
+      throw new Error("Price lower bound exceeds its upper bound.");
+    if (supplier.contacts)
+      strings(
+        object(supplier.contacts, "contacts").contact_evidence_ids,
+        "contacts.contact_evidence_ids",
+      );
+    if (supplier.packaging_and_logistics)
+      strings(
+        object(supplier.packaging_and_logistics, "logistics")
+          .logistics_evidence_ids,
+        "logistics.logistics_evidence_ids",
+      );
+    array(supplier.certifications, "supplier.certifications").forEach((cert) =>
+      strings(
+        object(cert, "certification").evidence_ids,
+        "certification.evidence_ids",
+      ),
+    );
+    const assessment = object(supplier.assessment, "supplier.assessment");
+    for (const field of ["compatibility_score", "data_completeness"])
+      score(assessment[field], `assessment.${field}`);
+    const dimensions = object(
+      assessment.dimension_scores,
+      "assessment.dimension_scores",
+    );
+    for (const key of [
+      "category_product_fit",
+      "compliance_certification_fit",
+      "volume_capacity_fit",
+      "price_tier_fit",
+      "positioning_brand_fit",
+      "geographic_reach_fit",
+    ])
+      score(dimensions[key], `dimension.${key}`);
+    for (const key of [
+      "positive_drivers",
+      "limiting_gaps",
+      "risk_flags",
+      "unknowns",
+      "required_validation",
+    ])
+      strings(assessment[key], `assessment.${key}`);
+    array(
+      assessment.mandatory_constraint_results,
+      "mandatory_constraint_results",
+    ).forEach((rawResult) => {
+      const result = object(rawResult, "constraint");
+      if (typeof result.satisfied !== "boolean")
+        throw new Error("Constraint satisfaction must be boolean.");
+      strings(result.evidence_ids, "constraint.evidence_ids");
+    });
+    if (
+      root.research_mode === "live" &&
+      (supplier.entity_basis === "synthetic_fixture" ||
+        supplier.evidence_basis === "illustrative_fixture" ||
+        supplier.fixture_entity_id)
+    )
+      throw new Error("Live output contains a synthetic fixture supplier.");
+  }
+  for (const claim of array(root.claims, "claims")) {
+    const c = object(claim, "claim");
+    string(c.claim_id, "claim.claim_id");
+    string(c.claim_text, "claim.claim_text");
+    strings(c.evidence_ids, "claim.evidence_ids");
+  }
+  for (const source of array(root.evidence_sources, "evidence_sources")) {
+    const e = object(source, "evidence");
+    string(e.evidence_id, "evidence.evidence_id");
+    strings(e.supports_claim_ids, "evidence.supports_claim_ids");
+    strings(e.contradicts_claim_ids, "evidence.contradicts_claim_ids");
+    if (
+      root.research_mode === "live" &&
+      (e.source_type === "synthetic_fixture" ||
+        !/^https?:\/\//i.test(String(e.source_url)))
+    )
+      throw new Error("Live evidence requires an actual HTTP(S) source URL.");
+  }
+  const telemetry = object(root.telemetry, "telemetry");
+  for (const key of [
+    "total_input_tokens",
+    "total_output_tokens",
+    "total_cost_usd",
+    "execution_latency_ms",
+    "verification_loops_count",
+  ])
+    if (
+      typeof telemetry[key] !== "number" ||
+      !Number.isFinite(telemetry[key]) ||
+      telemetry[key] < 0
+    )
+      throw new Error(`Invalid telemetry.${key}.`);
+  array(root.limitations_and_disclosures, "limitations_and_disclosures");
 
   return root as unknown as ConsultantResearchOutputV3;
 }

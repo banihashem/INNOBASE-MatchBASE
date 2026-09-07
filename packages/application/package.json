@@ -16,7 +16,8 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test --test-concurrency=1 ../../test/slice1/application/*.test.mjs ../../test/slice2/application/*.test.mjs",
     "worker:synthetic": "node dist/combined-synthetic-worker.js",
-    "worker:combined": "node dist/combined-worker.js"
+    "worker:combined": "node dist/combined-worker.js",
+    "worker:consultant": "node dist/consultant-worker-cli.js"
   },
   "dependencies": {
     "@matchbase/ai-evidence": "workspace:*",

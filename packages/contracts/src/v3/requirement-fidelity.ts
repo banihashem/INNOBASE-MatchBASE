@@ -224,9 +224,14 @@ export function extractExplicitRequirementLedger(intake: {
   }
 
   // Dimension / Diameter in Box 1 or Box 2
-  const diamMatch = `${box1} ${box2}`.match(
+  let diamMatch = `${box1} ${box2}`.match(
     /(?:max(?:imum)?|حداکثر)?\s*([0-9۰-۹]+)\s*(?:cm|سانتی[‌\s]*متر|mm|میلی[‌\s]*متر)?\s*(?:diameter|external diameter|outer diameter|قطر)/i,
   );
+  if (!diamMatch) {
+    diamMatch = `${box1} ${box2}`.match(
+      /(?:diameter|external diameter|outer diameter|قطر)\s*(?:of|is|:)?\s*(?:max(?:imum)?|حداکثر|<=)?\s*([0-9۰-۹]+)\s*(?:cm|سانتی[‌\s]*متر|mm|میلی[‌\s]*متر)/i,
+    );
+  }
   if (diamMatch) {
     const rawNum = diamMatch[1]!.replace(/[۰-۹]/g, (d) =>
       String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)),
@@ -234,10 +239,10 @@ export function extractExplicitRequirementLedger(intake: {
     const unit = diamMatch[0].includes("mm") ? "mm" : "cm";
     addReq({
       source_box:
-        box1.includes("85") || box1.includes("قطر")
+        box1.includes(rawNum) || box1.includes("قطر")
           ? "product_requirement"
           : "technical_compliance",
-      source_text: box1.includes("85") ? box1 : box2,
+      source_text: box1.includes(rawNum) ? box1 : box2,
       source_span: diamMatch[0],
       label: "Maximum External Diameter",
       normalized_value: `Maximum ${rawNum} ${unit}`,
@@ -446,19 +451,43 @@ export function extractExplicitRequirementLedger(intake: {
   }
 
   // Warranty Period
-  const warMatch = box2.match(
+  const warMonthMatch = box2.match(
+    /([0-9۰-۹]{2})\s*(?:[- ]month|months?|ماهه?|ماه)\s*(?:uae\s*)?(?:warranty|گارانتی|ضمانت)?/i,
+  );
+  const warYearMatch = box2.match(
     /([0-9۰-۹]+|two|three|one|2|3|1)\s*(?:[- ]year|year|ساله?|سال)\s*(?:uae\s*)?(?:warranty|گارانتی|ضمانت)/i,
   );
-  if (warMatch) {
-    let years = warMatch[1]!;
-    if (years === "two" || years === "۲" || years === "2") years = "2";
-    else if (years === "three" || years === "۳" || years === "3") years = "3";
-    else if (years === "one" || years === "۱" || years === "1") years = "1";
-    const isUae = /uae|امارات/i.test(warMatch[0]) || /uae|امارات/i.test(box2);
+  if (warMonthMatch) {
+    const rawMonths = warMonthMatch[1]!.replace(/[۰-۹]/g, (d) =>
+      String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)),
+    );
+    const mNum = parseInt(rawMonths, 10);
+    const years = String(Math.round(mNum / 12));
+    const isUae =
+      /uae|امارات/i.test(warMonthMatch[0]) || /uae|امارات/i.test(box2);
     addReq({
       source_box: "technical_compliance",
       source_text: box2,
-      source_span: warMatch[0],
+      source_span: warMonthMatch[0],
+      label: "Warranty Period",
+      normalized_value: `${years}-year${isUae ? " UAE" : ""} warranty (${mNum} months)`,
+      concept: "warranty_duration",
+      value: years,
+      duration: `${mNum} months`,
+      jurisdiction: isUae ? "UAE" : undefined,
+      comparison_operator: "gte",
+    });
+  } else if (warYearMatch) {
+    let years = warYearMatch[1]!;
+    if (years === "two" || years === "۲" || years === "2") years = "2";
+    else if (years === "three" || years === "۳" || years === "3") years = "3";
+    else if (years === "one" || years === "۱" || years === "1") years = "1";
+    const isUae =
+      /uae|امارات/i.test(warYearMatch[0]) || /uae|امارات/i.test(box2);
+    addReq({
+      source_box: "technical_compliance",
+      source_text: box2,
+      source_span: warYearMatch[0],
       label: "Warranty Period",
       normalized_value: `${years}-year${isUae ? " UAE" : ""} warranty (${Number(years) * 12} months)`,
       concept: "warranty_duration",
@@ -518,9 +547,19 @@ export function extractExplicitRequirementLedger(intake: {
 
   // Incoterm & Destination
   const incoMatch = box3.match(
-    /(ddp|cif|cfr|fob)\s*(?:dubai|jeddah|jebel ali|دبی|جده)?/i,
+    /(ddp|cif|cfr|fob)\s*(?:dubai|abu dhabi|jeddah|jebel ali|دبی|ابوظبی|جده)?/i,
   );
   if (incoMatch) {
+    const isAbuDhabi = /abu dhabi|ابوظبی/i.test(box3);
+    const isDubai = /dubai|دبی/i.test(box3);
+    const isJeddah = /jeddah|جده/i.test(box3);
+    const jurisdiction = isAbuDhabi
+      ? "Abu Dhabi"
+      : isDubai
+        ? "Dubai"
+        : isJeddah
+          ? "Jeddah"
+          : undefined;
     addReq({
       source_box: "order_profile",
       source_text: box3,
@@ -529,7 +568,18 @@ export function extractExplicitRequirementLedger(intake: {
       normalized_value: incoMatch[0].toUpperCase(),
       concept: "delivery_terms",
       comparison_operator: "eq",
-      jurisdiction: /dubai|دبی/i.test(incoMatch[0]) ? "Dubai" : undefined,
+      jurisdiction,
+    });
+  } else if (/abu dhabi|ابوظبی/i.test(box3)) {
+    addReq({
+      source_box: "order_profile",
+      source_text: box3,
+      source_span: "Abu Dhabi",
+      label: "Delivery Destination",
+      normalized_value: "Abu Dhabi, United Arab Emirates",
+      concept: "delivery_destination",
+      comparison_operator: "eq",
+      jurisdiction: "Abu Dhabi",
     });
   } else if (/dubai|دبی/i.test(box3)) {
     addReq({
@@ -545,18 +595,20 @@ export function extractExplicitRequirementLedger(intake: {
   }
 
   // Supplier Profile: Original manufacturer or authorized UAE distributor
+  const supplierBoxText = `${box2} ${box3}`;
   if (
-    /authorized\s+uae\s+distributor|توزیع‌کننده\s*مجاز\s*امارات|نماینده\s*مجاز/i.test(
-      box3,
+    /authorized\s+(?:uae\s+)?distributor|توزیع‌کننده\s*مجاز\s*امارات|نماینده\s*مجاز|authorized\s+distributor/i.test(
+      supplierBoxText,
     ) ||
-    (/manufacturer|سازنده|تولیدکننده/i.test(box3) &&
-      /distributor|توزیع‌کننده/i.test(box3))
+    (/manufacturer|سازنده|تولیدکننده/i.test(supplierBoxText) &&
+      /distributor|توزیع‌کننده/i.test(supplierBoxText))
   ) {
-    const isUae = /uae|امارات/i.test(box3);
-    const isAuthorized = /authorized|مجاز/i.test(box3);
+    const isUae = /uae|امارات/i.test(supplierBoxText);
+    const isAuthorized = /authorized|مجاز/i.test(supplierBoxText);
+    const inBox2 = /distributor|manufacturer/i.test(box2);
     addReq({
-      source_box: "order_profile",
-      source_text: box3,
+      source_box: inBox2 ? "technical_compliance" : "order_profile",
+      source_text: inBox2 ? box2 : box3,
       source_span: "authorized UAE distributor",
       label: "Supplier Profile",
       normalized_value:
@@ -609,7 +661,7 @@ export function validateStep1RequirementFidelity(
   },
   step1: {
     english_translation: string;
-    mandatory_requirements: readonly string[];
+    mandatory_requirements?: readonly string[] | undefined;
     explicit_requirements?: readonly any[] | undefined;
     model_suggestions?: readonly ModelSuggestionItem[] | undefined;
   },
@@ -618,7 +670,9 @@ export function validateStep1RequirementFidelity(
   const omittedItems: ExplicitRequirementItem[] = [];
   const mutatedItems: MutatedRequirementReport[] = [];
 
-  const combinedNarrative = (step1.english_translation || "").toLowerCase();
+  const combinedNarrative = (step1.english_translation || "")
+    .toLowerCase()
+    .trim();
   const mandatoryJoined = (step1.mandatory_requirements || [])
     .join(" ")
     .toLowerCase();
@@ -628,7 +682,14 @@ export function validateStep1RequirementFidelity(
     )
     .join(" ")
     .toLowerCase();
-  const allStep1Text = `${combinedNarrative} ${mandatoryJoined} ${explicitJoined}`;
+
+  // Authoritative fidelity: The interpretation narrative represents the human-approved text.
+  // When an interpretation narrative is provided, validate strictly against that narrative.
+  // Never allow stale arrays or previous ledger items to mask omissions from the edited interpretation!
+  const allStep1Text =
+    combinedNarrative.length > 0
+      ? combinedNarrative
+      : `${mandatoryJoined} ${explicitJoined}`.trim();
 
   let preservedCount = 0;
   let normalizedCount = 0;
@@ -638,28 +699,28 @@ export function validateStep1RequirementFidelity(
 
     // 1. Working Pressure: Directional Operator Check (gte vs lte)
     if (concept === "working_pressure") {
+      const pVal = req.value || "10";
       // Check for operator inversion (minimum inverted to maximum)
-      const hasMax10Bar =
-        /maximum\s*(?:of\s*)?10\s*bar|10\s*bar\s*maximum|not\s*more\s*than\s*10\s*bar|up\s*to\s*10\s*bar/i.test(
-          allStep1Text,
-        );
-      if (req.comparison_operator === "gte" && hasMax10Bar) {
+      const hasMaxPressure = new RegExp(
+        `(maximum\\s*(?:of\\s*)?${pVal}\\s*bar|${pVal}\\s*bar\\s*maximum|not\\s*more\\s*than\\s*${pVal}\\s*bar|up\\s*to\\s*${pVal}\\s*bar)`,
+        "i",
+      ).test(allStep1Text);
+      if (req.comparison_operator === "gte" && hasMaxPressure) {
         mutatedItems.push({
           requirement: req,
-          prohibited_value: "maximum 10 bar",
+          prohibited_value: `maximum ${pVal} bar`,
           expected_operator: "gte",
           observed_operator: "lte",
-          explanation:
-            "Operator inversion: Explicit technical constraint 'minimum 10 bar' (gte) was inverted to 'maximum 10 bar' (lte).",
+          explanation: `Operator inversion: Explicit technical constraint 'minimum ${pVal} bar' (gte) was inverted to 'maximum ${pVal} bar' (lte).`,
         });
         continue;
       }
 
-      const hasMin10Bar =
-        /minimum\s*(?:of\s*)?10\s*bar|at\s*least\s*10\s*bar|not\s*less\s*than\s*10\s*bar|>=\s*10\s*bar|10\s*bar\s*working\s*pressure/i.test(
-          allStep1Text,
-        );
-      if (!hasMin10Bar && !allStep1Text.includes("10 bar")) {
+      const hasMinPressure = new RegExp(
+        `(minimum\\s*(?:of\\s*)?${pVal}\\s*bar|at\\s*least\\s*${pVal}\\s*bar|not\\s*less\\s*than\\s*${pVal}\\s*bar|>=?\\s*${pVal}\\s*bar|${pVal}\\s*bar\\s*working\\s*pressure|operating\\s*at\\s*${pVal}\\s*bar)`,
+        "i",
+      ).test(allStep1Text);
+      if (!hasMinPressure && !allStep1Text.includes(`${pVal} bar`)) {
         omittedItems.push(req);
         continue;
       }
@@ -669,26 +730,32 @@ export function validateStep1RequirementFidelity(
 
     // 2. Maximum External Diameter: Directional Operator Check (lte vs gte)
     if (concept === "external_diameter") {
-      const hasMin85 =
-        /minimum\s*(?:of\s*)?85\s*cm|at\s*least\s*85\s*cm|not\s*less\s*than\s*85/i.test(
-          allStep1Text,
-        );
-      if (req.comparison_operator === "lte" && hasMin85) {
+      const dVal = req.value || "85";
+      const dValMm = String(Number(dVal) * 10);
+      const hasMinDiameter = new RegExp(
+        `(minimum\\s*(?:of\\s*)?${dVal}\\s*cm|at\\s*least\\s*${dVal}\\s*cm|not\\s*less\\s*than\\s*${dVal})`,
+        "i",
+      ).test(allStep1Text);
+      if (req.comparison_operator === "lte" && hasMinDiameter) {
         mutatedItems.push({
           requirement: req,
-          prohibited_value: "minimum 85 cm",
+          prohibited_value: `minimum ${dVal} cm`,
           expected_operator: "lte",
           observed_operator: "gte",
-          explanation:
-            "Operator inversion: Physical constraint 'maximum 85 cm' (lte) was inverted to 'minimum 85 cm' (gte).",
+          explanation: `Operator inversion: Physical constraint 'maximum ${dVal} cm' (lte) was inverted to 'minimum ${dVal} cm' (gte).`,
         });
         continue;
       }
 
-      const has85 =
-        /85\s*cm|850\s*mm/i.test(allStep1Text) &&
-        /diameter|max(?:imum)?|capped|limited/i.test(allStep1Text);
-      if (!has85) {
+      const hasDiameterNum = new RegExp(
+        `(${dVal}\\s*cm|${dValMm}\\s*mm)`,
+        "i",
+      ).test(allStep1Text);
+      const hasDiameterKeyword =
+        /diameter|max(?:imum)?|capped|limited|outer|external/i.test(
+          allStep1Text,
+        );
+      if (!hasDiameterNum || !hasDiameterKeyword) {
         omittedItems.push(req);
         continue;
       }
@@ -696,43 +763,43 @@ export function validateStep1RequirementFidelity(
       continue;
     }
 
-    // 3. Warranty Period: 2-Year UAE Warranty vs 5-Year Substitution
+    // 3. Warranty Period: Requested Warranty Duration vs Substituted Term
     if (concept === "warranty_duration") {
-      const is2YearRequested =
-        req.value === "2" || req.duration?.includes("24");
-      if (is2YearRequested) {
-        // Prohibited: 5-year tank warranty substituted in approved text
-        const has5YearInApproved =
-          /5[- ]year\s*(?:tank\s*)?warranty/i.test(combinedNarrative) ||
-          /5[- ]year\s*(?:tank\s*)?warranty/i.test(mandatoryJoined);
+      const reqVal = req.value || "2";
+      const reqMonths =
+        req.duration?.match(/\d+/)?.[0] || String(Number(reqVal) * 12);
 
-        if (has5YearInApproved) {
-          mutatedItems.push({
-            requirement: req,
-            prohibited_value: "5-year tank warranty",
-            explanation:
-              "Silent requirement mutation: Requested 'two-year UAE warranty' was replaced by '5-year tank warranty' in approved facts.",
-          });
-          continue;
-        }
+      // Check for prohibited substitutions (e.g. 5-year tank warranty when 2 or 3 years was requested)
+      const has5YearInApproved = /5[- ]year\s*(?:tank\s*)?warranty/i.test(
+        allStep1Text,
+      );
+      if (reqVal !== "5" && has5YearInApproved) {
+        mutatedItems.push({
+          requirement: req,
+          prohibited_value: "5-year tank warranty",
+          explanation: `Silent requirement mutation: Requested '${reqVal}-year UAE warranty' was replaced by '5-year tank warranty' in approved facts.`,
+        });
+        continue;
+      }
 
-        const has2Year = /2[- ]year|24[- ]months?|two[- ]year/i.test(
-          allStep1Text,
-        );
-        if (!has2Year) {
-          omittedItems.push(req);
-          continue;
-        }
+      const hasWarrantyPattern = new RegExp(
+        `(${reqVal}[- ]year|${reqMonths}[- ]months?|${reqVal === "2" ? "two" : reqVal === "3" ? "three" : "one"}[- ]year)`,
+        "i",
+      ).test(allStep1Text);
+      if (!hasWarrantyPattern) {
+        omittedItems.push(req);
+        continue;
+      }
 
-        const hasUae = /uae|united arab emirates|dubai/i.test(allStep1Text);
-        if (req.jurisdiction === "UAE" && !hasUae) {
-          mutatedItems.push({
-            requirement: req,
-            explanation:
-              "Jurisdiction omission: Requested 'two-year UAE warranty' lost the 'UAE' local warranty scope.",
-          });
-          continue;
-        }
+      const hasUae = /uae|united arab emirates|dubai|abu dhabi/i.test(
+        allStep1Text,
+      );
+      if (req.jurisdiction === "UAE" && !hasUae) {
+        mutatedItems.push({
+          requirement: req,
+          explanation: `Jurisdiction omission: Requested '${reqVal}-year UAE warranty' lost the 'UAE' local warranty scope.`,
+        });
+        continue;
       }
       preservedCount++;
       continue;
@@ -809,18 +876,18 @@ export function validateStep1RequirementFidelity(
 
     // 7. Order Quantity: Exact Quantity vs Range (eq -> range)
     if (concept === "order_quantity") {
-      const hasRange =
-        /10\s*to\s*50|10\s*-\s*50|10\s*to\s*20|10\s*-\s*20/i.test(allStep1Text);
+      const reqNum = req.value || req.normalized_value.match(/[0-9]+/)?.[0];
+      const hasRange = /[0-9]+\s*to\s*[0-9]+|[0-9]+\s*-\s*[0-9]+/i.test(
+        allStep1Text,
+      );
       if (req.comparison_operator === "eq" && hasRange) {
         mutatedItems.push({
           requirement: req,
-          prohibited_value: "10 to 50 units",
-          explanation:
-            "Quantity mutation: 'exactly 10 units' (eq) was mutated into a range.",
+          prohibited_value: "quantity range",
+          explanation: `Quantity mutation: 'exactly ${reqNum || 10} units' (eq) was mutated into a range.`,
         });
         continue;
       }
-      const reqNum = req.value || req.normalized_value.match(/[0-9]+/)?.[0];
       if (reqNum && !allStep1Text.includes(reqNum)) {
         omittedItems.push(req);
         continue;
@@ -870,10 +937,12 @@ export function validateStep1RequirementFidelity(
 
     // 11. Electrical Power Supply
     if (concept === "electrical_power") {
-      const hasPower =
-        /three[- ]phase|3[- ]phase/i.test(allStep1Text) &&
-        /400\s*v|380|415/i.test(allStep1Text);
-      if (!hasPower) {
+      const vVal = req.value || "400";
+      const hasPhase = /three[- ]phase|3[- ]phase/i.test(allStep1Text);
+      const hasVoltage =
+        new RegExp(`${vVal}\\s*v`, "i").test(allStep1Text) ||
+        (vVal === "400" && /380|400|415/i.test(allStep1Text));
+      if (!hasPhase || !hasVoltage) {
         omittedItems.push(req);
         continue;
       }
@@ -883,7 +952,11 @@ export function validateStep1RequirementFidelity(
 
     // 12. Storage Capacity
     if (concept === "storage_capacity") {
-      if (!/500\s*(?:l|litres?|liters?)/i.test(allStep1Text)) {
+      const cVal = req.value || "500";
+      const hasCap = new RegExp(`${cVal}\\s*(?:l|litres?|liters?)`, "i").test(
+        allStep1Text,
+      );
+      if (!hasCap) {
         omittedItems.push(req);
         continue;
       }
@@ -893,7 +966,15 @@ export function validateStep1RequirementFidelity(
 
     // 13. Delivery Terms & Destination
     if (concept === "delivery_terms" || concept === "delivery_destination") {
-      if (!allStep1Text.includes("dubai")) {
+      const targetDest = (
+        req.jurisdiction || req.normalized_value
+      ).toLowerCase();
+      const targetCity = targetDest.includes("abu dhabi")
+        ? "abu dhabi"
+        : targetDest.includes("jeddah")
+          ? "jeddah"
+          : "dubai";
+      if (!allStep1Text.includes(targetCity)) {
         omittedItems.push(req);
         continue;
       }

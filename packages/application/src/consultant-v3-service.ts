@@ -361,10 +361,6 @@ export async function approveInterpretationStep(
       },
       {
         english_translation: effectiveTranslation,
-        mandatory_requirements:
-          session.step1_interpretation.mandatory_requirements || [],
-        explicit_requirements:
-          session.step1_interpretation.explicit_requirements,
       },
     );
 
@@ -377,6 +373,14 @@ export async function approveInterpretationStep(
       );
     }
     session.step1_interpretation.fidelity_validation = fidelityCheck;
+    session.step1_interpretation.mandatory_requirements =
+      fidelityCheck.ledger.requirements
+        .filter((r) => r.modality === "mandatory")
+        .map((r) => r.normalized_value);
+    session.step1_interpretation.explicit_requirements = fidelityCheck.ledger
+      .requirements as any;
+    session.step1_interpretation.key_specifications =
+      session.step1_interpretation.mandatory_requirements;
   }
 
   session.step1_interpretation.english_translation = effectiveTranslation;
@@ -526,6 +530,8 @@ export async function executeConsultantWorkflowResearch(
     product_name: session.step1_interpretation.product_name,
     product_category: session.step1_interpretation.product_category,
     dual_lane_result: dualResult,
+    approved_translation: session.step1_interpretation.english_translation,
+    intake: session.intake,
   });
 
   // Mode-aware and semantic-coherence validation gate

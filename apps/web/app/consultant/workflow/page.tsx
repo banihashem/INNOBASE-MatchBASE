@@ -82,6 +82,10 @@ export default function ConsultantWorkflowPage() {
 
   // Resume Modal State
   const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
+  // Safe New Draft Modal State (Workstream C - L08-N04)
+  const [showNewDraftModal, setShowNewDraftModal] = useState(false);
+  const [isSavingNewDraft, setIsSavingNewDraft] = useState(false);
+  const [newDraftError, setNewDraftError] = useState<string | null>(null);
   const [incompleteSessions, setIncompleteSessions] = useState<any[]>([]);
   const [activeDraftSession, setActiveDraftSession] = useState<any>(null);
   const [draftId, setDraftId] = useState<string>("");
@@ -206,10 +210,6 @@ export default function ConsultantWorkflowPage() {
               order_profile: orderProfile,
             },
             translation: step1Translation,
-            mandatory_requirements:
-              step1Fidelity?.ledger?.requirements
-                ?.filter((r: any) => r.modality === "mandatory")
-                ?.map((r: any) => r.normalized_value) ?? [],
           }),
         });
         if (res.ok) {
@@ -410,11 +410,20 @@ export default function ConsultantWorkflowPage() {
         if (isResumeModalOpen) {
           setIsResumeModalOpen(false);
         }
+        if (showNewDraftModal) {
+          setShowNewDraftModal(false);
+        }
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showPopover1, showPopover2, showPopover3, isResumeModalOpen]);
+  }, [
+    showPopover1,
+    showPopover2,
+    showPopover3,
+    isResumeModalOpen,
+    showNewDraftModal,
+  ]);
 
   async function handleOpenResumeModal() {
     setIsResumeModalOpen(true);
@@ -666,19 +675,7 @@ export default function ConsultantWorkflowPage() {
     }
   }
 
-  async function handleStartNew() {
-    const hasUnsavedContent =
-      productRequirement.trim().length > 0 ||
-      technicalCompliance.trim().length > 0 ||
-      orderProfile.trim().length > 0;
-
-    if (hasUnsavedContent) {
-      const confirmed = window.confirm(
-        "You have an active draft. It will remain saved on the server and resumable from 'Resume Research'. Start a new blank workflow?",
-      );
-      if (!confirmed) return;
-    }
-
+  async function executeStartNewBlankDraft() {
     sessionStorage.removeItem("matchbase_active_draft_id");
     if (typeof window !== "undefined") {
       window.history.replaceState({}, "", "/consultant/workflow?mode=new");
@@ -699,6 +696,94 @@ export default function ConsultantWorkflowPage() {
     setStep1Fidelity(null);
     await handleCreateNewDraft();
     triggerToast("Started new blank sourcing workflow.");
+  }
+
+  async function handleSaveAndStartNew() {
+    setIsSavingNewDraft(true);
+    setNewDraftError(null);
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+    try {
+      const res = await fetch("/api/v1/consultant/workflow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save_draft",
+          draft_id: draftId,
+          draft_version: draftVersion,
+          expected_version: draftVersion,
+          draft_data: {
+            productRequirement,
+            technicalCompliance,
+            orderProfile,
+            savedAt: new Date().toISOString(),
+          },
+        }),
+      });
+
+      if (res.status === 409) {
+        const errData = await res.json();
+        setShowNewDraftModal(false);
+        setConflictState({
+          current_version: errData.error?.current_version ?? draftVersion + 1,
+          submitted_version: draftVersion,
+          unsaved_data: {
+            productRequirement,
+            technicalCompliance,
+            orderProfile,
+          },
+        });
+        return;
+      }
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setNewDraftError(
+          errData.error ||
+            "Save failed. Your input has been preserved locally.",
+        );
+        return;
+      }
+
+      const data = await res.json();
+      if (data.draft_version) {
+        setDraftVersion(data.draft_version);
+      }
+      setDraftStatus("saved");
+      setShowNewDraftModal(false);
+      await executeStartNewBlankDraft();
+    } catch {
+      setNewDraftError(
+        "Network error while saving draft. Your input is retained.",
+      );
+    } finally {
+      setIsSavingNewDraft(false);
+    }
+  }
+
+  async function handleDiscardAndStartNew() {
+    setShowNewDraftModal(false);
+    await executeStartNewBlankDraft();
+  }
+
+  async function handleStartNew() {
+    const hasUnsavedContent =
+      productRequirement.trim().length > 0 ||
+      technicalCompliance.trim().length > 0 ||
+      orderProfile.trim().length > 0;
+
+    if (hasUnsavedContent) {
+      const isDirty =
+        draftStatus !== "saved" || autosaveTimerRef.current !== null;
+      if (isDirty) {
+        setNewDraftError(null);
+        setShowNewDraftModal(true);
+        return;
+      }
+    }
+
+    await executeStartNewBlankDraft();
   }
 
   // Load demonstration examples (F12)
@@ -2519,6 +2604,128 @@ export default function ConsultantWorkflowPage() {
           setSelectedSupplier(null);
         }}
       />
+
+      {/* Safe New Transition Modal (Workstream C - L08-N04) */}
+      {showNewDraftModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="new-draft-modal-title"
+          aria-describedby="new-draft-modal-desc"
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isSavingNewDraft) {
+              setShowNewDraftModal(false);
+            }
+          }}
+        >
+          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4 text-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h2
+                id="new-draft-modal-title"
+                className="text-base font-bold text-white flex items-center gap-2"
+              >
+                <span>Save Unsaved Changes?</span>
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowNewDraftModal(false)}
+                disabled={isSavingNewDraft}
+                className="text-slate-400 hover:text-white p-1 rounded-md transition-colors"
+                aria-label="Close dialog"
+              >
+                <svg
+                  className="w-5 h-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <p
+              id="new-draft-modal-desc"
+              className="text-xs text-slate-300 leading-relaxed"
+            >
+              You have active inputs in your current draft that have not yet
+              been confirmed on the server. How would you like to proceed?
+            </p>
+
+            {newDraftError && (
+              <div className="p-2.5 bg-red-950/60 border border-red-800 rounded text-xs text-red-200">
+                {newDraftError}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                type="button"
+                id="save-and-start-new-btn"
+                data-testid="save-and-start-new"
+                disabled={isSavingNewDraft}
+                onClick={handleSaveAndStartNew}
+                className="w-full py-2 px-3 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow transition-colors flex items-center justify-center gap-2"
+              >
+                {isSavingNewDraft ? (
+                  <>
+                    <svg
+                      className="animate-spin h-3.5 w-3.5 text-white"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v8H4z"
+                      />
+                    </svg>
+                    Saving on Server...
+                  </>
+                ) : (
+                  "Save & Start New"
+                )}
+              </button>
+
+              <button
+                type="button"
+                id="stay-in-draft-btn"
+                data-testid="stay-in-draft"
+                disabled={isSavingNewDraft}
+                onClick={() => setShowNewDraftModal(false)}
+                className="w-full py-2 px-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
+              >
+                Stay &amp; Continue Editing
+              </button>
+
+              <button
+                type="button"
+                id="discard-and-start-new-btn"
+                data-testid="discard-and-start-new"
+                disabled={isSavingNewDraft}
+                onClick={handleDiscardAndStartNew}
+                className="w-full py-2 px-3 bg-red-950/40 hover:bg-red-900/60 disabled:opacity-50 text-red-300 text-xs font-semibold rounded-lg border border-red-800/60 transition-colors"
+              >
+                Discard Unsaved Inputs &amp; Start New
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Resume Research Modal */}
       {isResumeModalOpen && (

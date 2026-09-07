@@ -634,6 +634,12 @@ export default function RunResultPage({
       <div id="main-content" tabIndex={-1}>
         <ConsultantResultView
           result={viewStatus.result}
+          artifactDownload={{
+            run_id: resolvedRunId,
+            artifact_version_id: `${resolvedRunId}-v1`,
+            version: 1,
+            href: `/api/v1/consultant/reports/${resolvedRunId}/pdf`,
+          }}
           onBack={() => {
             window.location.href = "/runs";
           }}

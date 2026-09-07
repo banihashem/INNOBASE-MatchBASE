@@ -285,18 +285,38 @@ export class PreparationModelGateway {
     );
 
     if (domain === "water_heater") {
+      const text = approvedRequest.english_translation;
+      const capMatch = text.match(/([0-9۰-۹]+)\s*(?:l|litres?|liters?)/i);
+      const cap = capMatch ? capMatch[1] : "500";
+      const pressMatch = text.match(/([0-9۰-۹]+)\s*bar/i);
+      const press = pressMatch ? pressMatch[1] : "10";
+      let diamMatch = text.match(
+        /(?:max(?:imum)?\s*)?([0-9۰-۹]+)\s*(?:cm|سانتی[‌\s]*متر|mm|میلی[‌\s]*متر)?\s*(?:diameter|external diameter|outer diameter|قطر)/i,
+      );
+      if (!diamMatch) {
+        diamMatch = text.match(
+          /(?:diameter|external diameter|outer diameter|قطر)\s*(?:of|is|:)?\s*(?:max(?:imum)?|<=)?\s*([0-9۰-۹]+)\s*(?:cm|mm)/i,
+        );
+      }
+      const diam = diamMatch ? diamMatch[1] : "85";
+      const voltMatch = text.match(/([0-9۰-۹]{3})\s*(?:v|ولت)/i);
+      const volt = voltMatch ? voltMatch[1] : "400";
+      const isAbuDhabi = /abu dhabi|ابوظبی/i.test(text);
+      const destCity = isAbuDhabi ? "Abu Dhabi" : "Dubai";
+      const dest = `DDP ${destCity}, UAE`;
+
       const promptText = `
 Task: Execute deep agentic research to discover and verify legitimate commercial manufacturers and authorized export partners for Industrial Electric Water Heaters.
 
 1. Product Specifications & Target Criteria:
    - Category: Commercial / Industrial Electric Water Heater (Storage Calorifier)
-   - Capacity: 500 Litres storage capacity
-   - Pressure Rating: Minimum 10 bar working pressure (tested >= 15 bar)
-   - Electrical Specifications: Three-phase industrial connection (380V - 415V, 50/60 Hz)
-   - Dimensions: Outer diameter strictly capped at 85 cm (850 mm) for standard facility access
+   - Capacity: ${cap} Litres storage capacity
+   - Pressure Rating: Minimum ${press} bar working pressure (tested >= 15 bar)
+   - Electrical Specifications: Three-phase ${volt}V industrial connection (50/60 Hz)
+   - Dimensions: Outer diameter strictly capped at ${diam} cm (${Number(diam) * 10} mm) for facility access
    - Internal Protection: High-grade porcelain enamel / glass lining with sacrificial anode or 316L stainless steel
    - Regulatory Compliance: Mandatory CE marking, Pressure Equipment Directive (PED 2014/68/EU), UAE G-Mark / MoIAT conformity
-   - Commercial & Logistics: ${approvedRequest.incoterm || "DDP Dubai, UAE"}, including local spare parts availability and minimum 5-year warranty support
+   - Commercial & Logistics: ${dest}, including local spare parts availability and warranty support
 
 2. Discovery & Eligibility Rules:
    - Identify active direct manufacturers and authorized industrial heating distributors capable of supplying the UAE market.
@@ -309,22 +329,22 @@ Task: Execute deep agentic research to discover and verify legitimate commercial
    - Verified official website domain and commercial sales / export desk contact (email, telephone)
    - Compliance documentation references (CE declaration of conformity, pressure test certification)
    - Commercial parameters: indicative unit pricing, MOQ, production lead time, warranty terms
-   - Physical dimensions: confirm diameter <= 85cm and height
+   - Physical dimensions: confirm diameter <= ${diam}cm and height
 `.trim();
 
       return {
         prompt_text: promptText,
         discovery_criteria: [
           "Industrial electric water heater (calorifier) manufacturer or authorized distributor",
-          "500 Litres tank capacity with 10 bar pressure rating",
-          "Three-phase industrial electrical configuration (380-415V)",
-          "Maximum diameter 85cm physical constraint",
+          `${cap} Litres tank capacity with ${press} bar pressure rating`,
+          `Three-phase industrial electrical configuration (${volt}V)`,
+          `Maximum diameter ${diam}cm physical constraint`,
           "CE marking and Pressure Equipment Directive (PED) compliance",
-          "DDP Dubai delivery capability with local spares & warranty support",
+          `DDP ${destCity} delivery capability with local spares & warranty support`,
         ],
         evidence_thresholds: [
           "Verified official manufacturer domain and contact desk",
-          "Inspection of technical datasheet confirming 500L, 10 bar, and <=85cm diameter",
+          `Inspection of technical datasheet confirming ${cap}L, ${press} bar, and <=${diam}cm diameter`,
           "Documented CE / PED compliance declaration",
         ],
         target_supplier_count: 20,

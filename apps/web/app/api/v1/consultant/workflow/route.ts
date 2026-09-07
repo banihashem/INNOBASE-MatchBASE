@@ -237,17 +237,9 @@ export async function POST(req: Request): Promise<NextResponse> {
         order_profile: string;
       };
       const translation = (body.translation as string) || "";
-      const mandatory_requirements =
-        (body.mandatory_requirements as string[]) || [];
-      const explicit_requirements = body.explicit_requirements as
-        any[] | undefined;
 
       const fidelity = validateStep1RequirementFidelity(intake, {
         english_translation: translation,
-        mandatory_requirements,
-        ...(explicit_requirements !== undefined
-          ? { explicit_requirements }
-          : {}),
       });
 
       return NextResponse.json({ success: true, fidelity });

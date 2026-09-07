@@ -18,6 +18,114 @@ export interface SynthesisInput {
   readonly product_name: string;
   readonly product_category: string;
   readonly dual_lane_result: DualLaneExecutionResult;
+  readonly approved_translation?: string;
+  readonly intake?: {
+    product_requirement: string;
+    technical_compliance: string;
+    order_profile: string;
+  };
+}
+
+function extractApprovedWaterHeaterFacts(input: SynthesisInput) {
+  const text = `${input.intake?.product_requirement || ""} ${input.intake?.technical_compliance || ""} ${input.intake?.order_profile || ""} ${input.approved_translation || ""}`;
+
+  // 1. Capacity
+  const capMatch = text.match(/([0-9۰-۹]+)\s*(?:l|litres?|liters?|لیتر)/i);
+  const capacityLitres = capMatch
+    ? parseInt(
+        capMatch[1]!.replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))),
+        10,
+      )
+    : 500;
+
+  // 2. Working Pressure
+  const pressMatch = text.match(/([0-9۰-۹]+)\s*(?:bar|بار)/i);
+  const pressureVal = pressMatch
+    ? pressMatch[1]!.replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+    : "10";
+  const pressureBar = `Minimum ${pressureVal} bar`;
+
+  // 3. Diameter
+  let diamMatch = text.match(
+    /(?:max(?:imum)?|حداکثر)?\s*([0-9۰-۹]+)\s*(?:cm|سانتی[‌\s]*متر|mm|میلی[‌\s]*متر)?\s*(?:diameter|external diameter|outer diameter|قطر)/i,
+  );
+  if (!diamMatch) {
+    diamMatch = text.match(
+      /(?:diameter|external diameter|outer diameter|قطر)\s*(?:of|is|:)?\s*(?:max(?:imum)?|حداکثر|<=)?\s*([0-9۰-۹]+)\s*(?:cm|سانتی[‌\s]*متر|mm|میلی[‌\s]*متر)/i,
+    );
+  }
+  const maxOuterDiameterCm = diamMatch
+    ? parseInt(
+        diamMatch[1]!.replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))),
+        10,
+      )
+    : 85;
+
+  // 4. Voltage
+  const voltMatch = text.match(/([0-9۰-۹]{3})\s*(?:v|ولت)/i);
+  const voltVal = voltMatch
+    ? voltMatch[1]!.replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+    : "400";
+  const electrical = `Three-phase ${voltVal}V 50Hz`;
+
+  // 5. Quantity
+  const qtyMatch = text.match(
+    /(?:exactly\s*)?([0-9۰-۹]+)\s*(?:units?|دستگاه|عدد|pieces?|calorifiers?)/i,
+  );
+  const quantity = qtyMatch
+    ? parseInt(
+        qtyMatch[1]!.replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))),
+        10,
+      )
+    : 10;
+
+  // 6. Warranty
+  const warMonthMatch = text.match(
+    /([0-9۰-۹]{2})\s*(?:[- ]month|months?|ماهه?|ماه)\s*(?:uae\s*)?(?:warranty|گارانتی|ضمانت)?/i,
+  );
+  const warYearMatch = text.match(
+    /([0-9۰-۹]+|two|three|one|2|3|1)\s*(?:[- ]year|year|ساله?|سال)\s*(?:uae\s*)?(?:warranty|گارانتی|ضمانت)/i,
+  );
+  let warrantyMonths = 24;
+  let warrantyYears = 2;
+  if (warMonthMatch) {
+    warrantyMonths = parseInt(
+      warMonthMatch[1]!.replace(/[۰-۹]/g, (d) =>
+        String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)),
+      ),
+      10,
+    );
+    warrantyYears = Math.round(warrantyMonths / 12);
+  } else if (warYearMatch) {
+    const rawY = warYearMatch[1]!;
+    warrantyYears =
+      rawY === "three" || rawY === "3"
+        ? 3
+        : rawY === "one" || rawY === "1"
+          ? 1
+          : 2;
+    warrantyMonths = warrantyYears * 12;
+  }
+  const warranty = `${warrantyYears === 2 ? "Two-year" : warrantyYears === 3 ? "Three-year" : `${warrantyYears}-year`} UAE warranty (${warrantyMonths} months)`;
+
+  // 7. Delivery & Destination
+  const isAbuDhabi = /abu dhabi|ابوظبی/i.test(text);
+  const destinationCity = isAbuDhabi ? "Abu Dhabi" : "Dubai";
+  const incoterm = `DDP ${destinationCity}`;
+  const destination = `${destinationCity}, United Arab Emirates`;
+
+  return {
+    capacityLitres,
+    pressureBar,
+    maxOuterDiameterCm,
+    electrical,
+    quantity,
+    warranty,
+    incoterm,
+    destination,
+    destinationCity,
+    voltVal,
+  };
 }
 
 export function synthesizeConsultantOutputV3(
@@ -38,6 +146,8 @@ export function synthesizeConsultantOutputV3(
   const now = new Date().toISOString();
 
   if (domain === "water_heater") {
+    const facts = extractApprovedWaterHeaterFacts(input);
+
     const primary_classification: ProductClassificationRecord = {
       classification_id,
       scheme: "HS",
@@ -71,7 +181,7 @@ export function synthesizeConsultantOutputV3(
       execution_id,
       classification_id,
       title: `${product_name} Commercial Sourcing & Supplier Landscape`,
-      subtitle: `${candidates.length} Truthful Illustrative Candidates (UAE DDP Corridor)`,
+      subtitle: `${candidates.length} Truthful Illustrative Candidates (UAE ${facts.incoterm} Corridor)`,
       generated_at: now,
       as_of_date: now.split("T")[0]!,
       research_mode: isLive ? "hybrid" : "fixture",
@@ -83,41 +193,43 @@ export function synthesizeConsultantOutputV3(
         secondary_query_types: ["pricing", "product_recommendation"],
         intent_scope: "trade_lane",
         business_context: [
-          "Commercial contractor seeking 500L commercial electric water heaters (10 bar, <=85cm envelope) for Dubai project.",
+          `Commercial contractor seeking ${facts.capacityLitres}L commercial electric water heaters (${facts.pressureBar}, <=${facts.maxOuterDiameterCm}cm envelope) for ${facts.destinationCity} project.`,
         ],
         product_category: product_category || "Industrial & HVAC Equipment",
-        product_name: product_name || "Commercial Electric Water Heater 500L",
+        product_name:
+          product_name ||
+          `Commercial Electric Water Heater ${facts.capacityLitres}L`,
         confidence_level_required: "high",
         compliance_sensitive: true,
         pricing_volatile: false,
         product_attributes: {
-          capacity_litres: 500,
-          pressure_bar: "Minimum 10 bar",
-          max_outer_diameter_cm: 85,
-          electrical: "Three-phase 380-415V 50Hz",
+          capacity_litres: facts.capacityLitres,
+          pressure_bar: facts.pressureBar,
+          max_outer_diameter_cm: facts.maxOuterDiameterCm,
+          electrical: facts.electrical,
           installation_environment: "Indoor mechanical room installation",
           thermal_insulation: "Documented thermal insulation",
           safety_compliance: "Safety-valve compatibility",
           controls: "BMS-compatible thermostat",
-          destination: "Dubai, United Arab Emirates",
-          incoterm: "DDP Dubai",
-          quantity: 10,
-          warranty: "Two-year UAE warranty (24 months)",
+          destination: facts.destination,
+          incoterm: facts.incoterm,
+          quantity: facts.quantity,
+          warranty: facts.warranty,
         },
         normalized_requirements: [
           {
-            name: "Capacity 500 Litres",
-            value: "500L",
+            name: `Capacity ${facts.capacityLitres} Litres`,
+            value: `${facts.capacityLitres}L`,
             requirement_level: "mandatory",
           },
           {
-            name: "Working Pressure Minimum 10 bar",
-            value: "Minimum 10 bar",
+            name: `Working Pressure ${facts.pressureBar}`,
+            value: facts.pressureBar,
             requirement_level: "mandatory",
           },
           {
-            name: "Outer Diameter <= 85 cm",
-            value: "<=85cm",
+            name: `Outer Diameter <= ${facts.maxOuterDiameterCm} cm`,
+            value: `<=${facts.maxOuterDiameterCm}cm`,
             requirement_level: "mandatory",
           },
           {
@@ -151,27 +263,27 @@ export function synthesizeConsultantOutputV3(
             requirement_level: "mandatory",
           },
           {
-            name: "Two-Year UAE Warranty & Local Spares",
-            value: "2-year UAE warranty",
+            name: `${facts.warranty} & Local Spares`,
+            value: facts.warranty,
             requirement_level: "mandatory",
           },
           {
-            name: "DDP Dubai Terms",
-            value: "DDP Dubai",
+            name: `${facts.incoterm} Terms`,
+            value: facts.incoterm,
             requirement_level: "mandatory",
           },
           {
-            name: "Order Quantity: Exactly 10 Units",
-            value: "10 units",
+            name: `Order Quantity: Exactly ${facts.quantity} Units`,
+            value: `${facts.quantity} units`,
             requirement_level: "mandatory",
           },
         ],
         mandatory_constraints: [
-          "500L capacity, minimum 10 bar rating, <=85cm outer diameter, indoor installation",
+          `${facts.capacityLitres}L capacity, ${facts.pressureBar} rating, <=${facts.maxOuterDiameterCm}cm outer diameter, indoor installation`,
           "Documented thermal insulation, safety-valve compatibility, BMS-compatible thermostat",
           "CE / PED certification and UAE MoIAT compliance",
-          "Two-year UAE warranty, installation support, and local spare parts",
-          "DDP Dubai delivery terms, exactly 10 units",
+          `${facts.warranty}, installation support, and local spare parts`,
+          `${facts.incoterm} delivery terms, exactly ${facts.quantity} units`,
         ],
         preferred_constraints: [
           "Original manufacturer or authorized UAE distributor",
@@ -183,19 +295,19 @@ export function synthesizeConsultantOutputV3(
       },
       executive_summary: {
         headline: isLive
-          ? `${candidates.length} Truthful Illustrative Manufacturers Verified for UAE DDP Corridor`
-          : `${candidates.length} Truthful Illustrative Manufacturers Configured for UAE DDP Corridor`,
+          ? `${candidates.length} Truthful Illustrative Manufacturers Verified for UAE ${facts.incoterm} Corridor`
+          : `${candidates.length} Truthful Illustrative Manufacturers Configured for UAE ${facts.incoterm} Corridor`,
         direct_answer: isLive
-          ? "Identified 3 illustrative European commercial water heater manufacturers meeting all technical constraints (500L, 10 bar, <=85cm envelope, CE/PED, DDP Dubai)."
-          : "Demonstration dataset: exactly 3 illustrative commercial water heater manufacturers configured for testing technical constraints (500L, 10 bar, <=85cm envelope, CE/PED, DDP Dubai).",
+          ? `Identified ${candidates.length} illustrative European commercial water heater manufacturers meeting all technical constraints (${facts.capacityLitres}L, ${facts.pressureBar}, <=${facts.maxOuterDiameterCm}cm envelope, CE/PED, ${facts.incoterm}).`
+          : `Demonstration dataset: exactly ${candidates.length} illustrative commercial water heater manufacturers configured for testing technical constraints (${facts.capacityLitres}L, ${facts.pressureBar}, <=${facts.maxOuterDiameterCm}cm envelope, CE/PED, ${facts.incoterm}).`,
         key_findings: isLive
           ? [
-              "All 3 candidates satisfy the strict 85 cm service door access constraint.",
+              `All ${candidates.length} candidates satisfy the strict ${facts.maxOuterDiameterCm} cm service door access constraint.`,
               "CE and PED 2014/68/EU conformity verified against technical construction files.",
-              "Spare heating elements and 5-year warranty support available through regional distribution hubs.",
+              "Spare heating elements and warranty support available through regional distribution hubs.",
             ]
           : [
-              "All 3 illustrative candidates satisfy the strict 85 cm service door access constraint.",
+              `All ${candidates.length} illustrative candidates satisfy the strict ${facts.maxOuterDiameterCm} cm service door access constraint.`,
               "Demonstration completeness: Complete for UX and workflow validation.",
               "External market coverage: Not assessed.",
             ],

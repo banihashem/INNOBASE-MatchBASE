@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import {
   type ConsultantResearchOutputV2,
   CANONICAL_MATCH_DIMENSIONS_V2,
@@ -16,6 +16,9 @@ export function ConsultantResearchOutputView({
   headingRef?: RefObject<HTMLHeadingElement | null> | undefined;
   artifactDownload?: ResultArtifactDownload | null | undefined;
 }) {
+  const [isPdfDownloading, setIsPdfDownloading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
   const {
     result_id,
     run_id,
@@ -33,6 +36,51 @@ export function ConsultantResearchOutputView({
     limitations,
     decision_support,
   } = result;
+
+  const targetRunId = artifactDownload?.run_id || run_id;
+
+  async function handleDownloadPdf() {
+    if (!targetRunId) return;
+    setIsPdfDownloading(true);
+    setPdfError(null);
+    try {
+      const downloadUrl =
+        artifactDownload?.href ||
+        `/api/v1/consultant/reports/${encodeURIComponent(targetRunId)}/pdf`;
+      const res = await fetch(downloadUrl, {
+        method: "GET",
+        headers: { Accept: "application/pdf" },
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        throw new Error(`PDF request returned HTTP ${res.status}`);
+      }
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/pdf")) {
+        throw new Error(`Expected application/pdf but received ${contentType}`);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition");
+      let filename = `MatchBASE_Consultant_Report_${targetRunId}.pdf`;
+      if (disposition && disposition.includes("filename=")) {
+        const match = disposition.match(/filename="?([^";]+)"?/i);
+        if (match?.[1]) filename = match[1];
+      }
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (err: any) {
+      console.error("PDF download failed:", err);
+      setPdfError(err?.message || "Failed to download PDF report");
+    } finally {
+      setIsPdfDownloading(false);
+    }
+  }
 
   const isNoMatch = research_status === "no_strong_match";
 
@@ -55,7 +103,7 @@ export function ConsultantResearchOutputView({
         <button className="secondary-action" onClick={onBack} type="button">
           &larr; Return to runs
         </button>
-        {artifactDownload ? (
+        {targetRunId ? (
           <div
             style={{
               display: "flex",
@@ -64,20 +112,48 @@ export function ConsultantResearchOutputView({
               flexWrap: "wrap",
             }}
           >
-            <a
+            <button
               className="secondary-action"
-              href={artifactDownload.href}
-              download
-              data-matchbase-artifact-run-id={artifactDownload.run_id}
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={isPdfDownloading}
+              data-matchbase-artifact-run-id={targetRunId}
               data-matchbase-artifact-version-id={
-                artifactDownload.artifact_version_id
+                artifactDownload?.artifact_version_id || `${targetRunId}-v1`
               }
-              data-matchbase-artifact-version={artifactDownload.version}
-              aria-label={`Download PDF report for run ${artifactDownload.run_id}`}
-              style={{ fontWeight: 600 }}
+              data-matchbase-artifact-version={artifactDownload?.version ?? 1}
+              aria-label={`Download PDF report for run ${targetRunId}`}
+              style={{
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                cursor: isPdfDownloading ? "wait" : "pointer",
+              }}
             >
-              Download PDF report
-            </a>
+              {isPdfDownloading ? (
+                <>
+                  <span
+                    className="spinner"
+                    aria-hidden="true"
+                    style={{
+                      display: "inline-block",
+                      animation: "spin 1s linear infinite",
+                    }}
+                  >
+                    ⏳
+                  </span>
+                  <span>Downloading PDF...</span>
+                </>
+              ) : (
+                <span>Download Full PDF Report</span>
+              )}
+            </button>
+            {pdfError && (
+              <span style={{ color: "#f87171", fontSize: "0.8rem" }}>
+                {pdfError}
+              </span>
+            )}
           </div>
         ) : null}
       </div>

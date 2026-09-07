@@ -15,10 +15,11 @@ import {
   createConsultantDraftSession,
   getConsultantDraftSessionById,
   saveConsultantDraftSession,
-  getActiveConsultantDraftSession,
+  listActiveConsultantDraftSessions,
   abandonConsultantDraftSession,
   getConsultantDraftSessionByRunId,
 } from "@matchbase/data";
+import { validateStep1RequirementFidelity } from "@matchbase/contracts";
 import { getAppDatabasePool } from "../../../../../src/db-client";
 import { resolveRequestSession } from "../../../../../src/fetch-runtime";
 
@@ -70,6 +71,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     const body = (await req.json()) as Record<string, unknown>;
     const action = body.action as string;
+    console.log("--> POST ACTION:", action, "USER:", context.userId);
 
     // Action: Create New Independent Server Draft
     if (action === "create_draft") {
@@ -173,9 +175,16 @@ export async function POST(req: Request): Promise<NextResponse> {
 
     // Action: Submit Intake
     if (action === "submit_intake") {
-      const product_requirement = (body.product_requirement as string) || "";
-      const technical_compliance = (body.technical_compliance as string) || "";
-      const order_profile = (body.order_profile as string) || "";
+      const product_requirement =
+        (body.product_requirement as string) ||
+        (body.productRequirement as string) ||
+        "";
+      const technical_compliance =
+        (body.technical_compliance as string) ||
+        (body.technicalCompliance as string) ||
+        "";
+      const order_profile =
+        (body.order_profile as string) || (body.orderProfile as string) || "";
 
       if (!product_requirement.trim()) {
         return NextResponse.json(
@@ -220,10 +229,36 @@ export async function POST(req: Request): Promise<NextResponse> {
       return NextResponse.json({ success: true, session });
     }
 
-    // Action: Approve Step 1 Interpretation
+    // Action: Validate Step 1 Requirement Fidelity
+    if (action === "validate_step1_fidelity") {
+      const intake = body.intake as {
+        product_requirement: string;
+        technical_compliance: string;
+        order_profile: string;
+      };
+      const translation = (body.translation as string) || "";
+      const mandatory_requirements =
+        (body.mandatory_requirements as string[]) || [];
+      const explicit_requirements = body.explicit_requirements as
+        any[] | undefined;
+
+      const fidelity = validateStep1RequirementFidelity(intake, {
+        english_translation: translation,
+        mandatory_requirements,
+        ...(explicit_requirements !== undefined
+          ? { explicit_requirements }
+          : {}),
+      });
+
+      return NextResponse.json({ success: true, fidelity });
+    }
+
     if (action === "approve_step1") {
       const run_id = body.run_id as string;
-      const edited_translation = body.edited_translation as string | undefined;
+      const edited_translation =
+        (body.edited_translation as string | undefined) ||
+        ((body.interpretation as any)?.english_translation as
+          string | undefined);
 
       // Verify session ownership
       const existingSession = await getOrRestoreWorkflowSession(
@@ -238,12 +273,29 @@ export async function POST(req: Request): Promise<NextResponse> {
         );
       }
 
-      const session = await approveInterpretationStep(
-        run_id,
-        edited_translation,
-        pool,
-      );
-      return NextResponse.json({ success: true, session });
+      try {
+        const session = await approveInterpretationStep(
+          run_id,
+          edited_translation,
+          pool,
+        );
+        return NextResponse.json({ success: true, session });
+      } catch (err: any) {
+        if (
+          err instanceof ApplicationFault ||
+          err?.code === "MB-422-FIDELITY-FAILED"
+        ) {
+          return NextResponse.json(
+            {
+              error: err.message,
+              code: err.code || "MB-422-FIDELITY-FAILED",
+              status: err.status || 422,
+            },
+            { status: err.status || 422 },
+          );
+        }
+        throw err;
+      }
     }
 
     // Action: Approve Step 3 Deep Prompt
@@ -363,16 +415,22 @@ export async function POST(req: Request): Promise<NextResponse> {
     }
 
     if (code === "MB-409-DRAFT-CONFLICT" || status === 409) {
+      const currentVersion = (err as any)?.current_version ?? 1;
+      const submittedVersion = (err as any)?.submitted_version ?? 1;
       return NextResponse.json(
         {
+          code: "MB-409-DRAFT-CONFLICT",
+          current_version: currentVersion,
+          submitted_version: submittedVersion,
+          recoverable: true,
           error: {
             code: "MB-409-DRAFT-CONFLICT",
             message:
               err instanceof Error
                 ? err.message
                 : "This draft was updated in another tab.",
-            current_version: (err as any)?.current_version ?? 1,
-            submitted_version: (err as any)?.submitted_version ?? 1,
+            current_version: currentVersion,
+            submitted_version: submittedVersion,
             recoverable: true,
           },
         },
@@ -452,14 +510,27 @@ export async function GET(req: Request): Promise<NextResponse> {
     return NextResponse.json({ success: true, draft });
   }
 
-  // Retrieve active server-scoped draft
+  // Retrieve active server-scoped drafts
   if (getActiveDraft === "true") {
-    const draft = await getActiveConsultantDraftSession(
+    const drafts = await listActiveConsultantDraftSessions(
       pool,
       context.accountId,
       context.userId,
+      20,
     );
-    return NextResponse.json({ success: true, draft });
+    // Find active draft that has non-empty requirements, or fallback to the latest
+    const primaryDraft =
+      drafts.find((d) => {
+        const data = d.draft_data as any;
+        return (
+          data?.productRequirement?.trim() ||
+          data?.technicalCompliance?.trim() ||
+          data?.orderProfile?.trim()
+        );
+      }) ||
+      drafts[0] ||
+      null;
+    return NextResponse.json({ success: true, draft: primaryDraft, drafts });
   }
 
   // List incomplete workflow sessions for account (excluding invalidated sessions)

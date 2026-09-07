@@ -29,9 +29,11 @@ function config(
   };
 }
 
+const testNow = () => new Date("2026-08-31T12:00:00.000Z");
+
 describe("server-owned live research admission", () => {
   it("admits Demo and Consultant-depth execution after the closed worker-credential marker is verified", () => {
-    const admission = loadServerOwnedResearchAdmission(config(true));
+    const admission = loadServerOwnedResearchAdmission(config(true), testNow);
     expect(admission.decide("demo")).toMatchObject({
       id: "qualified_live_research",
       liveQualified: true,
@@ -50,7 +52,10 @@ describe("server-owned live research admission", () => {
   it.each([false, undefined])(
     "fails closed when worker credentials are not verified (%s)",
     (verified) => {
-      const admission = loadServerOwnedResearchAdmission(config(verified));
+      const admission = loadServerOwnedResearchAdmission(
+        config(verified),
+        testNow,
+      );
       expect(admission.isReady()).toBe(false);
       expect(() => admission.decide("demo")).toThrowError(
         expect.objectContaining({
@@ -66,7 +71,7 @@ describe("server-owned live research admission", () => {
       ...config(true),
       deploymentEnvironment: "production",
     };
-    const admission = loadServerOwnedResearchAdmission(mismatched);
+    const admission = loadServerOwnedResearchAdmission(mismatched, testNow);
     expect(admission.isReady()).toBe(false);
     expect(() => admission.decide("demo")).toThrowError(
       expect.objectContaining({ code: "MB-503-LIVE-ADMISSION" }),

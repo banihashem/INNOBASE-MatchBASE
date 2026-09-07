@@ -21,6 +21,8 @@ export class ConsultantPdfRenderer {
   private browserInstance: any = null;
   private browserPromise: Promise<any> | null = null;
 
+  private inFlightRenders: Map<string, Promise<Buffer>> = new Map();
+
   static getInstance(): ConsultantPdfRenderer {
     if (!ConsultantPdfRenderer.instance) {
       ConsultantPdfRenderer.instance = new ConsultantPdfRenderer();
@@ -71,6 +73,7 @@ export class ConsultantPdfRenderer {
       ),
       path.resolve(process.cwd(), ".artifacts/consultant-pdf"),
       path.resolve(process.cwd(), "../.artifacts/consultant-pdf"),
+      path.resolve(process.cwd(), "apps/web/.artifacts/consultant-pdf"),
     ];
     for (const c of candidates) {
       const parent = path.dirname(c);
@@ -114,8 +117,10 @@ export class ConsultantPdfRenderer {
       .update(html)
       .digest("hex")
       .slice(0, 16);
+    // Derived immutable key: runId + contentHash + template version + locale
+    const artifactKey = `${runId}_${contentHash}_v1_en`;
     const cacheDir = this.getCacheDir();
-    const cacheFilePath = path.join(cacheDir, `${runId}_${contentHash}.pdf`);
+    const cacheFilePath = path.join(cacheDir, `${artifactKey}.pdf`);
 
     // 1. Return cached PDF if available and valid
     try {
@@ -129,59 +134,84 @@ export class ConsultantPdfRenderer {
       console.warn("Could not read from PDF cache:", cacheReadErr);
     }
 
-    // 2. Render with bounded retry
-    let lastError: unknown = null;
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const browser = await this.getBrowser();
-        const page = await browser.newPage();
-        try {
-          await page.setContent(html, { waitUntil: "load", timeout: 25000 });
-          const pdfUint8 = await page.pdf({
-            format: "A4",
-            landscape: true,
-            printBackground: true,
-            margin: {
-              top: "12mm",
-              right: "15mm",
-              bottom: "15mm",
-              left: "15mm",
-            },
-            timeout: 30000,
-          });
-          const pdfBuf = Buffer.from(pdfUint8);
-          if (!this.isValidPdf(pdfBuf)) {
-            throw new Error(
-              `Rendered PDF failed validity check: bytes=${pdfBuf.length}`,
-            );
-          }
-          // Save to cache
-          try {
-            fs.writeFileSync(cacheFilePath, pdfBuf);
-          } catch (cacheWriteErr) {
-            console.warn("Failed to write PDF cache file:", cacheWriteErr);
-          }
-          return pdfBuf;
-        } finally {
-          await page.close().catch(() => {});
-        }
-      } catch (renderErr) {
-        lastError = renderErr;
-        console.warn(`PDF render attempt ${attempt} failed:`, renderErr);
-        if (this.browserInstance) {
-          try {
-            await this.browserInstance.close();
-          } catch {}
-          this.browserInstance = null;
-          this.browserPromise = null;
+    // Also check legacy naming for backwards compatibility
+    const legacyPath = path.join(cacheDir, `${runId}_${contentHash}.pdf`);
+    try {
+      if (fs.existsSync(legacyPath)) {
+        const cachedBuf = fs.readFileSync(legacyPath);
+        if (this.isValidPdf(cachedBuf)) {
+          return cachedBuf;
         }
       }
+    } catch {}
+
+    // 2. Single-flight rendering deduplication
+    const existingInFlight = this.inFlightRenders.get(artifactKey);
+    if (existingInFlight) {
+      return existingInFlight;
     }
 
-    throw new ConsultantPdfRendererUnavailableError(
-      "Consultant PDF renderer is currently unavailable. Please retry shortly.",
-      lastError,
-    );
+    const renderPromise = (async (): Promise<Buffer> => {
+      let lastError: unknown = null;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const browser = await this.getBrowser();
+          const page = await browser.newPage();
+          try {
+            await page.setContent(html, { waitUntil: "load", timeout: 25000 });
+            const pdfUint8 = await page.pdf({
+              format: "A4",
+              landscape: true,
+              printBackground: true,
+              margin: {
+                top: "12mm",
+                right: "15mm",
+                bottom: "15mm",
+                left: "15mm",
+              },
+              timeout: 30000,
+            });
+            const pdfBuf = Buffer.from(pdfUint8);
+            if (!this.isValidPdf(pdfBuf)) {
+              throw new Error(
+                `Rendered PDF failed validity check: bytes=${pdfBuf.length}`,
+              );
+            }
+            // Save to cache
+            try {
+              fs.writeFileSync(cacheFilePath, pdfBuf);
+            } catch (cacheWriteErr) {
+              console.warn("Failed to write PDF cache file:", cacheWriteErr);
+            }
+            return pdfBuf;
+          } finally {
+            await page.close().catch(() => {});
+          }
+        } catch (renderErr) {
+          lastError = renderErr;
+          console.warn(`PDF render attempt ${attempt} failed:`, renderErr);
+          if (this.browserInstance) {
+            try {
+              await this.browserInstance.close();
+            } catch {}
+            this.browserInstance = null;
+            this.browserPromise = null;
+          }
+        }
+      }
+
+      throw new ConsultantPdfRendererUnavailableError(
+        "Consultant PDF renderer is currently unavailable. Please retry shortly.",
+        lastError,
+      );
+    })();
+
+    this.inFlightRenders.set(artifactKey, renderPromise);
+    try {
+      return await renderPromise;
+    } finally {
+      this.inFlightRenders.delete(artifactKey);
+    }
   }
 
   private isValidPdf(buf: Buffer): boolean {

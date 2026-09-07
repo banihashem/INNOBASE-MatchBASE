@@ -874,6 +874,56 @@ export async function getActiveConsultantDraftSession(
   };
 }
 
+export async function listActiveConsultantDraftSessions(
+  db: Queryable,
+  accountId: string,
+  userProfileId?: string | null,
+  limit = 20,
+): Promise<ConsultantDraftSessionRecord[]> {
+  const params: unknown[] = [accountId];
+  let query = `SELECT * FROM consultant_draft_session
+     WHERE account_id = $1 AND status = 'active'`;
+  if (userProfileId) {
+    params.push(userProfileId);
+    query += ` AND user_profile_id = $${params.length}`;
+  }
+  params.push(limit);
+  query += ` ORDER BY updated_at DESC LIMIT $${params.length};`;
+
+  const res = await db.query<{
+    draft_id: string;
+    account_id: string;
+    user_profile_id: string;
+    tier: "consultant";
+    current_run_id: string | null;
+    snapshot_id: string | null;
+    draft_version: number;
+    status: "active" | "submitted" | "abandoned";
+    draft_data: Record<string, unknown> | string;
+    updated_at: Date;
+    created_at: Date;
+  }>(query, params);
+
+  const parseJson = (val: unknown): Record<string, unknown> =>
+    typeof val === "string"
+      ? JSON.parse(val)
+      : (val as Record<string, unknown>);
+
+  return res.rows.map((row) => ({
+    draft_id: row.draft_id,
+    account_id: row.account_id,
+    user_profile_id: row.user_profile_id,
+    tier: row.tier,
+    current_run_id: row.current_run_id,
+    snapshot_id: row.snapshot_id,
+    draft_version: row.draft_version,
+    status: row.status,
+    draft_data: parseJson(row.draft_data),
+    updated_at: row.updated_at.toISOString(),
+    created_at: row.created_at.toISOString(),
+  }));
+}
+
 export async function abandonConsultantDraftSession(
   db: Queryable,
   accountId: string,

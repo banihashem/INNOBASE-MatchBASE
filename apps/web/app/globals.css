@@ -1,3 +1,6 @@
+@tailwind base;
+@tailwind components;
+
 :root {
   color-scheme: dark;
 
@@ -2146,4 +2149,33 @@ footer {
 .break-anywhere {
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+/* Existing JSX uses utilities; keep their cascade after the legacy styles. */
+@tailwind utilities;
+
+/* Preflight stays disabled. Opt in to solid borders only via utility classes. */
+@layer utilities {
+  .border,
+  .border-2,
+  .border-4 {
+    border-style: solid;
+  }
+
+  .border-t {
+    border-top-style: solid;
+  }
+
+  .border-b {
+    border-bottom-style: solid;
+  }
+
+  .border-l,
+  .border-l-4 {
+    border-left-style: solid;
+  }
+
+  .border-r {
+    border-right-style: solid;
+  }
 }

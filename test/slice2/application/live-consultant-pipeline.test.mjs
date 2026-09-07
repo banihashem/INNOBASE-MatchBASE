@@ -247,7 +247,7 @@ test("live requires five actual verification calls after both native web discove
     mode: "live",
     on_checkpoint: async (event) => events.push(event),
   });
-  assert.equal(requests.length, 8);
+  assert.equal(requests.length, 15);
   assert.equal(result.verification_loops_completed, 5);
   assert.equal(result.candidates.length, 1);
   assert.equal(result.candidates[0].entity_basis, "live_verified");
@@ -265,10 +265,18 @@ test("live requires five actual verification calls after both native web discove
     ).length,
     5,
   );
-  assert.ok(
-    requests.slice(0, 7).every((body) => body.plugins[0].engine === "native"),
+  const nativeCalls = requests.filter((body) => body.plugins?.length);
+  const extractionCalls = requests.filter(
+    (body) =>
+      body.response_format?.json_schema?.name ===
+      "matchbase_native_evidence_extraction",
   );
-  assert.equal(requests[7].plugins, undefined);
+  assert.equal(nativeCalls.length, 7);
+  assert.ok(nativeCalls.every((body) => body.plugins[0].engine === "native"));
+  assert.ok(nativeCalls.every((body) => body.response_format === undefined));
+  assert.equal(extractionCalls.length, 7);
+  assert.ok(extractionCalls.every((body) => body.plugins === undefined));
+  assert.equal(requests.at(-1).plugins, undefined);
   assert.equal(result.synthesis_result.model, "openai/gpt-5.2");
   assert.ok(requests.every((body) => body.reasoning.effort === "high"));
   assert.ok(requests.every((body) => body.temperature === undefined));
@@ -279,7 +287,9 @@ test("live requires five actual verification calls after both native web discove
         (body) => body.max_tokens && body.max_completion_tokens === undefined,
       ),
   );
-  assert.equal(result.total_input_tokens, 80);
+  assert.equal(result.total_input_tokens, 150);
+  assert.equal(result.total_output_tokens, 300);
+  assert.ok(Math.abs(result.total_cost_usd - 0.15) < 1e-9);
   assert.equal(result.usage_complete, true);
 });
 test("provider prose or unannotated links cannot become live verified suppliers", async () => {
@@ -307,9 +317,51 @@ test("adaptive verification stops at fifteen actual loops and never pads a short
     { mode: "live" },
   );
   assert.equal(result.verification_loops_completed, 15);
-  assert.equal(requests.length, 18);
+  assert.equal(requests.length, 35);
   assert.equal(result.candidates.length, 1);
   assert.equal(result.stop_reason, "loop_limit");
+});
+test("L04 native extraction retains the local forty-candidate schema bound", async () => {
+  dispatch = () =>
+    respond(
+      discovery({
+        candidates: Array.from({ length: 41 }, () =>
+          structuredClone(candidate),
+        ),
+      }),
+    );
+  await assert.rejects(
+    executeDualLaneResearch(intake, { mode: "live" }),
+    /MB-422-LIVE-SCHEMA.*candidates/,
+  );
+  assert.equal(requests.filter((body) => body.plugins?.length).length, 2);
+  assert.equal(requests.length, 4);
+});
+test("L04 extraction annotations cannot replace native-search source authority", async () => {
+  const uncitedUrl = "https://other-manufacturer.com/products";
+  const unsupported = discovery();
+  unsupported.evidence[0].url = uncitedUrl;
+  unsupported.candidates[0].identity.source_urls = [uncitedUrl];
+  unsupported.candidates[0].product.source_urls = [uncitedUrl];
+  dispatch = (body) =>
+    body.plugins?.length
+      ? respond("Native research notes with a primary citation.")
+      : respond(unsupported, [
+          {
+            type: "url_citation",
+            url_citation: {
+              url: uncitedUrl,
+              title: "Extraction-only source",
+              content: quote,
+            },
+          },
+        ]);
+  const result = await executeDualLaneResearch(intake, { mode: "live" });
+  assert.equal(result.verification_loops_completed, 5);
+  assert.equal(result.candidates.length, 0);
+  assert.ok(
+    result.evidence_sources.every((source) => source.source_url !== uncitedUrl),
+  );
 });
 test("transport errors redact provider bodies and preserve a failed checkpoint", async () => {
   const events = [];

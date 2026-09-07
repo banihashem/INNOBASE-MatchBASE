@@ -859,8 +859,10 @@ export async function executeConsultantWorkflowResearch(
   options?: {
     mode?: ConsultantExecutionMode;
     assertLease?: () => Promise<void>;
+    signal?: AbortSignal;
   },
 ): Promise<ConsultantResearchOutputV3> {
+  options?.signal?.throwIfAborted();
   const session = activeSessions.get(runId);
   if (!session) throw new Error(`Workflow session ${runId} not found.`);
   if (
@@ -908,8 +910,13 @@ export async function executeConsultantWorkflowResearch(
         : session.approved_request_revision.key_specifications,
       target_supplier_count: 20,
     },
-    { mode, on_checkpoint: checkpoint },
+    {
+      mode,
+      on_checkpoint: checkpoint,
+      ...(options?.signal ? { signal: options.signal } : {}),
+    },
   );
+  options?.signal?.throwIfAborted();
 
   session.state = "lanes_converged";
   session.state = "verification_loop_running";

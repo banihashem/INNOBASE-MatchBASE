@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { Agent } from "undici";
 import { fetchPrimaryEvidenceText } from "./live-source-fetch.js";
 import {
   auditOpenRouterByok,
@@ -34,6 +35,7 @@ export interface OpenRouterCompletionParams {
   readonly max_tokens?: number;
   readonly reasoning?: { readonly effort: "high"; readonly exclude: true };
   readonly request_id?: string;
+  readonly timeout_ms?: number;
   readonly signal?: AbortSignal;
 }
 export interface OpenRouterCitation {
@@ -83,6 +85,7 @@ export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
   readonly model: string;
   readonly actual_model?: string;
   readonly request_hash: string;
+  readonly request_timeout_ms?: number;
   readonly provider_generation_id?: string;
   readonly started_at: string;
   readonly completed_at?: string;
@@ -391,6 +394,29 @@ export function safePublicEvidenceUrl(value: string): string | null {
 function finiteNonnegative(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
+const DEFAULT_COMPLETION_TIMEOUT_MS = 180000;
+const RESEARCH_COMPLETION_TIMEOUT_MS = 600000;
+const longResearchPhases = new Set([
+  "discovery_gemini",
+  "discovery_openai",
+  "verification",
+  "discovery_gemini_extraction",
+  "discovery_openai_extraction",
+  "verification_extraction",
+  "synthesis",
+]);
+function validateCompletionTimeout(timeoutMs: number): number {
+  if (
+    !Number.isInteger(timeoutMs) ||
+    timeoutMs <= 0 ||
+    timeoutMs > RESEARCH_COMPLETION_TIMEOUT_MS
+  )
+    throw new LiveResearchError(
+      "MB-422-LIVE-TIMEOUT",
+      "Provider request timeout must be a positive integer no greater than 600000 ms.",
+    );
+  return timeoutMs;
+}
 function providerErrorCategory(body: string, model: string): string {
   const normalized = body.toLowerCase().replace(/\\"/g, '"');
   if (
@@ -438,14 +464,22 @@ export async function callOpenRouterCompletion(
     );
   const startTime = Date.now();
   const requestId = params.request_id ?? randomUUID();
-  const timeout = AbortSignal.timeout(180000);
+  const timeoutMs = validateCompletionTimeout(
+    params.timeout_ms === undefined
+      ? DEFAULT_COMPLETION_TIMEOUT_MS
+      : params.timeout_ms,
+  );
+  const timeout = AbortSignal.timeout(timeoutMs);
   const signal = params.signal
     ? AbortSignal.any([params.signal, timeout])
     : timeout;
   let auditedResponse: OpenRouterCompletionResult | undefined;
+  let dispatcher: Agent | undefined;
   try {
+    signal.throwIfAborted();
     const provider = getConfiguredProviderRoute(params.model);
     const capabilities = await getOpenRouterModelCapabilities(params.model);
+    signal.throwIfAborted();
     const supported = new Set(capabilities.supported_parameters);
     const tokenParameter = supported.has("max_completion_tokens")
       ? "max_completion_tokens"
@@ -457,38 +491,44 @@ export async function callOpenRouterCompletion(
         "MB-422-MODEL-CAPABILITY",
         "The configured endpoint does not advertise a supported output-token limit.",
       );
+    dispatcher = new Agent({
+      headersTimeout: timeoutMs,
+      bodyTimeout: timeoutMs,
+    });
+    const fetchOptions = {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://innobase.matchbase.internal",
+        "X-Title": "MatchBASE Consultant Research",
+        "X-OpenRouter-Metadata": "enabled",
+      },
+      body: JSON.stringify({
+        model: params.model,
+        messages: params.messages,
+        ...(params.temperature !== undefined && supported.has("temperature")
+          ? { temperature: params.temperature }
+          : {}),
+        [tokenParameter]: params.max_tokens ?? 12000,
+        ...(params.plugins?.length ? { plugins: params.plugins } : {}),
+        ...(params.response_format
+          ? { response_format: params.response_format }
+          : {}),
+        ...(params.reasoning ? { reasoning: params.reasoning } : {}),
+        provider: {
+          only: [provider],
+          order: [provider],
+          require_parameters: true,
+          allow_fallbacks: false,
+        },
+      }),
+      signal,
+      dispatcher,
+    };
     const response = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://innobase.matchbase.internal",
-          "X-Title": "MatchBASE Consultant Research",
-          "X-OpenRouter-Metadata": "enabled",
-        },
-        body: JSON.stringify({
-          model: params.model,
-          messages: params.messages,
-          ...(params.temperature !== undefined && supported.has("temperature")
-            ? { temperature: params.temperature }
-            : {}),
-          [tokenParameter]: params.max_tokens ?? 12000,
-          ...(params.plugins?.length ? { plugins: params.plugins } : {}),
-          ...(params.response_format
-            ? { response_format: params.response_format }
-            : {}),
-          ...(params.reasoning ? { reasoning: params.reasoning } : {}),
-          provider: {
-            only: [provider],
-            order: [provider],
-            require_parameters: true,
-            allow_fallbacks: false,
-          },
-        }),
-        signal,
-      },
+      fetchOptions,
     );
     // Provider bodies may echo credentials or user input. Expose only controlled error codes.
     if (!response.ok) {
@@ -619,6 +659,25 @@ export async function callOpenRouterCompletion(
       );
     return auditedResponse;
   } catch (error) {
+    const transportCause = error instanceof Error ? error.cause : undefined;
+    const transportTimedOut =
+      transportCause !== null &&
+      typeof transportCause === "object" &&
+      "code" in transportCause &&
+      (transportCause.code === "UND_ERR_HEADERS_TIMEOUT" ||
+        transportCause.code === "UND_ERR_BODY_TIMEOUT");
+    if (signal.aborted || transportTimedOut) {
+      const cancelledByCaller =
+        params.signal?.aborted && signal.reason === params.signal.reason;
+      throw new LiveResearchError(
+        "MB-503-LIVE-TRANSPORT",
+        cancelledByCaller
+          ? "Provider request was cancelled by caller."
+          : `Provider request exceeded the ${timeoutMs} ms timeout.`,
+        !cancelledByCaller,
+        auditedResponse,
+      );
+    }
     if (error instanceof OpenRouterByokError)
       throw new LiveResearchError(
         error.code,
@@ -629,12 +688,12 @@ export async function callOpenRouterCompletion(
     if (error instanceof LiveResearchError) throw error;
     throw new LiveResearchError(
       "MB-503-LIVE-TRANSPORT",
-      signal.aborted
-        ? "Provider request was cancelled or timed out."
-        : "Provider transport or response decoding failed.",
+      "Provider transport or response decoding failed.",
       true,
       auditedResponse,
     );
+  } finally {
+    await dispatcher?.destroy();
   }
 }
 export async function runLiveCompletion(
@@ -669,6 +728,14 @@ export async function runLiveCompletion(
     evidence_urls: [],
   };
   try {
+    const timeoutMs = validateCompletionTimeout(
+      request.timeout_ms === undefined
+        ? longResearchPhases.has(context.phase)
+          ? RESEARCH_COMPLETION_TIMEOUT_MS
+          : DEFAULT_COMPLETION_TIMEOUT_MS
+        : request.timeout_ms,
+    );
+    checkpoint = { ...checkpoint, request_timeout_ms: timeoutMs };
     if (!getOpenRouterApiKey())
       throw new LiveResearchError(
         "MB-503-LIVE-CREDENTIAL",
@@ -702,16 +769,22 @@ export async function runLiveCompletion(
       generation_metadata_attempts: 0,
     };
     await options.on_checkpoint?.(checkpoint);
+    const callerSignals = [request.signal, options.signal].filter(
+      (signal): signal is AbortSignal => signal !== undefined,
+    );
     let result = await callOpenRouterCompletion({
       ...request,
       request_id: checkpointId,
+      timeout_ms: timeoutMs,
       ...(capabilities.reasoning
         ? { reasoning: { effort: "high", exclude: true } as const }
         : {}),
       ...(context.require_web
         ? { plugins: [{ id: "web", engine: "native" }] as const }
         : {}),
-      ...(options.signal ? { signal: options.signal } : {}),
+      ...(callerSignals.length
+        ? { signal: AbortSignal.any(callerSignals) }
+        : {}),
     });
     auditedResponse = result;
     if (

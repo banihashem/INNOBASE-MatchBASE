@@ -24,7 +24,8 @@
     "@matchbase/contracts": "workspace:*",
     "@matchbase/data": "workspace:*",
     "@matchbase/reporting": "workspace:*",
-    "@matchbase/security": "workspace:*"
+    "@matchbase/security": "workspace:*",
+    "undici": "7.29.1"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

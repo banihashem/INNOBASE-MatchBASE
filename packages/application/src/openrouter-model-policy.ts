@@ -73,6 +73,15 @@ export interface OpenRouterModelCapabilities {
   readonly served_model_ids?: readonly string[];
 }
 export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
+  readonly index_validation?: {
+    readonly accepted_candidates: number;
+    readonly reanchored_names: readonly string[];
+    readonly discarded_source_urls: readonly string[];
+    readonly rejected_candidates: readonly {
+      readonly legal_name: string;
+      readonly reason: string;
+    }[];
+  };
   readonly checkpoint_id: string;
   readonly request_id: string;
   readonly phase: string;

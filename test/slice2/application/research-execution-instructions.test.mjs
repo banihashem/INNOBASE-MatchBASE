@@ -611,17 +611,19 @@ test("MB-UX-LIVE-001 L04 malformed extraction fails local validation without an 
         (event) =>
           event.state === "completed" && event.request_id === failed.request_id,
       );
-      assert.ok(completed);
+      assert.equal(
+        completed,
+        undefined,
+        "Invalid structured output must not emit a successful completion checkpoint.",
+      );
       assert.equal(failed.phase, `discovery_gemini_extraction_${stage}`);
       assert.equal(failed.error, "MB-422-LIVE-SCHEMA");
-      assert.equal(failed.request_id, completed.request_id);
-      assert.equal(failed.response_content, completed.response_content);
       assert.equal(
         failed.response_content,
         typeof invalid === "string" ? invalid : JSON.stringify(invalid),
       );
-      assert.equal(failed.input_tokens, completed.input_tokens);
-      assert.equal(failed.output_tokens, completed.output_tokens);
+      assert.equal(failed.input_tokens, 10);
+      assert.equal(failed.output_tokens, 20);
       assert.equal(failed.is_byok, true);
       assert.equal(failed.native_web, false);
     }

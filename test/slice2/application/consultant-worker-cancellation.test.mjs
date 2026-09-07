@@ -119,7 +119,12 @@ function fixture(t) {
         return { rows: [] };
       }
       if (sql.includes("INSERT INTO consultant_workflow_session")) {
-        state.writes.push({ type: "session", state: params[4] });
+        state.writes.push({
+          type: "session",
+          state: params[4],
+          last_checkpoint: params[14],
+          metadata: JSON.parse(params[17]),
+        });
         return { rows: [] };
       }
       assert.fail(`Unexpected SQL boundary: ${sql.slice(0, 90)}`);
@@ -205,6 +210,13 @@ test("MB-UX-LIVE-001 L04 healthy lease keeps pending native requests active with
   assert.equal(state.finished.length, 1);
   assert.equal(state.finished[0][2], "failed");
   assert.ok(state.writes.some((write) => write.state === "workflow_failed"));
+  const terminal = state.writes.findLast(
+    (write) => write.state === "workflow_failed",
+  );
+  assert.equal(terminal.last_checkpoint, "workflow_failed");
+  assert.equal(terminal.metadata.progress.phase, "failed");
+  assert.match(terminal.metadata.progress.message, /Research stopped/);
+  assert.doesNotMatch(terminal.metadata.progress.message, /request started/);
   assert.ok(state.heartbeatCleared);
 });
 

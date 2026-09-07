@@ -1120,6 +1120,16 @@ export async function markConsultantWorkflowFailed(
       ? error.message
       : `Research could not complete (${code}).`;
   session.error = `${detail} Your approved request is saved. Execution ID: ${session.execution_id}.`;
+  // Terminal UI must never retain a stale parallel lane's "request started" message.
+  session.progress = {
+    phase: "failed",
+    loop: session.progress?.loop ?? 0,
+    max_loops: session.progress?.max_loops ?? (stage === "prepare" ? 3 : 15),
+    message:
+      "Research stopped. Your approved request is saved; the failed stage can be retried.",
+    updated_at: new Date().toISOString(),
+  };
+  session.last_checkpoint = "workflow_failed";
   await appendConsultantWorkflowEvent(db, session, "failed", { stage, code });
   await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
 }

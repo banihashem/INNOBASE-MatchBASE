@@ -298,7 +298,7 @@ test("MB-UX-LIVE-001 L05 twenty rich records use bounded batches and account for
   assert.equal(LIVE_DISCOVERY_SCHEMA.properties.candidates.maxItems, 40);
 });
 
-test("MB-UX-LIVE-001 L05 candidate index deduplicates grounded names and rejects invented anchors or sources before batches", async (t) => {
+test("MB-UX-LIVE-001 L06 candidate index deduplicates grounded names and rejects absent names before batches", async (t) => {
   const data = dataset(1);
   let roster = {
     ...data.index,
@@ -323,24 +323,6 @@ test("MB-UX-LIVE-001 L05 candidate index deduplicates grounded names and rejects
         { ...data.index.candidates[0], legal_name: "Invented Supplier" },
       ],
     },
-    {
-      ...data.index,
-      candidates: [
-        {
-          ...data.index.candidates[0],
-          anchor_quote: `${data.records[0].name} is invented evidence.`,
-        },
-      ],
-    },
-    {
-      ...data.index,
-      candidates: [
-        {
-          ...data.index.candidates[0],
-          source_urls: ["https://invented.example.com"],
-        },
-      ],
-    },
     { candidates: [] },
   ]) {
     roster = bad;
@@ -352,6 +334,44 @@ test("MB-UX-LIVE-001 L05 candidate index deduplicates grounded names and rejects
     );
     assert.equal(calls.length, count + 1);
   }
+});
+
+test("MB-UX-LIVE-001 L06 grounded index repairs are audited without granting new evidence", async (t) => {
+  const data = dataset(1);
+  const uncited = "https://invented.example.com/about";
+  data.index.candidates[0].anchor_quote = `"${data.records[0].name} is independently certified."`;
+  data.index.candidates[0].source_urls.push(uncited);
+  const events = [];
+  fixture(t, (body) => {
+    if (schemaName(body) === INDEX) return data.index;
+    assert.ok(
+      input(body).native_citations.every(
+        (citation) => citation.url !== uncited,
+      ),
+    );
+    return data.batch(input(body).assigned_candidate_names);
+  });
+  const output = await extractNativeDiscoveryPayload(
+    data.native,
+    "openai/gpt-5.2",
+    context,
+    { on_checkpoint: (event) => events.push(event) },
+  );
+  const indexed = events.find(
+    (event) => event.phase.endsWith("_index") && event.state === "completed",
+  );
+  assert.deepEqual(indexed.index_validation.discarded_source_urls, [uncited]);
+  assert.deepEqual(indexed.index_validation.reanchored_names, [
+    data.records[0].name,
+  ]);
+  assert.equal(events.filter((event) => event.state === "completed").length, 2);
+  assert.equal(output.results.length, 2);
+  assert.ok(
+    indexed.response_content.includes("independently certified"),
+    "Raw model audit remains immutable.",
+  );
+  assert.ok(!output.parsed.evidence.some((item) => item.url === uncited));
+  assert.equal(output.parsed.candidates[0].certifications.length, 0);
 });
 
 test("MB-UX-LIVE-001 L05 batches reject missing duplicate or unassigned names", async (t) => {

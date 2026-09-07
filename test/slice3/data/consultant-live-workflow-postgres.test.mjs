@@ -15,9 +15,263 @@ import {
   appendConsultantWorkflowEvent,
   renewConsultantWorkflowJobLease,
 } from "../../../packages/data/dist/index.js";
+import {
+  submitConsultantIntake,
+  retryConsultantIntakeInterpretation,
+} from "../../../packages/application/dist/consultant-v3-service.js";
+import { LivePreparationModelGateway } from "../../../packages/application/dist/live-preparation.js";
 
 const databaseUrl = process.env.MATCHBASE_CONSULTANT_TEST_DATABASE_URL;
 const postgresTest = databaseUrl ? test : test.skip;
+
+postgresTest(
+  "MB-UX-LIVE-001 L03 real submission transactions retain one immutable run and explicit retry",
+  async (t) => {
+    const pool = createPool({ connectionString: databaseUrl, max: 5 });
+    const accountId = randomUUID();
+    const userId = randomUUID();
+    const intake = {
+      account_id: accountId,
+      user_profile_id: userId,
+      product_requirement: "Industrial pumps",
+      technical_compliance: "",
+      order_profile: "",
+    };
+    // Only the provider is stubbed; admission, transactions, reads and CAS use PostgreSQL.
+    t.mock.method(globalThis, "fetch", async () => {
+      throw new Error(
+        "This database regression must not call an external provider.",
+      );
+    });
+    let failInterpretation = false;
+    const model = t.mock.method(
+      LivePreparationModelGateway.prototype,
+      "extractAndInterpret",
+      async () => {
+        if (failInterpretation)
+          throw Object.assign(new Error("Synthetic interpretation failure"), {
+            code: "MB-502-INTERPRETATION",
+          });
+        return {
+          english_translation: "Industrial pumps",
+          product_category: "Pumps",
+          product_name: "Industrial pumps",
+          explicit_requirements: [],
+          mandatory_requirements: [],
+          preferred_requirements: [],
+          excluded_requirements: [],
+          ambiguities: [],
+          unknowns: [],
+          suggested_clarifications: [],
+          classification: {},
+        };
+      },
+    );
+    try {
+      await migrateUp(pool);
+      await pool.query(
+        "INSERT INTO account(account_id,display_name,status) VALUES($1,'L03 isolated admission regression','active')",
+        [accountId],
+      );
+      const draft = await createConsultantDraftSession(pool, accountId, userId);
+      const options = {
+        mode: "live",
+        draft: {
+          draft_id: draft.draft_id,
+          expected_version: draft.draft_version,
+        },
+      };
+      await assert.rejects(
+        submitConsultantIntake(
+          { ...intake, user_profile_id: randomUUID() },
+          pool,
+          options,
+        ),
+        { code: "MB-404-DRAFT" },
+      );
+      await assert.rejects(
+        submitConsultantIntake(intake, pool, {
+          ...options,
+          draft: {
+            ...options.draft,
+            expected_version: draft.draft_version + 1,
+          },
+        }),
+        { code: "MB-409-DRAFT-CONFLICT" },
+      );
+      assert.equal(model.mock.callCount(), 0);
+
+      const [first, replay] = await Promise.all([
+        submitConsultantIntake(intake, pool, options),
+        submitConsultantIntake(intake, pool, options),
+      ]);
+      assert.equal(first.run_id, replay.run_id);
+      assert.equal(model.mock.callCount(), 1);
+      const retainedDraft = await getConsultantDraftSessionById(
+        pool,
+        accountId,
+        userId,
+        draft.draft_id,
+      );
+      assert.equal(retainedDraft.status, "submitted");
+      assert.equal(retainedDraft.draft_version, draft.draft_version + 1);
+      assert.ok(retainedDraft.snapshot_id);
+      const snapshots = await pool.query(
+        "SELECT snapshot_id,run_id,content_hash FROM consultant_intake_snapshot WHERE account_id=$1",
+        [accountId],
+      );
+      assert.equal(snapshots.rows.length, 1);
+      assert.equal(snapshots.rows[0].snapshot_id, retainedDraft.snapshot_id);
+      assert.equal(snapshots.rows[0].run_id, first.run_id);
+      await assert.rejects(
+        submitConsultantIntake(
+          { ...intake, product_requirement: "Changed product" },
+          pool,
+          options,
+        ),
+        { code: "MB-409-DRAFT-CONFLICT" },
+      );
+      await assert.rejects(
+        saveConsultantDraftSession(
+          pool,
+          { ...retainedDraft, current_run_id: randomUUID() },
+          retainedDraft.draft_version,
+        ),
+        { code: "MB-409-DRAFT-CONFLICT" },
+      );
+      const stored = await getConsultantWorkflowSessionByRunId(
+        pool,
+        accountId,
+        first.run_id,
+      );
+      await saveConsultantWorkflowSession(pool, {
+        ...stored,
+        original_intake: {
+          ...intake,
+          product_requirement: "Attempted overwrite",
+        },
+      });
+      assert.deepEqual(
+        (
+          await getConsultantWorkflowSessionByRunId(
+            pool,
+            accountId,
+            first.run_id,
+          )
+        ).original_intake,
+        intake,
+      );
+      assert.equal(model.mock.callCount(), 1);
+
+      const failedDraft = await createConsultantDraftSession(
+        pool,
+        accountId,
+        userId,
+      );
+      failInterpretation = true;
+      let failed;
+      await assert.rejects(
+        submitConsultantIntake(intake, pool, {
+          mode: "live",
+          draft: {
+            draft_id: failedDraft.draft_id,
+            expected_version: failedDraft.draft_version,
+          },
+        }),
+        (error) => {
+          failed = error;
+          return (
+            error.code === "MB-502-INTERPRETATION" &&
+            error.retry_action === "interpretation"
+          );
+        },
+      );
+      const failedRecord = await getConsultantWorkflowSessionByRunId(
+        pool,
+        accountId,
+        failed.run_id,
+      );
+      assert.equal(failedRecord.current_state, "workflow_failed");
+      assert.equal(
+        failedRecord.workflow_metadata.retry_action,
+        "interpretation",
+      );
+      const beforeRetry = model.mock.callCount();
+      await assert.rejects(
+        retryConsultantIntakeInterpretation(
+          pool,
+          accountId,
+          randomUUID(),
+          failed.run_id,
+        ),
+        { code: "MB-409-INTERPRETATION-RETRY" },
+      );
+      failInterpretation = false;
+      const retries = await Promise.allSettled([
+        retryConsultantIntakeInterpretation(
+          pool,
+          accountId,
+          userId,
+          failed.run_id,
+        ),
+        retryConsultantIntakeInterpretation(
+          pool,
+          accountId,
+          userId,
+          failed.run_id,
+        ),
+      ]);
+      assert.equal(
+        retries.filter((result) => result.status === "fulfilled").length,
+        1,
+      );
+      assert.equal(model.mock.callCount(), beforeRetry + 1);
+      const retry = retries.find(
+        (result) => result.status === "fulfilled",
+      ).value;
+      assert.equal(retry.run_id, failed.run_id);
+      assert.notEqual(retry.execution_id, failed.execution_id);
+      assert.equal(retry.state, "prep_step1_awaiting_approval");
+      const finalRecord = await getConsultantWorkflowSessionByRunId(
+        pool,
+        accountId,
+        failed.run_id,
+      );
+      assert.deepEqual(finalRecord.original_intake, intake);
+      assert.equal(finalRecord.approved_request_revision, null);
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT count(*)::int AS count FROM consultant_intake_snapshot WHERE account_id=$1",
+            [accountId],
+          )
+        ).rows[0].count,
+        2,
+      );
+      assert.deepEqual(
+        await getConsultantDraftSessionById(
+          pool,
+          accountId,
+          userId,
+          draft.draft_id,
+        ),
+        retainedDraft,
+      );
+    } finally {
+      for (const table of [
+        "consultant_workflow_event",
+        "consultant_workflow_session",
+        "consultant_draft_session",
+        "consultant_intake_snapshot",
+      ])
+        await pool.query(`DELETE FROM ${table} WHERE account_id=$1`, [
+          accountId,
+        ]);
+      await pool.query("DELETE FROM account WHERE account_id=$1", [accountId]);
+      await pool.end();
+    }
+  },
+);
 
 postgresTest(
   "MB-UX-LIVE-001 L01 atomic drafts, durable job leases and four-ID history",

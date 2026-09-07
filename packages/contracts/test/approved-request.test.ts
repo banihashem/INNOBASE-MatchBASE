@@ -18,6 +18,269 @@ const intake = {
 };
 const text = Object.values(intake).join("\n");
 
+const freightProfile = {
+  product_requirement: "International freight services.",
+  technical_compliance: "",
+  order_profile:
+    "تأمین‌کننده باید Freight Forwarder یا NVOCC فعال در امارات با سابقه حمل GCC باشد؛ دارای شبکه یا نماینده عملیاتی در عمان",
+};
+const freightInterpretation =
+  "The supplier must be a Freight Forwarder or NVOCC active in the UAE with experience shipping within the GCC; must have an operational network or agent in Oman.";
+
+test("MB-UX-LIVE-001 L03 separates business-role location from operating-presence location across languages", () => {
+  const facts = parseApprovedRequestFactsV3(freightProfile.order_profile).facts;
+  assert.equal(facts.length, 2);
+  assert.deepEqual(
+    facts.map((fact) => [fact.concept, fact.value, fact.qualifiers]),
+    [
+      [
+        "supplier_profile",
+        "freight_forwarder|nvocc",
+        {
+          role_combination: "any",
+          jurisdiction: "UAE",
+          activity: "active",
+          experience_jurisdiction: "GCC",
+        },
+      ],
+      [
+        "supplier_operational_presence",
+        "network|representative",
+        {
+          presence_combination: "any",
+          jurisdiction: "Oman",
+          scope: "operational",
+        },
+      ],
+    ],
+  );
+  for (const counterpart of ["agent", "partner", "representative"]) {
+    const result = validateStep1RequirementFidelity(freightProfile, {
+      english_translation: freightInterpretation.replace("agent", counterpart),
+    });
+    assert.equal(result.valid, true, result.explanation);
+    assert.equal(result.preserved_count, 2);
+    assert.ok(
+      result.ledger.requirements.every(
+        (item) => item.fidelity_status === "preserved",
+      ),
+    );
+  }
+});
+
+test("MB-UX-LIVE-001 L03 preserves alternative order and supports independent named jurisdictions", () => {
+  const variant = freightInterpretation
+    .replace("Freight Forwarder or NVOCC", "NVOCC or Freight Forwarder")
+    .replace("network or agent", "representative or network")
+    .replace("Oman", "Kuwait");
+  const source = {
+    ...freightProfile,
+    order_profile: freightProfile.order_profile.replace("عمان", "کویت"),
+  };
+  const result = validateStep1RequirementFidelity(source, {
+    english_translation: variant,
+  });
+  assert.equal(result.valid, true, result.explanation);
+});
+
+test("MB-UX-LIVE-001 L03 refuses supplier-role or operating-presence mutations", () => {
+  for (const [before, after, concept] of [
+    [
+      "Freight Forwarder or NVOCC",
+      "Freight Forwarder and NVOCC",
+      "supplier_profile",
+    ],
+    ["in the UAE", "in Oman", "supplier_profile"],
+    ["active in the UAE", "in the UAE", "supplier_profile"],
+    ["with experience shipping within the GCC", "", "supplier_profile"],
+    ["in Oman", "in Qatar", "supplier_operational_presence"],
+    [" in Oman", "", "supplier_operational_presence"],
+    ["network or agent", "network and agent", "supplier_operational_presence"],
+    ["network or agent", "agent", "supplier_operational_presence"],
+    ["operational network", "network", "supplier_operational_presence"],
+    [
+      "must have an operational",
+      "must not have an operational",
+      "supplier_operational_presence",
+    ],
+    [
+      "must have an operational",
+      "may optionally have an operational",
+      "supplier_operational_presence",
+    ],
+  ]) {
+    const result = validateStep1RequirementFidelity(freightProfile, {
+      english_translation: freightInterpretation.replace(before!, after!),
+      mandatory_requirements: [freightInterpretation],
+    });
+    assert.equal(result.valid, false, `${before} -> ${after}`);
+    assert.ok(
+      result.mutated_items.some((item) => item.requirement.concept === concept),
+      `${before} -> ${after}`,
+    );
+    assert.ok(
+      result.ledger.requirements.some(
+        (item) =>
+          item.concept === concept && item.fidelity_status === "mutated",
+      ),
+    );
+  }
+});
+
+test("MB-UX-LIVE-001 L03 ledger status reflects omitted and contradictory requirements", () => {
+  const omitted = validateStep1RequirementFidelity(freightProfile, {
+    english_translation: freightInterpretation.split(";")[0]!,
+  });
+  assert.equal(omitted.valid, false);
+  assert.equal(omitted.omitted_count, 1);
+  const omittedItem = omitted.omitted_items[0]!;
+  assert.equal(omittedItem.concept, "supplier_operational_presence");
+  assert.equal(omittedItem.source_box, "order_profile");
+  assert.equal(
+    omitted.ledger.requirements.find(
+      (item) => item.requirement_id === omittedItem.requirement_id,
+    )?.fidelity_status,
+    "omitted",
+  );
+
+  const conflict = validateStep1RequirementFidelity(freightProfile, {
+    english_translation: `${freightInterpretation} Must have an operational network or agent in Qatar.`,
+  });
+  assert.equal(conflict.valid, false);
+  assert.ok(
+    conflict.ledger.requirements.some(
+      (item) =>
+        item.concept === "supplier_operational_presence" &&
+        item.fidelity_status === "ambiguous",
+    ),
+  );
+});
+
+test("MB-UX-LIVE-001 L03 preserves each alternative's explicit operating location", () => {
+  const source = {
+    product_requirement: "",
+    technical_compliance: "",
+    order_profile: "Must have an operational network or agent in Oman.",
+  };
+  const sameLocation =
+    "Must have an operational network in Oman or an agent in Oman.";
+  const mixedLocation =
+    "Must have an operational network in UAE or an agent in Oman.";
+  assert.equal(
+    validateStep1RequirementFidelity(source, {
+      english_translation: sameLocation,
+    }).valid,
+    true,
+  );
+  const changed = validateStep1RequirementFidelity(source, {
+    english_translation: mixedLocation,
+  });
+  assert.equal(changed.valid, false);
+  assert.equal(
+    changed.mutated_items[0]?.requirement.concept,
+    "supplier_operational_presence",
+  );
+  const mixedSource = { ...source, order_profile: mixedLocation };
+  assert.equal(
+    validateStep1RequirementFidelity(mixedSource, {
+      english_translation: mixedLocation,
+    }).valid,
+    true,
+  );
+  assert.equal(
+    validateStep1RequirementFidelity(mixedSource, {
+      english_translation: sameLocation,
+    }).valid,
+    false,
+  );
+  assert.deepEqual(
+    parseApprovedRequestFactsV3(mixedLocation).facts[0]?.qualifiers,
+    {
+      presence_combination: "any",
+      presence_jurisdictions: "network:UAE|representative:Oman",
+      scope: "operational",
+    },
+  );
+});
+
+test("MB-UX-LIVE-001 L03 does not overwrite a business role's explicit location with its alternative", () => {
+  const source = {
+    product_requirement: "",
+    technical_compliance: "",
+    order_profile: "A Freight Forwarder or NVOCC active in UAE.",
+  };
+  assert.equal(
+    validateStep1RequirementFidelity(source, {
+      english_translation:
+        "A Freight Forwarder in Oman or NVOCC active in UAE.",
+    }).valid,
+    false,
+  );
+});
+
+test("MB-UX-LIVE-001 L03 never substitutes operating presence for an authorized distributor", () => {
+  const source = {
+    product_requirement: "",
+    technical_compliance: "Authorized UAE distributor.",
+    order_profile: "",
+  };
+  assert.equal(
+    validateStep1RequirementFidelity(source, {
+      english_translation:
+        "Must have an operational network or partner in the UAE.",
+    }).valid,
+    false,
+  );
+  const snapshot = createApprovedRequestSnapshotV3({
+    revision_id: "freight-profile",
+    approved_at: "2026-09-07T00:00:00Z",
+    product_name: "Freight service",
+    product_category: "Logistics service",
+    approved_translation: freightInterpretation,
+    intake: freightProfile,
+  });
+  assert.equal(snapshot.approved_translation, freightInterpretation);
+  assert.equal(
+    snapshot.facts.find(
+      (fact) => fact.concept === "supplier_operational_presence",
+    )?.qualifiers.jurisdiction,
+    "Oman",
+  );
+  assert.equal(verifyApprovedRequestSnapshotV3(snapshot), true);
+});
+
+test("MB-UX-LIVE-001 L03 does not classify product networks as supplier operating presence", () => {
+  for (const requirement of [
+    "Industrial network switches with redundant power supplies.",
+    "A neural network for image classification.",
+    "The equipment must have local network connectivity.",
+    "An operational industrial network in Oman.",
+    "سوئیچ‌های شبکه صنعتی و اتصال شبکه برای تجهیزات",
+    "شبکه عصبی برای پردازش تصویر",
+  ]) {
+    for (const sourceBox of [
+      "product_requirement",
+      "technical_compliance",
+      "order_profile",
+    ] as const) {
+      assert.ok(
+        !parseApprovedRequestFactsV3(requirement, sourceBox).facts.some(
+          (fact) =>
+            fact.concept === "supplier_profile" ||
+            fact.concept === "supplier_operational_presence",
+        ),
+        `${sourceBox}: ${requirement}`,
+      );
+    }
+  }
+  assert.equal(
+    parseApprovedRequestFactsV3(
+      "The supplier must have an operational network in Oman.",
+    ).facts[0]?.concept,
+    "supplier_operational_presence",
+  );
+});
+
 test("MB-UX-LIVE-001 L01 rejects semantic omissions and unrelated token matches", () => {
   assert.equal(
     validateStep1RequirementFidelity(intake, { english_translation: text })

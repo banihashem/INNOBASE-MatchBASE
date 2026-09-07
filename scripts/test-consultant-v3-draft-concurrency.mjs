@@ -258,6 +258,16 @@ async function runTests() {
   // Box 1: Industrial 500L water heater
   // Box 2: Halal poultry slaughter / SFDA poultry establishment requirements
   // Box 3: 10 units DDP Dubai
+  const submissionDraftRes = await fetch(
+    `${BASE_URL}/api/v1/consultant/workflow`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: consultantCookie },
+      body: JSON.stringify({ action: "create_draft" }),
+    },
+  );
+  assert.equal(submissionDraftRes.status, 200);
+  const submissionDraft = await submissionDraftRes.json();
   const contaminatedIntakeRes = await fetch(
     `${BASE_URL}/api/v1/consultant/workflow`,
     {
@@ -268,6 +278,8 @@ async function runTests() {
       },
       body: JSON.stringify({
         action: "submit_intake",
+        draft_id: submissionDraft.draft_id,
+        draft_version: submissionDraft.draft_version,
         product_requirement:
           "Industrial 500L commercial electric water heater, 10 bar working pressure, max 85cm outer diameter",
         technical_compliance:

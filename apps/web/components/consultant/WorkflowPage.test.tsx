@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ConsultantWorkflowPage from "../../app/consultant/workflow/page";
 import { GOLDEN_SCENARIO_V3_01 } from "@matchbase/contracts";
 import { SupplierDossierModal } from "./SupplierDossierModal";
+import { InterpretationApprovalStep } from "./InterpretationApprovalStep";
 
 function response(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -92,6 +93,349 @@ async function tick(ms = 0) {
     await vi.advanceTimersByTimeAsync(ms);
   });
 }
+
+describe("MB-UX-LIVE-001 L03 stage gates", () => {
+  it("restores the accepted intake and real running state after a competing submission wins", async () => {
+    const defaultFetch = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, options?: RequestInit) => {
+        const body = options?.body ? JSON.parse(String(options.body)) : {};
+        if (body.action === "submit_intake") {
+          requests.push(body);
+          return response(
+            {
+              success: false,
+              code: "MB-409-DRAFT-CONFLICT",
+              error: {
+                code: "MB-409-DRAFT-CONFLICT",
+                message: "Another tab already submitted this draft.",
+              },
+              run_id: "accepted-run",
+              draft_id: "draft-1",
+              draft_version: 4,
+            },
+            409,
+          );
+        }
+        if (String(url).includes("run_id=accepted-run"))
+          return response({
+            session: {
+              run_id: "accepted-run",
+              draft_id: "draft-1",
+              draft_version: 4,
+              state: "verification_loop_running",
+              mode: "live",
+              retry_action: "research",
+              intake: {
+                product_requirement: "Accepted pump",
+                technical_compliance: "Accepted CE requirement",
+                order_profile: "Accepted 10 units",
+              },
+              step1_interpretation: {
+                english_translation: "Accepted pump, CE required, 10 units",
+                fidelity_validation: { valid: true },
+              },
+              step3_deep_prompt: {
+                prompt_text: "Approved pump research",
+                is_approved: true,
+              },
+              progress: {
+                phase: "verification",
+                loop: 2,
+                max_loops: 15,
+                message: "Existing research is still running",
+              },
+            },
+          });
+        return defaultFetch(url, options);
+      }),
+    );
+    await openDraft();
+    edit("Rejected local edit");
+    fireEvent.click(
+      screen.getByRole("button", { name: /Submit Intake & Proceed/ }),
+    );
+    await tick();
+    expect(window.location.search).toBe(
+      "?draft_id=draft-1&run_id=accepted-run",
+    );
+    expect(
+      screen.getByRole("tab", { name: "Section 3: Research & Results" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.getByText("Existing research is still running"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Retry/ }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /Section 1: Request/ }));
+    expect(screen.getByLabelText("Product Requirement")).toHaveValue(
+      "Accepted pump",
+    );
+    expect(
+      screen.getByLabelText("Technical, Quality & Trade Requirements"),
+    ).toHaveValue("Accepted CE requirement");
+    expect(screen.getByLabelText("Order & Supplier Profile")).toHaveValue(
+      "Accepted 10 units",
+    );
+    expect(screen.getByLabelText("Product Requirement")).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "+ New Consultant Research" }),
+    ).toBeDisabled();
+    expect(
+      requests.some((item) =>
+        [
+          "approve_step1",
+          "approve_step3",
+          "retry_interpretation",
+          "execute_research",
+        ].includes(item.action),
+      ),
+    ).toBe(false);
+  });
+
+  it("opens research only after explicit prompt approval and keeps submitted input locked", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/consultant/workflow?run_id=run-stages",
+    );
+    const approval = deferred();
+    let session: any = {
+      run_id: "run-stages",
+      state: "prep_step3_prompt_awaiting_approval",
+      mode: "live",
+      intake: {
+        product_requirement: "Industrial pump",
+        technical_compliance: "CE required",
+        order_profile: "10 units to Dubai",
+      },
+      step1_interpretation: {
+        english_translation: "Industrial pump, CE required, 10 units to Dubai",
+        fidelity_validation: { valid: true },
+      },
+      step3_deep_prompt: {
+        prompt_text: "Find qualified industrial pump suppliers",
+        is_approved: false,
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, options?: RequestInit) => {
+        if (url === "/api/v1/me")
+          return response({
+            tier: "consultant",
+            user_id: "user",
+            account_id: "account",
+          });
+        if (!options?.method) return response({ session });
+        const body = JSON.parse(String(options.body));
+        requests.push(body);
+        if (body.action === "approve_step3") return approval.promise;
+        expect(body.action).toBe("execute_research");
+        session = {
+          ...session,
+          state: "verification_loop_running",
+          retry_action: "research",
+          progress: {
+            phase: "verification",
+            loop: 1,
+            max_loops: 15,
+            message: "First verification loop underway",
+          },
+        };
+        return response({ success: true, processing: true, session }, 202);
+      }),
+    );
+    render(<ConsultantWorkflowPage />);
+    const prompt = await screen.findByLabelText(
+      "Editable Synthesized Research Prompt",
+    );
+    const researchTab = screen.getByRole("tab", {
+      name: "Section 3: Research & Results",
+    });
+    expect(researchTab).toBeDisabled();
+    fireEvent.change(prompt, {
+      target: {
+        value: "Use this reviewed prompt; preserve CE and 10 units to Dubai.",
+      },
+    });
+    expect(requests).toHaveLength(0);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Approve Prompt & Start Research/ }),
+    );
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0]?.edited_prompt).toBe(
+      "Use this reviewed prompt; preserve CE and 10 units to Dubai.",
+    );
+    expect(researchTab).toBeDisabled();
+    session = {
+      ...session,
+      state: "prep_step3_prompt_approved",
+      step3_deep_prompt: {
+        prompt_text: requests[0]?.edited_prompt,
+        is_approved: true,
+      },
+    };
+    await act(async () => {
+      approval.resolve(response({ success: true, session }));
+    });
+    await screen.findByText("First verification loop underway");
+    expect(researchTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "+ New Consultant Research" }),
+    ).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole("tab", { name: "Section 2: Preparation" }),
+    );
+    expect(prompt).toBeDisabled();
+    expect(
+      screen.getByLabelText("Editable English Interpretation"),
+    ).toBeDisabled();
+    expect(
+      requests.filter((item) => item.action === "execute_research"),
+    ).toHaveLength(1);
+  });
+
+  it("retains a failed submitted run and retries interpretation only on explicit request", async () => {
+    const defaultFetch = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, options?: RequestInit) => {
+        const body = options?.body ? JSON.parse(String(options.body)) : {};
+        if (body.action === "submit_intake") {
+          requests.push(body);
+          expect(body.draft_version).toBe(2);
+          return response(
+            {
+              success: false,
+              error: {
+                code: "MB-502-LIVE-PROVIDER",
+                message: "Interpretation provider stopped",
+              },
+              run_id: "failed-intake",
+              execution_id: "attempt-1",
+              draft_id: "draft-1",
+              draft_version: 3,
+              retry_action: "interpretation",
+            },
+            502,
+          );
+        }
+        if (body.action === "retry_interpretation") {
+          requests.push(body);
+          expect(body.run_id).toBe("failed-intake");
+          return response({
+            success: true,
+            session: {
+              run_id: "failed-intake",
+              draft_id: "draft-1",
+              draft_version: 3,
+              state: "prep_step1_awaiting_approval",
+              retry_action: null,
+              step1_interpretation: {
+                english_translation: "Product A. Technical A. Order A.",
+                fidelity_validation: { valid: true },
+              },
+            },
+          });
+        }
+        if (body.action === "validate_step1_fidelity")
+          return response({ success: true, fidelity: { valid: true } });
+        return defaultFetch(url, options);
+      }),
+    );
+    await openDraft();
+    edit();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Submit Intake & Proceed/ }),
+    );
+    await tick();
+    expect(window.location.search).toBe(
+      "?draft_id=draft-1&run_id=failed-intake",
+    );
+    expect(
+      screen.getByRole("tab", { name: "Section 2: Preparation" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.getByRole("button", { name: "+ New Consultant Research" }),
+    ).toBeDisabled();
+    expect(screen.getByLabelText("Product Requirement")).toBeDisabled();
+    expect(
+      screen.queryByLabelText("Editable English Interpretation"),
+    ).not.toBeInTheDocument();
+    expect(
+      requests.filter((item) => item.action === "retry_interpretation"),
+    ).toHaveLength(0);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry Interpretation" }),
+    );
+    await tick();
+    await tick(450);
+    expect(
+      screen.getByLabelText("Editable English Interpretation"),
+    ).toHaveValue("Product A. Technical A. Order A.");
+    expect(
+      screen.getByRole("button", { name: "Approve Interpretation & Proceed" }),
+    ).toBeEnabled();
+    expect(
+      requests.filter((item) => item.action === "retry_interpretation"),
+    ).toHaveLength(1);
+    expect(
+      requests.some(
+        (item) =>
+          item.action === "approve_step1" || item.action === "execute_research",
+      ),
+    ).toBe(false);
+  });
+
+  it("shows authoritative omission for a legacy preserved ledger row without claiming complete detection", () => {
+    const requirement = {
+      requirement_id: "supplier-profile",
+      normalized_label: "Supplier representation",
+      concept: "supplier_profile",
+      source_text: "Have a representative in Iran",
+      normalized_value: "Representative in Iran",
+      fidelity_status: "preserved",
+    };
+    render(
+      <InterpretationApprovalStep
+        workflowState="prep_step1_awaiting_approval"
+        isLoading={false}
+        step1Translation="Freight service"
+        step1Fidelity={{
+          valid: false,
+          omitted_count: 1,
+          mutated_count: 0,
+          preserved_count: 0,
+          omitted_items: [requirement],
+          mutated_items: [],
+          ledger: { total_explicit_count: 1, requirements: [requirement] },
+        }}
+        isFidelityValidating={false}
+        showFullLedger
+        setShowFullLedger={() => {}}
+        onTranslationChange={() => {}}
+        onRetryValidation={() => {}}
+        handleApproveStep1={async () => {}}
+      />,
+    );
+    const row = screen.getByRole("row", { name: /Supplier representation/ });
+    expect(within(row).getByText("omitted")).toBeInTheDocument();
+    expect(within(row).queryByText("preserved")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Approval Gated (Fidelity Issues)" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(/a passed check does not establish/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/all explicit requirements preserved/i),
+    ).not.toBeInTheDocument();
+  });
+});
 
 describe("MB-UX-LIVE-001 L01 draft transitions", () => {
   it("preserves constraint-only evidence and the source currency, price type and validity in the dossier", () => {
@@ -286,6 +630,12 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     );
     await openDraft();
     edit();
+    expect(
+      screen.getByRole("tab", { name: "Section 1: Request" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.getByRole("tab", { name: "Section 2: Preparation" }),
+    ).toBeDisabled();
     fireEvent.click(
       screen.getByRole("button", { name: /Submit Intake & Proceed/ }),
     );
@@ -331,6 +681,33 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     expect(
       screen.getByLabelText("Editable English Interpretation"),
     ).toHaveValue("Product A. Technical A. Order A.");
+    expect(
+      screen.getByRole("tab", { name: "Section 2: Preparation" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.getByRole("tab", { name: "Section 3: Research & Results" }),
+    ).toBeDisabled();
+    expect(startNew).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Resume Research" }),
+    ).toBeDisabled();
+    const requestTab = screen.getByRole("tab", { name: /Section 1: Request/ });
+    fireEvent.click(requestTab);
+    expect(screen.getByLabelText("Product Requirement")).toBeDisabled();
+    expect(
+      screen.getByLabelText("Technical, Quality & Trade Requirements"),
+    ).toBeDisabled();
+    expect(screen.getByLabelText("Order & Supplier Profile")).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /Submit Intake & Proceed/ }),
+    ).toBeDisabled();
+    fireEvent.keyDown(requestTab, { key: "ArrowRight" });
+    const preparationTab = screen.getByRole("tab", {
+      name: "Section 2: Preparation",
+    });
+    expect(preparationTab).toHaveFocus();
+    expect(preparationTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
   });
   it("ignores an older valid response after the current interpretation fails validation", async () => {
     window.history.replaceState(
@@ -533,6 +910,12 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     );
     render(<ConsultantWorkflowPage />);
     await screen.findByText(/Showing 5 of 20/);
+    expect(
+      screen.getByRole("tab", { name: "Section 3: Research & Results" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.getByRole("button", { name: "+ New Consultant Research" }),
+    ).toBeEnabled();
     const best = [...output.supplier_candidates].sort(
       (a, b) =>
         b.assessment.compatibility_score - a.assessment.compatibility_score,

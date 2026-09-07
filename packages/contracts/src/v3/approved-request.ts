@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { parseSupplierServiceRequirements } from "./supplier-requirements.js";
 
 export type ApprovedFactOperator =
   "eq" | "gte" | "lte" | "range" | "requires" | "prohibits";
@@ -216,7 +217,7 @@ export function parseApprovedRequestFactsV3(
       operator: options.operator ?? "requires",
       modality: /\bprefer(?:red|ably)?\b|ترجیح/i.test(source)
         ? "preferred"
-        : /\boptional\b|اختیاری/i.test(source)
+        : /\boptional(?:ly)?\b|اختیاری/i.test(source)
           ? "optional"
           : "mandatory",
       qualifiers: options.qualifiers ?? {},
@@ -379,7 +380,19 @@ export function parseApprovedRequestFactsV3(
         { operator: "eq", qualifiers: destination ? { destination } : {} },
       );
     }
-    if (/distributor|توزیع\s*کننده|نماینده/i.test(clause)) {
+    const supplierRequirements = parseSupplierServiceRequirements(clause);
+    for (const requirement of supplierRequirements)
+      add(requirement.concept, requirement.label, requirement.value, source, {
+        operator: requirement.operator,
+        qualifiers: requirement.qualifiers,
+      });
+    const hasOperatingPresence = supplierRequirements.some(
+      (requirement) => requirement.concept === "supplier_operational_presence",
+    );
+    if (
+      /distributor|توزیع\s*کننده/i.test(clause) ||
+      (!hasOperatingPresence && /نماینده/i.test(clause))
+    ) {
       const authorized = /\bauthori[sz]ed\b|مجاز/i.test(clause);
       const jurisdiction =
         /(?:authori[sz]ed\s+UAE\s+distributor|distributor\s+(?:in|for)\s+(?:the\s+)?UAE|مجاز.*UAE)/i.test(
@@ -480,6 +493,32 @@ export function parseApprovedRequestFactsV3(
   return { facts, unparsed_clauses: unparsed };
 }
 
+function formatSupplierAlternatives(
+  fact: ApprovedRequestFactV3,
+  kind: "role" | "presence",
+): string {
+  const names: Record<string, string> = {
+    freight_forwarder: "Freight Forwarder",
+    nvocc: "NVOCC",
+  };
+  const memberLocations = new Map(
+    (fact.qualifiers[`${kind}_jurisdictions`] ?? "")
+      .split("|")
+      .filter(Boolean)
+      .map((item) => [
+        item.slice(0, item.indexOf(":")),
+        item.slice(item.indexOf(":") + 1),
+      ]),
+  );
+  return String(fact.value)
+    .split("|")
+    .map((member) => {
+      const location = memberLocations.get(member);
+      return `${names[member] ?? member}${location ? ` in ${location}` : ""}`;
+    })
+    .join(fact.qualifiers[`${kind}_combination`] === "any" ? " or " : " and ");
+}
+
 export function formatApprovedFactV3(fact: ApprovedRequestFactV3): string {
   const prefix =
     fact.operator === "gte"
@@ -489,6 +528,14 @@ export function formatApprovedFactV3(fact: ApprovedRequestFactV3): string {
         : fact.operator === "prohibits"
           ? "Excluded: "
           : "";
+  if (fact.concept === "supplier_operational_presence") {
+    const modes = formatSupplierAlternatives(fact, "presence");
+    return `${prefix}${fact.qualifiers.scope === "operational" ? "Operational " : ""}${modes}${fact.qualifiers.jurisdiction ? ` in ${fact.qualifiers.jurisdiction}` : ""}`;
+  }
+  if (fact.concept === "supplier_profile" && fact.qualifiers.role_combination) {
+    const roles = formatSupplierAlternatives(fact, "role");
+    return `${prefix}${roles}${fact.qualifiers.activity ? ` ${fact.qualifiers.activity}` : ""}${fact.qualifiers.jurisdiction ? ` in ${fact.qualifiers.jurisdiction}` : ""}${fact.qualifiers.experience_jurisdiction ? `; experience in ${fact.qualifiers.experience_jurisdiction}` : ""}`;
+  }
   const value =
     typeof fact.value === "boolean"
       ? fact.label

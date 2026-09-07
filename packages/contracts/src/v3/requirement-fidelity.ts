@@ -178,10 +178,11 @@ export function validateStep1RequirementFidelity(
     step1.english_translation || "",
   ).facts;
   const requirementFor = factToRequirement;
+  const evaluatedRequirements: ExplicitRequirementItem[] = [];
   const ledger: ExplicitRequirementLedger = {
     ledger_id: randomUUID(),
     intake_hash: computeSnapshotContentHash(intake),
-    requirements: expected.map(requirementFor),
+    requirements: evaluatedRequirements,
     total_explicit_count: expected.length,
   };
   const omitted: ExplicitRequirementItem[] = [];
@@ -212,12 +213,16 @@ export function validateStep1RequirementFidelity(
       (candidate) => candidate.concept === fact.concept,
     );
     if (!candidates.length) {
-      omitted.push({ ...item, fidelity_status: "omitted" });
+      const evaluated = { ...item, fidelity_status: "omitted" as const };
+      omitted.push(evaluated);
+      evaluatedRequirements.push(evaluated);
       continue;
     }
     if (!candidates.some((candidate) => equivalent(fact, candidate))) {
+      const evaluated = { ...item, fidelity_status: "mutated" as const };
+      evaluatedRequirements.push(evaluated);
       mutated.push({
-        requirement: { ...item, fidelity_status: "mutated" },
+        requirement: evaluated,
         expected_operator: fact.operator,
         observed_operator: candidates[0]!.operator,
         prohibited_value: candidates.map(formatApprovedFactV3).join("; "),
@@ -230,12 +235,15 @@ export function validateStep1RequirementFidelity(
       candidates.some((candidate) => !equivalent(fact, candidate)) &&
       expected.filter((x) => x.concept === fact.concept).length === 1
     ) {
+      const evaluated = { ...item, fidelity_status: "ambiguous" as const };
+      evaluatedRequirements.push(evaluated);
       mutated.push({
-        requirement: { ...item, fidelity_status: "ambiguous" },
+        requirement: evaluated,
         explanation: `Conflicting values for '${fact.label}' appear in the interpretation.`,
       });
       continue;
     }
+    evaluatedRequirements.push(item);
     preserved++;
   }
   const empty = !step1.english_translation?.trim();

@@ -226,6 +226,16 @@ async function runAllGates() {
   const consultantCookie = await getAuthCookie("consultant");
 
   // Submit intake first to establish a session
+  const submissionDraftRes = await fetch(
+    `${BASE_URL}/api/v1/consultant/workflow`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: consultantCookie },
+      body: JSON.stringify({ action: "create_draft" }),
+    },
+  );
+  assert.equal(submissionDraftRes.status, 200);
+  const submissionDraft = await submissionDraftRes.json();
   const intakeRes = await fetch(`${BASE_URL}/api/v1/consultant/workflow`, {
     method: "POST",
     headers: {
@@ -234,6 +244,8 @@ async function runAllGates() {
     },
     body: JSON.stringify({
       action: "submit_intake",
+      draft_id: submissionDraft.draft_id,
+      draft_version: submissionDraft.draft_version,
       product_requirement: baseWaterHeaterIntake.product_requirement,
       technical_compliance: baseWaterHeaterIntake.technical_compliance,
       order_profile: baseWaterHeaterIntake.order_profile,

@@ -114,6 +114,16 @@ async function runTests() {
   );
 
   console.log("\n4. Testing Atomic 3-Box Intake Snapshot in Database...");
+  const submissionDraftRes = await fetch(
+    `${BASE_URL}/api/v1/consultant/workflow`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: consultantCookie },
+      body: JSON.stringify({ action: "create_draft" }),
+    },
+  );
+  assert.equal(submissionDraftRes.status, 200);
+  const submissionDraft = await submissionDraftRes.json();
   const submitRes = await fetch(`${BASE_URL}/api/v1/consultant/workflow`, {
     method: "POST",
     headers: {
@@ -122,6 +132,8 @@ async function runTests() {
     },
     body: JSON.stringify({
       action: "submit_intake",
+      draft_id: submissionDraft.draft_id,
+      draft_version: submissionDraft.draft_version,
       product_requirement: "Frozen whole chicken Grade A 1100g",
       technical_compliance:
         "SFDA foreign slaughterhouse approval, FAMBRAS Halal",

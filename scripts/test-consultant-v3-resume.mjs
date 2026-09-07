@@ -165,6 +165,7 @@ async function runTests() {
   const intakePayload = {
     action: "submit_intake",
     draft_id: testDraftId,
+    draft_version: draftData.draft_version,
     product_requirement: "Commercial Electric Storage Water Heater 500L 48kW",
     technical_compliance: "CE PED Directive 2014/68/EU & UAE MoIAT ECAS 10 bar",
     order_profile: "15 units DDP Jebel Ali Free Zone Dubai",

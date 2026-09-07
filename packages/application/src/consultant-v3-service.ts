@@ -6,6 +6,8 @@ import {
   getConsultantWorkflowSessionByRunId,
   getConsultantOutputV3ByRunId,
   saveConsultantIntakeSnapshot,
+  admitConsultantDraftSubmission,
+  getConsultantDraftSessionByRunId,
   computeIntakeContentHash,
   type ConsultantWorkflowSessionRecord,
   appendConsultantWorkflowEvent,
@@ -59,6 +61,8 @@ export interface ConsultantIntakeSubmission {
 }
 
 export interface WorkflowSession {
+  readonly draft_id?: string;
+  readonly draft_version?: number;
   readonly session_id: string;
   readonly run_id: string;
   readonly user_profile_id: string;
@@ -67,7 +71,7 @@ export interface WorkflowSession {
   readonly classification_id: string;
   mode: ConsultantExecutionMode;
   progress?: ConsultantWorkflowProgress | undefined;
-  retry_action?: "prepare" | "research" | null | undefined;
+  retry_action?: "interpretation" | "prepare" | "research" | null | undefined;
   state: ConsultantWorkflowState;
   readonly intake: ConsultantIntakeSubmission;
   request_revision_id: string;
@@ -286,8 +290,19 @@ function mapRecordToSession(
 export async function submitConsultantIntake(
   submission: ConsultantIntakeSubmission,
   db?: Queryable,
-  options?: { mode?: ConsultantExecutionMode },
+  options?: {
+    mode?: ConsultantExecutionMode;
+    draft?: { draft_id: string; expected_version: number };
+  },
 ): Promise<WorkflowSession> {
+  submission = Object.freeze({ ...submission });
+  if (options?.draft && (!db || !("connect" in db)))
+    throw new ApplicationFault(
+      503,
+      "submission-storage-required",
+      "MB-503-SUBMISSION-STORAGE",
+      "Draft submission requires transactional storage.",
+    );
   const session_id = crypto.randomUUID();
   const run_id = crypto.randomUUID();
   const execution_id = crypto.randomUUID();
@@ -332,8 +347,9 @@ export async function submitConsultantIntake(
     },
     workflow_metadata: { mode, classification_id, revealed_count: 5 },
   };
+  let submittedDraft: { draft_id: string; draft_version: number } | undefined;
   if (db) {
-    await saveConsultantIntakeSnapshot(db, {
+    const snapshot = {
       ...identity,
       snapshot_id: crypto.randomUUID(),
       revision_number: 1,
@@ -345,9 +361,74 @@ export async function submitConsultantIntake(
         submission.technical_compliance,
         submission.order_profile,
       ),
-    });
-    await saveConsultantWorkflowSession(db, initialRecord);
+    };
+    const persist = async (client: Queryable) => {
+      if (options?.draft) {
+        const admission = await admitConsultantDraftSubmission(client, {
+          ...options.draft,
+          mode,
+          snapshot,
+        });
+        submittedDraft = {
+          draft_id: admission.draft_id,
+          draft_version: admission.draft_version,
+        };
+        if (admission.replay) return admission.run_id;
+      } else {
+        await saveConsultantIntakeSnapshot(client, snapshot);
+      }
+      await saveConsultantWorkflowSession(client, initialRecord);
+      return null;
+    };
+    const existingRunId =
+      "connect" in db
+        ? await inTransaction(db as ConnectionPool, persist)
+        : await persist(db);
+    if (existingRunId) {
+      const existing = await getOrRestoreWorkflowSession(
+        db,
+        submission.account_id,
+        existingRunId,
+      );
+      if (!existing)
+        throw new ApplicationFault(
+          409,
+          "submitted-run-unavailable",
+          "MB-409-SUBMITTED-RUN",
+          "The submitted run is unavailable. Its original intake remains locked.",
+        );
+      return { ...existing, ...submittedDraft };
+    }
   }
+  return interpretConsultantIntake(
+    submission,
+    db,
+    mode,
+    initialRecord,
+    submittedDraft,
+  );
+}
+
+async function interpretConsultantIntake(
+  submission: ConsultantIntakeSubmission,
+  db: Queryable | undefined,
+  mode: ConsultantExecutionMode,
+  initialRecord: ConsultantWorkflowSessionRecord,
+  submittedDraft?: { draft_id: string; draft_version: number },
+): Promise<WorkflowSession> {
+  const { session_id, run_id } = initialRecord;
+  const execution_id = initialRecord.execution_id!;
+  const classification_id = String(
+    initialRecord.workflow_metadata!.classification_id,
+  );
+  const revision_id = String(initialRecord.draft_revision!.revision_id);
+  const identity = {
+    account_id: submission.account_id,
+    user_profile_id: submission.user_profile_id,
+    run_id,
+    execution_id,
+    classification_id,
+  };
   // An interpretation failure remains traceable even before the first user approval.
   const step1 = await preparationGateway(mode, async (event) => {
     if (db)
@@ -382,19 +463,29 @@ export async function submitConsultantIntake(
           current_state: "workflow_failed",
           workflow_metadata: {
             ...initialRecord.workflow_metadata,
+            retry_action: "interpretation",
             error: `Interpretation failed (${code}). Execution ID: ${execution_id}.`,
           },
         });
       }
-      throw new ApplicationFault(
-        Number(code.match(/^MB-(\d{3})/)?.[1] ?? 502),
-        "interpretation-failed",
-        code,
-        `Interpretation could not complete (${code}). Your intake is saved. Execution ID: ${execution_id}.`,
+      throw Object.assign(
+        new ApplicationFault(
+          Number(code.match(/^MB-(\d{3})/)?.[1] ?? 502),
+          "interpretation-failed",
+          code,
+          `Interpretation could not complete (${code}). Your intake is saved. Execution ID: ${execution_id}.`,
+        ),
+        {
+          run_id,
+          execution_id,
+          retry_action: "interpretation",
+          ...submittedDraft,
+        },
       );
     });
 
   const session: WorkflowSession = {
+    ...submittedDraft,
     session_id,
     run_id,
     user_profile_id: submission.user_profile_id,
@@ -443,6 +534,61 @@ export async function submitConsultantIntake(
   }
 
   return session;
+}
+
+/** An explicit retry retains the original run and intake, with a fresh execution ID. */
+export async function retryConsultantIntakeInterpretation(
+  db: ConnectionPool,
+  accountId: string,
+  userId: string,
+  runId: string,
+): Promise<WorkflowSession> {
+  const executionId = crypto.randomUUID();
+  const record = await inTransaction(db, async (client) => {
+    const claimed = await client.query<{ run_id: string }>(
+      `UPDATE consultant_workflow_session
+          SET current_state='prep_step1_interpreting', execution_id=$4,
+              workflow_metadata=(COALESCE(workflow_metadata,'{}'::jsonb) - 'error') ||
+                '{"retry_action":"interpretation"}'::jsonb,
+              updated_at=clock_timestamp()
+        WHERE account_id=$1 AND user_profile_id=$2 AND run_id=$3
+          AND NOT is_invalidated AND current_state='workflow_failed'
+          AND approved_request_revision IS NULL
+          AND workflow_metadata->>'retry_action'='interpretation'
+        RETURNING run_id`,
+      [accountId, userId, runId, executionId],
+    );
+    if (!claimed.rows[0])
+      throw new ApplicationFault(
+        409,
+        "interpretation-retry-unavailable",
+        "MB-409-INTERPRETATION-RETRY",
+        "This interpretation cannot be retried in its current state.",
+      );
+    const stored = await getConsultantWorkflowSessionByRunId(
+      client,
+      accountId,
+      runId,
+    );
+    if (!stored)
+      throw new Error("Claimed interpretation record was not found.");
+    return stored;
+  });
+  const submission = Object.freeze({
+    ...(record.original_intake as unknown as ConsultantIntakeSubmission),
+    account_id: accountId,
+    user_profile_id: userId,
+  });
+  const draft = await getConsultantDraftSessionByRunId(db, accountId, runId);
+  return interpretConsultantIntake(
+    submission,
+    db,
+    (record.workflow_metadata?.mode as ConsultantExecutionMode) ?? "live",
+    record,
+    draft
+      ? { draft_id: draft.draft_id, draft_version: draft.draft_version }
+      : undefined,
+  );
 }
 
 /**

@@ -428,7 +428,6 @@ export async function saveConsultantWorkflowSession(
     ON CONFLICT (account_id, run_id)
     DO UPDATE SET
       current_state = EXCLUDED.current_state,
-      original_intake = EXCLUDED.original_intake,
       draft_revision = EXCLUDED.draft_revision,
       approved_request_revision = EXCLUDED.approved_request_revision,
       advisory_output = EXCLUDED.advisory_output,
@@ -821,7 +820,7 @@ export async function saveConsultantDraftSession(
            draft_data = $6,
            updated_at = clock_timestamp()
        WHERE draft_id = $1 AND account_id = $7 AND user_profile_id=$8
-         AND draft_version=$9 AND (status='active' OR $5 <> 'active')
+          AND draft_version=$9 AND status='active'
        RETURNING draft_id, draft_version;`,
       [
         draft.draft_id,
@@ -892,6 +891,114 @@ export async function saveConsultantDraftSession(
     }
     return inserted.rows[0];
   }
+}
+
+/** Call inside the same transaction that persists the initial workflow session. */
+export async function admitConsultantDraftSubmission(
+  db: Queryable,
+  input: {
+    draft_id: string;
+    expected_version: number;
+    mode: "live" | "demonstration" | "hybrid";
+    snapshot: ConsultantIntakeSnapshotRecord;
+  },
+): Promise<{
+  replay: boolean;
+  run_id: string;
+  draft_id: string;
+  draft_version: number;
+}> {
+  const { snapshot } = input;
+  const result = await db.query<{
+    draft_version: number;
+    status: string;
+    current_run_id: string | null;
+    draft_data: Record<string, unknown>;
+  }>(
+    `SELECT draft_version, status, current_run_id, draft_data
+       FROM consultant_draft_session
+      WHERE draft_id=$1 AND account_id=$2 AND user_profile_id=$3
+      FOR UPDATE`,
+    [input.draft_id, snapshot.account_id, snapshot.user_profile_id],
+  );
+  const existing = result.rows[0];
+  if (!existing)
+    throw Object.assign(new Error("Draft not found."), {
+      status: 404,
+      code: "MB-404-DRAFT",
+    });
+  const draftData = {
+    product_requirement: snapshot.product_requirement,
+    technical_compliance: snapshot.technical_compliance,
+    order_profile: snapshot.order_profile,
+    execution_mode: input.mode,
+  };
+  if (
+    existing.status === "submitted" &&
+    existing.current_run_id &&
+    [existing.draft_version, existing.draft_version - 1].includes(
+      input.expected_version,
+    ) &&
+    Object.entries(draftData).every(
+      ([key, value]) => existing.draft_data[key] === value,
+    )
+  )
+    return {
+      replay: true,
+      run_id: existing.current_run_id,
+      draft_id: input.draft_id,
+      draft_version: existing.draft_version,
+    };
+  if (
+    existing.status !== "active" ||
+    existing.current_run_id ||
+    existing.draft_version !== input.expected_version
+  )
+    throw Object.assign(
+      new Error(
+        "This draft was changed or submitted. Its submitted intake cannot be replaced.",
+      ),
+      {
+        status: 409,
+        code: "MB-409-DRAFT-CONFLICT",
+        current_version: existing.draft_version,
+        submitted_version: input.expected_version,
+        draft_id: input.draft_id,
+        ...(existing.current_run_id ? { run_id: existing.current_run_id } : {}),
+      },
+    );
+  await saveConsultantIntakeSnapshot(db, snapshot);
+  const updated = await db.query<{ draft_version: number }>(
+    `UPDATE consultant_draft_session
+        SET current_run_id=$4, snapshot_id=$5, draft_version=draft_version+1,
+            status='submitted', draft_data=$6, updated_at=clock_timestamp()
+      WHERE draft_id=$1 AND account_id=$2 AND user_profile_id=$3
+        AND status='active' AND current_run_id IS NULL AND draft_version=$7
+      RETURNING draft_version`,
+    [
+      input.draft_id,
+      snapshot.account_id,
+      snapshot.user_profile_id,
+      snapshot.run_id,
+      snapshot.snapshot_id,
+      JSON.stringify(draftData),
+      input.expected_version,
+    ],
+  );
+  if (!updated.rows[0])
+    throw Object.assign(
+      new Error("This draft was submitted in another request."),
+      {
+        status: 409,
+        code: "MB-409-DRAFT-CONFLICT",
+      },
+    );
+  return {
+    replay: false,
+    run_id: snapshot.run_id,
+    draft_id: input.draft_id,
+    draft_version: updated.rows[0].draft_version,
+  };
 }
 
 export async function getActiveConsultantDraftSession(

@@ -44,8 +44,11 @@ const read = async () => {
 };
 let session;
 if (!runId) {
+  const draft = await post({ action: "create_draft" });
   const response = await post({
     action: "submit_intake",
+    draft_id: draft.draft_id,
+    draft_version: draft.draft_version,
     mode: "live",
     product_requirement:
       "Industrial electric storage water heater, 500 litres, maximum external diameter 85 cm, for an indoor hotel mechanical room.",

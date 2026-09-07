@@ -3,6 +3,7 @@ import {
   ApplicationFault,
   authorizeConsultantRunResourceRead,
   submitConsultantIntake,
+  retryConsultantIntakeInterpretation,
   approveInterpretationStep,
   approveDeepPromptStep,
   queueConsultantWorkflowStep,
@@ -195,6 +196,25 @@ export async function POST(req: Request): Promise<NextResponse> {
 
     // Action: Submit Intake
     if (action === "submit_intake") {
+      const draftId = body.draft_id;
+      const draftVersion = body.draft_version;
+      if (
+        typeof draftId !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          draftId,
+        ) ||
+        typeof draftVersion !== "number" ||
+        !Number.isSafeInteger(draftVersion) ||
+        draftVersion < 1
+      )
+        return NextResponse.json(
+          {
+            error:
+              "Submit a saved draft with its current draft_id and draft_version.",
+            code: "MB-400-DRAFT-REQUIRED",
+          },
+          { status: 400 },
+        );
       const product_requirement =
         (body.product_requirement as string) ||
         (body.productRequirement as string) ||
@@ -225,28 +245,32 @@ export async function POST(req: Request): Promise<NextResponse> {
           order_profile,
         },
         pool,
-        { mode: body.mode === "demonstration" ? "demonstration" : "live" },
+        {
+          mode: body.mode === "demonstration" ? "demonstration" : "live",
+          draft: { draft_id: draftId, expected_version: draftVersion },
+        },
       );
 
-      // Save server-side draft linked to the created session
-      if (body.draft_id) {
-        await saveConsultantDraftSession(pool, {
-          draft_id: body.draft_id as string,
-          account_id: context.accountId,
-          user_profile_id: context.userId,
-          tier: "consultant",
-          current_run_id: session.run_id,
-          draft_version:
-            typeof body.draft_version === "number" ? body.draft_version + 1 : 1,
-          status: "submitted",
-          draft_data: {
-            product_requirement,
-            technical_compliance,
-            order_profile,
-          },
-        });
-      }
+      return NextResponse.json({ success: true, session });
+    }
 
+    if (action === "retry_interpretation") {
+      if (
+        typeof body.run_id !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          body.run_id,
+        )
+      )
+        return NextResponse.json(
+          { error: "A valid run_id is required.", code: "MB-400-RUN-REQUIRED" },
+          { status: 400 },
+        );
+      const session = await retryConsultantIntakeInterpretation(
+        pool,
+        context.accountId,
+        context.userId,
+        body.run_id,
+      );
       return NextResponse.json({ success: true, session });
     }
 
@@ -383,7 +407,11 @@ export async function POST(req: Request): Promise<NextResponse> {
         context.accountId,
         run_id,
       );
-      if (!session?.retry_action || session.state !== "workflow_failed") {
+      if (
+        !session?.retry_action ||
+        session.retry_action === "interpretation" ||
+        session.state !== "workflow_failed"
+      ) {
         return NextResponse.json(
           {
             error: "No failed execution is available to retry.",
@@ -440,8 +468,13 @@ export async function POST(req: Request): Promise<NextResponse> {
     console.error("Error in consultant workflow API:", err);
     const status = (err as any)?.status || 500;
     const code = (err as any)?.code || "MB-500-INTERNAL";
+    const recovery = Object.fromEntries(
+      ["run_id", "execution_id", "draft_id", "draft_version", "retry_action"]
+        .filter((key) => (err as any)?.[key] !== undefined)
+        .map((key) => [key, (err as any)[key]]),
+    );
 
-    if (code === "MB-422-COHERENCE" || status === 422) {
+    if (code === "MB-422-COHERENCE") {
       return NextResponse.json(
         {
           error: {
@@ -473,11 +506,12 @@ export async function POST(req: Request): Promise<NextResponse> {
       );
     }
 
-    if (code === "MB-409-DRAFT-CONFLICT" || status === 409) {
+    if (code === "MB-409-DRAFT-CONFLICT") {
       const currentVersion = (err as any)?.current_version ?? 1;
       const submittedVersion = (err as any)?.submitted_version ?? 1;
       return NextResponse.json(
         {
+          ...recovery,
           code: "MB-409-DRAFT-CONFLICT",
           current_version: currentVersion,
           submitted_version: submittedVersion,
@@ -498,7 +532,11 @@ export async function POST(req: Request): Promise<NextResponse> {
     }
 
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err), code },
+      {
+        error: err instanceof Error ? err.message : String(err),
+        code,
+        ...recovery,
+      },
       { status },
     );
   }

@@ -11,6 +11,21 @@ interface InterpretationApprovalStepProps {
   handleApproveStep1: () => Promise<void>;
 }
 
+function evaluatedStatus(requirement: any, result: any): string {
+  const id = requirement.requirement_id;
+  if (typeof id === "string") {
+    if (
+      result.mutated_items?.some(
+        (item: any) => item.requirement?.requirement_id === id,
+      )
+    )
+      return "mutated";
+    if (result.omitted_items?.some((item: any) => item.requirement_id === id))
+      return "omitted";
+  }
+  return requirement.fidelity_status ?? "Not assessed";
+}
+
 export function InterpretationApprovalStep({
   workflowState,
   isLoading,
@@ -51,6 +66,12 @@ export function InterpretationApprovalStep({
         onChange={(e) => onTranslationChange(e.target.value)}
         className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 font-mono mb-3 focus:ring-2 focus:ring-sky-500"
       />
+
+      <p className="mb-3 text-xs text-slate-300">
+        Automated checks cover detected requirements. Review the full English
+        interpretation against your original request; a passed check does not
+        establish that every requested detail was detected.
+      </p>
 
       {/* Step 1 Explicit Requirement Fidelity Review (N02 & Phase D) */}
       {isFidelityValidating && (
@@ -110,6 +131,7 @@ export function InterpretationApprovalStep({
                           <div className="font-bold text-rose-200">
                             ⚠️{" "}
                             {item.requirement?.label ||
+                              item.requirement?.normalized_label ||
                               item.requirement?.concept}
                             : {item.explanation}
                           </div>
@@ -145,7 +167,8 @@ export function InterpretationApprovalStep({
                           className="bg-amber-900/30 border border-amber-700/50 p-2 rounded text-[11px]"
                         >
                           <div className="font-bold text-amber-200">
-                            ⚠️ Omitted: {item.label} ({item.concept})
+                            ⚠️ Omitted: {item.label || item.normalized_label} (
+                            {item.concept})
                           </div>
                           <div className="text-slate-300 text-[10px] mt-0.5">
                             <strong>Source Span:</strong> "
@@ -165,10 +188,10 @@ export function InterpretationApprovalStep({
               {step1Fidelity.valid ? (
                 <span className="font-semibold text-emerald-400 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
                   <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                  Requirement Fidelity Verified (All{" "}
+                  Checked Requirements Passed ({" "}
                   {step1Fidelity.ledger?.total_explicit_count ??
                     step1Fidelity.preserved_count}{" "}
-                  explicit requirements preserved)
+                  detected requirements)
                 </span>
               ) : (
                 <span className="font-semibold text-rose-400 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
@@ -187,7 +210,7 @@ export function InterpretationApprovalStep({
             <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-1">
               <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
                 <span className="text-slate-400 text-[10px] block">
-                  Explicit
+                  Detected
                 </span>
                 <span className="font-bold text-white text-xs">
                   {step1Fidelity.ledger?.total_explicit_count ?? 0}
@@ -270,42 +293,47 @@ export function InterpretationApprovalStep({
                       <tr>
                         <th className="p-1.5">Requirement</th>
                         <th className="p-1.5">Original Source Span</th>
-                        <th className="p-1.5">Interpreted Normalized</th>
+                        <th className="p-1.5">Requested Normalized Value</th>
                         <th className="p-1.5">Operator</th>
                         <th className="p-1.5">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
                       {step1Fidelity.ledger.requirements.map(
-                        (r: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-slate-800/40">
-                            <td className="p-1.5 font-semibold text-slate-200">
-                              {r.label}
-                            </td>
-                            <td className="p-1.5 text-slate-400 italic">
-                              "{r.source_span_or_reference || r.source_text}"
-                            </td>
-                            <td className="p-1.5 text-slate-300">
-                              {r.normalized_value}
-                            </td>
-                            <td className="p-1.5 font-mono text-amber-300 font-semibold">
-                              {r.comparison_operator || "—"}
-                            </td>
-                            <td className="p-1.5">
-                              <span
-                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                  r.fidelity_status === "preserved"
-                                    ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
-                                    : r.fidelity_status === "mutated"
-                                      ? "bg-rose-950 text-rose-300 border border-rose-800"
-                                      : "bg-slate-800 text-slate-300"
-                                }`}
-                              >
-                                {r.fidelity_status}
-                              </span>
-                            </td>
-                          </tr>
-                        ),
+                        (r: any, idx: number) => {
+                          const status = evaluatedStatus(r, step1Fidelity);
+                          return (
+                            <tr key={idx} className="hover:bg-slate-800/40">
+                              <td className="p-1.5 font-semibold text-slate-200">
+                                {r.label || r.normalized_label || r.concept}
+                              </td>
+                              <td className="p-1.5 text-slate-400 italic">
+                                "{r.source_span_or_reference || r.source_text}"
+                              </td>
+                              <td className="p-1.5 text-slate-300">
+                                {r.normalized_value}
+                              </td>
+                              <td className="p-1.5 font-mono text-amber-300 font-semibold">
+                                {r.comparison_operator || "—"}
+                              </td>
+                              <td className="p-1.5">
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                    status === "preserved" ||
+                                    status === "normalized_equivalent"
+                                      ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
+                                      : status === "mutated" ||
+                                          status === "omitted"
+                                        ? "bg-rose-950 text-rose-300 border border-rose-800"
+                                        : "bg-slate-800 text-slate-300"
+                                  }`}
+                                >
+                                  {status}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        },
                       )}
                     </tbody>
                   </table>

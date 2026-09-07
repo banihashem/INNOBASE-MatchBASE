@@ -27,8 +27,11 @@ const post = async (body) => {
   assert.ok(response.ok, JSON.stringify({ status: response.status, ...value }));
   return { status: response.status, ...value };
 };
+const draft = await post({ action: "create_draft" });
 const created = await post({
   action: "submit_intake",
+  draft_id: draft.draft_id,
+  draft_version: draft.draft_version,
   mode: "demonstration",
   product_requirement: "Frozen whole chicken poultry from Brazil",
   technical_compliance: "Halal certification",

@@ -18,6 +18,10 @@ import { InterpretationApprovalStep } from "../../../components/consultant/Inter
 import { useConsultantReportDownloads } from "../../../components/consultant/useConsultantReportDownloads";
 import { ConsultantResultsSection } from "../../../components/consultant/ConsultantResultsSection";
 import { NewDraftTransitionModal } from "../../../components/consultant/NewDraftTransitionModal";
+import {
+  WorkflowStageTabs,
+  useWorkflowStage,
+} from "../../../components/consultant/WorkflowStageTabs";
 
 const DEMONSTRATION_EXAMPLES = {
   poultry: {
@@ -121,6 +125,25 @@ export default function ConsultantWorkflowPage() {
   const [approvedSnapshot, setApprovedSnapshot] =
     useState<ApprovedRequestSnapshotV3 | null>(null);
   const [retryAction, setRetryAction] = useState<string | null>(null);
+  const [promptApproved, setPromptApproved] = useState(false);
+  const researchAvailable =
+    Boolean(runId) &&
+    (promptApproved ||
+      Boolean(output) ||
+      [
+        "prep_step3_prompt_approved",
+        "research_dispatching",
+        "lane_gemini_running",
+        "lane_openai_running",
+        "lanes_converged",
+        "verification_loop_running",
+        "synthesis_running",
+        "progressive_reveal_ready",
+        "pdf_generating",
+        "workflow_complete",
+      ].includes(workflowState) ||
+      (workflowState === "workflow_failed" && retryAction === "research"));
+  const { stage, setStage } = useWorkflowStage(runId, researchAvailable);
 
   function updateDraftId(id: string) {
     draftIdRef.current = id;
@@ -131,6 +154,14 @@ export default function ConsultantWorkflowPage() {
     setDraftVersion(version);
   }
   function acceptProgress(session: any) {
+    if (typeof session.draft_version === "number")
+      updateDraftVersion(session.draft_version);
+    if (typeof session.draft_id === "string") updateDraftId(session.draft_id);
+    if (typeof session.step1_interpretation?.english_translation === "string") {
+      setStep1Translation(session.step1_interpretation.english_translation);
+      if (session.step1_interpretation.fidelity_validation)
+        setStep1Fidelity(session.step1_interpretation.fidelity_validation);
+    }
     if (session.approved_request_revision?.canonical_snapshot)
       setApprovedSnapshot(session.approved_request_revision.canonical_snapshot);
     if (session.state) setWorkflowState(session.state);
@@ -149,6 +180,8 @@ export default function ConsultantWorkflowPage() {
     if (session.step2_advisory) setAdvisoryContext(session.step2_advisory);
     if (session.step3_deep_prompt?.prompt_text)
       setStep3Prompt(session.step3_deep_prompt.prompt_text);
+    if (typeof session.step3_deep_prompt?.is_approved === "boolean")
+      setPromptApproved(session.step3_deep_prompt.is_approved);
   }
   const [hydrationState, setHydrationState] = useState<
     | "unresolved"
@@ -163,6 +196,13 @@ export default function ConsultantWorkflowPage() {
     runId: string;
     reason: string;
   } | null>(null);
+  const activeRunLocked =
+    Boolean(runId) &&
+    !output &&
+    !["progressive_reveal_ready", "workflow_complete", "invalidated"].includes(
+      workflowState,
+    ) &&
+    hydrationState !== "invalidated";
   const [coherenceError, setCoherenceError] = useState<{
     code: string;
     message: string;
@@ -503,6 +543,7 @@ export default function ConsultantWorkflowPage() {
   ]);
 
   async function handleOpenResumeModal() {
+    if (activeRunLocked || isLoading || isSavingNewDraft) return;
     setIsResumeModalOpen(true);
     try {
       const [resInc, resDraft] = await Promise.all([
@@ -530,7 +571,25 @@ export default function ConsultantWorkflowPage() {
   }
 
   function handleResumeDraft(draft: any) {
+    if (activeRunLocked) return;
+    if (draft?.current_run_id) {
+      setIsResumeModalOpen(false);
+      void loadExistingSession(draft.current_run_id);
+      return;
+    }
     if (draft?.draft_data) {
+      setRunId(null);
+      setWorkflowState("intake_draft");
+      setOutput(null);
+      setStep1Translation("");
+      setStep3Prompt("");
+      setAdvisoryContext(null);
+      setStep1Fidelity(null);
+      setPromptApproved(false);
+      setApprovedSnapshot(null);
+      setWorkflowProgress(null);
+      setWorkflowError(null);
+      setRetryAction(null);
       setProductRequirement(draft.draft_data.productRequirement ?? "");
       setTechnicalCompliance(draft.draft_data.technicalCompliance ?? "");
       setOrderProfile(draft.draft_data.orderProfile ?? "");
@@ -694,6 +753,22 @@ export default function ConsultantWorkflowPage() {
         const data = await res.json();
         if (data.session) {
           const s = data.session;
+          setOutput(s.output ?? null);
+          setPromptApproved(s.step3_deep_prompt?.is_approved === true);
+          setApprovedSnapshot(
+            s.approved_request_revision?.canonical_snapshot ?? null,
+          );
+          setStep1Translation(
+            s.step1_interpretation?.english_translation ?? "",
+          );
+          setStep1Fidelity(s.step1_interpretation?.fidelity_validation ?? null);
+          setStep3Prompt(
+            s.step3_deep_prompt?.prompt_text ??
+              s.step3_deep_prompt?.promptText ??
+              "",
+          );
+          setAdvisoryContext(s.step2_advisory ?? null);
+          setRevealedCount(s.revealed_count ?? 5);
           acceptProgress(s);
           setRunId(s.run_id);
           setWorkflowState(s.state);
@@ -708,30 +783,6 @@ export default function ConsultantWorkflowPage() {
             setProductRequirement(s.intake.product_requirement ?? "");
             setTechnicalCompliance(s.intake.technical_compliance ?? "");
             setOrderProfile(s.intake.order_profile ?? "");
-          }
-          if (s.step1_interpretation) {
-            setStep1Translation(
-              s.step1_interpretation.english_translation ?? "",
-            );
-            setStep1Fidelity(
-              s.step1_interpretation.fidelity_validation ?? null,
-            );
-          }
-          if (s.step2_advisory) {
-            setAdvisoryContext(s.step2_advisory);
-          }
-          if (s.step3_deep_prompt) {
-            setStep3Prompt(
-              s.step3_deep_prompt.prompt_text ??
-                s.step3_deep_prompt.promptText ??
-                "",
-            );
-          }
-          if (s.output) {
-            setOutput(s.output);
-          }
-          if (typeof s.revealed_count === "number") {
-            setRevealedCount(s.revealed_count);
           }
           const canonicalUrl = dId
             ? `/consultant/workflow?draft_id=${dId}&run_id=${s.run_id}`
@@ -754,7 +805,7 @@ export default function ConsultantWorkflowPage() {
   }
 
   async function executeStartNewBlankDraft(saveCurrent = false) {
-    if (transitionRef.current) return;
+    if (transitionRef.current || isLoading || activeRunLocked) return;
     transitionRef.current = true;
     setIsSavingNewDraft(true);
     setNewDraftError(null);
@@ -811,6 +862,7 @@ export default function ConsultantWorkflowPage() {
       setDraftStatus("idle");
       setCoherenceError(null);
       setStep1Fidelity(null);
+      setPromptApproved(false);
       setWorkflowProgress(null);
       setApprovedSnapshot(null);
       setWorkflowError(null);
@@ -837,7 +889,7 @@ export default function ConsultantWorkflowPage() {
     await executeStartNewBlankDraft(false);
   }
   async function handleStartNew() {
-    if (transitionRef.current || isLoading) return;
+    if (transitionRef.current || isLoading || activeRunLocked) return;
     clearAutosaveTimer();
     const snapshot = intakeRef.current;
     const hasContent = Object.values(snapshot).some(
@@ -856,6 +908,7 @@ export default function ConsultantWorkflowPage() {
 
   // Load demonstration examples (F12)
   function handleLoadExample(type: "poultry" | "water_heaters") {
+    if (runId || isLoading || isSavingNewDraft) return;
     const example = DEMONSTRATION_EXAMPLES[type];
     setProductRequirement(example.product_requirement);
     setTechnicalCompliance(example.technical_compliance);
@@ -867,6 +920,7 @@ export default function ConsultantWorkflowPage() {
   // Action 1: Submit Intake
   async function handleSubmitIntake(e: React.FormEvent) {
     e.preventDefault();
+    if (runId || isLoading || isSavingNewDraft) return;
     setIsLoading(true);
     setCoherenceError(null);
     setWorkflowError(null);
@@ -881,13 +935,45 @@ export default function ConsultantWorkflowPage() {
           action: "submit_intake",
           mode: researchMode,
           draft_id: draftId,
+          draft_version: draftVersionRef.current,
           product_requirement: productRequirement,
           technical_compliance: technicalCompliance,
           order_profile: orderProfile,
         }),
       });
       const data = await res.json();
-      if (res.status === 422 || data.code === "MB-422-COHERENCE") {
+      if (typeof data.draft_version === "number")
+        updateDraftVersion(data.draft_version);
+      if (!data.success && typeof data.run_id === "string") {
+        if (res.status === 409) {
+          // A competing submission owns this run; restore its accepted intake and state.
+          await loadExistingSession(data.run_id);
+          setWorkflowError(
+            errorMessage(
+              data,
+              "This draft was already submitted. Its saved run has been restored.",
+            ),
+          );
+          return;
+        }
+        setRunId(data.run_id);
+        setWorkflowState("workflow_failed");
+        setRetryAction(data.retry_action ?? null);
+        if (typeof data.draft_id === "string") updateDraftId(data.draft_id);
+        window.history.replaceState(
+          {},
+          "",
+          `/consultant/workflow?draft_id=${encodeURIComponent(data.draft_id ?? draftId)}&run_id=${encodeURIComponent(data.run_id)}`,
+        );
+        setWorkflowError(
+          errorMessage(
+            data,
+            "Preparation stopped. Reload this run to inspect its saved state.",
+          ),
+        );
+        return;
+      }
+      if ((data.code ?? data.error?.code) === "MB-422-COHERENCE") {
         setCoherenceError({
           code: data.code || data.error?.code || "MB-422-COHERENCE",
           message:
@@ -908,12 +994,16 @@ export default function ConsultantWorkflowPage() {
       }
       if (data.success && data.session) {
         setRunId(data.session.run_id);
+        if (typeof data.session.draft_version === "number")
+          updateDraftVersion(data.session.draft_version);
+        if (typeof data.session.draft_id === "string")
+          updateDraftId(data.session.draft_id);
         acceptProgress(data.session);
         setStep1Translation(
-          data.session.step1_interpretation.english_translation,
+          data.session.step1_interpretation?.english_translation ?? "",
         );
         setStep1Fidelity(
-          data.session.step1_interpretation.fidelity_validation ?? null,
+          data.session.step1_interpretation?.fidelity_validation ?? null,
         );
         setAdvisoryContext(data.session.step2_advisory);
         setDraftStatus("idle");
@@ -923,7 +1013,9 @@ export default function ConsultantWorkflowPage() {
           : `/consultant/workflow?run_id=${data.session.run_id}`;
         window.history.replaceState({}, "", canonicalUrl);
         triggerToast(
-          "Intake submitted and persisted. Review English Interpretation (Step 1).",
+          data.session.state === "prep_step1_awaiting_approval"
+            ? "Intake submitted and persisted. Review English Interpretation (Step 1)."
+            : "Request submitted. Its saved preparation state is shown in Section 2.",
         );
       } else {
         setWorkflowError(errorMessage(data, "Failed to submit intake"));
@@ -995,6 +1087,7 @@ export default function ConsultantWorkflowPage() {
             "Prompt approval failed. Research has not started.",
           ),
         );
+      setPromptApproved(true);
       if (approved.session) acceptProgress(approved.session);
       const res = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
@@ -1029,12 +1122,28 @@ export default function ConsultantWorkflowPage() {
       const res = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "retry_workflow", run_id: runId }),
+        body: JSON.stringify({
+          action:
+            retryAction === "interpretation"
+              ? "retry_interpretation"
+              : "retry_workflow",
+          run_id: runId,
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.success)
         throw new Error(errorMessage(data, "Retry could not start."));
-      if (data.session) acceptProgress(data.session);
+      if (data.session) {
+        acceptProgress(data.session);
+        if (data.session.step1_interpretation) {
+          setStep1Translation(
+            data.session.step1_interpretation.english_translation ?? "",
+          );
+          setStep1Fidelity(
+            data.session.step1_interpretation.fidelity_validation ?? null,
+          );
+        }
+      }
     } catch (error: any) {
       setWorkflowError(error.message);
     } finally {
@@ -1081,6 +1190,74 @@ export default function ConsultantWorkflowPage() {
     )
     .slice(0, 20);
   const visibleSuppliers = suppliers.slice(0, revealedCount);
+
+  const workflowFeedback = (
+    <>
+      {workflowError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-700 bg-amber-950/50 p-4 text-sm text-amber-100"
+        >
+          <p>{workflowError}</p>
+          {runId &&
+            workflowState === "workflow_failed" &&
+            !step1Translation && (
+              <button
+                type="button"
+                onClick={() => void loadExistingSession(runId)}
+                disabled={isLoading}
+                className="mt-3 rounded bg-sky-700 px-4 py-2 text-white disabled:opacity-50"
+              >
+                Reload Current Run
+              </button>
+            )}
+          {retryAction && workflowState === "workflow_failed" && (
+            <button
+              type="button"
+              onClick={handleRetryWorkflow}
+              disabled={isLoading}
+              className="mt-3 px-4 py-2 rounded bg-sky-700 text-white disabled:opacity-50"
+            >
+              {retryAction === "interpretation"
+                ? "Retry Interpretation"
+                : `Retry failed ${retryAction === "prepare" ? "preparation" : "research"} stage`}
+            </button>
+          )}
+        </div>
+      )}
+      {workflowProgress && !output && (
+        <section
+          aria-label="Workflow progress"
+          role="status"
+          aria-live="polite"
+          className="rounded-xl border border-sky-800 bg-slate-900 p-5 text-slate-200"
+        >
+          <h2 className="font-bold text-white">
+            {workflowProgress.phase?.replaceAll("_", " ") ||
+              "Workflow progress"}
+          </h2>
+          <p className="text-sm mt-2">{workflowProgress.message}</p>
+          {typeof workflowProgress.loop === "number" && (
+            <p className="text-xs mt-2">
+              Loop {workflowProgress.loop}
+              {workflowProgress.max_loops
+                ? ` of up to ${workflowProgress.max_loops}`
+                : ""}
+            </p>
+          )}
+          {workflowProgress.updated_at && (
+            <p className="text-xs text-slate-400 mt-1">
+              Last server update:{" "}
+              {new Date(workflowProgress.updated_at).toLocaleTimeString()}
+            </p>
+          )}
+        </section>
+      )}
+      {approvedSnapshot && !output && (
+        <ApprovedRequestSummary snapshot={approvedSnapshot} />
+      )}
+    </>
+  );
 
   // Entitlement gate: deny standard or unauthenticated users from viewing or manipulating consultant drafts
   if (
@@ -1246,7 +1423,12 @@ export default function ConsultantWorkflowPage() {
               <button
                 type="button"
                 onClick={handleStartNew}
-                disabled={isSavingNewDraft || isLoading}
+                disabled={isSavingNewDraft || isLoading || activeRunLocked}
+                title={
+                  activeRunLocked
+                    ? "Complete this research cycle before starting a new request."
+                    : undefined
+                }
                 className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-lg shadow transition-colors"
               >
                 + New Consultant Research
@@ -1254,7 +1436,7 @@ export default function ConsultantWorkflowPage() {
               <button
                 type="button"
                 onClick={handleOpenResumeModal}
-                disabled={isLoading || isSavingNewDraft}
+                disabled={isLoading || isSavingNewDraft || activeRunLocked}
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
               >
                 Resume Research
@@ -1310,60 +1492,20 @@ export default function ConsultantWorkflowPage() {
         )}
 
         {/* ========================================================= */}
-        {workflowError && (
-          <div
-            role="alert"
-            className="rounded-lg border border-amber-700 bg-amber-950/50 p-4 text-sm text-amber-100"
-          >
-            <p>{workflowError}</p>
-            {retryAction && workflowState === "workflow_failed" && (
-              <button
-                type="button"
-                onClick={handleRetryWorkflow}
-                disabled={isLoading}
-                className="mt-3 px-4 py-2 rounded bg-sky-700 text-white disabled:opacity-50"
-              >
-                Retry failed{" "}
-                {retryAction === "prepare" ? "preparation" : "research"} stage
-              </button>
-            )}
-          </div>
-        )}
-        {workflowProgress && !output && (
-          <section
-            aria-label="Workflow progress"
-            role="status"
-            aria-live="polite"
-            className="rounded-xl border border-sky-800 bg-slate-900 p-5 text-slate-200"
-          >
-            <h2 className="font-bold text-white">
-              {workflowProgress.phase?.replaceAll("_", " ") ||
-                "Workflow progress"}
-            </h2>
-            <p className="text-sm mt-2">{workflowProgress.message}</p>
-            {typeof workflowProgress.loop === "number" && (
-              <p className="text-xs mt-2">
-                Loop {workflowProgress.loop}
-                {workflowProgress.max_loops
-                  ? ` of up to ${workflowProgress.max_loops}`
-                  : ""}
-              </p>
-            )}
-            {workflowProgress.updated_at && (
-              <p className="text-xs text-slate-400 mt-1">
-                Last server update:{" "}
-                {new Date(workflowProgress.updated_at).toLocaleTimeString()}
-              </p>
-            )}
-          </section>
-        )}
-        {approvedSnapshot && !output && (
-          <ApprovedRequestSummary snapshot={approvedSnapshot} />
-        )}
+        <WorkflowStageTabs
+          stage={stage}
+          onChange={setStage}
+          submitted={Boolean(runId)}
+          researchAvailable={researchAvailable}
+        />
         {/* SECTION 1: MULTILINGUAL 3-BOX INTAKE                     */}
         {/* ========================================================= */}
         <section
-          aria-labelledby="section-1-heading"
+          id="workflow-panel-1"
+          role="tabpanel"
+          aria-labelledby="workflow-tab-1"
+          hidden={stage !== 1}
+          tabIndex={0}
           className="bg-slate-800/60 rounded-xl border border-slate-700 p-6 shadow-lg backdrop-blur"
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
@@ -1420,6 +1562,13 @@ export default function ConsultantWorkflowPage() {
             </div>
           </div>
 
+          {!runId && workflowFeedback}
+          {runId && (
+            <p className="mb-4 text-sm text-amber-200">
+              Submitted request locked. Review the original inputs here;
+              interpretation and prompt approval are in Section 2.
+            </p>
+          )}
           {(() => {
             const isBox1Conflicted = coherenceError?.conflicts?.some((c) =>
               c.fields.some((f) => f.includes("product_requirement")),
@@ -1795,7 +1944,11 @@ export default function ConsultantWorkflowPage() {
         {/* ========================================================= */}
         {runId && (
           <section
-            aria-labelledby="section-2-heading"
+            id="workflow-panel-2"
+            role="tabpanel"
+            aria-labelledby="workflow-tab-2"
+            hidden={stage !== 2}
+            tabIndex={0}
             className="bg-slate-800/60 rounded-xl border border-slate-700 p-6 shadow-lg backdrop-blur space-y-8"
           >
             <div>
@@ -1818,21 +1971,32 @@ export default function ConsultantWorkflowPage() {
               </p>
             </div>
 
-            <InterpretationApprovalStep
-              workflowState={workflowState}
-              isLoading={isLoading}
-              step1Translation={step1Translation}
-              step1Fidelity={step1Fidelity}
-              isFidelityValidating={isFidelityValidating}
-              showFullLedger={showFullLedger}
-              setShowFullLedger={setShowFullLedger}
-              onTranslationChange={(value) => {
-                setIsFidelityValidating(true);
-                setStep1Translation(value);
-              }}
-              onRetryValidation={() => setValidationRetry((value) => value + 1)}
-              handleApproveStep1={handleApproveStep1}
-            />
+            {!researchAvailable && workflowFeedback}
+            {step1Translation && (
+              <InterpretationApprovalStep
+                workflowState={workflowState}
+                isLoading={isLoading}
+                step1Translation={step1Translation}
+                step1Fidelity={step1Fidelity}
+                isFidelityValidating={isFidelityValidating}
+                showFullLedger={showFullLedger}
+                setShowFullLedger={setShowFullLedger}
+                onTranslationChange={(value) => {
+                  setIsFidelityValidating(true);
+                  setStep1Translation(value);
+                }}
+                onRetryValidation={() =>
+                  setValidationRetry((value) => value + 1)
+                }
+                handleApproveStep1={handleApproveStep1}
+              />
+            )}
+            {!step1Translation && workflowState !== "workflow_failed" && (
+              <p role="status" className="text-sm text-slate-300">
+                Preparing the English interpretation. The submitted request
+                remains locked.
+              </p>
+            )}
 
             {/* Step 2: 3-Loop Advisory Context */}
             {advisoryContext && (
@@ -1927,7 +2091,6 @@ export default function ConsultantWorkflowPage() {
                     ![
                       "prep_step2_advisory_ready",
                       "prep_step3_prompt_awaiting_approval",
-                      "prep_step3_prompt_approved",
                     ].includes(workflowState)
                   }
                   onChange={(e) => setStep3Prompt(e.target.value)}
@@ -2117,22 +2280,45 @@ export default function ConsultantWorkflowPage() {
         {/* ========================================================= */}
         {/* SECTION 3: DUAL-LANE RESULTS & PROGRESSIVE REVELATION     */}
         {/* ========================================================= */}
-        {output && (
-          <ConsultantResultsSection
-            output={output}
-            suppliers={suppliers}
-            visibleSuppliers={visibleSuppliers}
-            revealedCount={revealedCount}
-            isLoading={isLoading}
-            isPdfDownloading={isPdfDownloading}
-            handlePdfDownload={handlePdfDownload}
-            handleJsonExport={handleJsonExport}
-            handleRevealMore={handleRevealMore}
-            onSelectSupplier={(supplier) => {
-              setSelectedSupplier(supplier);
-              setIsModalOpen(true);
-            }}
-          />
+        {researchAvailable && (
+          <div
+            id="workflow-panel-3"
+            role="tabpanel"
+            aria-labelledby="workflow-tab-3"
+            hidden={stage !== 3}
+            tabIndex={0}
+            className="space-y-6"
+          >
+            {!output && (
+              <h2 className="text-xl font-bold text-white">
+                Section 3: Research &amp; Results
+              </h2>
+            )}
+            {workflowFeedback}
+            {!output && !workflowProgress && !workflowError && (
+              <p role="status" className="text-slate-300">
+                The approved research request is being dispatched. Progress will
+                appear here.
+              </p>
+            )}
+            {output && (
+              <ConsultantResultsSection
+                output={output}
+                suppliers={suppliers}
+                visibleSuppliers={visibleSuppliers}
+                revealedCount={revealedCount}
+                isLoading={isLoading}
+                isPdfDownloading={isPdfDownloading}
+                handlePdfDownload={handlePdfDownload}
+                handleJsonExport={handleJsonExport}
+                handleRevealMore={handleRevealMore}
+                onSelectSupplier={(supplier) => {
+                  setSelectedSupplier(supplier);
+                  setIsModalOpen(true);
+                }}
+              />
+            )}
+          </div>
         )}
       </main>
 

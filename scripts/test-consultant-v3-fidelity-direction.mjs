@@ -266,6 +266,16 @@ async function main() {
   // -------------------------------------------------------------
   console.log("\n--- [6] Step 1 Approval Gated Against Mutations ---");
   // 1. Submit intake to create a workflow session
+  const submissionDraftRes = await fetch(
+    `${BASE_URL}/api/v1/consultant/workflow`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ action: "create_draft" }),
+    },
+  );
+  assert.equal(submissionDraftRes.status, 200);
+  const submissionDraft = await submissionDraftRes.json();
   const submitRes = await fetch(`${BASE_URL}/api/v1/consultant/workflow`, {
     method: "POST",
     headers: {
@@ -274,6 +284,8 @@ async function main() {
     },
     body: JSON.stringify({
       action: "submit_intake",
+      draft_id: submissionDraft.draft_id,
+      draft_version: submissionDraft.draft_version,
       productRequirement: waterHeaterIntake.product_requirement,
       technicalCompliance: waterHeaterIntake.technical_compliance,
       orderProfile: waterHeaterIntake.order_profile,

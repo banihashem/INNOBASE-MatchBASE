@@ -168,10 +168,10 @@ test("MB-UX-LIVE-001 L04 authoring stays offline and scopes restrictions to the 
   assert.deepEqual(approved, before);
 });
 
-test("MB-UX-LIVE-001 L04 approved execution overrides only historical planning reminders without rewriting the request", async (t) => {
+test("MB-UX-LIVE-001 L04 approved execution scopes each actual round without rewriting the whole-workflow request", async (t) => {
   const sourceUrl = "https://supplier-registry.example.com/current-scope";
   const nativeNotes =
-    "No relevant supplier information is available in this registry. Supplier identity and product capability are unknown. No eligible companies were evidenced; available evidence is exhausted.";
+    "No relevant supplier information is available in this registry. Supplier identity and product capability are unknown. No eligible companies were evidenced; available evidence is exhausted. Model-reported verification loops completed: 15.";
   const requests = stubProvider(t, (body) => {
     if (body.response_format?.json_schema?.name === "matchbase_live_synthesis")
       return {
@@ -229,6 +229,22 @@ test("MB-UX-LIVE-001 L04 approved execution overrides only historical planning r
       body.messages[0].content,
       /Do not contact suppliers, send messages, submit forms/,
     );
+    assert.match(
+      body.messages[0].content,
+      /Execute only this current native-search round/,
+    );
+    assert.match(
+      body.messages[0].content,
+      /minimum of 5 and a maximum of 15 verification rounds/,
+    );
+    assert.match(
+      body.messages[0].content,
+      /Complete every candidate review required by the current task, including the entire supplied roster/,
+    );
+    assert.match(
+      body.messages[0].content,
+      /requested supplier target remains up to 20 across the complete workflow/,
+    );
     return {
       payload: nativeNotes,
       citations: [
@@ -249,7 +265,7 @@ test("MB-UX-LIVE-001 L04 approved execution overrides only historical planning r
     technical_compliance: "Exclude used equipment; pricing is unknown.",
     order_profile: "Prefer local support; do not contact suppliers.",
     deep_prompt:
-      "Find industrial pumps.\nDo NOT execute web research in this response; this is a research instruction only.\nWait for approval.\nExclude used equipment; do not contact suppliers.",
+      "Find industrial pumps.\nDo NOT execute web research in this response; this is a research instruction only.\nWait for approval.\nRun both parallel discovery lanes, complete a minimum of 5 and up to 15 verification loops, and produce the final report with up to 20 suppliers.\nExclude used equipment; do not contact suppliers.",
     mandatory_requirements: ["Industrial pumps", "Exclude used equipment"],
     target_supplier_count: 20,
   };
@@ -288,6 +304,38 @@ test("MB-UX-LIVE-001 L04 approved execution overrides only historical planning r
     );
   assert.deepEqual(input, original);
   assert.equal(result.verification_loops_completed, 5);
+  const nativeRequests = requests.filter(
+    (body) => body.plugins?.[0]?.engine === "native",
+  );
+  const currentRounds = nativeRequests.map((body) => {
+    const assignment = body.messages[0].content.match(
+      /Phase: (\w+)\nRound: (\d+)\nCurrent task: ([^\n]+)/,
+    );
+    assert.ok(assignment);
+    assert.equal(
+      assignment[3],
+      JSON.parse(body.messages[1].content).instruction,
+    );
+    return { phase: assignment[1], loop: Number(assignment[2]) };
+  });
+  assert.deepEqual(currentRounds, [
+    { phase: "discovery_gemini", loop: 1 },
+    { phase: "discovery_openai", loop: 1 },
+    ...[1, 2, 3, 4, 5].map((loop) => ({ phase: "verification", loop })),
+  ]);
+  assert.equal(
+    result.checkpoints.filter(
+      (event) => event.phase === "verification" && event.state === "completed",
+    ).length,
+    5,
+  );
+  assert.ok(
+    result.checkpoints.some((event) =>
+      event.response_content?.includes(
+        "Model-reported verification loops completed: 15",
+      ),
+    ),
+  );
   assert.equal(result.candidates.length, 0);
   assert.equal(result.stop_reason, "evidence_exhausted");
 });

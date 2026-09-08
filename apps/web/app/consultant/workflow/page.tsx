@@ -11,6 +11,11 @@ import { SupplierDossierModal } from "../../../components/consultant/SupplierDos
 
 import { ApprovedRequestSummary } from "../../../components/consultant/ApprovedRequestSummary";
 
+import { WorkflowActivity } from "../../../components/consultant/WorkflowActivity";
+import {
+  workflowLabel,
+  type ActivityStep,
+} from "../../../components/consultant/workflow-status";
 import { errorMessage } from "../../../components/consultant/workflow-response";
 import { useWorkflowPolling } from "../../../components/consultant/useWorkflowPolling";
 import { useStep1Fidelity } from "../../../components/consultant/useStep1Fidelity";
@@ -121,6 +126,8 @@ export default function ConsultantWorkflowPage() {
   });
   intakeRef.current = { productRequirement, technicalCompliance, orderProfile };
   const [workflowError, setWorkflowError] = useState<string | null>(null);
+  const [activity, setActivity] = useState<ActivityStep[]>([]);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [workflowProgress, setWorkflowProgress] = useState<any>(null);
   const [approvedSnapshot, setApprovedSnapshot] =
     useState<ApprovedRequestSnapshotV3 | null>(null);
@@ -153,7 +160,17 @@ export default function ConsultantWorkflowPage() {
     draftVersionRef.current = version;
     setDraftVersion(version);
   }
+  const activityExecutionRef = useRef<string | null>(null);
   function acceptProgress(session: any) {
+    if (
+      session.execution_id &&
+      session.execution_id !== activityExecutionRef.current
+    ) {
+      activityExecutionRef.current = session.execution_id;
+      setActivity([]);
+    }
+    setConnectionError(null);
+    if (Array.isArray(session.activity)) setActivity(session.activity);
     if (typeof session.draft_version === "number")
       updateDraftVersion(session.draft_version);
     if (typeof session.draft_id === "string") updateDraftId(session.draft_id);
@@ -483,7 +500,7 @@ export default function ConsultantWorkflowPage() {
     acceptProgress,
     setOutput,
     setRevealedCount,
-    setWorkflowError,
+    setConnectionError,
   });
 
   // N04: Trap initial focus into conflict modal and store previous active element
@@ -1199,6 +1216,12 @@ export default function ConsultantWorkflowPage() {
           className="rounded-lg border border-amber-700 bg-amber-950/50 p-4 text-sm text-amber-100"
         >
           <p>{workflowError}</p>
+          {workflowError.includes("HTTP 403") && (
+            <p className="mt-2">
+              Research access was denied. The API key spending limit or provider
+              permissions must be checked before another retry can succeed.
+            </p>
+          )}
           {runId &&
             workflowState === "workflow_failed" &&
             !step1Translation && (
@@ -1224,34 +1247,6 @@ export default function ConsultantWorkflowPage() {
             </button>
           )}
         </div>
-      )}
-      {workflowProgress && !output && (
-        <section
-          aria-label="Workflow progress"
-          role="status"
-          aria-live="polite"
-          className="rounded-xl border border-sky-800 bg-slate-900 p-5 text-slate-200"
-        >
-          <h2 className="font-bold text-white">
-            {workflowProgress.phase?.replaceAll("_", " ") ||
-              "Workflow progress"}
-          </h2>
-          <p className="text-sm mt-2">{workflowProgress.message}</p>
-          {typeof workflowProgress.loop === "number" && (
-            <p className="text-xs mt-2">
-              Loop {workflowProgress.loop}
-              {workflowProgress.max_loops
-                ? ` of up to ${workflowProgress.max_loops}`
-                : ""}
-            </p>
-          )}
-          {workflowProgress.updated_at && (
-            <p className="text-xs text-slate-400 mt-1">
-              Last server update:{" "}
-              {new Date(workflowProgress.updated_at).toLocaleTimeString()}
-            </p>
-          )}
-        </section>
       )}
       {approvedSnapshot && !output && (
         <ApprovedRequestSummary snapshot={approvedSnapshot} />
@@ -1401,19 +1396,21 @@ export default function ConsultantWorkflowPage() {
           <div>
             <div className="inline-flex items-center gap-2 bg-sky-950 text-sky-400 text-xs font-bold px-3 py-1 rounded-full border border-sky-800 mb-2">
               <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
-              CONSULTANT-TIER AGENTIC RESEARCH WORKFLOW
+              CONSULTANT RESEARCH
             </div>
             <h1 className="text-3xl font-extrabold text-white tracking-tight">
-              Structured B2B Sourcing Specification &amp; Agentic Intelligence
+              Find and verify B2B suppliers
             </h1>
             <p className="text-slate-400 text-sm mt-1">
-              End-to-end 3-section workflow: Multilingual 3-box intake, 3-step
-              Human preparation gates, and dual-lane agentic research with
-              progressive disclosure.
+              Describe your needs, approve the research plan, and review
+              evidence-backed supplier results.
             </p>
           </div>
           <div className="flex flex-col sm:items-end gap-2">
             <div className="flex items-center gap-2 flex-wrap">
+              <Link href="/" className="px-3 py-1.5 text-sky-300 underline">
+                Home
+              </Link>
               <Link
                 href="/runs"
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
@@ -1448,8 +1445,8 @@ export default function ConsultantWorkflowPage() {
                   Active Run ID
                 </div>
                 <div className="font-mono text-xs text-sky-300">{runId}</div>
-                <div className="text-[11px] text-emerald-400 font-semibold mt-1">
-                  State: {workflowState.replaceAll("_", " ")}
+                <div className="text-[11px] text-slate-200 font-semibold mt-1">
+                  {workflowLabel(workflowState)}
                 </div>
               </div>
             )}
@@ -1498,6 +1495,17 @@ export default function ConsultantWorkflowPage() {
           submitted={Boolean(runId)}
           researchAvailable={researchAvailable}
         />
+        {(runId || isLoading) && (
+          <WorkflowActivity
+            state={workflowState}
+            progress={workflowProgress}
+            activity={activity}
+            busy={isLoading}
+            connectionError={connectionError}
+            pdfBusy={isPdfDownloading}
+            retryAction={retryAction}
+          />
+        )}
         {/* SECTION 1: MULTILINGUAL 3-BOX INTAKE                     */}
         {/* ========================================================= */}
         <section

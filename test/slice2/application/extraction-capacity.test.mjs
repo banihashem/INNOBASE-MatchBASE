@@ -265,6 +265,13 @@ test("MB-UX-LIVE-001 L05 twenty rich records use bounded batches and account for
   assert.equal(peak, 2);
   assert.equal(active, 0);
   assert.equal(calls.length, 10);
+  for (const body of calls) {
+    const isIndex =
+      body.response_format.json_schema.name ===
+      "matchbase_native_candidate_index";
+    assert.equal(body.reasoning.effort, isIndex ? "low" : "high");
+    assert.equal(body.max_completion_tokens ?? body.max_tokens, 24000);
+  }
   for (const output of outputs) {
     assert.equal(output.results.length, 5);
     assert.equal(

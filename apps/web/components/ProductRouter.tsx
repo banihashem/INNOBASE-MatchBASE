@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ProductFlow } from "./ProductFlow";
 import { StandardWorkspace } from "./standard/StandardWorkspace";
 import type { WorkspaceSession } from "./standard/types";
-import { ConsultantWorkspace } from "./consultant/ConsultantWorkspace";
+import { ConsultantHome } from "./consultant/ConsultantHome";
 import { AdminWorkspace } from "./admin/AdminWorkspace";
 
 type Resolution =
@@ -79,7 +79,7 @@ export function ProductRouter({
     return <StandardWorkspace initialSession={resolution.session} />;
   }
   if (resolution.state === "consultant") {
-    return <ConsultantWorkspace initialSession={resolution.session} />;
+    return <ConsultantHome session={resolution.session} />;
   }
   if (resolution.state === "error") {
     return (

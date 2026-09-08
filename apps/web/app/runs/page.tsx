@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ConsultantHome } from "../../components/consultant/ConsultantHome";
+import type { WorkspaceSession } from "../../components/standard/types";
 import { GOLDEN_SCENARIOS, GOLDEN_SCENARIOS_V3 } from "@matchbase/contracts";
 
 interface RunItem {
@@ -24,12 +26,7 @@ interface IncompleteSessionItem {
   };
 }
 
-interface UserSession {
-  account_id: string;
-  user_id: string;
-  display_name: string;
-  tier: "demo" | "standard" | "consultant" | "admin";
-}
+type UserSession = WorkspaceSession & { account_id: string; user_id: string };
 
 export default function RunsPage() {
   const [session, setSession] = useState<UserSession | null>(null);
@@ -60,12 +57,10 @@ export default function RunsPage() {
   }, []);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || session.tier === "consultant") return;
     setLoadingRuns(true);
     const endpoint =
-      session.tier === "admin" || session.tier === "consultant"
-        ? "/api/v1/consultant/runs"
-        : "/api/v1/runs";
+      session.tier === "admin" ? "/api/v1/consultant/runs" : "/api/v1/runs";
     void fetch(endpoint, { cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) throw new Error("Failed to load run history");
@@ -78,7 +73,7 @@ export default function RunsPage() {
       .finally(() => setLoadingRuns(false));
 
     // Fetch incomplete sessions for Consultant / Admin
-    if (session.tier === "admin" || session.tier === "consultant") {
+    if (session.tier === "admin") {
       void fetch("/api/v1/consultant/workflow?incomplete=true", {
         cache: "no-store",
       })
@@ -101,6 +96,9 @@ export default function RunsPage() {
         .catch(() => {});
     }
   }, [session]);
+
+  if (session?.tier === "consultant")
+    return <ConsultantHome session={session} initialView="history" />;
 
   if (loadingSession) {
     return (

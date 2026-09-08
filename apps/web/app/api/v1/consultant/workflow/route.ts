@@ -21,6 +21,8 @@ import {
   abandonConsultantDraftSession,
   getConsultantDraftSessionByRunId,
   failExpiredConsultantWorkflowJobs,
+  getConsultantWorkflowActivity,
+  listConsultantResearchSummaries,
 } from "@matchbase/data";
 import { validateStep1RequirementFidelity } from "@matchbase/contracts";
 import { getAppDatabasePool } from "../../../../../src/db-client";
@@ -590,6 +592,15 @@ export async function GET(req: Request): Promise<NextResponse> {
   const listIncomplete = url.searchParams.get("incomplete");
   const getActiveDraft = url.searchParams.get("active_draft");
 
+  if (url.searchParams.get("history") === "true") {
+    await failExpiredConsultantWorkflowJobs(pool);
+    const items = await listConsultantResearchSummaries(
+      pool,
+      context.accountId,
+    );
+    return NextResponse.json({ success: true, items });
+  }
+
   // Retrieve specific server draft by ID
   if (draftIdParam) {
     const draft = await getConsultantDraftSessionById(
@@ -678,7 +689,17 @@ export async function GET(req: Request): Promise<NextResponse> {
         (session as any).draft_id = draft.draft_id;
         (session as any).draft_version = draft.draft_version;
       }
-      return NextResponse.json({ success: true, session, draft });
+      const activity = await getConsultantWorkflowActivity(
+        pool,
+        context.accountId,
+        authorized.runId,
+        session.execution_id,
+      );
+      return NextResponse.json({
+        success: true,
+        session: { ...session, activity },
+        draft,
+      });
     }
 
     // Output is authorized and present

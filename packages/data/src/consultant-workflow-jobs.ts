@@ -147,3 +147,61 @@ export async function appendConsultantWorkflowEvent(
     ],
   );
 }
+
+/** Public activity summary excludes prompts, raw model output, costs and source content. */
+export async function getConsultantWorkflowActivity(
+  db: Queryable,
+  accountId: string,
+  runId: string,
+  executionId: string,
+) {
+  const result = await db.query<{
+    phase: string;
+    loop: number;
+    started: number;
+    completed: number;
+    failed: number;
+    updated_at: Date;
+  }>(
+    `SELECT phase, COALESCE((detail->>'loop')::int,0) AS loop,
+      count(*) FILTER (WHERE detail->>'state'='started')::int AS started,
+      count(*) FILTER (WHERE detail->>'state'='completed')::int AS completed,
+      count(*) FILTER (WHERE detail->>'state'='failed')::int AS failed,
+      max(created_at) AS updated_at
+    FROM consultant_workflow_event
+    WHERE account_id=$1 AND run_id=$2 AND execution_id=$3 AND detail->>'state' IS NOT NULL
+    GROUP BY phase, COALESCE((detail->>'loop')::int,0)
+    ORDER BY min(created_at)`,
+    [accountId, runId, executionId],
+  );
+  return result.rows.map((row) => ({
+    ...row,
+    updated_at: row.updated_at.toISOString(),
+  }));
+}
+
+export async function listConsultantResearchSummaries(
+  db: Queryable,
+  accountId: string,
+) {
+  const result = await db.query<{
+    run_id: string;
+    state: string;
+    title: string;
+    updated_at: Date;
+    mode: string;
+    result_available: boolean;
+  }>(
+    `SELECT s.run_id, s.current_state AS state,
+      COALESCE(s.original_intake->>'product_requirement', s.original_intake->>'productRequirement', '') AS title,
+      s.updated_at, COALESCE(s.workflow_metadata->>'mode','unknown') AS mode,
+      EXISTS(SELECT 1 FROM consultant_output_v3 o WHERE o.account_id=s.account_id AND o.run_id=s.run_id AND o.execution_id=s.execution_id) AS result_available
+    FROM consultant_workflow_session s WHERE s.account_id=$1 AND NOT s.is_invalidated
+    ORDER BY s.updated_at DESC LIMIT 100`,
+    [accountId],
+  );
+  return result.rows.map((row) => ({
+    ...row,
+    updated_at: row.updated_at.toISOString(),
+  }));
+}

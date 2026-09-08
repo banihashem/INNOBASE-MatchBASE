@@ -9,7 +9,7 @@ interface WorkflowPollingOptions {
   acceptProgress: (session: any) => void;
   setOutput: (output: ConsultantResearchOutputV3) => void;
   setRevealedCount: (count: number) => void;
-  setWorkflowError: (message: string) => void;
+  setConnectionError: (message: string | null) => void;
 }
 
 export function useWorkflowPolling({
@@ -49,6 +49,7 @@ export function useWorkflowPolling({
           throw new Error(
             errorMessage(data, "Could not refresh workflow progress."),
           );
+        callbacks.current.setConnectionError(null);
         if (data.session) callbacks.current.acceptProgress(data.session);
         const result = data.output ?? data.session?.output;
         if (result) {
@@ -58,7 +59,7 @@ export function useWorkflowPolling({
         }
       } catch (error: any) {
         if (!controller.signal.aborted)
-          callbacks.current.setWorkflowError(error.message);
+          callbacks.current.setConnectionError(error.message);
       }
       if (!controller.signal.aborted) timer = setTimeout(poll, 2000);
     }

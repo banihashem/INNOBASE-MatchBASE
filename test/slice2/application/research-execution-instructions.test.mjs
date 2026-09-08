@@ -437,7 +437,8 @@ test("MB-UX-LIVE-001 L04 evidence extraction preserves native inputs and usage w
   assert.equal(requests.length, 2);
   const [indexRequest, request] = requests;
   assert.equal(indexRequest.plugins, undefined);
-  assert.equal(indexRequest.max_tokens, 12000);
+  assert.equal(indexRequest.max_tokens, 24000);
+  assert.equal(indexRequest.reasoning.effort, "low");
   assert.equal(
     indexRequest.response_format.json_schema.name,
     "matchbase_native_candidate_index",

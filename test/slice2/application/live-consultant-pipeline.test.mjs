@@ -305,7 +305,16 @@ test("live requires five actual verification calls after both native web discove
   assert.ok(extractionCalls.every((body) => body.plugins === undefined));
   assert.equal(requests.at(-1).plugins, undefined);
   assert.equal(result.synthesis_result.model, "openai/gpt-5.2");
-  assert.ok(requests.every((body) => body.reasoning.effort === "high"));
+  assert.ok(
+    requests.every(
+      (body) =>
+        body.reasoning.effort ===
+        (body.response_format?.json_schema?.name ===
+        "matchbase_native_candidate_index"
+          ? "low"
+          : "high"),
+    ),
+  );
   assert.ok(requests.every((body) => body.temperature === undefined));
   assert.ok(
     requests

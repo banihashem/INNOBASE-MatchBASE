@@ -33,7 +33,10 @@ export interface OpenRouterCompletionParams {
         };
       };
   readonly max_tokens?: number;
-  readonly reasoning?: { readonly effort: "high"; readonly exclude: true };
+  readonly reasoning?: {
+    readonly effort: "high" | "low";
+    readonly exclude: true;
+  };
   readonly request_id?: string;
   readonly timeout_ms?: number;
   readonly signal?: AbortSignal;
@@ -50,6 +53,8 @@ export interface OpenRouterCompletionResult extends Partial<OpenRouterByokAudit>
   readonly text: string;
   readonly input_tokens: number;
   readonly output_tokens: number;
+  readonly finish_reason?: string | undefined;
+  readonly reasoning_tokens?: number | undefined;
   readonly latency_ms: number;
   readonly cost_usd: number;
   readonly live_api_invoked: boolean;
@@ -99,10 +104,12 @@ export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
   readonly started_at: string;
   readonly completed_at?: string;
   readonly native_web: boolean;
-  readonly reasoning_effort: "high" | "unsupported";
+  readonly reasoning_effort: "high" | "low" | "unsupported";
   readonly evidence_urls: readonly string[];
   readonly input_tokens?: number;
   readonly output_tokens?: number;
+  readonly finish_reason?: string | undefined;
+  readonly reasoning_tokens?: number | undefined;
   readonly cost_usd?: number;
   readonly usage_reported?: boolean;
   readonly cost_reported?: boolean;
@@ -580,6 +587,7 @@ export async function callOpenRouterCompletion(
       usage?: {
         prompt_tokens?: unknown;
         completion_tokens?: unknown;
+        completion_tokens_details?: { reasoning_tokens?: unknown };
         cost?: unknown;
         cost_details?: unknown;
       };
@@ -619,6 +627,13 @@ export async function callOpenRouterCompletion(
       ...(generationId ? { provider_generation_id: generationId } : {}),
       text: typeof text === "string" ? text : "",
       citations,
+      ...(choice?.finish_reason ? { finish_reason: choice.finish_reason } : {}),
+      ...(finiteNonnegative(usage?.completion_tokens_details?.reasoning_tokens)
+        ? {
+            reasoning_tokens: usage!.completion_tokens_details!
+              .reasoning_tokens as number,
+          }
+        : {}),
       input_tokens: finiteNonnegative(usage?.prompt_tokens)
         ? usage.prompt_tokens
         : 0,
@@ -712,6 +727,7 @@ export async function runLiveCompletion(
     loop: number;
     max_loops?: number;
     require_web?: boolean;
+    reasoning_effort?: "high" | "low";
   },
   options: LiveCallOptions = {},
 ): Promise<OpenRouterCompletionResult> {
@@ -769,7 +785,9 @@ export async function runLiveCompletion(
       );
     checkpoint = {
       ...checkpoint,
-      reasoning_effort: capabilities.reasoning ? "high" : "unsupported",
+      reasoning_effort: capabilities.reasoning
+        ? (context.reasoning_effort ?? "high")
+        : "unsupported",
       requested_provider: getConfiguredProviderRoute(request.model),
       actual_provider: null,
       is_byok: null,
@@ -786,7 +804,12 @@ export async function runLiveCompletion(
       request_id: checkpointId,
       timeout_ms: timeoutMs,
       ...(capabilities.reasoning
-        ? { reasoning: { effort: "high", exclude: true } as const }
+        ? {
+            reasoning: {
+              effort: context.reasoning_effort ?? "high",
+              exclude: true,
+            } as const,
+          }
         : {}),
       ...(context.require_web
         ? { plugins: [{ id: "web", engine: "native" }] as const }
@@ -856,6 +879,8 @@ export async function runLiveCompletion(
       evidence_urls: (result.citations ?? []).map((citation) => citation.url),
       input_tokens: result.input_tokens,
       output_tokens: result.output_tokens,
+      finish_reason: result.finish_reason,
+      reasoning_tokens: result.reasoning_tokens,
       cost_usd: result.cost_usd,
       ...byokCheckpointFields(result),
       usage_reported: result.usage_reported ?? false,
@@ -901,6 +926,8 @@ export async function runLiveCompletion(
             actual_model: auditedResponse.model,
             input_tokens: auditedResponse.input_tokens,
             output_tokens: auditedResponse.output_tokens,
+            finish_reason: auditedResponse.finish_reason,
+            reasoning_tokens: auditedResponse.reasoning_tokens,
             cost_usd: auditedResponse.cost_usd,
             provider_generation_id: auditedResponse.provider_generation_id,
             ...byokCheckpointFields(auditedResponse),

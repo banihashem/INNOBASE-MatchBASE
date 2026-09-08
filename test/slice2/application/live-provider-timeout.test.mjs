@@ -393,3 +393,34 @@ test("MB-UX-LIVE-001 L04 invalid timeout overrides are rejected before a provide
     await callOpenRouterCompletion({ ...request, timeout_ms });
   assert.equal(fixture.calls.length, 2);
 });
+test("MB-UX-LIVE-001 L07 retains finish and reasoning counts when provider exhausts output budget", async (t) => {
+  providerFixture(t, (body) => {
+    const response = completedResponse(body);
+    return response.json().then((data) => {
+      data.choices[0].finish_reason = "length";
+      data.usage.completion_tokens = 24000;
+      data.usage.completion_tokens_details = { reasoning_tokens: 21000 };
+      return Response.json(data);
+    });
+  });
+  const events = [];
+  await assert.rejects(
+    runLiveCompletion(
+      { ...request, max_tokens: 24000 },
+      {
+        phase: "verification_extraction_index",
+        loop: 2,
+        reasoning_effort: "low",
+      },
+      { on_checkpoint: (event) => events.push(event) },
+    ),
+    (error) => error.code === "MB-502-LIVE-RESPONSE",
+  );
+  const failed = events.at(-1);
+  assert.equal(failed.state, "failed");
+  assert.equal(failed.finish_reason, "length");
+  assert.equal(failed.reasoning_tokens, 21000);
+  assert.equal(failed.output_tokens, 24000);
+  assert.equal(failed.reasoning_effort, "low");
+  assert.equal(failed.is_byok, true);
+});

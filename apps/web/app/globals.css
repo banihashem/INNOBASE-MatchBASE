@@ -2179,3 +2179,352 @@ footer {
     border-right-style: solid;
   }
 }
+
+/* MB-UX-LIVE-001 L07: Consultant entry, persistent activity and responsive history. */
+.consultant-home {
+  color: #e2e8f0;
+  background: #0b101b;
+  min-height: 100vh;
+}
+.consultant-home-header {
+  max-width: 1240px;
+  margin: auto;
+  padding: 24px 28px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.consultant-wordmark {
+  color: #f8fafc;
+  font-size: 22px;
+  font-weight: 750;
+  text-decoration: none;
+}
+.consultant-wordmark span {
+  margin-left: 10px;
+  color: #7dd3fc;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.consultant-home-header nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.consultant-home-header nav a {
+  color: #cbd5e1;
+  text-decoration: none;
+  padding: 10px 14px;
+  border-radius: 8px;
+}
+.consultant-home-header nav a[aria-current="page"] {
+  background: #173451;
+  color: #e0f2fe;
+}
+.consultant-home-main {
+  max-width: 1184px;
+  padding: 36px 24px 60px;
+  margin: auto;
+  display: grid;
+  gap: 24px;
+}
+.consultant-hero {
+  max-width: 800px;
+  padding: 12px 0 16px;
+}
+.consultant-hero h1 {
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.15;
+  color: #f8fafc;
+  font-weight: 750;
+  margin: 12px 0 18px;
+}
+.consultant-home p,
+.workflow-activity p {
+  line-height: 1.6;
+}
+.consultant-hero > p {
+  color: #cbd5e1;
+}
+.consultant-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+.consultant-primary,
+.consultant-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 650;
+  flex-shrink: 0;
+  color: #f8fafc;
+}
+.consultant-primary {
+  background: #075985;
+  border-color: #38bdf8;
+}
+.consultant-secondary {
+  background: #1e293b;
+}
+.consultant-home a:hover {
+  filter: brightness(1.2);
+}
+.consultant-card,
+.workflow-activity {
+  background: #121d2d;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 24px;
+}
+.consultant-card h2,
+.workflow-activity h2 {
+  color: #f8fafc;
+  font-size: 20px;
+  font-weight: 700;
+  margin: 4px 0 12px;
+}
+.consultant-card > p {
+  color: #cbd5e1;
+}
+.consultant-resume {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  border-color: #527a9e;
+  background: #15273b;
+}
+.consultant-resume > div {
+  min-width: 0;
+}
+.consultant-snippet {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.activity-kicker {
+  color: #7dd3fc;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+.activity-time {
+  color: #aebed1;
+  font-size: 12px;
+  margin-top: 10px;
+}
+.consultant-journey {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.consultant-journey article {
+  padding: 20px;
+}
+.consultant-journey article > span {
+  color: #7dd3fc;
+  font-size: 13px;
+}
+.consultant-journey p {
+  font-size: 13px;
+  color: #cbd5e1;
+}
+.consultant-section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.consultant-section-heading label {
+  font-size: 12px;
+  color: #cbd5e1;
+  display: grid;
+  gap: 6px;
+}
+.consultant-section-heading input {
+  background: #0b101b;
+  border: 1px solid #64748b;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #f8fafc;
+  width: min(100%, 320px);
+}
+.consultant-research-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+}
+.consultant-research-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 20px 0;
+  border-top: 1px solid #334155;
+}
+.consultant-research-list li > div {
+  min-width: 0;
+}
+.consultant-research-list h3 {
+  color: #e2e8f0;
+  font-size: 15px;
+  line-height: 1.6;
+  font-weight: 500;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.consultant-state {
+  color: #7dd3fc;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.consultant-state.is-stopped {
+  color: #fde68a;
+}
+.consultant-home-footer {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  color: #aebed1;
+  font-size: 13px;
+}
+.consultant-home-footer a,
+.consultant-profile + p + a,
+.consultant-archive-link a {
+  color: #7dd3fc;
+  text-decoration: underline;
+}
+.consultant-profile {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 16px;
+}
+.consultant-profile dt {
+  color: #aebed1;
+}
+.consultant-profile dd {
+  overflow-wrap: anywhere;
+}
+.consultant-archive-link {
+  margin: 24px;
+  color: #cbd5e1;
+}
+.workflow-activity {
+  color: #cbd5e1;
+  border-left: 4px solid #38bdf8;
+}
+.activity-warning {
+  color: #fde68a;
+  background: #322516;
+  padding: 12px 16px;
+  border: 1px solid #a17632;
+  border-radius: 8px;
+  margin: 12px 0;
+}
+.activity-warning button {
+  text-decoration: underline;
+  margin-left: 10px;
+  min-height: 44px;
+}
+.activity-details {
+  margin-top: 16px;
+  border-top: 1px solid #334155;
+  padding-top: 12px;
+}
+.activity-details summary {
+  color: #bae6fd;
+  cursor: pointer;
+  padding: 8px 0;
+  min-height: 44px;
+}
+.activity-roadmap {
+  padding-left: 24px;
+  margin: 12px 0 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 28px;
+  list-style: decimal;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+.activity-log {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  max-height: 360px;
+  overflow: auto;
+}
+.activity-log li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid #334155;
+  font-size: 13px;
+}
+.activity-log small {
+  color: #aebed1;
+  grid-column: 1 / -1;
+}
+.consultant-home :focus-visible,
+.workflow-activity :focus-visible {
+  outline: 3px solid #38bdf8;
+  outline-offset: 3px;
+}
+@media (max-width: 760px) {
+  .consultant-home-header {
+    padding: 16px;
+    gap: 16px;
+  }
+  .consultant-home-header nav {
+    gap: 0;
+  }
+  .consultant-home-header nav a {
+    padding: 10px;
+    font-size: 13px;
+  }
+  .consultant-home-main {
+    padding: 20px 16px 40px;
+  }
+  .consultant-journey {
+    grid-template-columns: 1fr 1fr;
+  }
+  .consultant-resume,
+  .consultant-research-list li {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .consultant-card,
+  .workflow-activity {
+    padding: 18px;
+  }
+  .activity-roadmap {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workflow-activity *,
+  .consultant-home * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

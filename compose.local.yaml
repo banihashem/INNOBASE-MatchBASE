@@ -41,7 +41,10 @@ services:
       dockerfile: Dockerfile.local
       target: local-runtime
     command: [web]
-    ports: ["127.0.0.1:${MATCHBASE_LOCAL_WEB_PORT:-3000}:3000"]
+    ports:
+      [
+        "${MATCHBASE_LOCAL_WEB_BIND_ADDRESS:-127.0.0.1}:${MATCHBASE_LOCAL_WEB_PORT:-3000}:3000",
+      ]
     volumes: ["pdf_cache:/workspace/apps/web/.artifacts"]
     shm_size: 512mb
     healthcheck:

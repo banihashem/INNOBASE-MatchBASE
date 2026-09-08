@@ -1,8 +1,9 @@
-# MB-UX-OPS-002 L01. All secret values are supplied in memory to Compose secrets.
+# MB-UX-OPS-002 L02. All secret values are supplied in memory to Compose secrets.
 [CmdletBinding()]
 param(
     [ValidateSet('Build', 'Up', 'Stop', 'Status', 'Backup')][string]$Action = 'Status',
     [ValidateRange(1024,65535)][int]$WebPort = 3000,
+    [string]$LanAddress = [Environment]::GetEnvironmentVariable('MATCHBASE_LOCAL_LAN_ADDRESS', 'User'),
     [string[]]$Services = @('postgres', 'web', 'worker', 'dashboard')
 )
 $ErrorActionPreference = 'Stop'
@@ -91,6 +92,22 @@ try {
         Assert-NativeSuccess 'Docker image build and Linux unit gate'
         return
     }
+    # LAN access is an explicit, persistent choice; never bind every host interface.
+    $bindAddress = '127.0.0.1'
+    $originHost = 'localhost'
+    if ($LanAddress) {
+        $parsedAddress = $null
+        if (-not [System.Net.IPAddress]::TryParse($LanAddress, [ref]$parsedAddress) -or
+            $parsedAddress.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork -or
+            $parsedAddress.ToString() -ne $LanAddress) { throw 'LAN address must be a canonical private IPv4 address.' }
+        $octets = $parsedAddress.GetAddressBytes()
+        $privateAddress = $octets[0] -eq 10 -or ($octets[0] -eq 172 -and $octets[1] -ge 16 -and $octets[1] -le 31) -or ($octets[0] -eq 192 -and $octets[1] -eq 168)
+        if (-not $privateAddress) { throw 'Only private LAN addresses are supported.' }
+        $assignedAddress = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -eq $LanAddress -and $_.AddressState -eq 'Preferred' }
+        if (-not $assignedAddress) { throw 'LAN address is not assigned to this computer. Select its current private IPv4 address.' }
+        $bindAddress = $LanAddress
+        $originHost = $LanAddress
+    }
     $runtime = @{}
     foreach ($name in @('MATCHBASE_DATABASE_URL', 'MATCHBASE_DIGEST_KEY', 'MATCHBASE_OPENROUTER_API_KEY', 'MATCHBASE_PROVIDER_GOOGLE', 'MATCHBASE_PROVIDER_OPENAI')) {
         $value = [Environment]::GetEnvironmentVariable($name, 'User')
@@ -109,14 +126,21 @@ try {
     $runtime.MATCHBASE_ENVIRONMENT = 'test'
     $runtime.MATCHBASE_OIDC_SIMULATOR = 'true'
     $runtime.MATCHBASE_SYNTHETIC_FIXTURE = 'true'
-    $runtime.MATCHBASE_ORIGIN = "http://localhost:$WebPort"
+    $runtime.MATCHBASE_ORIGIN = "http://${originHost}:$WebPort"
     $env:MATCHBASE_LOCAL_RUNTIME_CONFIG = $runtime | ConvertTo-Json -Compress
     $env:MATCHBASE_LOCAL_WEB_PORT = [string]$WebPort
+    $env:MATCHBASE_LOCAL_WEB_BIND_ADDRESS = $bindAddress
     Assert-LocalQueueIdle
     & docker compose -f compose.local.yaml up -d --no-build --wait --wait-timeout 180 @Services
     Assert-NativeSuccess 'Local Compose startup'
+    if ($PSBoundParameters.ContainsKey('LanAddress')) {
+        [Environment]::SetEnvironmentVariable('MATCHBASE_LOCAL_LAN_ADDRESS', $LanAddress, 'User')
+    }
+    Write-Output "Application URL: $($runtime.MATCHBASE_ORIGIN)"
 } finally {
     Remove-Item Env:MATCHBASE_LOCAL_RUNTIME_CONFIG -ErrorAction SilentlyContinue
     Remove-Item Env:MATCHBASE_LOCAL_DATABASE_PASSWORD -ErrorAction SilentlyContinue
+    Remove-Item Env:MATCHBASE_LOCAL_WEB_BIND_ADDRESS -ErrorAction SilentlyContinue
+    Remove-Item Env:MATCHBASE_LOCAL_WEB_PORT -ErrorAction SilentlyContinue
     Pop-Location
 }

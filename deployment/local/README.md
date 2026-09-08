@@ -1,4 +1,4 @@
-# Local Docker runtime — MB-UX-OPS-002 L01
+# Local Docker runtime — MB-UX-OPS-002 L02
 
 This profile runs the Consultant workspace, durable research worker, PostgreSQL18 and read-only PM dashboard on Docker Desktop. It retains local simulator authentication. The existing production Dockerfile and production identity controls are separate. No registry push is required.
 
@@ -14,7 +14,21 @@ This profile runs the Consultant workspace, durable research worker, PostgreSQL1
 
 Build creates a disposable PostgreSQL container on a random loopback port and runs the complete workspace unit command, including database-dependent tests, before sending application source to Docker. It removes only that disposable test container afterward. The Dockerfile repeats unit tests on Linux; its build stage has no database or runtime credentials, so database cases are separately covered by the first gate. Any test failure prevents the final image. No tests are disabled to permit a build. The disposable database contains test data only and accepts trusted local connections; it is never used as the runtime database.
 
-The application stays at http://localhost:3000. The PM dashboard is at http://localhost:3001 and preserves its snapshot freshness warnings. Host database access is on127.0.0.1:55433; containers use postgres:5432. All published ports bind only to loopback. Web uses Next development mode intentionally to preserve this project's local test identity policy; it is not a production deployment. Source changes require another validated Build followed by Up. The image contains the locked development workspace and Chromium for Consultant PDF rendering.
+By default the application is at http://localhost:3000. The PM dashboard is at http://localhost:3001 and preserves its snapshot freshness warnings. Host database access is on127.0.0.1:55433; containers use postgres:5432. Dashboard and database ports always bind to loopback; web can opt into a specific private LAN address as described below. Web uses Next development mode intentionally to preserve this project's local test identity policy; it is not a production deployment. Source changes require another validated Build followed by Up. The image contains the locked development workspace and Chromium for Consultant PDF rendering.
+
+## Private LAN access
+
+After Build, select a private IPv4 address currently assigned to this computer:
+
+```powershell
+./deployment/local/Manage-LocalDocker.ps1 -Action Up -LanAddress 192.168.168.40
+```
+
+Use http://192.168.168.40:3000 on both the host and devices on the same network. Consultant test sign-in is `/auth/simulator/start?fixture=consultant`. This replaces localhost web access, so old browser sessions require sign-in on the new origin. The launcher sets both the Docker host binding and MATCHBASE_ORIGIN together; opening a port alone is insufficient for login and mutation origin checks. It rejects public, wildcard and unassigned addresses. It saves the successful non-secret choice in Windows User MATCHBASE_LOCAL_LAN_ADDRESS for subsequent Up commands. If DHCP changes this computer's IP, repeat Up with the current private address. To restore host-only mode, use `-Action Up -LanAddress ''`.
+
+The host firewall must permit TCP3000 on the selected interface for intended LAN clients. The launcher does not change firewall policies or router forwarding. This is a trusted-LAN test profile with simulator sign-in, not public hosting or production authentication. No other service is exposed by this option. [Docker port binding documentation](https://docs.docker.com/engine/network/port-publishing/).
+
+Next development resources admit only the configured origin hostname through allowedDevOrigins in the test/development profile. This is necessary for browser JavaScript, styles and HMR when using the LAN IP; an HTTP200 document alone does not establish browser readiness. Production configuration is unaffected.
 
 PostgreSQL data resides in named volume matchbase_local_postgres_data; PDF cache resides in matchbase_local_pdf_cache. Stop/recreate preserves these volumes. Never use down --volumes or remove the database volume for routine maintenance. The old tmpfs test database in compose.yaml is not the persistent local runtime.
 

@@ -1,4 +1,13 @@
 import { readFile } from "node:fs/promises";
+import { isIP } from "node:net";
+
+export function isPrivateIPv4(hostname) {
+  if (isIP(hostname) !== 4) return false;
+  const [a, b] = hostname.split(".").map(Number);
+  return (
+    a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+  );
+}
 
 export function validateLocalConfig(config) {
   if (!config || typeof config !== "object" || Array.isArray(config))
@@ -30,11 +39,17 @@ export function validateLocalConfig(config) {
   const origin = new URL(config.MATCHBASE_ORIGIN);
   if (
     origin.protocol !== "http:" ||
-    !["localhost", "127.0.0.1"].includes(origin.hostname) ||
+    (!["localhost", "127.0.0.1"].includes(origin.hostname) &&
+      !isPrivateIPv4(origin.hostname)) ||
     origin.username ||
-    origin.password
+    origin.password ||
+    origin.pathname !== "/" ||
+    origin.search ||
+    origin.hash
   )
-    throw new Error("Local origin must use loopback HTTP.");
+    throw new Error(
+      "Local origin must use loopback or private IPv4 HTTP without a path.",
+    );
   const database = new URL(config.MATCHBASE_DATABASE_URL);
   if (
     !["postgres:", "postgresql:"].includes(database.protocol) ||

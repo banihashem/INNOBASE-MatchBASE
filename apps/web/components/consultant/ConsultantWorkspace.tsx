@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   parseDemoProjectionV1,
   parseConsultantResultProjectionV1,
@@ -78,7 +84,8 @@ export function ConsultantWorkspace({
   useEffect(() => {
     if (initialView === "runs") void loadRuns();
   }, [initialView, loadRuns]);
-  useEffect(() => {
+  // Consume navigation focus during commit, before another click can queue a view.
+  useLayoutEffect(() => {
     if (view.state === "loading" || !moveFocusAfterLoad.current) return;
     moveFocusAfterLoad.current = false;
     headingRef.current?.focus();

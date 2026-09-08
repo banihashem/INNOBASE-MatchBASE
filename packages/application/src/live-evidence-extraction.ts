@@ -40,6 +40,7 @@ const indexSchema = objectSchema({
   summary: stringSchema,
 });
 interface ExtractionContext {
+  candidate_limit?: number | undefined;
   phase: string;
   loop: number;
   max_loops: number;
@@ -220,14 +221,16 @@ export async function extractNativeDiscoveryPayload(
     options,
   );
   const batches: CandidateIndex["candidates"][] = [];
+  const scopedCandidates = indexed.parsed.candidates.slice(
+    0,
+    context.candidate_limit ?? 40,
+  );
   for (
     let offset = 0;
-    offset < indexed.parsed.candidates.length;
+    offset < scopedCandidates.length;
     offset += MAX_BATCH_CANDIDATES
   )
-    batches.push(
-      indexed.parsed.candidates.slice(offset, offset + MAX_BATCH_CANDIDATES),
-    );
+    batches.push(scopedCandidates.slice(offset, offset + MAX_BATCH_CANDIDATES));
   if (!batches.length)
     return {
       results: [indexed.result],
@@ -333,6 +336,11 @@ export async function extractNativeDiscoveryPayload(
       remaining_gaps: [
         ...new Set([
           ...indexed.parsed.remaining_gaps,
+          ...(scopedCandidates.length < indexed.parsed.candidates.length
+            ? [
+                "Additional named leads were not extracted within this approved round allowance.",
+              ]
+            : []),
           ...outputs.flatMap((output) => output.parsed.remaining_gaps),
         ]),
       ],

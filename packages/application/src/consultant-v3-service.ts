@@ -1,6 +1,11 @@
 import crypto from "node:crypto";
 import type { Queryable } from "@matchbase/data";
 import {
+  getResearchRoundForExecution,
+  listResearchRounds,
+  completeResearchRound,
+  recordConsultantProviderCall,
+  readConsultantCostEvents,
   saveConsultantOutputV3,
   saveConsultantWorkflowSession,
   getConsultantWorkflowSessionByRunId,
@@ -39,7 +44,14 @@ import {
   type Step2AdvisoryResult,
   type ApprovedRequestRevision,
 } from "./preparation-gateway.js";
-import { executeDualLaneResearch } from "./dual-lane-orchestrator.js";
+import {
+  createRoundCallGuard,
+  summarizeResearchCosts,
+} from "./consultant-research-cost.js";
+import {
+  type ResearchContinuation,
+  executeDualLaneResearch,
+} from "./dual-lane-orchestrator.js";
 import { synthesizeConsultantOutputV3 } from "./synthesis-engine.js";
 import { LivePreparationModelGateway } from "./live-preparation.js";
 import { LiveResearchError } from "./openrouter-model-policy.js";
@@ -69,6 +81,7 @@ export interface WorkflowSession {
   readonly user_profile_id: string;
   readonly account_id: string;
   execution_id: string;
+  round_number?: number | undefined;
   readonly classification_id: string;
   mode: ConsultantExecutionMode;
   progress?: ConsultantWorkflowProgress | undefined;
@@ -145,8 +158,19 @@ export async function getOrRestoreWorkflowSession(
 
   const restored = mapRecordToSession(dbRow);
   if (
-    restored.state === "progressive_reveal_ready" ||
-    restored.state === "workflow_complete"
+    restored.round_number ||
+    [
+      "research_dispatching",
+      "lane_gemini_running",
+      "lane_openai_running",
+      "lanes_converged",
+      "verification_loop_running",
+      "synthesis_running",
+      "progressive_reveal_ready",
+      "workflow_complete",
+    ].includes(restored.state) ||
+    (restored.state === "workflow_failed" &&
+      restored.retry_action === "research")
   ) {
     const dbOutput = await getConsultantOutputV3ByRunId(db, accountId, runId);
     if (dbOutput) {
@@ -203,6 +227,7 @@ function mapSessionToRecord(
     execution_id: session.execution_id,
     last_checkpoint: session.last_checkpoint ?? session.state,
     workflow_metadata: {
+      round_number: session.round_number,
       mode: session.mode,
       classification_id: session.classification_id,
       step1_interpretation: session.step1_interpretation,
@@ -245,6 +270,10 @@ function mapRecordToSession(
       String(metadata.classification_id ?? record.run_id),
     mode:
       (metadata.mode as ConsultantExecutionMode | undefined) ?? "demonstration",
+    round_number:
+      typeof metadata.round_number === "number"
+        ? metadata.round_number
+        : undefined,
     progress: metadata.progress as ConsultantWorkflowProgress | undefined,
     error: metadata.error as string | undefined,
     retry_action: metadata.retry_action as WorkflowSession["retry_action"],
@@ -881,6 +910,39 @@ export async function executeConsultantWorkflowResearch(
   if (mode !== session.mode)
     throw new Error("Execution mode cannot change after request preparation.");
 
+  const round = await getResearchRoundForExecution(
+    db,
+    session.account_id,
+    session.execution_id,
+  );
+  if (!round || round.status !== "approved") {
+    throw new ApplicationFault(
+      409,
+      "round-approval-required",
+      "MB-409-ROUND-APPROVAL",
+      "Review and approve a current cost estimate before starting research.",
+    );
+  }
+  session.round_number = round.round_number;
+  const rounds = await listResearchRounds(
+    db,
+    session.account_id,
+    session.run_id,
+  );
+  const parent = rounds.find(
+    (item) => item.round_id === round.plan.parent_round_id,
+  );
+  const roundOptions = {
+    round_plan: round.plan,
+    approved_rates: round.plan.rates,
+    ...(parent?.continuation
+      ? { continuation: parent.continuation as unknown as ResearchContinuation }
+      : {}),
+    before_call: createRoundCallGuard(round.plan),
+    max_output_tokens: round.plan.max_output_tokens_per_call,
+    reasoning_effort: "high" as const,
+    web_engine: round.plan.search_engine,
+  };
   assertValidWorkflowTransition(session.state, "research_dispatching");
   session.state = "research_dispatching";
   session.error = undefined;
@@ -892,9 +954,9 @@ export async function executeConsultantWorkflowResearch(
   );
   await checkpoint({
     phase: "discovery",
-    loop: 0,
-    max_loops: 15,
-    message: "Searching Gemini and OpenAI in parallel.",
+    loop: round.round_number,
+    max_loops: round.round_number,
+    message: `Starting approved round ${round.round_number}. ${round.plan.purpose}`,
   });
 
   // Dispatch Dual Lane Research
@@ -913,6 +975,7 @@ export async function executeConsultantWorkflowResearch(
     },
     {
       mode,
+      ...roundOptions,
       on_checkpoint: checkpoint,
       ...(options?.signal ? { signal: options.signal } : {}),
     },
@@ -924,7 +987,7 @@ export async function executeConsultantWorkflowResearch(
   session.state = "synthesis_running";
 
   // Synthesize V3 output
-  const output = synthesizeConsultantOutputV3({
+  let output = synthesizeConsultantOutputV3({
     user_profile_id: session.user_profile_id,
     research_run_id: session.run_id,
     execution_id: session.execution_id,
@@ -943,6 +1006,87 @@ export async function executeConsultantWorkflowResearch(
     intake: session.intake,
   });
 
+  const costSummary = summarizeResearchCosts(
+    await readConsultantCostEvents(db, session.account_id, session.run_id),
+    mode === "demonstration",
+  );
+  const socialChecks: NonNullable<
+    ConsultantResearchOutputV3["public_social_checks"]
+  >[number][] = [];
+  if (round.round_number >= 4 && dualResult.continuation) {
+    const continuation = dualResult.continuation;
+    for (const [, candidate] of continuation.roster) {
+      const urls = [
+        ...new Set([
+          ...candidate.identity.source_urls,
+          ...candidate.product.source_urls,
+          ...candidate.facts.flatMap((f) => f.source_urls),
+        ]),
+      ].filter((url) => {
+        try {
+          return /(^|\.)(linkedin\.com|facebook\.com|instagram\.com|youtube\.com|x\.com|twitter\.com|tiktok\.com)$/.test(
+            new URL(url).hostname,
+          );
+        } catch {
+          return false;
+        }
+      });
+      const checked = urls.filter((url) =>
+        continuation.retrieved.some(([key]) => key === url),
+      );
+      for (const url of checked)
+        socialChecks.push({
+          supplier_name: candidate.legal_name,
+          profile_url: url,
+          status: continuation.retrieved.find(([key]) => key === url)?.[1]
+            ? "reviewed"
+            : "access_limited",
+          ownership_basis:
+            "Cited in supplier research; corporate ownership is not independently established.",
+          checked_at:
+            continuation.retrieved.find(([key]) => key === url)?.[1]
+              ?.retrieved_at ?? new Date().toISOString(),
+          limitation:
+            "Public retrieval only. No private access, follower scoring, badge inference or order-acceptance confirmation.",
+        });
+      if (!checked.length)
+        socialChecks.push({
+          supplier_name: candidate.legal_name,
+          profile_url: null,
+          status: "not_executed",
+          ownership_basis: "No cited public profile was retrieved.",
+          checked_at: new Date().toISOString(),
+          limitation:
+            "This does not mean the company lacks social profiles. Missing profiles do not reduce supplier eligibility.",
+        });
+    }
+  }
+  output = {
+    ...output,
+    ...(round.round_number >= 4 ? { public_social_checks: socialChecks } : {}),
+    limitations_and_disclosures: [
+      ...output.limitations_and_disclosures,
+      {
+        title: `Recorded cost through research round ${round.round_number}`,
+        description: `USD ${costSummary.recorded_total_usd.toFixed(6)} recorded across this request: preparation USD ${costSummary.preparation_usd.toFixed(6)}, research attempts USD ${costSummary.research_usd.toFixed(6)}. OpenRouter USD ${costSummary.openrouter_charge_usd.toFixed(6)}; BYOK upstream USD ${costSummary.byok_upstream_usd.toFixed(6)}. ${costSummary.unpriced_calls} calls have incomplete accounting. ${costSummary.disclosure}`,
+        severity: "info",
+      },
+      ...(socialChecks.length
+        ? [
+            {
+              title: "Public social evidence review",
+              description: socialChecks
+                .map(
+                  (check) =>
+                    `${check.supplier_name}: ${check.status}; ${check.profile_url ?? "no reviewed URL"}. ${check.limitation}`,
+                )
+                .join("\n"),
+              severity: "advisory" as const,
+            },
+          ]
+        : []),
+    ],
+  };
   parseConsultantResearchOutputV3(output);
   const integrity = validateConsultantOutputV3Integrity(output);
   if (!integrity.isValid)
@@ -971,8 +1115,8 @@ export async function executeConsultantWorkflowResearch(
   session.progress = {
     phase: "completed",
     loop: dualResult.verification_loops_completed,
-    max_loops: 15,
-    message: `${output.supplier_candidates.length} supplier dossiers saved.`,
+    max_loops: round.round_number,
+    message: `Round ${round.round_number} complete: ${output.supplier_candidates.length} supplier dossiers saved. No further research is running.`,
     updated_at: new Date().toISOString(),
   };
 
@@ -986,6 +1130,13 @@ export async function executeConsultantWorkflowResearch(
         session.execution_id,
       );
     }
+    await completeResearchRound(
+      client,
+      session.account_id,
+      session.execution_id,
+      output,
+      dualResult.continuation,
+    );
     await saveConsultantOutputV3(client, {
       account_id: session.account_id,
       output,
@@ -1035,15 +1186,23 @@ function createWorkflowCheckpoint(
 ) {
   let pending = Promise.resolve();
   return (event: any): Promise<void> => {
+    // Do not let a rejected lease/progress promise discard late provider accounting.
+    const accounting = db
+      ? recordConsultantProviderCall(db, session, event)
+      : Promise.resolve();
     pending = pending.then(async () => {
+      await accounting;
       if (assertLease) await assertLease();
       const phase = String(event.phase ?? event.stage ?? "research");
-      const loop = Number(event.loop ?? event.loop_number ?? 0);
+      const loop =
+        session.round_number ?? Number(event.loop ?? event.loop_number ?? 0);
       session.progress = {
         phase,
         loop,
         max_loops: Number(
-          event.max_loops ?? (phase.includes("advisory") ? 3 : 15),
+          session.round_number ??
+            event.max_loops ??
+            (phase.includes("advisory") ? 3 : 15),
         ),
         message: String(event.message ?? "Research in progress."),
         updated_at: new Date().toISOString(),
@@ -1072,7 +1231,7 @@ function createWorkflowCheckpoint(
         else await persist(db);
       }
     });
-    return pending;
+    return Promise.all([accounting, pending]).then(() => undefined);
   };
 }
 
@@ -1082,6 +1241,13 @@ export async function queueConsultantWorkflowStep(
   stage: "prepare" | "research",
   retry = false,
 ): Promise<ConsultantWorkflowJob> {
+  if (stage === "research")
+    throw new ApplicationFault(
+      409,
+      "round-approval-required",
+      "MB-409-ROUND-APPROVAL",
+      "Review and approve a current round estimate in Section 3.",
+    );
   const session = activeSessions.get(runId);
   if (!session?.approved_request_revision)
     throw new Error("An approved request is required.");
@@ -1091,8 +1257,6 @@ export async function queueConsultantWorkflowStep(
     session.execution_id = crypto.randomUUID();
     session.error = undefined;
   }
-  if (stage === "research" && !session.step3_deep_prompt?.is_approved)
-    throw new Error("An approved research prompt is required.");
   const persist = async (client: Queryable) => {
     const job = await enqueueConsultantWorkflowJob(
       client,

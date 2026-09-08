@@ -109,7 +109,7 @@ try {
         $originHost = $LanAddress
     }
     $runtime = @{}
-    foreach ($name in @('MATCHBASE_DATABASE_URL', 'MATCHBASE_DIGEST_KEY', 'MATCHBASE_OPENROUTER_API_KEY', 'MATCHBASE_PROVIDER_GOOGLE', 'MATCHBASE_PROVIDER_OPENAI')) {
+    foreach ($name in @('MATCHBASE_DATABASE_URL', 'MATCHBASE_DIGEST_KEY', 'MATCHBASE_OPENROUTER_API_KEY', 'MATCHBASE_PROVIDER_GOOGLE', 'MATCHBASE_PROVIDER_OPENAI', 'MATCHBASE_PROVIDER_ROUTES')) {
         $value = [Environment]::GetEnvironmentVariable($name, 'User')
         if (-not $value) { $value = [Environment]::GetEnvironmentVariable($name, 'Process') }
         if ($value) { $runtime[$name] = $value }

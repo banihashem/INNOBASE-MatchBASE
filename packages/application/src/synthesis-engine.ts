@@ -258,7 +258,9 @@ export function synthesizeConsultantOutputV3(
     claims,
     evidence_sources: evidence,
     telemetry: {
-      lanes_executed: isLive ? ["lane_gemini", "lane_openai"] : [],
+      lanes_executed: isLive
+        ? [...new Set(result.executed_models ?? ["lane_gemini", "lane_openai"])]
+        : [],
       verification_loops_count: result.verification_loops_completed,
       total_input_tokens: isLive ? result.total_input_tokens : 0,
       total_output_tokens: isLive ? result.total_output_tokens : 0,

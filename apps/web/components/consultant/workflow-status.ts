@@ -26,7 +26,7 @@ export function workflowLabel(state: string, stoppedByUser = false): string {
     return "Review English interpretation";
   if (state === "prep_step3_prompt_awaiting_approval")
     return "Review research plan";
-  if (state === "prep_step3_prompt_approved") return "Ready to start research";
+  if (state === "prep_step3_prompt_approved") return "Review research cost";
   if (state.startsWith("prep_")) return "Preparing your request";
   if (state === "synthesis_running") return "Combining supplier findings";
   if (state === "verification_loop_running") return "Verifying suppliers";

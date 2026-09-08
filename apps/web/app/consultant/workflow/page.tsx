@@ -12,6 +12,7 @@ import { SupplierDossierModal } from "../../../components/consultant/SupplierDos
 import { ApprovedRequestSummary } from "../../../components/consultant/ApprovedRequestSummary";
 
 import { WorkflowActivity } from "../../../components/consultant/WorkflowActivity";
+import { ResearchRoundControl } from "../../../components/consultant/ResearchRoundControl";
 import { StopResearchButton } from "../../../components/consultant/StopResearchButton";
 import {
   workflowLabel,
@@ -152,6 +153,9 @@ export default function ConsultantWorkflowPage() {
       ].includes(workflowState) ||
       (workflowState === "workflow_failed" && retryAction === "research"));
   const { stage, setStage } = useWorkflowStage(runId, researchAvailable);
+  const viewedRoundRef = useRef<{ runId: string; roundId: string } | null>(
+    null,
+  );
 
   function updateDraftId(id: string) {
     draftIdRef.current = id;
@@ -780,7 +784,8 @@ export default function ConsultantWorkflowPage() {
         const data = await res.json();
         if (data.session) {
           const s = data.session;
-          setOutput(s.output ?? null);
+          if (viewedRoundRef.current?.runId !== targetRunId)
+            setOutput(s.output ?? null);
           setPromptApproved(s.step3_deep_prompt?.is_approved === true);
           setApprovedSnapshot(
             s.approved_request_revision?.canonical_snapshot ?? null,
@@ -795,7 +800,8 @@ export default function ConsultantWorkflowPage() {
               "",
           );
           setAdvisoryContext(s.step2_advisory ?? null);
-          setRevealedCount(s.revealed_count ?? 5);
+          if (viewedRoundRef.current?.runId !== targetRunId)
+            setRevealedCount(s.revealed_count ?? 5);
           acceptProgress(s);
           setRunId(s.run_id);
           setWorkflowState(s.state);
@@ -1116,25 +1122,7 @@ export default function ConsultantWorkflowPage() {
         );
       setPromptApproved(true);
       if (approved.session) acceptProgress(approved.session);
-      const res = await fetch("/api/v1/consultant/workflow", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "execute_research",
-          run_id: runId,
-          mode: researchMode,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success)
-        throw new Error(errorMessage(data, "Research could not start."));
-      if (data.session) acceptProgress(data.session);
-      else setWorkflowState("research_dispatching");
-      if (data.output) {
-        setOutput(data.output);
-        setWorkflowState("progressive_reveal_ready");
-        setRevealedCount(5);
-      }
+      setStage(3);
     } catch (error: any) {
       setWorkflowError(error.message);
     } finally {
@@ -1144,6 +1132,11 @@ export default function ConsultantWorkflowPage() {
 
   async function handleRetryWorkflow() {
     if (!runId || isLoading) return;
+    if (retryAction === "research") {
+      setStage(3);
+      setWorkflowError(null);
+      return;
+    }
     setIsLoading(true);
     try {
       const res = await fetch("/api/v1/consultant/workflow", {
@@ -1180,6 +1173,10 @@ export default function ConsultantWorkflowPage() {
 
   // Action 4: Reveal More Candidates (+5)
   async function handleRevealMore() {
+    if (viewedRoundRef.current?.runId === runId) {
+      setRevealedCount(Math.min(revealedCount + 5, suppliers.length));
+      return;
+    }
     if (!runId) return;
     setIsLoading(true);
     try {
@@ -1254,10 +1251,12 @@ export default function ConsultantWorkflowPage() {
               className="mt-3 px-4 py-2 rounded bg-sky-700 text-white disabled:opacity-50"
             >
               {workflowProgress?.phase === "user_cancelled"
-                ? "Restart research"
+                ? "Review a new research estimate"
                 : retryAction === "interpretation"
                   ? "Retry Interpretation"
-                  : `Retry failed ${retryAction === "prepare" ? "preparation" : "research"} stage`}
+                  : retryAction === "research"
+                    ? "Review a new research estimate"
+                    : "Retry failed preparation stage"}
             </button>
           )}
         </div>
@@ -2293,7 +2292,7 @@ export default function ConsultantWorkflowPage() {
                         Submitting approved prompt...
                       </>
                     ) : (
-                      <>Approve Prompt &amp; Start Research &rarr;</>
+                      <>Approve Prompt &amp; Review Cost &rarr;</>
                     )}
                   </button>
                 </div>
@@ -2339,12 +2338,56 @@ export default function ConsultantWorkflowPage() {
                   }}
                 />
               )}
+            {runId && (
+              <ResearchRoundControl
+                runId={runId}
+                workflowState={workflowState}
+                onStarted={() => {
+                  viewedRoundRef.current = null;
+                  void loadExistingSession(runId);
+                }}
+                onPreview={(saved, roundId) => {
+                  viewedRoundRef.current = { runId, roundId };
+                  setOutput(saved);
+                  setRevealedCount(5);
+                }}
+              />
+            )}
             {workflowFeedback}
             {!output && !workflowProgress && !workflowError && (
               <p role="status" className="text-slate-300">
-                The approved research request is being dispatched. Progress will
-                appear here.
+                Review the cost estimate above to start one research round.
               </p>
+            )}
+            {output?.public_social_checks && (
+              <section className="rounded-lg border border-slate-600 p-4">
+                <h3 className="font-bold">Public social evidence checks</h3>
+                <ul className="mt-3 space-y-3 text-sm">
+                  {output.public_social_checks.map((check, i) => (
+                    <li key={i}>
+                      <strong>
+                        {check.supplier_name} ·{" "}
+                        {check.status.replaceAll("_", " ")}
+                      </strong>
+                      {check.profile_url && (
+                        <p>
+                          <a
+                            className="text-sky-300 underline"
+                            href={check.profile_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Public source URL
+                          </a>
+                        </p>
+                      )}
+                      <p>
+                        {check.ownership_basis} {check.limitation}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
             {output && (
               <ConsultantResultsSection

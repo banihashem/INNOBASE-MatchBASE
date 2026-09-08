@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import {
+  saveResearchQuote,
+  approveResearchQuote,
   createPool,
   migrateUp,
   createConsultantDraftSession,
@@ -548,12 +550,30 @@ postgresTest(
       );
       await app.approveInterpretationStep(full.run_id, undefined, pool);
       await app.approveDeepPromptStep(full.run_id, undefined, pool);
-      const completeJob = await enqueueConsultantWorkflowJob(
+      const prepared = await app.getOrRestoreWorkflowSession(
         pool,
-        full,
-        "research",
-        "demonstration",
+        accountId,
+        full.run_id,
       );
+      const { plan } = await app.buildResearchRoundPlan({
+        round_number: 1,
+        depth: "simple",
+        parent_round_id: null,
+        request_hash: app.researchRequestHash(prepared),
+        focus_requirements: [],
+        mode: "demonstration",
+      });
+      const quoteId = await saveResearchQuote(pool, prepared, plan);
+      const approved = await approveResearchQuote(
+        pool,
+        accountId,
+        prepared.user_profile_id,
+        prepared.run_id,
+        quoteId,
+        plan.request_hash,
+      );
+      const completeJob = approved.job;
+      await app.getOrRestoreWorkflowSession(pool, accountId, full.run_id);
       await claimConsultantWorkflowJob(pool, completeJob.job_id);
       const output = await app.executeConsultantWorkflowResearch(
         pool,

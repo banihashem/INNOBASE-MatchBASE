@@ -31,6 +31,24 @@ const PROVIDER_NAMES: Readonly<Record<string, readonly string[]>> = {
 };
 
 export function getConfiguredProviderRoute(model: string): string {
+  let extra: unknown;
+  try {
+    extra = JSON.parse(process.env.MATCHBASE_PROVIDER_ROUTES || "{}");
+  } catch {
+    throw new OpenRouterByokError(
+      "MB-503-LIVE-PROVIDER-CONFIG",
+      "The server provider-route mapping is invalid.",
+    );
+  }
+  const configured =
+    extra && typeof extra === "object" && !Array.isArray(extra)
+      ? (extra as Record<string, unknown>)[model.split("/")[0]!]
+      : undefined;
+  if (
+    typeof configured === "string" &&
+    /^[a-z][a-z0-9-]{1,60}$/.test(configured)
+  )
+    return configured;
   const family = model.startsWith("google/")
     ? "GOOGLE"
     : model.startsWith("openai/")
@@ -70,7 +88,9 @@ function providerName(value: unknown): string | null {
 }
 function isExpectedProvider(name: string, requested: string): boolean {
   return (
-    name === requested || Boolean(PROVIDER_NAMES[requested]?.includes(name))
+    name.toLowerCase().replace(/[ -]/g, "") ===
+      requested.toLowerCase().replace(/[ -]/g, "") ||
+    Boolean(PROVIDER_NAMES[requested]?.includes(name))
   );
 }
 

@@ -3,7 +3,11 @@ import {
   ApplicationFault,
   authorizeConsultantRunResourceRead,
 } from "@matchbase/application";
-import { savePdfReportLedger } from "@matchbase/data";
+import { parseConsultantResearchOutputV3 } from "@matchbase/contracts";
+import {
+  getResearchRoundForExecution,
+  savePdfReportLedger,
+} from "@matchbase/data";
 import {
   generateConsultantPdf,
   ConsultantPdfRendererUnavailableError,
@@ -125,7 +129,27 @@ async function handlePdfRequest(
       throw authzError;
     }
 
-    const { output, runId: effectiveRunId } = authorized;
+    const { runId: effectiveRunId } = authorized;
+    let output = authorized.output;
+    const execution = new URL(req.url).searchParams.get("execution_id");
+    if (execution && execution !== output.execution_id) {
+      if (!/^[0-9a-f-]{36}$/i.test(execution))
+        return NextResponse.json(
+          { error: "Invalid execution ID." },
+          { status: 400, headers },
+        );
+      const saved = await getResearchRoundForExecution(
+        pool,
+        requestContext.accountId,
+        execution,
+      );
+      if (!saved?.output || saved.run_id !== effectiveRunId)
+        return NextResponse.json(
+          { error: "Saved round report not found." },
+          { status: 404, headers },
+        );
+      output = parseConsultantResearchOutputV3(saved.output);
+    }
 
     // Dynamic filename based on scenario report artifact or product
     const filename =

@@ -97,6 +97,53 @@ function fixture(t) {
   // controlled SQL and HTTP boundaries. No database or provider connection is opened.
   const db = {
     async query(sql, params = []) {
+      if (
+        sql.includes("FROM consultant_output_v3") ||
+        sql.startsWith("UPDATE consultant_research_round") ||
+        sql.includes("INSERT INTO consultant_provider_call")
+      )
+        return { rows: [] };
+      if (sql.includes("FROM consultant_research_round"))
+        return {
+          rows: [
+            {
+              round_id: randomUUID(),
+              status: "approved",
+              round_number: 1,
+              plan: {
+                round_number: 1,
+                depth: "simple",
+                mode: "live",
+                parent_round_id: null,
+                purpose: "Fixture research",
+                research_models: ["google/gemini-3.8-flash", "openai/gpt-5.2"],
+                extraction_model: "openai/gpt-5.2",
+                synthesis_model: "openai/gpt-5.2",
+                search_engine: "native",
+                max_calls: 9,
+                max_input_tokens_per_call: 240000,
+                max_output_tokens_per_call: 12000,
+                candidate_limit_per_search: 10,
+                rates: [
+                  {
+                    model: "google/gemini-3.8-flash",
+                    provider: "google-ai-studio",
+                    input_usd_per_token: 1,
+                    output_usd_per_token: 1,
+                    request_usd: 1,
+                  },
+                  {
+                    model: "openai/gpt-5.2",
+                    provider: "openai",
+                    input_usd_per_token: 1,
+                    output_usd_per_token: 1,
+                    request_usd: 1,
+                  },
+                ],
+              },
+            },
+          ],
+        };
       if (sql.startsWith("WITH expired AS")) return { rows: [] };
       if (sql.includes("SET status='running', lease_token"))
         return { rows: [job] };

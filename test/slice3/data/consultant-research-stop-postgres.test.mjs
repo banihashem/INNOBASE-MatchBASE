@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import {
+  saveResearchQuote,
+  approveResearchQuote,
   createPool,
   saveConsultantWorkflowSession,
   getConsultantWorkflowSessionByRunId,
@@ -115,12 +117,32 @@ const databaseUrl = process.env.MATCHBASE_CONSULTANT_TEST_DATABASE_URL;
         { code: "execution-lease-lost" },
       );
 
-      await getOrRestoreWorkflowSession(pool, accountId, identity.run_id);
-      const retry = await queueConsultantWorkflowStep(
+      const prepared = await getOrRestoreWorkflowSession(
         pool,
+        accountId,
         identity.run_id,
-        "research",
-        true,
+      );
+      await assert.rejects(
+        queueConsultantWorkflowStep(pool, identity.run_id, "research", true),
+        { code: "MB-409-ROUND-APPROVAL" },
+      );
+      const app = await import("../../../packages/application/dist/index.js");
+      const { plan } = await app.buildResearchRoundPlan({
+        round_number: 1,
+        depth: "simple",
+        parent_round_id: null,
+        request_hash: app.researchRequestHash(prepared),
+        focus_requirements: [],
+        mode: "demonstration",
+      });
+      const quoteId = await saveResearchQuote(pool, prepared, plan);
+      const { job: retry } = await approveResearchQuote(
+        pool,
+        accountId,
+        identity.user_profile_id,
+        identity.run_id,
+        quoteId,
+        plan.request_hash,
       );
       const next = await read();
       assert.notEqual(next.execution_id, identity.execution_id);

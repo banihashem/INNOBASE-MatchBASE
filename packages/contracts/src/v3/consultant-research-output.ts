@@ -246,8 +246,8 @@ export interface EvidenceSourceV3 {
 }
 
 export interface ExecutionTelemetryV3 {
-  readonly lanes_executed: readonly ("lane_gemini" | "lane_openai")[];
-  readonly verification_loops_count: number; // min 5, max 15
+  readonly lanes_executed: readonly string[];
+  readonly verification_loops_count: number; // Legacy verification loops or completed approved research round number.
   readonly total_input_tokens: number;
   readonly total_output_tokens: number;
   readonly total_cost_usd: number;
@@ -274,7 +274,16 @@ export interface AdvancedSearchQueryFilters {
   readonly direct_manufacturers_only?: boolean;
 }
 
+export interface PublicSocialCheckV3 {
+  readonly supplier_name: string;
+  readonly profile_url: string | null;
+  readonly status: "reviewed" | "access_limited" | "not_executed";
+  readonly ownership_basis: string;
+  readonly checked_at: string;
+  readonly limitation: string;
+}
 export interface ConsultantResearchOutputV3 extends FourIdTrace {
+  readonly public_social_checks?: readonly PublicSocialCheckV3[];
   readonly approved_request_snapshot?: ApprovedRequestSnapshotV3;
   readonly schema_version: typeof CONSULTANT_RESEARCH_OUTPUT_V3_SCHEMA_VERSION;
   readonly schema_contract_version: typeof CONSULTANT_RESEARCH_OUTPUT_V3_VERSION;

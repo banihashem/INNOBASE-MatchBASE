@@ -6,6 +6,7 @@ import {
   type SupplierEntityV3,
   type EvidenceSourceV3,
   type ClaimV3,
+  type ResearchRoundPlan,
 } from "@matchbase/contracts";
 import {
   getConfiguredLiveModels,
@@ -52,8 +53,17 @@ export interface DualLaneExecutionInput {
   readonly approved_request_snapshot?: unknown;
 }
 export interface DualLaneExecutionOptions extends LiveCallOptions {
+  readonly round_plan?: ResearchRoundPlan;
+  readonly continuation?: ResearchContinuation;
   readonly mode?: "live" | "demonstration" | "hybrid";
   readonly source_retriever?: typeof fetchPrimaryEvidenceText;
+}
+export interface ResearchContinuation {
+  entity_ids?: [string, string][];
+  roster: [string, LiveCandidateRecord][];
+  evidence: [string, LiveEvidenceRecord][];
+  retrieved: [string, RetrievedPrimaryEvidence | null][];
+  remaining_gaps: string[];
 }
 export interface DualLaneExecutionResult {
   readonly lane_g_result: OpenRouterCompletionResult;
@@ -68,7 +78,13 @@ export interface DualLaneExecutionResult {
   readonly claims: readonly ClaimV3[];
   readonly checkpoints: readonly LiveResearchCheckpoint[];
   readonly stop_reason:
-    "target_reached" | "evidence_exhausted" | "loop_limit" | "demonstration";
+    | "target_reached"
+    | "evidence_exhausted"
+    | "loop_limit"
+    | "demonstration"
+    | "user_review";
+  readonly continuation?: ResearchContinuation;
+  readonly executed_models?: readonly string[];
   readonly excluded_candidates: readonly {
     readonly legal_name: string;
     readonly reason: string;
@@ -158,16 +174,28 @@ export async function executeDualLaneResearch(
       "MB-422-LIVE-REQUIREMENTS",
       "Target supplier count is invalid.",
     );
-  await validateLiveModelConfiguration();
-  const models = getConfiguredLiveModels();
+  if (!options.round_plan || options.round_plan.round_number === 1)
+    await validateLiveModelConfiguration();
+  const configuredModels = getConfiguredLiveModels();
+  const models = options.round_plan
+    ? { ...configuredModels, synthesis: options.round_plan.synthesis_model }
+    : configuredModels;
   const startedAt = Date.now();
   const checkpoints: LiveResearchCheckpoint[] = [];
   const calls: OpenRouterCompletionResult[] = [];
-  const evidence = new Map<string, LiveEvidenceRecord>();
-  const retrieved = new Map<string, RetrievedPrimaryEvidence | null>();
-  const roster = new Map<string, LiveCandidateRecord>();
+  const evidence = new Map<string, LiveEvidenceRecord>(
+    options.continuation?.evidence,
+  );
+  const retrieved = new Map<string, RetrievedPrimaryEvidence | null>(
+    options.continuation?.retrieved,
+  );
+  const entityIds = new Map<string, string>(options.continuation?.entity_ids);
+  const roster = new Map<string, LiveCandidateRecord>(
+    options.continuation?.roster,
+  );
   const reviewedAt = new Map<string, number>();
   const callback: LiveCallOptions = {
+    ...options,
     ...(options.signal ? { signal: options.signal } : {}),
     on_checkpoint: async (checkpoint) => {
       checkpoints.push(checkpoint);
@@ -217,32 +245,44 @@ export async function executeDualLaneResearch(
     calls.push(result);
     const extracted = await extractNativeDiscoveryPayload(
       result,
-      models.synthesis,
+      options.round_plan?.extraction_model ?? models.synthesis,
       {
         phase,
         loop,
         max_loops: phase === "verification" ? 15 : 1,
         mandatory_criteria: requirements,
+        candidate_limit: options.round_plan?.candidate_limit_per_search,
       },
       callback,
     );
     calls.push(...extracted.results);
     return { result, parsed: extracted.parsed };
   };
-  const discovery = await Promise.allSettled([
-    callResearch(
-      models.lane_gemini,
-      "discovery_gemini",
-      1,
-      "Discover companies using official registries, product catalogs and market access evidence. Establish identity and product fit; no padding.",
-    ),
-    callResearch(
-      models.lane_openai,
-      "discovery_openai",
-      1,
-      "Independently discover companies using corporate identity, official product documents and direct business contacts. Challenge assumed compliance and preserve unknowns.",
-    ),
-  ]);
+  const discovery = await Promise.allSettled(
+    options.round_plan && options.round_plan.round_number > 1
+      ? [
+          callResearch(
+            options.round_plan.research_models[0]!,
+            "verification",
+            options.round_plan.round_number,
+            `${options.round_plan.purpose} Focus on these unresolved differentiators: ${options.round_plan.focus_requirements.join("; ")}. Reuse existing evidence and return updated records only where new evidence changes or supplements findings. Review up to20 candidates. ${options.round_plan.round_number >= 4 ? "Review accessible public corporate social profiles and cite actual profiles/posts. Link profiles to the legal company using website reciprocity and corporate contacts. Distinguish reviewed, access_limited, no_profile_found after an actual search, and not_executed. Badges/followers are not qualification. Company websites and their social accounts are one controlled evidence origin. Do not bypass login, collect private employee data, contact anyone or invent profiles/dates. Record platform limits and latest activity actually seen; lack of a profile is not failure." : ""}`,
+          ),
+        ]
+      : [
+          callResearch(
+            models.lane_gemini,
+            "discovery_gemini",
+            1,
+            `Discover companies using official registries, product catalogs and market access evidence. Establish identity and product or service fit; no padding.${options.round_plan ? " Return at most10 distinct companies in this path; another path researches additional candidates." : ""}`,
+          ),
+          callResearch(
+            models.lane_openai,
+            "discovery_openai",
+            1,
+            `Independently discover companies using corporate identity, official product or service documents and direct business contacts. Challenge assumed compliance and preserve unknowns.${options.round_plan ? " Return at most10 distinct companies in this path." : ""}`,
+          ),
+        ],
+  );
   const failed = discovery.find((entry) => entry.status === "rejected");
   if (failed?.status === "rejected") throw failed.reason;
   const successful = discovery.flatMap((entry) =>
@@ -255,7 +295,11 @@ export async function executeDualLaneResearch(
   ) => {
     const citedUrls = [
       ...new Set((completion.citations ?? []).map((citation) => citation.url)),
-    ].filter((url) => !retrieved.has(url));
+    ].filter(
+      (url) =>
+        retrieved.get(url) == null ||
+        (options.round_plan?.round_number ?? 0) >= 4,
+    );
     for (let index = 0; index < citedUrls.length; index += 3) {
       const chunk = citedUrls.slice(index, index + 3);
       const results = await Promise.allSettled(
@@ -314,7 +358,58 @@ export async function executeDualLaneResearch(
     for (const candidate of payload.candidates) {
       const key = stableCandidateKey(candidate);
       if (roster.size >= 40 && !roster.has(key)) continue;
-      roster.set(key, candidate);
+      const old = roster.get(key);
+      roster.set(
+        key,
+        options.round_plan && old
+          ? {
+              ...old,
+              ...candidate,
+              country: candidate.country || old.country,
+              headquarters: candidate.headquarters || old.headquarters,
+              website: candidate.website || old.website,
+              identity:
+                candidate.identity.status === "unknown"
+                  ? old.identity
+                  : candidate.identity,
+              product:
+                candidate.product.status === "unknown"
+                  ? old.product
+                  : candidate.product,
+              facts: [
+                ...new Map(
+                  [...old.facts, ...candidate.facts].map((f) => [
+                    f.field_path,
+                    f,
+                  ]),
+                ).values(),
+              ],
+              certifications: [
+                ...new Map(
+                  [...old.certifications, ...candidate.certifications].map(
+                    (c) => [c.name, c],
+                  ),
+                ).values(),
+              ],
+              constraints: [
+                ...new Map(
+                  [
+                    ...old.constraints,
+                    ...candidate.constraints.filter(
+                      (c) =>
+                        c.status !== "unknown" ||
+                        !old.constraints.some(
+                          (o) => o.constraint === c.constraint,
+                        ),
+                    ),
+                  ].map((c) => [c.constraint, c]),
+                ).values(),
+              ],
+              unknowns: [...new Set([...old.unknowns, ...candidate.unknowns])],
+              risks: [...new Set([...old.risks, ...candidate.risks])],
+            }
+          : candidate,
+      );
       reviewedAt.set(key, loop);
     }
   };
@@ -326,11 +421,18 @@ export async function executeDualLaneResearch(
     "Verification loop4: Inspect official business contacts, commercial/export capabilities and logistics. Keep price/MOQ/lead time/Incoterms unknown if not public. Explore new direct sources for gaps without fabricating numbers.",
     "Verification loop5: Independently audit ALL retained candidates for identity/product evidence, contradictions, exact requested-versus-observed requirements and duplicate entities. Return complete records for every reviewed candidate; candidates omitted from this final review cannot be published. Conditional matches must show every remaining uncertainty.",
   ];
-  let previous = successful[0]!.parsed;
-  let loops = 0;
+  let previous = {
+    ...successful[0]!.parsed,
+    remaining_gaps: [
+      ...new Set(successful.flatMap((item) => item.parsed.remaining_gaps)),
+    ],
+  };
+  let loops = options.round_plan?.round_number ?? 0;
   let staleRounds = 0;
-  let stopReason: DualLaneExecutionResult["stop_reason"] = "loop_limit";
-  for (let loop = 1; loop <= 15; loop++) {
+  let stopReason: DualLaneExecutionResult["stop_reason"] = options.round_plan
+    ? "user_review"
+    : "loop_limit";
+  for (let loop = 1; loop <= (options.round_plan ? 0 : 15); loop++) {
     const countBefore = evidence.size;
     const instruction =
       rounds[loop - 1] ??
@@ -366,16 +468,17 @@ export async function executeDualLaneResearch(
     }
   }
   const reviewed = [...roster.entries()]
-    .filter(([key]) => (reviewedAt.get(key) ?? 0) >= 5)
+    .filter(([key]) => options.round_plan || (reviewedAt.get(key) ?? 0) >= 5)
     .map(([, candidate]) => candidate);
   const assembled = assembleLiveSuppliers(
     reviewed,
     requirements,
     evidence,
     target,
+    entityIds,
   );
   const notReviewed = [...roster.entries()]
-    .filter(([key]) => (reviewedAt.get(key) ?? 0) < 5)
+    .filter(([key]) => !options.round_plan && (reviewedAt.get(key) ?? 0) < 5)
     .map(([, candidate]) => ({
       legal_name: candidate.legal_name,
       reason: "Candidate did not receive the final primary-evidence review.",
@@ -495,7 +598,28 @@ export async function executeDualLaneResearch(
   });
   return {
     lane_g_result: successful[0]!.result,
-    lane_o_result: successful[1]!.result,
+    lane_o_result: successful[1]?.result ?? {
+      ...successful[0]!.result,
+      model: "not-executed",
+      live_api_invoked: false,
+      input_tokens: 0,
+      output_tokens: 0,
+      cost_usd: 0,
+    },
+    executed_models: calls
+      .filter((call) => call.live_api_invoked)
+      .map((call) => call.model),
+    ...(options.round_plan
+      ? {
+          continuation: {
+            entity_ids: [...entityIds],
+            roster: [...roster],
+            evidence: [...evidence],
+            retrieved: [...retrieved],
+            remaining_gaps: previous.remaining_gaps,
+          },
+        }
+      : {}),
     ...assembled,
     candidates: rankedCandidates,
     synthesis_result: synthesisResult,
@@ -507,7 +631,13 @@ export async function executeDualLaneResearch(
       (sum, call) => sum + call.output_tokens,
       0,
     ),
-    total_cost_usd: calls.reduce((sum, call) => sum + call.cost_usd, 0),
+    total_cost_usd: calls.reduce(
+      (sum, call) =>
+        sum +
+        call.cost_usd +
+        (call.is_byok === true ? (call.upstream_inference_cost ?? 0) : 0),
+      0,
+    ),
     total_latency_ms: Date.now() - startedAt,
     checkpoints,
     stop_reason: stopReason,

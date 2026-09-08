@@ -26,16 +26,22 @@ export function useConsultantReportDownloads(
   // Action 6: Authenticated PDF Blob Download (Section 8.5)
   async function handlePdfDownload() {
     const targetRunId = runId || output?.research_run_id;
+    const execution = output?.execution_id
+      ? `?execution_id=${encodeURIComponent(output.execution_id)}`
+      : "";
     if (!targetRunId) return;
     setIsPdfDownloading(true);
     try {
-      const res = await fetch(`/api/v1/consultant/reports/${targetRunId}/pdf`, {
-        method: "GET",
-        headers: {
-          Accept: "application/pdf",
+      const res = await fetch(
+        `/api/v1/consultant/reports/${targetRunId}/pdf${execution}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/pdf",
+          },
+          credentials: "same-origin",
         },
-        credentials: "same-origin",
-      });
+      );
 
       if (!res.ok) {
         throw new Error(`PDF request returned HTTP ${res.status}`);

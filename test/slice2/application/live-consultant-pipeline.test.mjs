@@ -325,7 +325,7 @@ test("live requires five actual verification calls after both native web discove
   );
   assert.equal(result.total_input_tokens, 220);
   assert.equal(result.total_output_tokens, 440);
-  assert.ok(Math.abs(result.total_cost_usd - 0.22) < 1e-9);
+  assert.ok(Math.abs(result.total_cost_usd - 0.66) < 1e-9);
   assert.equal(result.usage_complete, true);
 });
 test("provider prose or unannotated links cannot become live verified suppliers", async () => {
@@ -859,4 +859,45 @@ test("bounded primary retrieval is cached per execution and content hashes reach
         checkpoint.content_sha256 === hash,
     ),
   );
+});
+
+test("MB-UX-COST-001 approved rounds publish after one pass and reuse the saved roster", async () => {
+  const plan = {
+    round_number: 1,
+    depth: "simple",
+    purpose: "Initial research",
+    focus_requirements: [],
+    research_models: ["google/gemini-3.8-flash", "openai/gpt-5.2"],
+    extraction_model: "openai/gpt-5.2",
+    synthesis_model: "openai/gpt-5.2",
+    candidate_limit_per_search: 10,
+  };
+  const first = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: plan,
+  });
+  assert.equal(first.stop_reason, "user_review");
+  assert.equal(first.verification_loops_completed, 1);
+  assert.equal(first.candidates.length, 1);
+  assert.equal(requests.filter((r) => r.plugins?.length).length, 2);
+  assert.equal(requests.length, 7);
+  const old = requests.length;
+  const second = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: {
+      ...plan,
+      round_number: 2,
+      research_models: ["openai/gpt-5.2"],
+    },
+    continuation: first.continuation,
+    web_engine: "exa",
+  });
+  assert.equal(second.verification_loops_completed, 2);
+  assert.equal(
+    second.candidates[0].supplier_entity_id,
+    first.candidates[0].supplier_entity_id,
+  );
+  assert.equal(requests.slice(old).filter((r) => r.plugins?.length).length, 1);
+  assert.equal(requests.length - old, 4);
+  assert.equal(requests[old].plugins[0].engine, "exa");
 });

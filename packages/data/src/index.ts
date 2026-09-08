@@ -17,3 +17,4 @@ export * from "./migrations.js";
 export * from "./quota.js";
 export * from "./request-governed-annotation.js";
 export * from "./v3-repository.js";
+export * from "./consultant-research-rounds.js";

@@ -221,11 +221,11 @@ test("MB-UX-LIVE-001 L04 approved execution scopes each actual round without rew
     );
     assert.match(
       body.messages[0].content,
-      /Execute only this current native-search round/,
+      /Execute only this approved search task/,
     );
     assert.match(
       body.messages[0].content,
-      /minimum of 5 and a maximum of 15 verification rounds/,
+      /fresh cost estimate and explicit human approval/,
     );
     assert.match(
       body.messages[0].content,
@@ -305,7 +305,7 @@ test("MB-UX-LIVE-001 L04 approved execution scopes each actual round without rew
   assert.equal(result.verification_loops_completed, 5);
   assert.equal(result.total_input_tokens, 150);
   assert.equal(result.total_output_tokens, 300);
-  assert.ok(Math.abs(result.total_cost_usd - 0.15) < 0.000001);
+  assert.ok(Math.abs(result.total_cost_usd - 0.45) < 0.000001);
   const nativeRequests = requests.filter(
     (body) => body.plugins?.[0]?.engine === "native",
   );

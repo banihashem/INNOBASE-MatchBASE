@@ -42,7 +42,7 @@ export function WorkflowActivity({
   const stoppedByUser = failed && progress?.phase === "user_cancelled";
   const recoveryCopy =
     retryAction === "research"
-      ? "Your saved request and approvals are retained. No research is running. A retry starts a new research execution with your approved request; earlier research steps may run again."
+      ? "Your saved request and approvals are retained. No research is running. A new execution requires a fresh cost estimate and your approval. Completed round results are retained."
       : retryAction === "prepare"
         ? "Your approved interpretation is saved. No research is running. Retry restarts advisory research and research-plan preparation; the plan still needs your approval."
         : "Your saved request is retained. No research is running. Retry repeats the failed interpretation or preparation step.";
@@ -75,7 +75,7 @@ export function WorkflowActivity({
     "Advisory research · 3 rounds",
     "Research plan · Your approval",
     "Gemini + OpenAI supplier discovery",
-    "Evidence verification · 5–15 rounds",
+    "Evidence review · one approved round at a time",
     "Ranked results and supplier details",
     "PDF download",
   ];
@@ -101,10 +101,12 @@ export function WorkflowActivity({
             ? "The report is being prepared and transferred to your browser. Keep this page open until the download starts."
             : failed
               ? stoppedByUser
-                ? "Your saved findings, request and approvals are retained. Worker cancellation has been requested. Restart research begins a new execution; earlier research steps may run again."
+                ? "Your saved findings, request and approvals are retained. No new execution starts without a fresh cost estimate and your approval. Completed round results remain available."
                 : recoveryCopy
               : awaiting
-                ? "Review the editable text below to continue. Research waits for your approval."
+                ? state === "prep_step3_prompt_approved"
+                  ? "Your research plan is approved. Review the recorded spend and get a cost estimate below. Research starts only after you approve that estimate."
+                  : "Review the editable text below to continue. Research waits for your approval."
                 : ready
                   ? "Open any supplier for the full evidence and contact details. Download the report from the results section."
                   : initialInterpretation
@@ -118,7 +120,8 @@ export function WorkflowActivity({
             </strong>
           </p>
         )}
-        {progress?.loop != null &&
+        {!awaiting &&
+          progress?.loop != null &&
           progress.loop > 0 &&
           (progress.max_loops ?? 0) > 1 && (
             <p>

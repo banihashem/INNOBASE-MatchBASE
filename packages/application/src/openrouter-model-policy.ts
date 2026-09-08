@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { ResearchModelRate } from "@matchbase/contracts";
 import { Agent } from "undici";
 import { fetchPrimaryEvidenceText } from "./live-source-fetch.js";
 import {
@@ -14,12 +15,13 @@ export interface OpenRouterMessage {
 }
 export type JsonSchema = Readonly<Record<string, unknown>>;
 export interface OpenRouterCompletionParams {
+  readonly approved_rate?: ResearchModelRate;
   readonly model: string;
   readonly messages: readonly OpenRouterMessage[];
   readonly temperature?: number;
   readonly plugins?: readonly {
     readonly id: string;
-    readonly engine?: "native";
+    readonly engine?: "native" | "exa";
     readonly max_results?: number;
   }[];
   readonly response_format?:
@@ -78,6 +80,7 @@ export interface OpenRouterModelCapabilities {
   readonly served_model_ids?: readonly string[];
 }
 export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
+  readonly dispatched?: boolean;
   readonly index_validation?: {
     readonly accepted_candidates: number;
     readonly reanchored_names: readonly string[];
@@ -128,6 +131,14 @@ export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
   }[];
 }
 export interface LiveCallOptions {
+  readonly approved_rates?: readonly ResearchModelRate[];
+  readonly max_output_tokens?: number;
+  readonly reasoning_effort?: "high" | "low";
+  readonly web_engine?: "native" | "exa";
+  readonly before_call?: (
+    request: OpenRouterCompletionParams,
+    web: boolean,
+  ) => Promise<void>;
   readonly on_checkpoint?: (
     checkpoint: LiveResearchCheckpoint,
   ) => void | Promise<void>;
@@ -494,6 +505,11 @@ export async function callOpenRouterCompletion(
   try {
     signal.throwIfAborted();
     const provider = getConfiguredProviderRoute(params.model);
+    if (params.approved_rate && params.approved_rate.provider !== provider)
+      throw new LiveResearchError(
+        "MB-409-ROUND-PROVIDER",
+        "Provider route changed after cost approval.",
+      );
     const capabilities = await getOpenRouterModelCapabilities(params.model);
     signal.throwIfAborted();
     const supported = new Set(capabilities.supported_parameters);
@@ -533,6 +549,16 @@ export async function callOpenRouterCompletion(
           : {}),
         ...(params.reasoning ? { reasoning: params.reasoning } : {}),
         provider: {
+          ...(params.approved_rate
+            ? {
+                max_price: {
+                  prompt: params.approved_rate.input_usd_per_token * 1000000,
+                  completion:
+                    params.approved_rate.output_usd_per_token * 1000000,
+                  request: params.approved_rate.request_usd,
+                },
+              }
+            : {}),
           only: [provider],
           order: [provider],
           require_parameters: true,
@@ -731,9 +757,19 @@ export async function runLiveCompletion(
   },
   options: LiveCallOptions = {},
 ): Promise<OpenRouterCompletionResult> {
+  if (options.max_output_tokens)
+    request = {
+      ...request,
+      max_tokens: Math.min(
+        request.max_tokens ?? 12000,
+        options.max_output_tokens,
+      ),
+    };
+  const effort = options.reasoning_effort ?? context.reasoning_effort ?? "high";
   const checkpointId = randomUUID();
   let auditedResponse: OpenRouterCompletionResult | undefined;
   let checkpoint: LiveResearchCheckpoint = {
+    dispatched: false,
     checkpoint_id: checkpointId,
     request_id: checkpointId,
     phase: context.phase,
@@ -748,7 +784,7 @@ export async function runLiveCompletion(
       .update(JSON.stringify(request.messages))
       .digest("hex"),
     started_at: new Date().toISOString(),
-    native_web: Boolean(context.require_web),
+    native_web: Boolean(context.require_web) && options.web_engine !== "exa",
     reasoning_effort: "unsupported",
     evidence_urls: [],
   };
@@ -777,6 +813,7 @@ export async function runLiveCompletion(
       );
     if (
       context.require_web &&
+      options.web_engine !== "exa" &&
       !/^(google\/gemini-|openai\/)/.test(request.model)
     )
       throw new LiveResearchError(
@@ -785,9 +822,7 @@ export async function runLiveCompletion(
       );
     checkpoint = {
       ...checkpoint,
-      reasoning_effort: capabilities.reasoning
-        ? (context.reasoning_effort ?? "high")
-        : "unsupported",
+      reasoning_effort: capabilities.reasoning ? effort : "unsupported",
       requested_provider: getConfiguredProviderRoute(request.model),
       actual_provider: null,
       is_byok: null,
@@ -795,6 +830,8 @@ export async function runLiveCompletion(
       byok_verification_source: "unverified",
       generation_metadata_attempts: 0,
     };
+    await options.before_call?.(request, Boolean(context.require_web));
+    checkpoint = { ...checkpoint, dispatched: true };
     await options.on_checkpoint?.(checkpoint);
     const callerSignals = [request.signal, options.signal].filter(
       (signal): signal is AbortSignal => signal !== undefined,
@@ -802,17 +839,32 @@ export async function runLiveCompletion(
     let result = await callOpenRouterCompletion({
       ...request,
       request_id: checkpointId,
+      ...(options.approved_rates?.find((rate) => rate.model === request.model)
+        ? {
+            approved_rate: options.approved_rates.find(
+              (rate) => rate.model === request.model,
+            )!,
+          }
+        : {}),
       timeout_ms: timeoutMs,
       ...(capabilities.reasoning
         ? {
             reasoning: {
-              effort: context.reasoning_effort ?? "high",
+              effort,
               exclude: true,
             } as const,
           }
         : {}),
       ...(context.require_web
-        ? { plugins: [{ id: "web", engine: "native" }] as const }
+        ? {
+            plugins: [
+              {
+                id: "web",
+                engine: options.web_engine ?? "native",
+                ...(options.web_engine === "exa" ? { max_results: 8 } : {}),
+              },
+            ],
+          }
         : {}),
       ...(callerSignals.length
         ? { signal: AbortSignal.any(callerSignals) }
@@ -929,6 +981,8 @@ export async function runLiveCompletion(
             finish_reason: auditedResponse.finish_reason,
             reasoning_tokens: auditedResponse.reasoning_tokens,
             cost_usd: auditedResponse.cost_usd,
+            cost_reported: auditedResponse.cost_reported ?? false,
+            usage_reported: auditedResponse.usage_reported ?? false,
             provider_generation_id: auditedResponse.provider_generation_id,
             ...byokCheckpointFields(auditedResponse),
             evidence_urls: (auditedResponse.citations ?? []).map(

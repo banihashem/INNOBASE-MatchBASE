@@ -143,5 +143,5 @@ if (!anchorOnly) {
   }
 }
 process.stdout.write(
-  `protected baseline: PASS (${anchorOnly ? "MANIFEST_ANCHOR_CI" : "EXACT_LOCAL_SHA256"}; 14 authoritative, 67 planning, 36 explicit management-history files)\n`,
+  `protected baseline: PASS (${anchorOnly ? "MANIFEST_ANCHOR_CI" : "EXACT_LOCAL_SHA256"}; ${rootsById.get("authoritative").fileCount} authoritative, 67 planning, 36 explicit management-history files)\n`,
 );

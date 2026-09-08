@@ -237,7 +237,7 @@ export function ConsultantHome({
                   [
                     "03",
                     "Research",
-                    "Follow both search paths and 5–15 rounds of source verification.",
+                    "Review one research round, then approve optional evidence improvements and their costs.",
                   ],
                   [
                     "04",

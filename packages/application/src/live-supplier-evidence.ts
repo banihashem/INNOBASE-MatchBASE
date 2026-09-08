@@ -303,7 +303,7 @@ export function ingestLiveEvidence(
           previous?.source.source_type,
           entry.source_type,
         ),
-        retrieved_at: new Date().toISOString(),
+        retrieved_at: actual?.retrieved_at ?? new Date().toISOString(),
         freshness_status: "current",
         verification_status: "externally_verified",
         excerpt_summary:
@@ -423,6 +423,7 @@ export function assembleLiveSuppliers(
   requirements: readonly string[],
   evidence: Map<string, LiveEvidenceRecord>,
   limit: number,
+  entityIds = new Map<string, string>(),
 ) {
   const candidates: SupplierEntityV3[] = [];
   const claims: ClaimV3[] = [];
@@ -438,7 +439,9 @@ export function assembleLiveSuppliers(
       continue;
     }
     if (candidates.length >= limit) continue;
-    const entityId = randomUUID();
+    const key = stableCandidateKey(candidate);
+    const entityId = entityIds.get(key) ?? randomUUID();
+    entityIds.set(key, entityId);
     const makeClaim = (
       text: string,
       proof: Pick<LiveProof, "source_urls" | "quote">,
@@ -461,8 +464,10 @@ export function assembleLiveSuppliers(
         field_path: field,
         claim_text: text,
         status,
-        confidence: sources.length > 1 ? "high" : "medium",
-        conflict_status: sources.length > 1 ? "corroborated" : "single_source",
+        // Multiple URLs or a company's own social profiles are not independent origins.
+        // The current contract does not establish independent ownership, so do not infer it.
+        confidence: "medium",
+        conflict_status: "single_source",
         evidence_ids: sources.map((source) => source.evidence_id),
       });
       return sources.map((source) => source.evidence_id);

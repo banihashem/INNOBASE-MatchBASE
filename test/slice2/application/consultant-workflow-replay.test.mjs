@@ -65,6 +65,7 @@ function workflowFixture(state = "prep_step3_prompt_awaiting_approval") {
   const sessionWrites = [];
   const db = {
     async query(sql, params) {
+      if (sql.includes("FROM consultant_output_v3")) return { rows: [] };
       if (sql.includes("SELECT * FROM consultant_workflow_session")) {
         return { rows: [row] };
       }

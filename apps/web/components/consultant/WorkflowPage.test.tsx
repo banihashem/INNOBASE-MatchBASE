@@ -32,6 +32,43 @@ let requests: RequestBody[];
 let save: (body: RequestBody) => Promise<Response>;
 let version: number;
 let created: number;
+const roundOverview = {
+  costs: {
+    currency: "USD",
+    recorded_total_usd: 0.2,
+    openrouter_charge_usd: 0,
+    byok_upstream_usd: 0.2,
+    preparation_usd: 0.2,
+    research_usd: 0,
+    unpriced_calls: 0,
+    calls: 5,
+    complete: true,
+    by_execution: {},
+    disclosure: "Recorded usage",
+  },
+  rounds: [],
+  next_round: 1,
+};
+const roundQuote = {
+  quote_id: "quote-1",
+  choices: [],
+  plan: {
+    round_number: 1,
+    title: "Initial research",
+    purpose: "Find suppliers",
+    estimated_low_usd: 0.1,
+    estimated_high_usd: 1,
+    expires_at: "2099-01-01T00:00:00Z",
+    research_models: ["google/gemini", "openai/gpt"],
+    synthesis_model: "reasoner",
+    extraction_model: "extractor",
+    search_engine: "native",
+    focus_requirements: [],
+    max_calls: 9,
+    max_output_tokens_per_call: 12000,
+    assumptions: ["No automatic next round"],
+  },
+};
 
 beforeEach(() => {
   requests = [];
@@ -43,6 +80,11 @@ beforeEach(() => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, options?: RequestInit) => {
+      if (
+        String(url).startsWith("/api/v1/consultant/research-rounds") &&
+        !options?.body
+      )
+        return response(roundOverview);
       if (String(url) === "/api/v1/me")
         return response({
           tier: "consultant",
@@ -116,6 +158,11 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, options?: RequestInit) => {
+        if (
+          String(url).startsWith("/api/v1/consultant/research-rounds") &&
+          !options?.body
+        )
+          return response(roundOverview);
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
@@ -153,7 +200,9 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
       screen.getByRole("tab", { name: "Section 3: Research & Results" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Stop research" }));
-    await screen.findByRole("button", { name: "Restart research" });
+    await screen.findByRole("button", {
+      name: "Review a new research estimate",
+    });
     await act(async () => {
       stalePoll.resolve(response({ session: active }));
     });
@@ -177,6 +226,11 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, options?: RequestInit) => {
+        if (
+          String(url).startsWith("/api/v1/consultant/research-rounds") &&
+          !options?.body
+        )
+          return response(roundOverview);
         const body = options?.body ? JSON.parse(String(options.body)) : {};
         if (body.action === "submit_intake") {
           requests.push(body);
@@ -300,6 +354,11 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, options?: RequestInit) => {
+        if (
+          String(url).startsWith("/api/v1/consultant/research-rounds") &&
+          !options?.body
+        )
+          return response(roundOverview);
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
@@ -310,7 +369,8 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
         const body = JSON.parse(String(options.body));
         requests.push(body);
         if (body.action === "approve_step3") return approval.promise;
-        expect(body.action).toBe("execute_research");
+        if (body.action === "quote") return response(roundQuote);
+        expect(body.action).toBe("approve");
         session = {
           ...session,
           state: "verification_loop_running",
@@ -340,7 +400,7 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     });
     expect(requests).toHaveLength(0);
     fireEvent.click(
-      screen.getByRole("button", { name: /Approve Prompt & Start Research/ }),
+      screen.getByRole("button", { name: /Approve Prompt & Review Cost/ }),
     );
     await waitFor(() => expect(requests).toHaveLength(1));
     expect(requests[0]?.edited_prompt).toBe(
@@ -358,6 +418,16 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     await act(async () => {
       approval.resolve(response({ success: true, session }));
     });
+    const estimate = await screen.findByRole("button", {
+      name: /Get cost estimate/,
+    });
+    expect(requests.map((r) => r.action)).toEqual(["approve_step3"]);
+    fireEvent.click(estimate);
+    const approveCost = await screen.findByRole("button", {
+      name: /Approve cost estimate & start round 1/,
+    });
+    expect(requests.map((r) => r.action)).toEqual(["approve_step3", "quote"]);
+    fireEvent.click(approveCost);
     await screen.findByText("First verification loop underway");
     expect(researchTab).toHaveAttribute("aria-selected", "true");
     expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
@@ -373,7 +443,10 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     ).toBeDisabled();
     expect(
       requests.filter((item) => item.action === "execute_research"),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
+    expect(requests.filter((item) => item.action === "approve")).toHaveLength(
+      1,
+    );
   });
 
   it("retains a failed submitted run and retries interpretation only on explicit request", async () => {
@@ -381,6 +454,11 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, options?: RequestInit) => {
+        if (
+          String(url).startsWith("/api/v1/consultant/research-rounds") &&
+          !options?.body
+        )
+          return response(roundOverview);
         const body = options?.body ? JSON.parse(String(options.body)) : {};
         if (body.action === "submit_intake") {
           requests.push(body);
@@ -591,6 +669,11 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, options?: RequestInit) => {
+        if (
+          String(url).startsWith("/api/v1/consultant/research-rounds") &&
+          !options?.body
+        )
+          return response(roundOverview);
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
@@ -697,6 +780,11 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, options?: RequestInit) => {
+        if (
+          String(url).startsWith("/api/v1/consultant/research-rounds") &&
+          !options?.body
+        )
+          return response(roundOverview);
         const body = options?.body ? JSON.parse(String(options.body)) : {};
         if (body.action === "submit_intake") {
           requests.push(body);
@@ -797,6 +885,11 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, options?: RequestInit) => {
+        if (
+          String(url).startsWith("/api/v1/consultant/research-rounds") &&
+          !options?.body
+        )
+          return response(roundOverview);
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
@@ -875,6 +968,11 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, options?: RequestInit) => {
+        if (
+          String(url).startsWith("/api/v1/consultant/research-rounds") &&
+          !options?.body
+        )
+          return response(roundOverview);
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
@@ -961,6 +1059,11 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, options?: RequestInit) => {
+        if (
+          String(url).startsWith("/api/v1/consultant/research-rounds") &&
+          !options?.body
+        )
+          return response(roundOverview);
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
@@ -1141,6 +1244,11 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, options?: RequestInit) => {
+        if (
+          String(url).startsWith("/api/v1/consultant/research-rounds") &&
+          !options?.body
+        )
+          return response(roundOverview);
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
@@ -1168,7 +1276,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     );
     render(<ConsultantWorkflowPage />);
     const launch = await screen.findByRole("button", {
-      name: /Approve Prompt & Start Research/,
+      name: /Approve Prompt & Review Cost/,
     });
     fireEvent.click(launch);
     await screen.findByText("Prompt version rejected");

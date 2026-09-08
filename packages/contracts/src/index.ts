@@ -33,3 +33,10 @@ export * from "./v3/integrity-validator.js";
 export * from "./v3/semantic-coherence-validator.js";
 export * from "./v3/requirement-fidelity.js";
 export * from "./v3/approved-request.js";
+export type {
+  ResearchDepth,
+  ResearchModelRate,
+  ResearchRoundPlan,
+  ResearchRoundView,
+  ResearchCostSummary,
+} from "./v3/research-round.js";

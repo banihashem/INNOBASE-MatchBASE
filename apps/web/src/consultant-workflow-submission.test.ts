@@ -7,11 +7,18 @@ const mocks = vi.hoisted(() => ({
   retry: vi.fn(),
   pool: {},
   after: vi.fn(),
+  stop: vi.fn(),
+  restore: vi.fn(),
 }));
 vi.mock("@matchbase/application", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   submitConsultantIntake: mocks.submit,
   retryConsultantIntakeInterpretation: mocks.retry,
+  getOrRestoreWorkflowSession: mocks.restore,
+}));
+vi.mock("@matchbase/data", async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  stopConsultantResearch: mocks.stop,
 }));
 vi.mock("./db-client", () => ({ getAppDatabasePool: () => mocks.pool }));
 vi.mock("./fetch-runtime", () => ({
@@ -39,6 +46,54 @@ const post = (body: Record<string, unknown>) =>
       headers: { "Content-Type": "application/json" },
     }),
   );
+
+describe("L09 stop research admission", () => {
+  it("requires an exact valid execution identity", async () => {
+    expect(
+      (await post({ action: "stop_research", run_id: runId })).status,
+    ).toBe(400);
+    expect(mocks.stop).not.toHaveBeenCalled();
+  });
+  it("scopes cancellation to the authenticated account and never dispatches work", async () => {
+    mocks.stop.mockResolvedValue("already_stopped");
+    mocks.restore.mockResolvedValue({
+      execution_id: draftId,
+      state: "workflow_failed",
+    });
+    const response = await post({
+      action: "stop_research",
+      run_id: runId,
+      execution_id: draftId,
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.stop).toHaveBeenCalledWith(
+      mocks.pool,
+      "owner-account",
+      runId,
+      draftId,
+    );
+    expect(mocks.after).not.toHaveBeenCalled();
+  });
+  it("rejects other accounts, stale executions and completed work", async () => {
+    for (const [outcome, status] of [
+      ["not_found", 404],
+      ["stale", 409],
+      ["not_running", 409],
+    ]) {
+      mocks.stop.mockResolvedValue(outcome);
+      expect(
+        (
+          await post({
+            action: "stop_research",
+            run_id: runId,
+            execution_id: draftId,
+          })
+        ).status,
+      ).toBe(status);
+    }
+    expect(mocks.after).not.toHaveBeenCalled();
+  });
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

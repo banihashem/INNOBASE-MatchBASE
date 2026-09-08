@@ -16,9 +16,10 @@ export interface WorkflowProgress {
 }
 export const resultReady = (state: string) =>
   ["progressive_reveal_ready", "workflow_complete"].includes(state);
-export function workflowLabel(state: string): string {
+export function workflowLabel(state: string, stoppedByUser = false): string {
   if (resultReady(state)) return "Results ready";
-  if (state === "workflow_failed") return "Stopped · review required";
+  if (state === "workflow_failed")
+    return stoppedByUser ? "Stopped by you" : "Stopped · review required";
   if (state === "invalidated") return "Unavailable";
   if (state === "intake_draft") return "Draft";
   if (state === "prep_step1_awaiting_approval")
@@ -33,6 +34,7 @@ export function workflowLabel(state: string): string {
   return "Research in progress";
 }
 export function phaseLabel(phase: string, loop = 0): string {
+  if (phase === "user_cancelled") return "Stopped by you";
   const lane = phase.includes("gemini")
     ? "Gemini"
     : phase.includes("openai")

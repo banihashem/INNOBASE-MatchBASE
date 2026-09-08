@@ -12,6 +12,7 @@ type Research = {
   updated_at: string;
   mode: string;
   result_available: boolean;
+  stopped_by_user?: boolean;
 };
 type Draft = {
   draft_id: string;
@@ -197,7 +198,7 @@ export function ConsultantHome({
               <section className="consultant-resume consultant-card">
                 <div>
                   <p className="activity-kicker">Continue where you left off</p>
-                  <h2>{workflowLabel(latest.state)}</h2>
+                  <h2>{workflowLabel(latest.state, latest.stopped_by_user)}</h2>
                   <p dir="auto" className="consultant-snippet">
                     {latest.title || "Saved sourcing request"}
                   </p>
@@ -289,7 +290,10 @@ export function ConsultantHome({
                       >
                         {item.result_available
                           ? "Results ready"
-                          : workflowLabel(item.state)}{" "}
+                          : workflowLabel(
+                              item.state,
+                              item.stopped_by_user,
+                            )}{" "}
                         ·{" "}
                         {item.mode === "live"
                           ? "Live research"

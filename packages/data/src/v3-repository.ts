@@ -441,7 +441,12 @@ export async function saveConsultantWorkflowSession(
       invalidation_reason = EXCLUDED.invalidation_reason,
       workflow_metadata = EXCLUDED.workflow_metadata,
       updated_at = clock_timestamp()
-    WHERE NOT consultant_workflow_session.is_invalidated;`,
+    WHERE NOT consultant_workflow_session.is_invalidated
+      AND NOT (consultant_workflow_session.execution_id=EXCLUDED.execution_id
+        AND consultant_workflow_session.last_checkpoint IS NOT DISTINCT FROM 'user_cancelled')
+      AND NOT EXISTS (SELECT 1 FROM consultant_workflow_job j
+        WHERE j.account_id=EXCLUDED.account_id AND j.run_id=EXCLUDED.run_id
+          AND j.execution_id=EXCLUDED.execution_id AND j.error_code='user-cancelled');`,
     [
       session.session_id,
       session.account_id,

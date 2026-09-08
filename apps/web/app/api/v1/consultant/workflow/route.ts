@@ -23,6 +23,7 @@ import {
   failExpiredConsultantWorkflowJobs,
   getConsultantWorkflowActivity,
   listConsultantResearchSummaries,
+  stopConsultantResearch,
 } from "@matchbase/data";
 import { validateStep1RequirementFidelity } from "@matchbase/contracts";
 import { getAppDatabasePool } from "../../../../../src/db-client";
@@ -369,6 +370,46 @@ export async function POST(req: Request): Promise<NextResponse> {
 
       const session = await approveDeepPromptStep(run_id, edited_prompt, pool);
       return NextResponse.json({ success: true, session });
+    }
+
+    if (action === "stop_research") {
+      const runId = String(body.run_id ?? "");
+      const executionId = String(body.execution_id ?? "");
+      const uuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuid.test(runId) || !uuid.test(executionId)) {
+        return NextResponse.json(
+          { error: "A valid run and execution ID are required." },
+          { status: 400 },
+        );
+      }
+      const outcome = await stopConsultantResearch(
+        pool,
+        context.accountId,
+        runId,
+        executionId,
+      );
+      if (outcome === "not_found") {
+        return NextResponse.json(
+          { error: "Research not found." },
+          { status: 404 },
+        );
+      }
+      if (outcome === "stale" || outcome === "not_running") {
+        return NextResponse.json(
+          {
+            error:
+              "This execution is no longer running. Reload its current status.",
+          },
+          { status: 409 },
+        );
+      }
+      const session = await getOrRestoreWorkflowSession(
+        pool,
+        context.accountId,
+        runId,
+      );
+      return NextResponse.json({ success: true, outcome, session });
     }
 
     // Action: Execute Research

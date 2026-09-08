@@ -12,6 +12,7 @@ import { SupplierDossierModal } from "../../../components/consultant/SupplierDos
 import { ApprovedRequestSummary } from "../../../components/consultant/ApprovedRequestSummary";
 
 import { WorkflowActivity } from "../../../components/consultant/WorkflowActivity";
+import { StopResearchButton } from "../../../components/consultant/StopResearchButton";
 import {
   workflowLabel,
   type ActivityStep,
@@ -161,7 +162,16 @@ export default function ConsultantWorkflowPage() {
     setDraftVersion(version);
   }
   const activityExecutionRef = useRef<string | null>(null);
+  const stoppedExecutionRef = useRef<string | null>(null);
   function acceptProgress(session: any) {
+    // A poll dispatched before cancellation must not restore the old running UI.
+    if (
+      session.execution_id === stoppedExecutionRef.current &&
+      session.progress?.phase !== "user_cancelled"
+    )
+      return;
+    if (session.progress?.phase === "user_cancelled")
+      stoppedExecutionRef.current = session.execution_id;
     if (
       session.execution_id &&
       session.execution_id !== activityExecutionRef.current
@@ -1212,7 +1222,9 @@ export default function ConsultantWorkflowPage() {
     <>
       {workflowError && (
         <div
-          role="alert"
+          role={
+            workflowProgress?.phase === "user_cancelled" ? "status" : "alert"
+          }
           className="rounded-lg border border-amber-700 bg-amber-950/50 p-4 text-sm text-amber-100"
         >
           <p>{workflowError}</p>
@@ -1241,9 +1253,11 @@ export default function ConsultantWorkflowPage() {
               disabled={isLoading}
               className="mt-3 px-4 py-2 rounded bg-sky-700 text-white disabled:opacity-50"
             >
-              {retryAction === "interpretation"
-                ? "Retry Interpretation"
-                : `Retry failed ${retryAction === "prepare" ? "preparation" : "research"} stage`}
+              {workflowProgress?.phase === "user_cancelled"
+                ? "Restart research"
+                : retryAction === "interpretation"
+                  ? "Retry Interpretation"
+                  : `Retry failed ${retryAction === "prepare" ? "preparation" : "research"} stage`}
             </button>
           )}
         </div>
@@ -1446,7 +1460,10 @@ export default function ConsultantWorkflowPage() {
                 </div>
                 <div className="font-mono text-xs text-sky-300">{runId}</div>
                 <div className="text-[11px] text-slate-200 font-semibold mt-1">
-                  {workflowLabel(workflowState)}
+                  {workflowLabel(
+                    workflowState,
+                    workflowProgress?.phase === "user_cancelled",
+                  )}
                 </div>
               </div>
             )}
@@ -2302,6 +2319,26 @@ export default function ConsultantWorkflowPage() {
                 Section 3: Research &amp; Results
               </h2>
             )}
+            {runId &&
+              activityExecutionRef.current &&
+              [
+                "research_dispatching",
+                "lane_gemini_running",
+                "lane_openai_running",
+                "lanes_converged",
+                "verification_loop_running",
+                "synthesis_running",
+              ].includes(workflowState) && (
+                <StopResearchButton
+                  key={activityExecutionRef.current}
+                  runId={runId}
+                  executionId={activityExecutionRef.current}
+                  onStopped={(session) => {
+                    if (session.execution_id === activityExecutionRef.current)
+                      acceptProgress(session);
+                  }}
+                />
+              )}
             {workflowFeedback}
             {!output && !workflowProgress && !workflowError && (
               <p role="status" className="text-slate-300">

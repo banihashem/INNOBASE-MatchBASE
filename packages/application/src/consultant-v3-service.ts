@@ -12,6 +12,7 @@ import {
   type ConsultantWorkflowSessionRecord,
   appendConsultantWorkflowEvent,
   enqueueConsultantWorkflowJob,
+  lockActiveConsultantExecution,
   inTransaction,
   type ConnectionPool,
   type ConsultantWorkflowJob,
@@ -977,6 +978,14 @@ export async function executeConsultantWorkflowResearch(
 
   // Persist the complete output and all suppliers atomically, independent of reveal pagination.
   const persist = async (client: Queryable) => {
+    if (options?.assertLease) {
+      await lockActiveConsultantExecution(
+        client,
+        session.account_id,
+        session.run_id,
+        session.execution_id,
+      );
+    }
     await saveConsultantOutputV3(client, {
       account_id: session.account_id,
       output,
@@ -1045,8 +1054,22 @@ function createWorkflowCheckpoint(
         session.state = "synthesis_running";
       session.last_checkpoint = `${phase}:${loop}`;
       if (db) {
-        await appendConsultantWorkflowEvent(db, session, phase, event);
-        await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
+        const persist = async (client: Queryable) => {
+          if (assertLease)
+            await lockActiveConsultantExecution(
+              client,
+              session.account_id,
+              session.run_id,
+              session.execution_id,
+            );
+          await appendConsultantWorkflowEvent(client, session, phase, event);
+          await saveConsultantWorkflowSession(
+            client,
+            mapSessionToRecord(session),
+          );
+        };
+        if ("connect" in db) await inTransaction(db as ConnectionPool, persist);
+        else await persist(db);
       }
     });
     return pending;
@@ -1085,6 +1108,7 @@ export async function queueConsultantWorkflowStep(
           ? "prep_step2_advisory_generating"
           : "research_dispatching";
       session.retry_action = stage;
+      session.last_checkpoint = "queued";
       session.progress = {
         phase: "queued",
         loop: 0,

@@ -110,6 +110,11 @@ function fixture(t) {
       }
       if (sql.startsWith("SELECT * FROM consultant_workflow_session"))
         return { rows: [session] };
+      if (
+        sql.includes("FROM consultant_workflow_session") &&
+        sql.includes("FOR UPDATE")
+      )
+        return { rows: [session] };
       if (sql.includes("SET status=$3, error_code=$4")) {
         state.finished.push(params);
         return { rows: [] };

@@ -95,6 +95,83 @@ async function tick(ms = 0) {
 }
 
 describe("MB-UX-LIVE-001 L03 stage gates", () => {
+  it("L09 exposes Stop only in Section 3 and preserves stopped state against a late poll", async () => {
+    window.history.replaceState({}, "", "/consultant/workflow?run_id=run-stop");
+    const stalePoll = deferred();
+    let reads = 0;
+    const active = {
+      run_id: "run-stop",
+      execution_id: "execution-stop",
+      state: "verification_loop_running",
+      mode: "live",
+      intake: {},
+      retry_action: "research",
+      step1_interpretation: { english_translation: "Approved pumps" },
+      step3_deep_prompt: {
+        is_approved: true,
+        prompt_text: "Approved pump research",
+      },
+      progress: { phase: "verification", loop: 4, max_loops: 15 },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, options?: RequestInit) => {
+        if (url === "/api/v1/me")
+          return response({
+            tier: "consultant",
+            user_id: "user",
+            account_id: "account",
+          });
+        if (!options?.method) {
+          if (++reads > 1) return stalePoll.promise;
+          return response({ session: active });
+        }
+        const body = JSON.parse(String(options.body));
+        requests.push(body);
+        if (body.action === "stop_research")
+          return response({
+            success: true,
+            session: {
+              ...active,
+              state: "workflow_failed",
+              error: "Research stopped by your request.",
+              progress: { phase: "user_cancelled", loop: 4, max_loops: 15 },
+            },
+          });
+        throw new Error("Unexpected mutation");
+      }),
+    );
+    render(<ConsultantWorkflowPage />);
+    await screen.findByRole("button", { name: "Stop research" });
+    fireEvent.click(
+      screen.getByRole("tab", { name: "Section 2: Preparation" }),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Stop research" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("tab", { name: "Section 3: Research & Results" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Stop research" }));
+    await screen.findByRole("button", { name: "Restart research" });
+    await act(async () => {
+      stalePoll.resolve(response({ session: active }));
+    });
+    expect(
+      screen.queryByRole("button", { name: "Stop research" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Stopped by you" }),
+    ).toBeInTheDocument();
+    expect(requests).toEqual([
+      {
+        action: "stop_research",
+        run_id: "run-stop",
+        execution_id: "execution-stop",
+      },
+    ]);
+  });
+
   it("restores the accepted intake and real running state after a competing submission wins", async () => {
     const defaultFetch = globalThis.fetch;
     vi.stubGlobal(

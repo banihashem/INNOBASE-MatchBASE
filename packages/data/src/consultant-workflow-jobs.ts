@@ -1,5 +1,101 @@
 import { randomUUID } from "node:crypto";
-import type { Queryable } from "./database.js";
+import {
+  inTransaction,
+  type ConnectionPool,
+  type Queryable,
+} from "./database.js";
+
+/** L09: serialize cancellation and publication on the retained session. */
+export async function lockActiveConsultantExecution(
+  db: Queryable,
+  accountId: string,
+  runId: string,
+  executionId: string,
+): Promise<void> {
+  const result = await db.query(
+    `SELECT execution_id, last_checkpoint, is_invalidated
+       FROM consultant_workflow_session WHERE account_id=$1 AND run_id=$2 FOR UPDATE`,
+    [accountId, runId],
+  );
+  const row = result.rows[0];
+  if (
+    !row ||
+    row.is_invalidated ||
+    row.execution_id !== executionId ||
+    row.last_checkpoint === "user_cancelled"
+  ) {
+    throw Object.assign(new Error("Execution is no longer active."), {
+      code: "execution-lease-lost",
+    });
+  }
+}
+
+export async function stopConsultantResearch(
+  pool: ConnectionPool,
+  accountId: string,
+  runId: string,
+  executionId: string,
+): Promise<
+  "stopped" | "already_stopped" | "not_found" | "stale" | "not_running"
+> {
+  return inTransaction(pool, async (client) => {
+    const result = await client.query(
+      `SELECT * FROM consultant_workflow_session
+        WHERE account_id=$1 AND run_id=$2 FOR UPDATE`,
+      [accountId, runId],
+    );
+    const session = result.rows[0];
+    if (!session || session.is_invalidated) return "not_found";
+    if (session.execution_id !== executionId) return "stale";
+    if (session.last_checkpoint === "user_cancelled") return "already_stopped";
+    if (
+      [
+        "progressive_reveal_ready",
+        "workflow_complete",
+        "pdf_generating",
+      ].includes(session.current_state)
+    )
+      return "not_running";
+    const stopped = await client.query<ConsultantWorkflowJob>(
+      `UPDATE consultant_workflow_job SET status='failed', error_code='user-cancelled',
+         lease_until=NULL, completed_at=clock_timestamp()
+       WHERE account_id=$1 AND run_id=$2 AND execution_id=$3
+         AND stage='research' AND status IN ('queued','running') RETURNING *`,
+      [accountId, runId, executionId],
+    );
+    const stoppedJob = stopped.rows[0];
+    if (!stoppedJob) return "not_running";
+    const previous = session.workflow_metadata?.progress;
+    const metadata = {
+      error:
+        "Research stopped by your request. Saved findings and approvals are retained.",
+      retry_action: "research",
+      stopped_by_user: true,
+      progress: {
+        phase: "user_cancelled",
+        loop: previous?.loop ?? 0,
+        max_loops: previous?.max_loops ?? 15,
+        message:
+          "Stopped by you. Worker cancellation is requested; already-dispatched provider calls may still finish.",
+        updated_at: new Date().toISOString(),
+      },
+    };
+    await client.query(
+      `UPDATE consultant_workflow_session SET current_state='workflow_failed',
+         last_checkpoint='user_cancelled',
+         workflow_metadata=COALESCE(workflow_metadata,'{}'::jsonb) || $4::jsonb,
+         updated_at=clock_timestamp()
+       WHERE account_id=$1 AND run_id=$2 AND execution_id=$3`,
+      [accountId, runId, executionId, JSON.stringify(metadata)],
+    );
+    await appendConsultantWorkflowEvent(client, stoppedJob, "user_cancelled", {
+      state: "completed",
+      message: "User stopped research; execution lease revoked.",
+      activity: "MB-UX-LIVE-001 L09",
+    });
+    return "stopped";
+  });
+}
 
 export type ConsultantJobStage = "prepare" | "research";
 export interface ConsultantWorkflowIdentity {
@@ -191,11 +287,13 @@ export async function listConsultantResearchSummaries(
     updated_at: Date;
     mode: string;
     result_available: boolean;
+    stopped_by_user: boolean;
   }>(
     `SELECT s.run_id, s.current_state AS state,
       COALESCE(s.original_intake->>'product_requirement', s.original_intake->>'productRequirement', '') AS title,
       s.updated_at, COALESCE(s.workflow_metadata->>'mode','unknown') AS mode,
-      EXISTS(SELECT 1 FROM consultant_output_v3 o WHERE o.account_id=s.account_id AND o.run_id=s.run_id AND o.execution_id=s.execution_id) AS result_available
+      EXISTS(SELECT 1 FROM consultant_output_v3 o WHERE o.account_id=s.account_id AND o.run_id=s.run_id AND o.execution_id=s.execution_id) AS result_available,
+      s.last_checkpoint IS NOT DISTINCT FROM 'user_cancelled' AS stopped_by_user
     FROM consultant_workflow_session s WHERE s.account_id=$1 AND NOT s.is_invalidated
     ORDER BY s.updated_at DESC LIMIT 100`,
     [accountId],

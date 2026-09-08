@@ -39,6 +39,7 @@ export function WorkflowActivity({
         ? "Preparation stopped"
         : "Research stopped";
   const failed = state === "workflow_failed";
+  const stoppedByUser = failed && progress?.phase === "user_cancelled";
   const recoveryCopy =
     retryAction === "research"
       ? "Your saved request and approvals are retained. No research is running. A retry starts a new research execution with your approved request; earlier research steps may run again."
@@ -57,7 +58,9 @@ export function WorkflowActivity({
   const heading = pdfBusy
     ? "Preparing your PDF download"
     : failed
-      ? failureLabel
+      ? stoppedByUser
+        ? "Stopped by you"
+        : failureLabel
       : awaiting
         ? workflowLabel(state)
         : ready
@@ -81,7 +84,9 @@ export function WorkflowActivity({
       <div role="status" aria-label="Workflow progress" aria-live="polite">
         <p className="activity-kicker">
           {failed
-            ? "Action needed"
+            ? stoppedByUser
+              ? "Research stopped"
+              : "Action needed"
             : pdfBusy || active
               ? "Working on your request"
               : awaiting
@@ -95,7 +100,9 @@ export function WorkflowActivity({
           {pdfBusy
             ? "The report is being prepared and transferred to your browser. Keep this page open until the download starts."
             : failed
-              ? recoveryCopy
+              ? stoppedByUser
+                ? "Your saved findings, request and approvals are retained. Worker cancellation has been requested. Restart research begins a new execution; earlier research steps may run again."
+                : recoveryCopy
               : awaiting
                 ? "Review the editable text below to continue. Research waits for your approval."
                 : ready

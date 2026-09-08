@@ -1,0 +1,91 @@
+name: matchbase-local
+
+x-runtime: &runtime
+  image: matchbase-local:${MATCHBASE_LOCAL_IMAGE_TAG:-current}
+  init: true
+  restart: unless-stopped
+  stop_grace_period: 2m
+  security_opt:
+    - no-new-privileges:true
+  cap_drop: [ALL]
+  secrets: [runtime_config]
+  depends_on:
+    postgres:
+      condition: service_healthy
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  postgres:
+    image: postgres:18.1-bookworm@sha256:cc9f4143a8d2fa8cf3749d0cb4d26ecf2d53a77a2ac807e9ebd67ae22426221a
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matchbase_slice1
+      POSTGRES_USER: matchbase_test
+      POSTGRES_PASSWORD_FILE: /run/secrets/database_password
+    secrets: [database_password]
+    ports: ["127.0.0.1:55433:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql"]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U matchbase_test -d matchbase_slice1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    security_opt: ["no-new-privileges:true"]
+
+  web:
+    <<: *runtime
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+      target: local-runtime
+    command: [web]
+    ports: ["127.0.0.1:${MATCHBASE_LOCAL_WEB_PORT:-3000}:3000"]
+    volumes: ["pdf_cache:/workspace/apps/web/.artifacts"]
+    shm_size: 512mb
+    healthcheck:
+      test: [CMD, node, deployment/local/health.mjs, web]
+      interval: 10s
+      timeout: 10s
+      start_period: 120s
+      retries: 12
+
+  worker:
+    <<: *runtime
+    command: [worker]
+    healthcheck:
+      test: [CMD, node, deployment/local/health.mjs, worker]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
+
+  dashboard:
+    <<: *runtime
+    command: [dashboard]
+    secrets: []
+    depends_on: []
+    ports: ["127.0.0.1:3001:5173"]
+    volumes:
+      - type: bind
+        source: ./apps/dashboard/public/current-snapshot.json
+        target: /workspace/apps/dashboard/dist/current-snapshot.json
+        read_only: true
+    healthcheck:
+      test: [CMD, node, deployment/local/health.mjs, dashboard]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  postgres_data:
+    name: matchbase_local_postgres_data
+  pdf_cache:
+    name: matchbase_local_pdf_cache
+
+secrets:
+  runtime_config:
+    environment: MATCHBASE_LOCAL_RUNTIME_CONFIG
+  database_password:
+    environment: MATCHBASE_LOCAL_DATABASE_PASSWORD

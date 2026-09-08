@@ -23,3 +23,14 @@ APIKeys.md
 .role2_tmp
 .role3_work
 .work
+.artifacts
+**/.artifacts
+01_Governance
+04_Product_Artifacts
+05_Operations
+99_Archive
+apps/dashboard/public/current-snapshot.json
+*.sql
+*.sql.gz
+*.dump
+!packages/data/migrations/*.sql

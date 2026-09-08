@@ -349,6 +349,15 @@ postgresTest(
     try {
       await migrateDown(pool).catch(() => false);
       await migrateUp(pool);
+      for (const migration of [
+        "0019_consultant_honest_execution_metadata",
+        "0018_consultant_live_execution",
+        "0017_consultant_v3_fixture_truth_relaxation",
+        "0016_consultant_v3_draft_isolation_and_snapshots",
+        "0015_consultant_v3_workflow_persistence",
+        "0014_consultant_v3_agentic_workflow",
+      ])
+        assert.equal(await migrateDownLatest(pool), migration);
       assert.equal(
         await migrateDownLatest(pool),
         DOMAIN_PACK_V2_AND_LEGACY_ANNOTATION_MIGRATION_ID,

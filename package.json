@@ -14,7 +14,7 @@
     "check:dev": "pnpm run format:check && pnpm run lint && pnpm run boundary:check && pnpm run protected:check && pnpm run secrets:scan && pnpm -r --if-present check",
     "check:full": "pnpm run check",
     "test": "pnpm -r --workspace-concurrency=1 --if-present test && pnpm run test:slice1:api && pnpm run test:slice2:api && pnpm run test:admin && node --test --test-concurrency=1 test/*.test.mjs test/slice3/*.test.mjs",
-    "test:unit": "pnpm -r --workspace-concurrency=1 --if-present test",
+    "test:unit": "pnpm -r --workspace-concurrency=1 --if-present test && node --test deployment/local/*.test.mjs",
     "test:integration": "pnpm run test:slice1:api && pnpm run test:slice2:api && pnpm run test:admin && node --test --test-concurrency=1 test/*.test.mjs test/slice3/*.test.mjs",
     "test:slice1:api": "pnpm --filter @matchbase/application build && pnpm --filter @matchbase/security build && node --test test/slice1/api/*.test.mjs",
     "test:slice2:api": "pnpm --filter @matchbase/application build && pnpm --filter @matchbase/security build && node --test --test-concurrency=1 test/slice2/api/*.test.mjs test/slice2/repository/*.test.mjs",

@@ -6,4 +6,4 @@
 *.pdf binary
 *.docx binary
 # Preserve the exact CRLF public-key bytes bound by the signed historical manifest.
-evidence/slice3/staging-openrouter-azure-openai-qualification.v2.pub.pem -text
+evidence/slice3/staging-openrouter-azure-openai-qualification.v2.pub.pem -text whitespace=cr-at-eol

@@ -940,7 +940,9 @@ export async function executeConsultantWorkflowResearch(
       : {}),
     before_call: createRoundCallGuard(round.plan),
     max_output_tokens: round.plan.max_output_tokens_per_call,
-    reasoning_effort: "high" as const,
+    max_input_bytes: round.plan.max_input_tokens_per_call,
+    reasoning_effort:
+      round.plan.depth === "deep" ? ("high" as const) : ("low" as const),
     web_engine: round.plan.search_engine,
   };
   assertValidWorkflowTransition(session.state, "research_dispatching");

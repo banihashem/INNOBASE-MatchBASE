@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { extractNativeDiscoveryPayload } from "../../../packages/application/dist/live-evidence-extraction.js";
+import { createRoundCallGuard } from "../../../packages/application/dist/consultant-research-cost.js";
 import {
   LIVE_DISCOVERY_SCHEMA,
   assembleLiveSuppliers,
@@ -225,6 +226,95 @@ function fixture(t, dispatch) {
 }
 const schemaName = (body) => body.response_format.json_schema.name;
 const input = (body) => JSON.parse(body.messages[1].content);
+
+test("MB-UX-LIVE-001 L10 citation-heavy discovery fits the approved allowance without losing notes or citation identities", async (t) => {
+  const data = dataset(10);
+  data.native.text = data.native.text.padEnd(20953, " ");
+  while (data.native.citations.length < 71)
+    data.native.citations.push({
+      url: `https://other-${data.native.citations.length}.example.com/evidence`,
+      title: "Additional cited source",
+      content: "Public source excerpt.",
+    });
+  for (const citation of data.native.citations)
+    citation.content = citation.content.padEnd(6000, "x");
+  const original = structuredClone(data.native);
+  const maxInput = 240000;
+  const guard = createRoundCallGuard({
+    mode: "live",
+    research_models: [],
+    extraction_model: "openai/gpt-5.2",
+    synthesis_model: "openai/gpt-5.2",
+    max_calls: 9,
+    max_input_tokens_per_call: maxInput,
+    max_output_tokens_per_call: 12000,
+    rates: [{ model: "openai/gpt-5.2", provider: "openai" }],
+  });
+  const calls = fixture(t, async (body) => {
+    assert.ok(
+      Buffer.byteLength(JSON.stringify(body.messages), "utf8") + 512 <=
+        maxInput,
+    );
+    assert.equal(body.max_tokens, 12000);
+    assert.equal(input(body).native_research_notes, original.text);
+    assert.deepEqual(input(body).buyer_mandatory_criteria, criteria);
+    if (schemaName(body) === INDEX) {
+      assert.deepEqual(
+        input(body).native_citations.map((c) => c.url),
+        original.citations.map((c) => c.url),
+      );
+      assert.match(input(body).evidence_excerpt_notice, /shortened/);
+      assert.equal(body.reasoning.effort, "low");
+      return data.index;
+    }
+    assert.equal(body.reasoning.effort, "high");
+    return data.batch(input(body).assigned_candidate_names);
+  });
+  const result = await extractNativeDiscoveryPayload(
+    data.native,
+    "openai/gpt-5.2",
+    { ...context, candidate_limit: 10 },
+    {
+      max_input_bytes: maxInput,
+      max_output_tokens: 12000,
+      reasoning_effort: "high",
+      before_call: guard,
+    },
+  );
+  assert.equal(calls.length, 3);
+  assert.equal(result.parsed.candidates.length, 10);
+  assert.deepEqual(data.native, original);
+});
+
+test("MB-UX-LIVE-001 L10 oversized immutable notes preserve the allowance failure before any paid call", async (t) => {
+  const data = dataset(1);
+  data.native.text = data.native.text.padEnd(250000, "x");
+  const calls = fixture(t, async () =>
+    assert.fail("No paid completion is permitted"),
+  );
+  const checkpoints = [];
+  await assert.rejects(
+    extractNativeDiscoveryPayload(data.native, "openai/gpt-5.2", context, {
+      max_input_bytes: 240000,
+      max_output_tokens: 12000,
+      before_call: createRoundCallGuard({
+        mode: "live",
+        research_models: [],
+        extraction_model: "openai/gpt-5.2",
+        synthesis_model: "openai/gpt-5.2",
+        max_calls: 9,
+        max_input_tokens_per_call: 240000,
+        max_output_tokens_per_call: 12000,
+        rates: [{ model: "openai/gpt-5.2", provider: "openai" }],
+      }),
+      on_checkpoint: (checkpoint) => checkpoints.push(checkpoint),
+    }),
+    { code: "MB-409-ROUND-ALLOWANCE" },
+  );
+  assert.equal(calls.length, 0);
+  assert.equal(checkpoints.at(-1).dispatched, false);
+  assert.match(checkpoints.at(-1).error, /MB-409-ROUND-ALLOWANCE/);
+});
 
 test("MB-UX-LIVE-001 L05 twenty rich records use bounded batches and account for every completion", async (t) => {
   const data = dataset(20);

@@ -414,7 +414,7 @@ test("MB-UX-LIVE-001 L07 retains finish and reasoning counts when provider exhau
       },
       { on_checkpoint: (event) => events.push(event) },
     ),
-    (error) => error.code === "MB-502-LIVE-RESPONSE",
+    (error) => error.code === "MB-422-LIVE-OUTPUT-LIMIT",
   );
   const failed = events.at(-1);
   assert.equal(failed.state, "failed");

@@ -8,6 +8,8 @@ import {
   safePublicEvidenceUrl,
 } from "../../../packages/application/dist/openrouter-model-policy.js";
 import { LivePreparationModelGateway } from "../../../packages/application/dist/live-preparation.js";
+import { ResearchRoundFault } from "../../../packages/data/dist/consultant-research-rounds.js";
+import { synthesizeConsultantOutputV3 } from "../../../packages/application/dist/synthesis-engine.js";
 import {
   parseLiveJson,
   objectSchema,
@@ -900,4 +902,152 @@ test("MB-UX-COST-001 approved rounds publish after one pass and reuse the saved 
   assert.equal(requests.slice(old).filter((r) => r.plugins?.length).length, 1);
   assert.equal(requests.length - old, 4);
   assert.equal(requests[old].plugins[0].engine, "exa");
+});
+
+const partialRound = {
+  round_number: 1,
+  depth: "simple",
+  purpose: "Initial research",
+  focus_requirements: [],
+  research_models: ["google/gemini-3.8-flash", "openai/gpt-5.2"],
+  extraction_model: "openai/gpt-5.2",
+  synthesis_model: "openai/gpt-5.2",
+  candidate_limit_per_search: 10,
+};
+const exhaustedResponse = () =>
+  respond("Incomplete notes must never become suppliers.", [], {
+    choices: [
+      {
+        finish_reason: "length",
+        message: { content: "Incomplete native notes" },
+      },
+    ],
+    usage: {
+      prompt_tokens: 121442,
+      completion_tokens: 12000,
+      completion_tokens_details: { reasoning_tokens: 11687 },
+      cost: 0.01,
+      cost_details: { upstream_inference_cost: 0.02 },
+    },
+  });
+
+test("MB-UX-LIVE-001 L10 a valid sibling publishes supported partial results after native output exhaustion", async () => {
+  dispatch = (body) =>
+    body.plugins?.length && body.model.startsWith("openai/")
+      ? exhaustedResponse()
+      : respond(discovery());
+  const result = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: partialRound,
+    reasoning_effort: "low",
+    max_output_tokens: 12000,
+  });
+  assert.equal(requests.filter((r) => r.plugins?.length).length, 2);
+  assert.equal(requests.length, 5);
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.lane_o_result.finish_reason, "length");
+  assert.equal(result.lane_g_result.finish_reason, "stop");
+  assert.equal(result.total_output_tokens, 12080);
+  assert.ok(Math.abs(result.total_cost_usd - 0.15) < 1e-9);
+  assert.match(result.synthesis_summary, /Partial research coverage/);
+  assert.ok(
+    result.continuation.remaining_gaps.some((gap) =>
+      gap.includes("independent cross-checking is incomplete"),
+    ),
+  );
+  assert.ok(
+    result.checkpoints.some(
+      (c) =>
+        c.phase === "discovery_openai" &&
+        c.state === "failed" &&
+        c.reasoning_tokens === 11687,
+    ),
+  );
+  const report = synthesizeConsultantOutputV3({
+    user_profile_id: randomUUID(),
+    research_run_id: randomUUID(),
+    execution_id: randomUUID(),
+    classification_id: randomUUID(),
+    product_name: "Pump",
+    product_category: "Pumps",
+    dual_lane_result: result,
+  });
+  assert.equal(report.research_status, "partial");
+  assert.ok(
+    report.limitations_and_disclosures.some(
+      (l) =>
+        l.title === "Partial research coverage" && l.severity === "critical",
+    ),
+  );
+  // A later model omitting a gap cannot erase the recorded coverage limitation.
+  dispatch = () => respond({ ...discovery(), remaining_gaps: [] });
+  const followup = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: {
+      ...partialRound,
+      round_number: 2,
+      research_models: [partialRound.research_models[0]],
+      search_engine: "exa",
+    },
+    continuation: result.continuation,
+  });
+  assert.match(
+    followup.synthesis_summary,
+    /Unresolved earlier-round limitation/,
+  );
+  assert.equal(followup.continuation.coverage_gaps.length, 1);
+});
+
+test("MB-UX-LIVE-001 L10 two exhausted discovery paths cannot publish or start synthesis", async () => {
+  dispatch = () => exhaustedResponse();
+  await assert.rejects(
+    executeDualLaneResearch(intake, { mode: "live", round_plan: partialRound }),
+    { code: "MB-422-LIVE-OUTPUT-LIMIT" },
+  );
+  assert.equal(requests.length, 2);
+});
+
+test("MB-UX-LIVE-001 L10 guard failures cannot be replaced by a successful sibling", async () => {
+  await assert.rejects(
+    executeDualLaneResearch(intake, {
+      mode: "live",
+      round_plan: partialRound,
+      before_call: async (request, web) => {
+        if (web && request.model.startsWith("openai/"))
+          throw new ResearchRoundFault(
+            409,
+            "MB-409-ROUND-ALLOWANCE",
+            "No approved calls remain.",
+          );
+      },
+    }),
+    { code: "MB-409-ROUND-ALLOWANCE" },
+  );
+  assert.equal(requests.filter((r) => r.plugins?.length).length, 1);
+  assert.equal(
+    requests.some(
+      (r) =>
+        r.response_format?.json_schema?.name === "matchbase_live_synthesis",
+    ),
+    false,
+  );
+});
+
+test("MB-UX-LIVE-001 L10 extraction output exhaustion remains terminal even with a healthy native sibling", async () => {
+  dispatch = (body) =>
+    body.response_format?.json_schema?.name ===
+    "matchbase_native_evidence_extraction"
+      ? exhaustedResponse()
+      : respond(discovery());
+  await assert.rejects(
+    executeDualLaneResearch(intake, { mode: "live", round_plan: partialRound }),
+    { code: "MB-422-LIVE-OUTPUT-LIMIT" },
+  );
+  assert.equal(
+    requests.some(
+      (r) =>
+        r.response_format?.json_schema?.name === "matchbase_live_synthesis",
+    ),
+    false,
+  );
 });

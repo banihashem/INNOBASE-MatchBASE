@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { ResearchModelRate } from "@matchbase/contracts";
+import { ResearchRoundFault } from "@matchbase/data";
 import { Agent } from "undici";
 import { fetchPrimaryEvidenceText } from "./live-source-fetch.js";
 import {
@@ -103,6 +104,8 @@ export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
   readonly actual_model?: string;
   readonly request_hash: string;
   readonly request_timeout_ms?: number;
+  readonly request_input_bytes?: number;
+  readonly request_output_token_limit?: number;
   readonly provider_generation_id?: string;
   readonly started_at: string;
   readonly completed_at?: string;
@@ -131,6 +134,8 @@ export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
   }[];
 }
 export interface LiveCallOptions {
+  /** Conservative serialized-message byte budget used by the approved call guard. */
+  readonly max_input_bytes?: number;
   readonly approved_rates?: readonly ResearchModelRate[];
   readonly max_output_tokens?: number;
   readonly reasoning_effort?: "high" | "low";
@@ -695,6 +700,13 @@ export async function callOpenRouterCompletion(
       signal,
     });
     auditedResponse = { ...auditedResponse, ...audit };
+    if (choice?.finish_reason === "length")
+      throw new LiveResearchError(
+        "MB-422-LIVE-OUTPUT-LIMIT",
+        `Provider exhausted the approved output allowance (${auditedResponse.output_tokens} output tokens, ${auditedResponse.reasoning_tokens ?? "unknown"} reasoning tokens). The incomplete response and usage are retained. Review a fresh estimate before another attempt.`,
+        false,
+        auditedResponse,
+      );
     if (
       data.error ||
       typeof text !== "string" ||
@@ -783,6 +795,9 @@ export async function runLiveCompletion(
     request_hash: createHash("sha256")
       .update(JSON.stringify(request.messages))
       .digest("hex"),
+    request_input_bytes:
+      Buffer.byteLength(JSON.stringify(request.messages), "utf8") + 512,
+    request_output_token_limit: request.max_tokens ?? 12000,
     started_at: new Date().toISOString(),
     native_web: Boolean(context.require_web) && options.web_engine !== "exa",
     reasoning_effort: "unsupported",
@@ -943,7 +958,7 @@ export async function runLiveCompletion(
         url: citation.url,
         title: citation.title,
         ...(citation.content
-          ? { content_excerpt: citation.content.slice(0, 1600) }
+          ? { content_excerpt: citation.content.slice(0, 6000) }
           : {}),
       })),
       source_content_hashes: (result.citations ?? []).flatMap((citation) =>
@@ -959,7 +974,8 @@ export async function runLiveCompletion(
     const safeError =
       error instanceof LiveResearchError
         ? error
-        : error instanceof OpenRouterByokError
+        : error instanceof OpenRouterByokError ||
+            error instanceof ResearchRoundFault
           ? new LiveResearchError(error.code, error.message)
           : new LiveResearchError(
               "MB-503-LIVE-CHECKPOINT",

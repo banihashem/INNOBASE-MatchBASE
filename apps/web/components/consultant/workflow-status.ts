@@ -39,7 +39,9 @@ export function phaseLabel(phase: string, loop = 0): string {
     ? "Gemini"
     : phase.includes("openai")
       ? "OpenAI"
-      : "";
+      : phase.includes("selected")
+        ? "Selected model"
+        : "";
   const scope = phase.startsWith("verification")
     ? `Verification round ${loop}`
     : lane;
@@ -47,11 +49,14 @@ export function phaseLabel(phase: string, loop = 0): string {
     return `${scope} · Organizing discovered suppliers`;
   if (phase.endsWith("extraction_batch"))
     return `${scope} · Extracting supplier details`;
-  if (phase.startsWith("discovery")) return `${lane} · Searching for suppliers`;
+  if (phase.startsWith("discovery"))
+    return lane
+      ? `${lane} · Searching for suppliers`
+      : "Searching for suppliers";
   if (phase === "verification")
     return `Verification round ${loop} · Checking evidence and gaps`;
   if (phase === "source_retrieval")
-    return `Verification round ${loop} · Reading company sources`;
+    return "Reading supplier websites and supporting sources";
   if (phase.includes("advisory"))
     return `Advisory research · Round ${loop} of 3`;
   if (phase.includes("prompt")) return "Preparing your editable research plan";

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Progress } from "../ui/progress-1";
 import {
   phaseLabel,
   resultReady,
@@ -51,10 +52,26 @@ export function WorkflowActivity({
     state.includes("awaiting_approval") ||
     state === "prep_step3_prompt_approved";
   const active =
-    !failed && !ready && !awaiting && (busy || state !== "intake_draft");
+    !failed &&
+    !ready &&
+    !awaiting &&
+    state !== "invalidated" &&
+    (busy || state !== "intake_draft");
   const age = progress?.updated_at ? now - Date.parse(progress.updated_at) : 0;
   const quiet = active && age > 120000;
   const failure = [...activity].reverse().find((step) => step.failed > 0);
+  const finishedOperations = activity.reduce(
+    (sum, step) => sum + step.completed,
+    0,
+  );
+  const pendingOperations = activity.reduce(
+    (sum, step) =>
+      sum + Math.max(0, step.started - step.completed - step.failed),
+    0,
+  );
+  const runningSteps = activity.filter(
+    (step) => step.started > step.completed + step.failed,
+  );
   const heading = pdfBusy
     ? "Preparing your PDF download"
     : failed
@@ -65,10 +82,14 @@ export function WorkflowActivity({
         ? workflowLabel(state)
         : ready
           ? "Your supplier results are ready"
-          : phaseLabel(
-              progress?.phase || (busy ? "interpretation" : "queued"),
-              progress?.loop,
-            );
+          : runningSteps.length > 1
+            ? "Research steps are running in parallel"
+            : phaseLabel(
+                runningSteps[0]?.phase ||
+                  progress?.phase ||
+                  (busy ? "interpretation" : "queued"),
+                runningSteps[0]?.loop ?? progress?.loop,
+              );
   const stages = [
     "Your request",
     "English interpretation · Your approval",
@@ -96,6 +117,37 @@ export function WorkflowActivity({
                   : "Research status"}
         </p>
         <h2>{heading}</h2>
+        {!connectionError && (active || ready || pdfBusy) && (
+          <div className="activity-progress">
+            <div className="activity-progress-caption">
+              <span>
+                {pdfBusy
+                  ? "Preparing download"
+                  : ready
+                    ? "Result saved"
+                    : "Live execution"}
+              </span>
+              <span>
+                {ready && !pdfBusy ? "100%" : "Completion time not yet known"}
+              </span>
+            </div>
+            <Progress
+              aria-label={pdfBusy ? "PDF preparation" : "Execution progress"}
+              aria-valuetext={
+                ready && !pdfBusy
+                  ? "Result saved"
+                  : "In progress; completion percentage is not yet known"
+              }
+              value={ready && !pdfBusy ? 100 : null}
+            />
+            {!ready && !pdfBusy && (
+              <p className="activity-progress-note">
+                Completed operations and current work appear below as updates
+                arrive.
+              </p>
+            )}
+          </div>
+        )}
         <p>
           {pdfBusy
             ? "The report is being prepared and transferred to your browser. Keep this page open until the download starts."
@@ -151,34 +203,56 @@ export function WorkflowActivity({
           </time>
         </p>
       )}
-      <details className="activity-details">
-        <summary>View research stages and recorded activity</summary>
-        <ol className="activity-roadmap" aria-label="Research plan">
-          {stages.map((label) => (
-            <li key={label}>{label}</li>
-          ))}
-        </ol>
-        <h3>Recorded activity · Current execution</h3>
+      <div
+        className="activity-recorded"
+        aria-label="Recorded execution activity"
+      >
+        <h3>Current work and completed steps</h3>
+        {activity.length > 0 && (
+          <p className="activity-counts" aria-live="polite">
+            {finishedOperations} operation(s) completed
+            {active && !connectionError && pendingOperations > 0
+              ? ` · ${pendingOperations} in progress`
+              : ""}
+            {failed ? " · Execution stopped" : ""}
+          </p>
+        )}
         {activity.length ? (
           <ul className="activity-log">
             {activity.map((step) => {
               const status = step.failed
                 ? "Stopped"
-                : step.started > step.completed
-                  ? failed
+                : step.started > step.completed + step.failed
+                  ? failed || ready || awaiting || state === "invalidated"
                     ? "Interrupted"
-                    : "In progress"
+                    : connectionError
+                      ? "Last recorded: in progress"
+                      : "In progress"
                   : step.completed
                     ? "Completed"
                     : "Recorded";
               return (
-                <li key={`${step.phase}:${step.loop}`}>
-                  <span>{phaseLabel(step.phase, step.loop)}</span>
-                  <strong>{status}</strong>
-                  {step.phase.endsWith("extraction_batch") && (
+                <li key={`${step.phase}:${step.loop}`} data-status={status}>
+                  <span className="activity-operation-name">
+                    <span
+                      className="activity-operation-icon"
+                      aria-hidden="true"
+                    >
+                      {status === "Completed"
+                        ? "✓"
+                        : status === "Stopped" || status === "Interrupted"
+                          ? "!"
+                          : "·"}
+                    </span>
+                    {phaseLabel(step.phase, step.loop)}
+                  </span>
+                  <strong className="activity-operation-status">
+                    {status}
+                  </strong>
+                  {(step.completed > 0 || step.started > 1) && (
                     <small>
-                      {step.completed} detail batches completed · {step.started}{" "}
-                      started
+                      {step.completed} completed · {step.started} started
+                      {step.failed > 0 ? ` · ${step.failed} stopped` : ""}
                     </small>
                   )}
                 </li>
@@ -190,6 +264,14 @@ export function WorkflowActivity({
             Detailed activity appears after the server records a research stage.
           </p>
         )}
+      </div>
+      <details className="activity-details">
+        <summary>View research plan and technical details</summary>
+        <ol className="activity-roadmap" aria-label="Research plan">
+          {stages.map((label) => (
+            <li key={label}>{label}</li>
+          ))}
+        </ol>
         {progress?.message && (
           <details>
             <summary>Latest technical checkpoint</summary>

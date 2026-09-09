@@ -281,6 +281,37 @@ test("Live has no implicit provider route when server configuration is absent", 
   assert.equal(posts.length, 0);
 });
 
+test("MB-UX-LIVE-001 L10 output exhaustion retains billable usage and never retries", async () => {
+  responseBody.choices[0].finish_reason = "length";
+  responseBody.usage.completion_tokens = 12000;
+  responseBody.usage.completion_tokens_details = { reasoning_tokens: 11687 };
+  const checkpoints = [];
+  await assert.rejects(
+    runLiveCompletion(
+      { ...request, max_tokens: 24000 },
+      { phase: "discovery_openai", loop: 1 },
+      {
+        max_output_tokens: 12000,
+        reasoning_effort: "low",
+        on_checkpoint: (checkpoint) => checkpoints.push(checkpoint),
+      },
+    ),
+    (error) => {
+      assert.equal(error.code, "MB-422-LIVE-OUTPUT-LIMIT");
+      assert.equal(error.retryable, false);
+      assert.equal(error.audited_response.reasoning_tokens, 11687);
+      assert.equal(error.audited_response.upstream_inference_cost, 0.42);
+      return true;
+    },
+  );
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].body.reasoning.effort, "low");
+  assert.equal(posts[0].body.max_tokens, 12000);
+  assert.equal(checkpoints.at(-1).finish_reason, "length");
+  assert.equal(checkpoints.at(-1).output_tokens, 12000);
+  assert.equal(checkpoints.at(-1).provider_generation_id, "gen-byok-test");
+});
+
 test("legacy qualified route accepts explicit BYOK and a genuinely reported zero fee", async () => {
   const legacyModel = "google/gemini-3.6-flash";
   const legacy = {

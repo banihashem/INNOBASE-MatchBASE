@@ -1043,6 +1043,112 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     expect(requests).toHaveLength(0);
   });
 
+  it("L10 publishes a resumed run after previewing a saved round from a different run", async () => {
+    window.history.replaceState({}, "", "/consultant/workflow?run_id=old-run");
+    const oldOutput = {
+      ...GOLDEN_SCENARIO_V3_01,
+      execution_id: "old-execution",
+    };
+    const newOutput = {
+      ...GOLDEN_SCENARIO_V3_01,
+      execution_id: "new-execution",
+      supplier_candidates: GOLDEN_SCENARIO_V3_01.supplier_candidates.map(
+        (s) => ({ ...s, legal_name: "Current run supplier" }),
+      ),
+    };
+    const finish = deferred();
+    let newReads = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/v1/me")
+          return response({
+            tier: "consultant",
+            user_id: "user",
+            account_id: "account",
+          });
+        if (url.includes("research-rounds")) {
+          if (url.includes("round_id=")) return response({ output: oldOutput });
+          return response({
+            ...roundOverview,
+            next_round: 2,
+            rounds: url.includes("old-run")
+              ? [
+                  {
+                    round_id: "old-round",
+                    round_number: 1,
+                    status: "completed",
+                    execution_id: "old-execution",
+                    candidate_count: 20,
+                    output_available: true,
+                    plan: { ...roundQuote.plan, mode: "demonstration" },
+                  },
+                ]
+              : [],
+          });
+        }
+        if (url.includes("incomplete=true"))
+          return response({
+            sessions: [
+              { run_id: "new-run", current_state: "research_dispatching" },
+            ],
+          });
+        if (url.includes("active_draft=true")) return response({ drafts: [] });
+        if (url.includes("run_id=old-run"))
+          return response({
+            session: {
+              run_id: "old-run",
+              execution_id: "old-execution",
+              state: "progressive_reveal_ready",
+              mode: "demonstration",
+              intake: {},
+              output: oldOutput,
+              revealed_count: 5,
+            },
+          });
+        if (url.includes("run_id=new-run")) {
+          newReads++;
+          return newReads === 1
+            ? response({
+                session: {
+                  run_id: "new-run",
+                  execution_id: "new-execution",
+                  state: "research_dispatching",
+                  mode: "demonstration",
+                  intake: {},
+                  output: null,
+                },
+              })
+            : finish.promise;
+        }
+        throw new Error(`Unexpected URL ${url}`);
+      }),
+    );
+    render(<ConsultantWorkflowPage />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "View round 1 result" }),
+    );
+    await screen.findByText(/Showing the selected saved round below/);
+    fireEvent.click(screen.getByRole("button", { name: "Resume Research" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Resume Run" }));
+    await waitFor(() => expect(newReads).toBeGreaterThanOrEqual(2));
+    await act(async () => {
+      finish.resolve(
+        response({
+          session: {
+            run_id: "new-run",
+            execution_id: "new-execution",
+            state: "progressive_reveal_ready",
+            output: newOutput,
+            revealed_count: 5,
+          },
+        }),
+      );
+    });
+    expect((await screen.findAllByText("Current run supplier")).length).toBe(5);
+    expect(screen.getByText(/Showing 5 of 20/)).toBeVisible();
+  });
+
   it("reveals match-sorted candidates five at a time and opens their full dossier", async () => {
     window.history.replaceState(
       {},

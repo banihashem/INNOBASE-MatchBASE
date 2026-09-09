@@ -510,10 +510,13 @@ export default function ConsultantWorkflowPage() {
   useWorkflowPolling({
     runId,
     workflowState,
-    output,
     acceptProgress,
-    setOutput,
-    setRevealedCount,
+    setOutput: (saved) => {
+      if (viewedRoundRef.current?.runId !== runId) setOutput(saved);
+    },
+    setRevealedCount: (count) => {
+      if (viewedRoundRef.current?.runId !== runId) setRevealedCount(count);
+    },
     setConnectionError,
   });
 

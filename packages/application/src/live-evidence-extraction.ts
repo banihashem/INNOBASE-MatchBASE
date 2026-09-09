@@ -102,14 +102,43 @@ async function extractStructured<T>(
   validate: (payload: T) => T,
   audit?: () => Pick<LiveResearchCheckpoint, "index_validation">,
 ): Promise<{ result: OpenRouterCompletionResult; parsed: T }> {
+  // MB-UX-LIVE-001 L10: many native citations can overflow a round's input
+  // allowance before the first index call. Only compact optional excerpts;
+  // retain all citation identities, buyer requirements and native notes.
+  // Full evidence remains in nativeCompletion for grounding and later review.
+  let boundedInput = input;
+  const messages = () => [
+    { role: "system" as const, content: system },
+    { role: "user" as const, content: JSON.stringify(boundedInput) },
+  ];
+  if (options.max_input_bytes && Array.isArray(input.native_citations)) {
+    for (
+      let excerptLimit = 3000;
+      Buffer.byteLength(JSON.stringify(messages()), "utf8") + 512 >
+      options.max_input_bytes;
+      excerptLimit = Math.floor(excerptLimit / 2)
+    ) {
+      if (excerptLimit < 0) break;
+      boundedInput = {
+        ...input,
+        native_citations: input.native_citations.map(
+          (citation: { content_excerpt?: string }) => ({
+            ...citation,
+            content_excerpt:
+              citation.content_excerpt?.slice(0, excerptLimit) ?? "",
+          }),
+        ),
+        evidence_excerpt_notice:
+          "Citation excerpts were shortened to fit the approved input allowance. Do not infer missing evidence; keep unsupported findings unknown. Full original evidence is retained by the application.",
+      };
+      if (excerptLimit === 0) break;
+    }
+  }
   let completedCheckpoint: LiveResearchCheckpoint | undefined;
   const result = await runLiveCompletion(
     {
       model,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: JSON.stringify(input) },
-      ],
+      messages: messages(),
       response_format: {
         type: "json_schema",
         json_schema: { name: schemaName, strict: true, schema },
@@ -125,6 +154,10 @@ async function extractStructured<T>(
     },
     {
       ...options,
+      // Scope indexing is a literal extraction task even in a deep round.
+      reasoning_effort: phase.endsWith("_extraction_index")
+        ? "low"
+        : (options.reasoning_effort ?? "high"),
       on_checkpoint: async (checkpoint) => {
         if (checkpoint.state === "completed") completedCheckpoint = checkpoint;
         else await options.on_checkpoint?.(checkpoint);

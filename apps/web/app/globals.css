@@ -2484,6 +2484,89 @@ footer {
   color: #aebed1;
   grid-column: 1 / -1;
 }
+.activity-progress {
+  margin: 20px 0;
+}
+.activity-progress-caption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #bae6fd;
+}
+.live-progress {
+  position: relative;
+  height: 6px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #334155;
+}
+.live-progress-indicator {
+  height: 100%;
+  width: 100%;
+  background: #38bdf8;
+  border-radius: inherit;
+  transition: transform 300ms ease;
+}
+.live-progress[data-state="indeterminate"] .live-progress-indicator {
+  width: 35%;
+  animation: activity-indeterminate 1.8s ease-in-out infinite;
+}
+.live-progress[data-state="complete"] .live-progress-indicator {
+  background: #6ee7b7;
+}
+@keyframes activity-indeterminate {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+.workflow-activity .activity-progress-note,
+.workflow-activity .activity-counts {
+  font-size: 12px;
+  color: #aebed1;
+  margin: 10px 0 0;
+}
+.activity-recorded {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  background: #0f172a;
+}
+.activity-recorded h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.activity-operation-name {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+.activity-operation-icon {
+  flex: 0 0 18px;
+  text-align: center;
+  color: #7dd3fc;
+}
+.activity-operation-status {
+  font-size: 12px;
+  color: #bae6fd;
+}
+.activity-log [data-status="Completed"] .activity-operation-icon,
+.activity-log [data-status="Completed"] .activity-operation-status {
+  color: #6ee7b7;
+}
+.activity-log [data-status="Stopped"] .activity-operation-icon,
+.activity-log [data-status="Stopped"] .activity-operation-status,
+.activity-log [data-status="Interrupted"] .activity-operation-status {
+  color: #fbbf24;
+}
 .consultant-home :focus-visible,
 .workflow-activity :focus-visible {
   outline: 3px solid #38bdf8;

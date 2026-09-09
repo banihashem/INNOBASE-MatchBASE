@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import type { ConsultantResearchOutputV3 } from "@matchbase/contracts";
 import { errorMessage } from "./workflow-response";
+import { resultReady } from "./workflow-status";
 
 interface WorkflowPollingOptions {
   runId: string | null;
   workflowState: string;
-  output: ConsultantResearchOutputV3 | null;
   acceptProgress: (session: any) => void;
   setOutput: (output: ConsultantResearchOutputV3) => void;
   setRevealedCount: (count: number) => void;
@@ -15,7 +15,6 @@ interface WorkflowPollingOptions {
 export function useWorkflowPolling({
   runId,
   workflowState,
-  output,
   ...handlers
 }: WorkflowPollingOptions) {
   const callbacks = useRef(handlers);
@@ -23,7 +22,6 @@ export function useWorkflowPolling({
   useEffect(() => {
     if (
       !runId ||
-      output ||
       workflowState === "workflow_failed" ||
       workflowState === "invalidated" ||
       workflowState === "workflow_complete" ||
@@ -52,11 +50,23 @@ export function useWorkflowPolling({
         callbacks.current.setConnectionError(null);
         if (data.session) callbacks.current.acceptProgress(data.session);
         const result = data.output ?? data.session?.output;
-        if (result) {
+        const state = data.session?.state ?? data.state;
+        if (
+          result &&
+          resultReady(state) &&
+          (!data.session?.execution_id ||
+            result.execution_id === data.session.execution_id)
+        ) {
           callbacks.current.setOutput(result);
           callbacks.current.setRevealedCount(data.session?.revealed_count ?? 5);
           return;
         }
+        if (
+          state === "workflow_failed" ||
+          state === "invalidated" ||
+          resultReady(state)
+        )
+          return;
       } catch (error: any) {
         if (!controller.signal.aborted)
           callbacks.current.setConnectionError(error.message);
@@ -68,5 +78,5 @@ export function useWorkflowPolling({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [runId, workflowState, output]);
+  }, [runId, workflowState]);
 }

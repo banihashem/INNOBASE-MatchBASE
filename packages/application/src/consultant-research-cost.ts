@@ -446,16 +446,21 @@ export function createRoundCallGuard(plan: ResearchRoundPlan) {
         "MB-409-ROUND-MODEL",
         "The model differs from the approved round.",
       );
-    if (
-      calls >= plan.max_calls ||
-      (request.max_tokens ?? 12000) > plan.max_output_tokens_per_call ||
-      Buffer.byteLength(JSON.stringify(request.messages), "utf8") + 512 >
-        plan.max_input_tokens_per_call
-    )
+    const inputBytes =
+      Buffer.byteLength(JSON.stringify(request.messages), "utf8") + 512;
+    const exhausted =
+      calls >= plan.max_calls
+        ? `The approved allowance of ${plan.max_calls} provider calls is exhausted.`
+        : (request.max_tokens ?? 12000) > plan.max_output_tokens_per_call
+          ? `The requested output exceeds the approved ${plan.max_output_tokens_per_call}-token allowance.`
+          : inputBytes > plan.max_input_tokens_per_call
+            ? `The prepared evidence exceeds the conservative input allowance (${inputBytes} serialized bytes; approved limit ${plan.max_input_tokens_per_call}).`
+            : null;
+    if (exhausted)
       throw new ResearchRoundFault(
         409,
         "MB-409-ROUND-ALLOWANCE",
-        "The approved call or token allowance is exhausted. Review a fresh estimate before further work.",
+        `${exhausted} No provider request was sent. Review a fresh estimate before further work.`,
       );
     calls++;
   };

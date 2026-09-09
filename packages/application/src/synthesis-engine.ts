@@ -193,6 +193,12 @@ export function synthesizeConsultantOutputV3(
         "At least one provider response omitted usage metadata; reported consumption is incomplete.",
       severity: "advisory",
     });
+  for (const gap of result.coverage_gaps ?? [])
+    limitations.push({
+      title: "Partial research coverage",
+      description: gap,
+      severity: "critical",
+    });
   return {
     schema_version: CONSULTANT_RESEARCH_OUTPUT_V3_SCHEMA_VERSION,
     schema_contract_version: CONSULTANT_RESEARCH_OUTPUT_V3_VERSION,
@@ -208,7 +214,7 @@ export function synthesizeConsultantOutputV3(
     research_status:
       count === 0
         ? "insufficient_evidence"
-        : count < 20
+        : count < 20 || result.coverage_gaps?.length
           ? "partial"
           : "complete",
     primary_classification: input.primary_classification ?? {
@@ -246,7 +252,7 @@ export function synthesizeConsultantOutputV3(
         isLive && evidence.length ? "medium" : "not_assessed",
       research_coverage_status: !isLive
         ? "not_assessed"
-        : count === 20
+        : count === 20 && !result.coverage_gaps?.length
           ? "sufficient"
           : count
             ? "partial"

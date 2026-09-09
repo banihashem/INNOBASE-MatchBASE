@@ -13,7 +13,8 @@ const patterns = [
 function git(args, options = {}) {
   const result = spawnSync("git", args, {
     shell: false,
-    encoding: options.encoding ?? "utf8",
+    // null requests bytes; coalescing it to UTF-8 makes includes(0) match digit "0".
+    encoding: options.encoding === undefined ? "utf8" : options.encoding,
     maxBuffer: options.maxBuffer ?? 6 * 1024 * 1024,
   });
   if (result.status !== 0) throw new Error("Git history inventory failed.");

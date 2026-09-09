@@ -41,6 +41,7 @@ function validSha(value) {
 const FORWARD_PLANNING_DOCS = new Set([
   "MATCHBASE_PRODUCT_DEVELOPMENT_BASELINE.md",
   "CONSULTANT_DEEP_RESEARCH_OUTPUT_V2_SPEC.md",
+  "CONSULTANT_TIER_AGENTIC_RESEARCH_AND_UX_SPEC.md",
 ]);
 
 async function inventory(root) {
@@ -142,5 +143,5 @@ if (!anchorOnly) {
   }
 }
 process.stdout.write(
-  `protected baseline: PASS (${anchorOnly ? "MANIFEST_ANCHOR_CI" : "EXACT_LOCAL_SHA256"}; 14 authoritative, 67 planning, 36 explicit management-history files)\n`,
+  `protected baseline: PASS (${anchorOnly ? "MANIFEST_ANCHOR_CI" : "EXACT_LOCAL_SHA256"}; ${rootsById.get("authoritative").fileCount} authoritative, 67 planning, 36 explicit management-history files)\n`,
 );

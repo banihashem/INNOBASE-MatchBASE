@@ -5,3 +5,5 @@ export * from "./model.js";
 export * from "./p4-qualification.js";
 export * from "./pdf-toolchain.js";
 export * from "./runtime-adapter.js";
+export * from "./consultant-landscape-report.js";
+export * from "./pdf-generator.js";

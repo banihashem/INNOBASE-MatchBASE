@@ -1,13 +1,13 @@
 {
   "schemaVersion": "1.0",
   "algorithm": "SHA256(sorted(relativePath + NUL + uppercaseFileSha256 + LF))",
-  "capturedAt": "2026-08-14T18:52:00+04:00",
+  "capturedAt": "2026-09-08",
   "roots": [
     {
       "id": "authoritative",
       "path": "C:\\INNOBASE\\MatchBASE\\00_Authoritative_Sources",
-      "fileCount": 14,
-      "aggregateSha256": "20BE6AEB62DC40B7E89D3D185EF6301323BAF73BF69382FE35AB79874E0BED45"
+      "fileCount": 20,
+      "aggregateSha256": "957D718E17B415F4C9402CFA1AD10DB928A25432215291D9B0FDBC714329EAD1"
     },
     {
       "id": "planning",
@@ -30,5 +30,36 @@
     "path": "C:\\INNOBASE\\MatchBASE\\01_Product_Management\\PRODUCT_MANAGEMENT_LOOP_LOG.md",
     "prefixBytes": 136319,
     "prefixSha256": "77770676DBF1D4223FAFAC1026FC116FD97617529CED753CD02932020C518133"
+  },
+  "sourceAdoption": {
+    "activity": "MB-UX-COST-001 L01",
+    "previousFileCount": 14,
+    "previousAggregateSha256": "20BE6AEB62DC40B7E89D3D185EF6301323BAF73BF69382FE35AB79874E0BED45",
+    "addedFiles": [
+      {
+        "path": "ProductDefinationInstruction/INNOBASE-MatchBASE_Universal_Request_Structuring_Framework_v2.0.docx",
+        "sha256": "D3B854050EC94FB4538E0F7FE5A20478760EF1184F53450B16E572E69DDE79A1"
+      },
+      {
+        "path": "ProductDefinationInstruction/MatchBASE_Public_Social_Evidence_Protocol_v3.1.md",
+        "sha256": "723B100355E9E0BA32DD1FF060269849652637EC86F57F466E4A936124C4E53B"
+      },
+      {
+        "path": "ProductDefinationInstruction/MatchBASE_Universal_Request_and_Research_Prompt_Specification_v3.0.docx",
+        "sha256": "5569434A02EAFCF96DBE054636931977FDE5DC6B03A188E272062CF3B9A60665"
+      },
+      {
+        "path": "ProductDefinationInstruction/MatchBASE_Universal_Request_and_Research_Prompt_Specification_v3.1.docx",
+        "sha256": "0D85BD36B4902B9E053B079ED8A01E8B3F5E674D4033A62A75C44F39008C9DFE"
+      },
+      {
+        "path": "ProductDefinationInstruction/MatchBASE_Universal_Request_Classifier_Prompt_v3.0.md",
+        "sha256": "CC3304F968D07DD827B782729F70A3EC111C0EDE354FE6246AE5B3E66AC0A90D"
+      },
+      {
+        "path": "ProductDefinationInstruction/MatchBASE_Universal_Request_Classifier_Prompt_v3.1.md",
+        "sha256": "805E92B6F9A1029E104787DE25CD1B464398F503E236A603EA6648A7BA141ACF"
+      }
+    ]
   }
 }

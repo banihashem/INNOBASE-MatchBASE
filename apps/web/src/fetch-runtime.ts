@@ -122,7 +122,7 @@ function sessionCookieAttributes(config: WebConfig, httpOnly: boolean): string {
 function simulatorTicket(
   config: WebConfig,
   state: string,
-  fixture: "demo" | "standard" | "admin",
+  fixture: "demo" | "standard" | "consultant" | "admin",
 ): string {
   return createHmac("sha256", config.digestKey)
     .update(`${fixture}\u0000${state}`, "utf8")
@@ -347,8 +347,44 @@ function object(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+const GOLDEN_ALIAS_MAP: Record<string, string> = {
+  "run-v2-golden-01": "00000000-0000-4000-8000-000000000301",
+  "run-v2-golden-02": "00000000-0000-4000-8000-000000000302",
+  "run-v2-golden-03": "00000000-0000-4000-8000-000000000303",
+  "run-v2-golden-04": "00000000-0000-4000-8000-000000000304",
+  "run-v2-golden-05": "00000000-0000-4000-8000-000000000305",
+  "run-v2-golden-06": "00000000-0000-4000-8000-000000000306",
+  "run-v2-golden-07": "00000000-0000-4000-8000-000000000307",
+  "run-v2-golden-08": "00000000-0000-4000-8000-000000000308",
+  "run-v2-golden-09": "00000000-0000-4000-8000-000000000309",
+  "run-v2-golden-10": "00000000-0000-4000-8000-000000000310",
+  "run-v2-golden-11": "00000000-0000-4000-8000-000000000311",
+  "run-v2-golden-12": "00000000-0000-4000-8000-000000000312",
+  "run-v2-golden-13": "00000000-0000-4000-8000-000000000313",
+  "run-v2-golden-14": "00000000-0000-4000-8000-000000000314",
+  "run-v2-golden-15": "00000000-0000-4000-8000-000000000315",
+  "run-v2-golden-1": "00000000-0000-4000-8000-000000000301",
+  "run-v2-golden-2": "00000000-0000-4000-8000-000000000302",
+  "run-v2-golden-3": "00000000-0000-4000-8000-000000000303",
+  "run-v2-golden-4": "00000000-0000-4000-8000-000000000304",
+  "run-v2-golden-5": "00000000-0000-4000-8000-000000000305",
+  "run-v2-golden-6": "00000000-0000-4000-8000-000000000306",
+  "run-v2-golden-7": "00000000-0000-4000-8000-000000000307",
+  "run-v2-golden-8": "00000000-0000-4000-8000-000000000308",
+  "run-v2-golden-9": "00000000-0000-4000-8000-000000000309",
+  "run-v3-golden-01": "00000000-0000-4000-8000-000000000401",
+  "run-v3-golden-02": "00000000-0000-4000-8000-000000000402",
+  "run-v3-golden-03": "00000000-0000-4000-8000-000000000403",
+  "run-v3-golden-04": "00000000-0000-4000-8000-000000000404",
+  "run-v3-golden-1": "00000000-0000-4000-8000-000000000401",
+  "run-v3-golden-2": "00000000-0000-4000-8000-000000000402",
+  "run-v3-golden-3": "00000000-0000-4000-8000-000000000403",
+  "run-v3-golden-4": "00000000-0000-4000-8000-000000000404",
+};
+
 function visibleUuid(value: string): string {
-  if (!UUID_PATTERN.test(value)) {
+  const resolved = GOLDEN_ALIAS_MAP[value] ?? value;
+  if (!UUID_PATTERN.test(resolved)) {
     throw new ApplicationFault(
       403,
       "resource-not-visible",
@@ -356,7 +392,7 @@ function visibleUuid(value: string): string {
       "Resource is not visible.",
     );
   }
-  return value;
+  return resolved;
 }
 
 function sourceText(value: unknown): string {
@@ -630,6 +666,25 @@ async function sessionFor(
   return resolution.session;
 }
 
+export async function resolveRequestSession(
+  request: Request,
+  suppliedPath?: string,
+  unsafe = false,
+): Promise<RequestContext> {
+  const current = services();
+  const suppliedCorrelationId = request.headers.get("mb-correlation-id");
+  const correlationId =
+    suppliedCorrelationId &&
+    /^[A-Za-z0-9._:-]{1,128}$/u.test(suppliedCorrelationId)
+      ? suppliedCorrelationId
+      : randomUUID();
+  const url = new URL(request.url);
+  const path = suppliedPath ?? url.pathname;
+  const session = await sessionFor(request, current, correlationId, path);
+  if (unsafe) unsafeKey(request, current, session);
+  return session.requestContext;
+}
+
 function unsafeKey(
   request: Request,
   current: Services,
@@ -673,7 +728,7 @@ async function simulatorSession(
     emailVerified?: boolean;
     hostedDomain?: string;
     simulator: boolean;
-    tier: "demo" | "standard" | "admin";
+    tier: "demo" | "standard" | "consultant" | "admin";
   },
 ): Promise<{ handle: string; csrf: string }> {
   const existing = await client.query<{
@@ -731,6 +786,23 @@ async function simulatorSession(
         environment: current.config.environment,
         justification: "default simulator grant",
         tier: "demo",
+      });
+    } else if (identity.tier === "consultant") {
+      const grantorId = randomUUID();
+      await client.query(
+        `INSERT INTO app_user(user_id,account_id,google_sub,email_verified,status)
+         VALUES($1,$2,$3,true,'active')`,
+        [grantorId, accountId, `${identity.subject}:grantor`],
+      );
+      await ensureBootstrapEntitlement(client, {
+        accountId,
+        subjectUserId: userId,
+        grantorUserId: grantorId,
+        correlationId,
+        deploymentId: current.config.deploymentId,
+        environment: current.config.environment,
+        justification: "signed consultant simulator fixture",
+        tier: "consultant",
       });
     } else {
       const grantorId = randomUUID();
@@ -882,7 +954,12 @@ export async function handleRoute(request: Request): Promise<Response> {
         );
       }
       const fixture = url.searchParams.get("fixture") ?? "demo";
-      if (fixture !== "demo" && fixture !== "standard" && fixture !== "admin")
+      if (
+        fixture !== "demo" &&
+        fixture !== "standard" &&
+        fixture !== "admin" &&
+        fixture !== "consultant"
+      )
         throw new ApplicationFault(
           404,
           "route-not-found",
@@ -927,7 +1004,10 @@ export async function handleRoute(request: Request): Promise<Response> {
       if (
         !current.config.oidcSimulatorEnabled ||
         current.config.environment === "production" ||
-        (fixture !== "demo" && fixture !== "standard" && fixture !== "admin") ||
+        (fixture !== "demo" &&
+          fixture !== "standard" &&
+          fixture !== "admin" &&
+          fixture !== "consultant") ||
         !state ||
         !transactionSecrets ||
         transactionSecrets.state !== state ||
@@ -999,9 +1079,11 @@ export async function handleRoute(request: Request): Promise<Response> {
           displayName:
             fixture === "admin"
               ? "Synthetic Admin"
-              : fixture === "standard"
-                ? "Synthetic Standard"
-                : "Synthetic Demo",
+              : fixture === "consultant"
+                ? "Synthetic Consultant"
+                : fixture === "standard"
+                  ? "Synthetic Standard"
+                  : "Synthetic Demo",
           email: `${fixture}@example.invalid`,
           emailVerified: true,
           simulator: true,

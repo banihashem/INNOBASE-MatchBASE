@@ -1,5 +1,8 @@
-import type { RefObject } from "react";
-import type { ConsultantResearchOutputV2 } from "@matchbase/contracts";
+import { useState, type RefObject } from "react";
+import {
+  type ConsultantResearchOutputV2,
+  CANONICAL_MATCH_DIMENSIONS_V2,
+} from "@matchbase/contracts";
 import type { ResultArtifactDownload } from "./ConsultantResult";
 
 export function ConsultantResearchOutputView({
@@ -13,6 +16,9 @@ export function ConsultantResearchOutputView({
   headingRef?: RefObject<HTMLHeadingElement | null> | undefined;
   artifactDownload?: ResultArtifactDownload | null | undefined;
 }) {
+  const [isPdfDownloading, setIsPdfDownloading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
   const {
     result_id,
     run_id,
@@ -30,6 +36,51 @@ export function ConsultantResearchOutputView({
     limitations,
     decision_support,
   } = result;
+
+  const targetRunId = artifactDownload?.run_id || run_id;
+
+  async function handleDownloadPdf() {
+    if (!targetRunId) return;
+    setIsPdfDownloading(true);
+    setPdfError(null);
+    try {
+      const downloadUrl =
+        artifactDownload?.href ||
+        `/api/v1/consultant/reports/${encodeURIComponent(targetRunId)}/pdf`;
+      const res = await fetch(downloadUrl, {
+        method: "GET",
+        headers: { Accept: "application/pdf" },
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        throw new Error(`PDF request returned HTTP ${res.status}`);
+      }
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/pdf")) {
+        throw new Error(`Expected application/pdf but received ${contentType}`);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition");
+      let filename = `MatchBASE_Consultant_Report_${targetRunId}.pdf`;
+      if (disposition && disposition.includes("filename=")) {
+        const match = disposition.match(/filename="?([^";]+)"?/i);
+        if (match?.[1]) filename = match[1];
+      }
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (err: any) {
+      console.error("PDF download failed:", err);
+      setPdfError(err?.message || "Failed to download PDF report");
+    } finally {
+      setIsPdfDownloading(false);
+    }
+  }
 
   const isNoMatch = research_status === "no_strong_match";
 
@@ -52,21 +103,58 @@ export function ConsultantResearchOutputView({
         <button className="secondary-action" onClick={onBack} type="button">
           &larr; Return to runs
         </button>
-        {artifactDownload ? (
-          <a
-            className="secondary-action"
-            href={artifactDownload.href}
-            download
-            data-matchbase-artifact-run-id={artifactDownload.run_id}
-            data-matchbase-artifact-version-id={
-              artifactDownload.artifact_version_id
-            }
-            data-matchbase-artifact-version={artifactDownload.version}
-            aria-label={`Download PDF report for run ${artifactDownload.run_id}`}
-            style={{ fontWeight: 600 }}
+        {targetRunId ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
           >
-            Download PDF report
-          </a>
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={isPdfDownloading}
+              data-matchbase-artifact-run-id={targetRunId}
+              data-matchbase-artifact-version-id={
+                artifactDownload?.artifact_version_id || `${targetRunId}-v1`
+              }
+              data-matchbase-artifact-version={artifactDownload?.version ?? 1}
+              aria-label={`Download PDF report for run ${targetRunId}`}
+              style={{
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                cursor: isPdfDownloading ? "wait" : "pointer",
+              }}
+            >
+              {isPdfDownloading ? (
+                <>
+                  <span
+                    className="spinner"
+                    aria-hidden="true"
+                    style={{
+                      display: "inline-block",
+                      animation: "spin 1s linear infinite",
+                    }}
+                  >
+                    ⏳
+                  </span>
+                  <span>Downloading PDF...</span>
+                </>
+              ) : (
+                <span>Download Full PDF Report</span>
+              )}
+            </button>
+            {pdfError && (
+              <span style={{ color: "#f87171", fontSize: "0.8rem" }}>
+                {pdfError}
+              </span>
+            )}
+          </div>
         ) : null}
       </div>
 
@@ -74,7 +162,7 @@ export function ConsultantResearchOutputView({
       <header
         style={{
           marginBottom: "2rem",
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: "1px solid #334155",
           paddingBottom: "1.5rem",
         }}
       >
@@ -93,17 +181,20 @@ export function ConsultantResearchOutputView({
               fontWeight: 700,
               letterSpacing: "0.05em",
               textTransform: "uppercase",
+              color: "#93c5fd",
             }}
           >
             Consultant Deep-Research Output V2
           </span>
           <span
+            className="badge-query-type"
             style={{
               background: "#e2e8f0",
+              color: "#0f172a",
               borderRadius: "4px",
               padding: "2px 8px",
               fontSize: "0.75rem",
-              fontWeight: 600,
+              fontWeight: 700,
             }}
           >
             {request_snapshot.primary_query_type.toUpperCase()}
@@ -111,11 +202,14 @@ export function ConsultantResearchOutputView({
           {request_snapshot.secondary_query_types.map((st) => (
             <span
               key={st}
+              className="badge-query-type"
               style={{
-                background: "#edf2f7",
+                background: "#e2e8f0",
+                color: "#0f172a",
                 borderRadius: "4px",
                 padding: "2px 8px",
                 fontSize: "0.75rem",
+                fontWeight: 600,
               }}
             >
               +{st}
@@ -126,30 +220,33 @@ export function ConsultantResearchOutputView({
               borderRadius: "4px",
               padding: "2px 8px",
               fontSize: "0.75rem",
-              fontWeight: 600,
+              fontWeight: 700,
               background:
                 research_status === "complete"
                   ? "#def7ec"
                   : research_status === "no_strong_match"
                     ? "#fde8e8"
-                    : "#fef08a",
+                    : "#fef3c7",
               color:
                 research_status === "complete"
                   ? "#03543f"
                   : research_status === "no_strong_match"
                     ? "#9b1c1c"
-                    : "#713f12",
+                    : "#78350f",
             }}
           >
-            STATUS: {research_status.replace(/_/g, " ").toUpperCase()}
+            {research_status === "insufficient_evidence"
+              ? "RESEARCH COVERAGE: INSUFFICIENT"
+              : `STATUS: ${research_status.replace(/_/g, " ").toUpperCase()}`}
           </span>
           <span
             style={{
-              background: "#f1f5f9",
+              background: "#1e293b",
               borderRadius: "4px",
               padding: "2px 8px",
               fontSize: "0.75rem",
-              color: "#64748b",
+              color: "#f8fafc",
+              fontWeight: 600,
             }}
           >
             MODE: {research_mode}
@@ -164,6 +261,7 @@ export function ConsultantResearchOutputView({
             fontWeight: 700,
             lineHeight: 1.3,
             marginBottom: "0.75rem",
+            color: "#f8fafc",
           }}
         >
           <bdi dir="auto">{executive_summary.headline}</bdi>
@@ -172,7 +270,7 @@ export function ConsultantResearchOutputView({
           className="lede"
           style={{
             fontSize: "1.1rem",
-            color: "#334155",
+            color: "#cbd5e1",
             lineHeight: 1.5,
             marginBottom: "1rem",
           }}
@@ -186,30 +284,72 @@ export function ConsultantResearchOutputView({
             display: "flex",
             gap: "1.5rem",
             fontSize: "0.85rem",
-            color: "#64748b",
+            color: "#cbd5e1",
             flexWrap: "wrap",
           }}
         >
           <span>
-            <strong>Result ID:</strong> {result_id}
+            <strong style={{ color: "#f8fafc" }}>Result ID:</strong> {result_id}
           </span>
           <span>
-            <strong>Run ID:</strong> {run_id}
+            <strong style={{ color: "#f8fafc" }}>Run ID:</strong> {run_id}
           </span>
           <span>
-            <strong>Generated:</strong>{" "}
+            <strong style={{ color: "#f8fafc" }}>Generated:</strong>{" "}
             {new Date(generated_at).toLocaleString()}
           </span>
           <span>
-            <strong>Product:</strong> {request_snapshot.product_name}
+            <strong style={{ color: "#f8fafc" }}>Product:</strong>{" "}
+            {request_snapshot.product_name}
           </span>
           {request_snapshot.geographic_scope ? (
             <span>
-              <strong>Scope:</strong> {request_snapshot.geographic_scope}
+              <strong style={{ color: "#f8fafc" }}>Scope:</strong>{" "}
+              {request_snapshot.geographic_scope}
             </span>
           ) : null}
         </div>
       </header>
+
+      {/* Insufficient Evidence Alert Notice (F08) */}
+      {research_status === "insufficient_evidence" ? (
+        <section
+          role="alert"
+          style={{
+            background: "#fffbeb",
+            border: "2px solid #fde68a",
+            borderRadius: "8px",
+            padding: "1.25rem 1.5rem",
+            marginBottom: "2rem",
+            color: "#92400e",
+          }}
+        >
+          <h2
+            style={{
+              color: "#78350f",
+              fontSize: "1.15rem",
+              margin: "0 0 0.5rem",
+              fontWeight: 700,
+            }}
+          >
+            Market coverage: Insufficient
+          </h2>
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.95rem",
+              lineHeight: 1.5,
+              color: "#92400e",
+            }}
+          >
+            <bdi dir="auto">
+              This candidate is supported by strong evidence, but the available
+              market coverage is too limited to conclude that the shortlist is
+              complete.
+            </bdi>
+          </p>
+        </section>
+      ) : null}
 
       {/* No-Match Alert Notice (First-Class State) */}
       {isNoMatch ? (
@@ -247,8 +387,10 @@ export function ConsultantResearchOutputView({
           </p>
           {result_modules.sourcing?.recommendations_summary ? (
             <div
+              className="surface-light-card"
               style={{
                 background: "#ffffff",
+                color: "#334155",
                 padding: "1rem",
                 borderRadius: "6px",
                 border: "1px solid #fbd5d5",
@@ -257,7 +399,7 @@ export function ConsultantResearchOutputView({
               <strong style={{ color: "#9b1c1c" }}>
                 Recommended Relaxation:{" "}
               </strong>
-              <span>
+              <span style={{ color: "#334155" }}>
                 <bdi dir="auto">
                   {result_modules.sourcing.recommendations_summary}
                 </bdi>
@@ -290,7 +432,12 @@ export function ConsultantResearchOutputView({
         >
           <h2
             id="executive-summary-heading"
-            style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}
+            style={{
+              margin: 0,
+              fontSize: "1.25rem",
+              fontWeight: 700,
+              color: "#0f172a",
+            }}
           >
             Executive Synthesis
           </h2>
@@ -311,6 +458,7 @@ export function ConsultantResearchOutputView({
             <span
               style={{
                 background: "#f1f5f9",
+                color: "#0f172a",
                 padding: "3px 10px",
                 borderRadius: "12px",
                 fontSize: "0.8rem",
@@ -343,8 +491,9 @@ export function ConsultantResearchOutputView({
           <div
             style={{
               fontSize: "0.85rem",
-              color: "#b45309",
+              color: "#78350f",
               background: "#fef3c7",
+              border: "1px solid #fde68a",
               padding: "0.75rem 1rem",
               borderRadius: "6px",
               marginTop: "0.75rem",
@@ -368,20 +517,25 @@ export function ConsultantResearchOutputView({
               fontSize: "1.35rem",
               fontWeight: 700,
               marginBottom: "1rem",
+              color: "#f8fafc",
             }}
           >
             Sourcing & Market Landscape
           </h2>
           <div
+            className="surface-light-card"
             style={{
               background: "#ffffff",
+              color: "#334155",
               border: "1px solid #e2e8f0",
               borderRadius: "8px",
               padding: "1.25rem",
               marginBottom: "1rem",
             }}
           >
-            <p style={{ margin: "0 0 1rem", lineHeight: 1.5 }}>
+            <p
+              style={{ margin: "0 0 1rem", lineHeight: 1.5, color: "#334155" }}
+            >
               <bdi dir="auto">
                 {result_modules.sourcing.market_landscape_summary}
               </bdi>
@@ -405,13 +559,20 @@ export function ConsultantResearchOutputView({
                 <div
                   style={{
                     fontSize: "0.75rem",
-                    color: "#64748b",
+                    color: "#475569",
                     textTransform: "uppercase",
+                    fontWeight: 600,
                   }}
                 >
                   Evaluated Suppliers
                 </div>
-                <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>
+                <div
+                  style={{
+                    fontSize: "1.5rem",
+                    fontWeight: 700,
+                    color: "#0f172a",
+                  }}
+                >
                   {result_modules.sourcing.evaluated_supplier_count}
                 </div>
               </div>
@@ -426,8 +587,9 @@ export function ConsultantResearchOutputView({
                 <div
                   style={{
                     fontSize: "0.75rem",
-                    color: "#64748b",
+                    color: "#475569",
                     textTransform: "uppercase",
+                    fontWeight: 600,
                   }}
                 >
                   Qualified Suppliers
@@ -436,7 +598,7 @@ export function ConsultantResearchOutputView({
                   style={{
                     fontSize: "1.5rem",
                     fontWeight: 700,
-                    color: "#059669",
+                    color: "#15803d",
                   }}
                 >
                   {result_modules.sourcing.qualified_supplier_count}
@@ -454,8 +616,9 @@ export function ConsultantResearchOutputView({
                   <div
                     style={{
                       fontSize: "0.75rem",
-                      color: "#64748b",
+                      color: "#475569",
                       textTransform: "uppercase",
+                      fontWeight: 600,
                     }}
                   >
                     Trade Lane
@@ -465,6 +628,7 @@ export function ConsultantResearchOutputView({
                       fontSize: "0.9rem",
                       fontWeight: 600,
                       marginTop: "4px",
+                      color: "#0f172a",
                     }}
                   >
                     {result_modules.sourcing.trade_lane_evaluated}
@@ -475,7 +639,7 @@ export function ConsultantResearchOutputView({
 
             {result_modules.sourcing.key_bottlenecks.length > 0 ? (
               <div style={{ marginBottom: "0.75rem" }}>
-                <strong style={{ fontSize: "0.85rem", color: "#64748b" }}>
+                <strong style={{ fontSize: "0.85rem", color: "#475569" }}>
                   Key Supply Bottlenecks:
                 </strong>
                 <ul
@@ -486,7 +650,7 @@ export function ConsultantResearchOutputView({
                   }}
                 >
                   {result_modules.sourcing.key_bottlenecks.map((b, i) => (
-                    <li key={i}>
+                    <li key={i} style={{ color: "#334155" }}>
                       <bdi dir="auto">{b}</bdi>
                     </li>
                   ))}
@@ -527,13 +691,16 @@ export function ConsultantResearchOutputView({
               fontSize: "1.35rem",
               fontWeight: 700,
               marginBottom: "1rem",
+              color: "#f8fafc",
             }}
           >
             Commercial Pricing & Benchmark Intelligence
           </h2>
           <div
+            className="surface-light-card"
             style={{
               background: "#ffffff",
+              color: "#334155",
               border: "1px solid #e2e8f0",
               borderRadius: "8px",
               padding: "1.25rem",
@@ -585,11 +752,15 @@ export function ConsultantResearchOutputView({
                     fontSize: "1rem",
                     fontWeight: 600,
                     marginBottom: "0.5rem",
+                    color: "#0f172a",
                   }}
                 >
                   Official Reference Benchmarks
                 </h3>
-                <div style={{ overflowX: "auto" }}>
+                <div
+                  className="table-responsive-container"
+                  style={{ overflowX: "auto" }}
+                >
                   <table
                     style={{
                       width: "100%",
@@ -600,16 +771,56 @@ export function ConsultantResearchOutputView({
                     <thead>
                       <tr
                         style={{
-                          background: "#f8fafc",
+                          background: "#f1f5f9",
                           textAlign: "left",
-                          borderBottom: "2px solid #e2e8f0",
+                          borderBottom: "2px solid #cbd5e1",
                         }}
                       >
-                        <th style={{ padding: "8px 12px" }}>Benchmark Index</th>
-                        <th style={{ padding: "8px 12px" }}>Price</th>
-                        <th style={{ padding: "8px 12px" }}>Unit</th>
-                        <th style={{ padding: "8px 12px" }}>Source</th>
-                        <th style={{ padding: "8px 12px" }}>As Of</th>
+                        <th
+                          style={{
+                            padding: "8px 12px",
+                            color: "#0f172a",
+                            fontWeight: 700,
+                          }}
+                        >
+                          Benchmark Index
+                        </th>
+                        <th
+                          style={{
+                            padding: "8px 12px",
+                            color: "#0f172a",
+                            fontWeight: 700,
+                          }}
+                        >
+                          Price
+                        </th>
+                        <th
+                          style={{
+                            padding: "8px 12px",
+                            color: "#0f172a",
+                            fontWeight: 700,
+                          }}
+                        >
+                          Unit
+                        </th>
+                        <th
+                          style={{
+                            padding: "8px 12px",
+                            color: "#0f172a",
+                            fontWeight: 700,
+                          }}
+                        >
+                          Source
+                        </th>
+                        <th
+                          style={{
+                            padding: "8px 12px",
+                            color: "#0f172a",
+                            fontWeight: 700,
+                          }}
+                        >
+                          As Of
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -618,23 +829,31 @@ export function ConsultantResearchOutputView({
                           key={idx}
                           style={{ borderBottom: "1px solid #e2e8f0" }}
                         >
-                          <td style={{ padding: "8px 12px", fontWeight: 600 }}>
+                          <td
+                            style={{
+                              padding: "8px 12px",
+                              fontWeight: 600,
+                              color: "#0f172a",
+                            }}
+                          >
                             {b.benchmark_name}
                           </td>
                           <td
                             style={{
                               padding: "8px 12px",
-                              color: "#059669",
+                              color: "#15803d",
                               fontWeight: 700,
                             }}
                           >
                             {b.currency} {b.benchmark_price.toLocaleString()}
                           </td>
-                          <td style={{ padding: "8px 12px" }}>{b.unit}</td>
-                          <td style={{ padding: "8px 12px", color: "#64748b" }}>
+                          <td style={{ padding: "8px 12px", color: "#334155" }}>
+                            {b.unit}
+                          </td>
+                          <td style={{ padding: "8px 12px", color: "#475569" }}>
                             {b.source}
                           </td>
-                          <td style={{ padding: "8px 12px", color: "#64748b" }}>
+                          <td style={{ padding: "8px 12px", color: "#475569" }}>
                             {b.as_of_date}
                           </td>
                         </tr>
@@ -653,6 +872,7 @@ export function ConsultantResearchOutputView({
                     fontSize: "1rem",
                     fontWeight: 600,
                     marginBottom: "0.75rem",
+                    color: "#0f172a",
                   }}
                 >
                   Observed Market Quotations
@@ -667,11 +887,13 @@ export function ConsultantResearchOutputView({
                   {result_modules.pricing.pricing_observations.map((obs) => (
                     <div
                       key={obs.observation_id}
+                      className="surface-light-card"
                       style={{
                         border: "1px solid #cbd5e1",
                         borderRadius: "6px",
                         padding: "1rem",
                         background: "#fafafa",
+                        color: "#334155",
                       }}
                     >
                       <div
@@ -685,7 +907,7 @@ export function ConsultantResearchOutputView({
                           style={{
                             fontSize: "0.75rem",
                             fontWeight: 700,
-                            color: "#64748b",
+                            color: "#475569",
                           }}
                         >
                           {obs.observation_id}
@@ -694,6 +916,8 @@ export function ConsultantResearchOutputView({
                           style={{
                             fontSize: "0.75rem",
                             background: "#e2e8f0",
+                            color: "#0f172a",
+                            fontWeight: 600,
                             padding: "1px 6px",
                             borderRadius: "4px",
                           }}
@@ -717,7 +941,7 @@ export function ConsultantResearchOutputView({
                         <span
                           style={{
                             fontSize: "0.85rem",
-                            color: "#64748b",
+                            color: "#475569",
                             fontWeight: 400,
                           }}
                         >
@@ -771,7 +995,7 @@ export function ConsultantResearchOutputView({
                   borderTop: "1px solid #f1f5f9",
                 }}
               >
-                <strong style={{ fontSize: "0.85rem", color: "#64748b" }}>
+                <strong style={{ fontSize: "0.85rem", color: "#475569" }}>
                   Key Price Drivers:{" "}
                 </strong>
                 {result_modules.pricing.price_factors.map((f, i) => (
@@ -780,6 +1004,7 @@ export function ConsultantResearchOutputView({
                     style={{
                       display: "inline-block",
                       background: "#f1f5f9",
+                      color: "#0f172a",
                       borderRadius: "4px",
                       padding: "2px 8px",
                       fontSize: "0.8rem",
@@ -807,19 +1032,24 @@ export function ConsultantResearchOutputView({
               fontSize: "1.35rem",
               fontWeight: 700,
               marginBottom: "1rem",
+              color: "#f8fafc",
             }}
           >
             Formulation & Product Recommendations
           </h2>
           <div
+            className="surface-light-card"
             style={{
               background: "#ffffff",
+              color: "#334155",
               border: "1px solid #e2e8f0",
               borderRadius: "8px",
               padding: "1.25rem",
             }}
           >
-            <p style={{ margin: "0 0 1rem", lineHeight: 1.5 }}>
+            <p
+              style={{ margin: "0 0 1rem", lineHeight: 1.5, color: "#334155" }}
+            >
               <bdi dir="auto">
                 {result_modules.product_recommendation.overview}
               </bdi>
@@ -835,11 +1065,13 @@ export function ConsultantResearchOutputView({
                 (rec) => (
                   <div
                     key={rec.product_id}
+                    className="surface-light-card"
                     style={{
                       border: "1px solid #cbd5e1",
                       borderRadius: "8px",
                       padding: "1.25rem",
                       background: "#fafafa",
+                      color: "#334155",
                     }}
                   >
                     <div
@@ -855,6 +1087,7 @@ export function ConsultantResearchOutputView({
                           margin: 0,
                           fontSize: "1.1rem",
                           fontWeight: 700,
+                          color: "#0f172a",
                         }}
                       >
                         <bdi dir="auto">{rec.product_name}</bdi>
@@ -877,7 +1110,7 @@ export function ConsultantResearchOutputView({
                     <div
                       style={{
                         fontSize: "0.85rem",
-                        color: "#64748b",
+                        color: "#475569",
                         marginBottom: "0.75rem",
                       }}
                     >
@@ -888,6 +1121,7 @@ export function ConsultantResearchOutputView({
                         fontSize: "0.9rem",
                         lineHeight: 1.4,
                         margin: "0 0 0.75rem",
+                        color: "#334155",
                       }}
                     >
                       <bdi dir="auto">{rec.description}</bdi>
@@ -899,6 +1133,7 @@ export function ConsultantResearchOutputView({
                         borderRadius: "6px",
                         fontSize: "0.85rem",
                         marginBottom: "0.75rem",
+                        color: "#334155",
                       }}
                     >
                       <strong>Use Case Fit: </strong>
@@ -907,7 +1142,7 @@ export function ConsultantResearchOutputView({
                     {rec.tradeoffs.length > 0 ? (
                       <div>
                         <strong
-                          style={{ fontSize: "0.8rem", color: "#64748b" }}
+                          style={{ fontSize: "0.8rem", color: "#475569" }}
                         >
                           Engineering Tradeoffs:
                         </strong>
@@ -947,13 +1182,16 @@ export function ConsultantResearchOutputView({
               fontSize: "1.35rem",
               fontWeight: 700,
               marginBottom: "1rem",
+              color: "#f8fafc",
             }}
           >
             Product Catalog & Technical Line Card
           </h2>
           <div
+            className="surface-light-card"
             style={{
               background: "#ffffff",
+              color: "#334155",
               border: "1px solid #e2e8f0",
               borderRadius: "8px",
               padding: "1.25rem",
@@ -966,10 +1204,16 @@ export function ConsultantResearchOutputView({
                 borderBottom: "1px solid #e2e8f0",
               }}
             >
-              <h3 style={{ margin: "0 0 0.25rem", fontSize: "1.1rem" }}>
+              <h3
+                style={{
+                  margin: "0 0 0.25rem",
+                  fontSize: "1.1rem",
+                  color: "#0f172a",
+                }}
+              >
                 {result_modules.product_catalog.catalog_name}
               </h3>
-              <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
+              <span style={{ fontSize: "0.85rem", color: "#475569" }}>
                 Supplier:{" "}
                 <strong>{result_modules.product_catalog.supplier_name}</strong>{" "}
                 ({result_modules.product_catalog.supplier_entity_id}) | As of:{" "}
@@ -977,7 +1221,10 @@ export function ConsultantResearchOutputView({
               </span>
             </div>
 
-            <div style={{ overflowX: "auto" }}>
+            <div
+              className="table-responsive-container"
+              style={{ overflowX: "auto" }}
+            >
               <table
                 style={{
                   width: "100%",
@@ -988,18 +1235,74 @@ export function ConsultantResearchOutputView({
                 <thead>
                   <tr
                     style={{
-                      background: "#f8fafc",
+                      background: "#f1f5f9",
                       textAlign: "left",
                       borderBottom: "2px solid #cbd5e1",
                     }}
                   >
-                    <th style={{ padding: "8px" }}>SKU / Model</th>
-                    <th style={{ padding: "8px" }}>Family</th>
-                    <th style={{ padding: "8px" }}>Variant Description</th>
-                    <th style={{ padding: "8px" }}>Certifications</th>
-                    <th style={{ padding: "8px" }}>MOQ</th>
-                    <th style={{ padding: "8px" }}>Pricing Ref</th>
-                    <th style={{ padding: "8px" }}>Status</th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        color: "#0f172a",
+                        fontWeight: 700,
+                      }}
+                    >
+                      SKU / Model
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        color: "#0f172a",
+                        fontWeight: 700,
+                      }}
+                    >
+                      Family
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        color: "#0f172a",
+                        fontWeight: 700,
+                      }}
+                    >
+                      Variant Description
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        color: "#0f172a",
+                        fontWeight: 700,
+                      }}
+                    >
+                      Certifications
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        color: "#0f172a",
+                        fontWeight: 700,
+                      }}
+                    >
+                      MOQ
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        color: "#0f172a",
+                        fontWeight: 700,
+                      }}
+                    >
+                      Pricing Ref
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        color: "#0f172a",
+                        fontWeight: 700,
+                      }}
+                    >
+                      Status
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1008,19 +1311,31 @@ export function ConsultantResearchOutputView({
                       key={line.line_id}
                       style={{ borderBottom: "1px solid #e2e8f0" }}
                     >
-                      <td style={{ padding: "8px", fontWeight: 700 }}>
-                        {line.sku_or_model}
-                      </td>
-                      <td style={{ padding: "8px" }}>{line.product_family}</td>
-                      <td style={{ padding: "8px" }}>{line.variant_name}</td>
-                      <td style={{ padding: "8px" }}>
-                        {line.certifications_held.join(", ")}
-                      </td>
-                      <td style={{ padding: "8px" }}>{line.moq ?? "N/A"}</td>
                       <td
                         style={{
                           padding: "8px",
-                          color: "#059669",
+                          fontWeight: 700,
+                          color: "#0f172a",
+                        }}
+                      >
+                        {line.sku_or_model}
+                      </td>
+                      <td style={{ padding: "8px", color: "#334155" }}>
+                        {line.product_family}
+                      </td>
+                      <td style={{ padding: "8px", color: "#334155" }}>
+                        {line.variant_name}
+                      </td>
+                      <td style={{ padding: "8px", color: "#334155" }}>
+                        {line.certifications_held.join(", ")}
+                      </td>
+                      <td style={{ padding: "8px", color: "#334155" }}>
+                        {line.moq ?? "N/A"}
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px",
+                          color: "#15803d",
                           fontWeight: 600,
                         }}
                       >
@@ -1033,6 +1348,11 @@ export function ConsultantResearchOutputView({
                               line.availability === "in_production"
                                 ? "#dcfce7"
                                 : "#fef3c7",
+                            color:
+                              line.availability === "in_production"
+                                ? "#14532d"
+                                : "#78350f",
+                            fontWeight: 600,
                             padding: "2px 6px",
                             borderRadius: "4px",
                             fontSize: "0.75rem",
@@ -1062,13 +1382,16 @@ export function ConsultantResearchOutputView({
               fontSize: "1.35rem",
               fontWeight: 700,
               marginBottom: "1rem",
+              color: "#f8fafc",
             }}
           >
             Macro Market Overview
           </h2>
           <div
+            className="surface-light-card"
             style={{
               background: "#ffffff",
+              color: "#334155",
               border: "1px solid #e2e8f0",
               borderRadius: "8px",
               padding: "1.25rem",
@@ -1080,6 +1403,7 @@ export function ConsultantResearchOutputView({
                 justifyContent: "space-between",
                 marginBottom: "1rem",
                 flexWrap: "wrap",
+                color: "#334155",
               }}
             >
               <div>
@@ -1089,9 +1413,11 @@ export function ConsultantResearchOutputView({
               <span
                 style={{
                   background: "#f1f5f9",
+                  color: "#0f172a",
                   padding: "2px 8px",
                   borderRadius: "4px",
                   fontSize: "0.8rem",
+                  fontWeight: 600,
                 }}
               >
                 Concentration:{" "}
@@ -1100,7 +1426,13 @@ export function ConsultantResearchOutputView({
                   .toUpperCase()}
               </span>
             </div>
-            <p style={{ lineHeight: 1.5, marginBottom: "1rem" }}>
+            <p
+              style={{
+                lineHeight: 1.5,
+                marginBottom: "1rem",
+                color: "#334155",
+              }}
+            >
               <bdi dir="auto">
                 {result_modules.market_overview.supply_structure_summary}
               </bdi>
@@ -1114,6 +1446,7 @@ export function ConsultantResearchOutputView({
                     fontSize: "0.95rem",
                     fontWeight: 600,
                     marginBottom: "0.5rem",
+                    color: "#0f172a",
                   }}
                 >
                   Key Trade Corridors
@@ -1136,7 +1469,13 @@ export function ConsultantResearchOutputView({
                           border: "1px solid #e2e8f0",
                         }}
                       >
-                        <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            fontSize: "0.9rem",
+                            color: "#0f172a",
+                          }}
+                        >
                           {flow.origin_country} &rarr;{" "}
                           {flow.destination_country}
                         </div>
@@ -1146,7 +1485,7 @@ export function ConsultantResearchOutputView({
                         <div
                           style={{
                             fontSize: "0.75rem",
-                            color: "#059669",
+                            color: "#15803d",
                             marginTop: "2px",
                           }}
                         >
@@ -1174,22 +1513,37 @@ export function ConsultantResearchOutputView({
               fontSize: "1.35rem",
               fontWeight: 700,
               marginBottom: "1rem",
+              color: "#f8fafc",
             }}
           >
             Regulatory & Process Architecture
           </h2>
           <div
+            className="surface-light-card"
             style={{
               background: "#ffffff",
+              color: "#334155",
               border: "1px solid #e2e8f0",
               borderRadius: "8px",
               padding: "1.25rem",
             }}
           >
-            <h3 style={{ margin: "0 0 0.5rem", fontSize: "1.15rem" }}>
+            <h3
+              style={{
+                margin: "0 0 0.5rem",
+                fontSize: "1.15rem",
+                color: "#0f172a",
+              }}
+            >
               <bdi dir="auto">{result_modules.general_info.topic_title}</bdi>
             </h3>
-            <p style={{ lineHeight: 1.5, marginBottom: "1.5rem" }}>
+            <p
+              style={{
+                lineHeight: 1.5,
+                marginBottom: "1.5rem",
+                color: "#334155",
+              }}
+            >
               <bdi dir="auto">{result_modules.general_info.topic_summary}</bdi>
             </p>
 
@@ -1201,6 +1555,7 @@ export function ConsultantResearchOutputView({
                     fontSize: "1rem",
                     fontWeight: 600,
                     marginBottom: "0.5rem",
+                    color: "#0f172a",
                   }}
                 >
                   Procedural Execution Roadmap
@@ -1210,7 +1565,11 @@ export function ConsultantResearchOutputView({
                     (step, idx) => (
                       <li
                         key={idx}
-                        style={{ marginBottom: "0.5rem", lineHeight: 1.4 }}
+                        style={{
+                          marginBottom: "0.5rem",
+                          lineHeight: 1.4,
+                          color: "#334155",
+                        }}
                       >
                         <bdi dir="auto">{step}</bdi>
                       </li>
@@ -1228,6 +1587,7 @@ export function ConsultantResearchOutputView({
                     fontSize: "1rem",
                     fontWeight: 600,
                     marginBottom: "0.5rem",
+                    color: "#0f172a",
                   }}
                 >
                   Governing Regulatory Standards
@@ -1253,10 +1613,16 @@ export function ConsultantResearchOutputView({
                         <div style={{ fontWeight: 700, color: "#1e40af" }}>
                           {std.standard_code}
                         </div>
-                        <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            fontSize: "0.9rem",
+                            color: "#0f172a",
+                          }}
+                        >
                           {std.title}
                         </div>
-                        <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                        <div style={{ fontSize: "0.8rem", color: "#475569" }}>
                           {std.issuing_body}
                         </div>
                         <p
@@ -1327,7 +1693,12 @@ export function ConsultantResearchOutputView({
           >
             <h2
               id="candidates-heading"
-              style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0 }}
+              style={{
+                fontSize: "1.4rem",
+                fontWeight: 700,
+                margin: 0,
+                color: "#f8fafc",
+              }}
             >
               Qualified Supplier Candidates ({supplier_candidates.length})
             </h2>
@@ -1348,8 +1719,10 @@ export function ConsultantResearchOutputView({
               return (
                 <article
                   key={cand.candidate_id}
+                  className="surface-light-card"
                   style={{
                     background: "#ffffff",
+                    color: "#334155",
                     border: "1px solid #cbd5e1",
                     borderRadius: "8px",
                     padding: "1.5rem",
@@ -1381,6 +1754,7 @@ export function ConsultantResearchOutputView({
                             margin: 0,
                             fontSize: "1.3rem",
                             fontWeight: 700,
+                            color: "#0f172a",
                           }}
                         >
                           <bdi dir="auto">{cand.legal_name}</bdi>
@@ -1388,6 +1762,7 @@ export function ConsultantResearchOutputView({
                         <span
                           style={{
                             background: "#e2e8f0",
+                            color: "#0f172a",
                             padding: "2px 6px",
                             borderRadius: "4px",
                             fontSize: "0.8rem",
@@ -1399,6 +1774,7 @@ export function ConsultantResearchOutputView({
                         <span
                           style={{
                             background: "#f1f5f9",
+                            color: "#0f172a",
                             padding: "2px 6px",
                             borderRadius: "4px",
                             fontSize: "0.75rem",
@@ -1425,8 +1801,26 @@ export function ConsultantResearchOutputView({
                           {cand.verification_status.replace(/_/g, " ")}
                         </span>
                       </div>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#475569",
+                          marginBottom: "0.25rem",
+                          display: "flex",
+                          gap: "0.5rem",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span>
+                          Candidate ID: <code>{cand.candidate_id}</code>
+                        </span>
+                        <span>&bull;</span>
+                        <span>
+                          Entity ID: <code>{cand.entity_id}</code>
+                        </span>
+                      </div>
                       {cand.brand_names.length > 0 ? (
-                        <div style={{ fontSize: "0.85rem", color: "#64748b" }}>
+                        <div style={{ fontSize: "0.85rem", color: "#475569" }}>
                           Brands: {cand.brand_names.join(", ")}
                         </div>
                       ) : null}
@@ -1444,7 +1838,7 @@ export function ConsultantResearchOutputView({
                         <div
                           style={{
                             fontSize: "0.75rem",
-                            color: "#64748b",
+                            color: "#475569",
                             textTransform: "uppercase",
                           }}
                         >
@@ -1456,7 +1850,7 @@ export function ConsultantResearchOutputView({
                             fontWeight: 800,
                             color:
                               cand.fit_assessment.compatibility_score >= 80
-                                ? "#059669"
+                                ? "#15803d"
                                 : "#d97706",
                           }}
                         >
@@ -1465,7 +1859,7 @@ export function ConsultantResearchOutputView({
                             style={{
                               fontSize: "0.9rem",
                               fontWeight: 400,
-                              color: "#64748b",
+                              color: "#475569",
                             }}
                           >
                             /100
@@ -1476,13 +1870,15 @@ export function ConsultantResearchOutputView({
                         <div
                           style={{
                             fontSize: "0.75rem",
-                            color: "#64748b",
+                            color: "#334155",
+                            fontWeight: 600,
                             textTransform: "uppercase",
                           }}
                         >
-                          Evidence
+                          Candidate Evidence
                         </div>
                         <span
+                          aria-label={`Candidate Evidence: ${cand.fit_assessment.evidence_confidence.toUpperCase()}`}
                           style={{
                             display: "inline-block",
                             padding: "2px 8px",
@@ -1498,11 +1894,11 @@ export function ConsultantResearchOutputView({
                                   : "#fee2e2",
                             color:
                               cand.fit_assessment.evidence_confidence === "high"
-                                ? "#166534"
+                                ? "#14532d"
                                 : cand.fit_assessment.evidence_confidence ===
                                     "medium"
-                                  ? "#92400e"
-                                  : "#991b1b",
+                                  ? "#78350f"
+                                  : "#7f1d1d",
                           }}
                         >
                           {cand.fit_assessment.evidence_confidence.toUpperCase()}
@@ -1549,6 +1945,117 @@ export function ConsultantResearchOutputView({
                     <bdi dir="auto">{cand.verification_summary}</bdi>
                   </p>
 
+                  {/* Canonical 6-Dimension Score Breakdown */}
+                  {cand.fit_assessment.dimension_scores &&
+                  Object.keys(cand.fit_assessment.dimension_scores).length >
+                    0 ? (
+                    <div
+                      style={{
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "6px",
+                        padding: "0.75rem 1rem",
+                        marginBottom: "1rem",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "0.85rem",
+                          fontWeight: 700,
+                          color: "#334155",
+                          marginBottom: "0.5rem",
+                        }}
+                      >
+                        Compatibility Dimension Breakdown (100% Weight Matrix)
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fit, minmax(200px, 1fr))",
+                          gap: "0.5rem 1rem",
+                        }}
+                      >
+                        {CANONICAL_MATCH_DIMENSIONS_V2.map((dim) => {
+                          const score =
+                            cand.fit_assessment.dimension_scores[
+                              dim.dimension_id
+                            ] ?? 0;
+                          const barColor =
+                            score >= 80
+                              ? "#15803d"
+                              : score >= 60
+                                ? "#d97706"
+                                : "#dc2626";
+                          return (
+                            <div
+                              key={dim.dimension_id}
+                              style={{
+                                background: "#ffffff",
+                                border: "1px solid #e2e8f0",
+                                borderRadius: "4px",
+                                padding: "0.5rem",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                  marginBottom: "0.25rem",
+                                }}
+                              >
+                                <span style={{ color: "#1e293b" }}>
+                                  {dim.label}
+                                </span>
+                                <span style={{ color: "#475569" }}>
+                                  {dim.weight}%
+                                </span>
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.5rem",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    flex: 1,
+                                    height: "6px",
+                                    background: "#e2e8f0",
+                                    borderRadius: "3px",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      width: `${Math.min(100, Math.max(0, score))}%`,
+                                      height: "100%",
+                                      background: barColor,
+                                    }}
+                                  />
+                                </div>
+                                <span
+                                  style={{
+                                    fontSize: "0.8rem",
+                                    fontWeight: 700,
+                                    color: barColor,
+                                    minWidth: "1.8rem",
+                                    textAlign: "right",
+                                  }}
+                                >
+                                  {score}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
                   {/* Positive Drivers & Limiting Gaps */}
                   <div
                     style={{
@@ -1570,7 +2077,7 @@ export function ConsultantResearchOutputView({
                         }}
                       >
                         {cand.fit_assessment.positive_drivers.map((d, i) => (
-                          <li key={i}>
+                          <li key={i} style={{ color: "#334155" }}>
                             <bdi dir="auto">{d}</bdi>
                           </li>
                         ))}
@@ -1588,7 +2095,7 @@ export function ConsultantResearchOutputView({
                         }}
                       >
                         {cand.fit_assessment.limiting_gaps.map((g, i) => (
-                          <li key={i}>
+                          <li key={i} style={{ color: "#334155" }}>
                             <bdi dir="auto">{g}</bdi>
                           </li>
                         ))}
@@ -1605,26 +2112,28 @@ export function ConsultantResearchOutputView({
                       gap: "0.75rem",
                       fontSize: "0.85rem",
                       background: "#f8fafc",
+                      color: "#334155",
                       padding: "0.75rem",
                       borderRadius: "6px",
                       marginBottom: "1rem",
                     }}
                   >
                     <div>
-                      <strong>MOQ:</strong> {cand.moq.value} {cand.moq.unit} (
+                      <strong style={{ color: "#0f172a" }}>MOQ:</strong>{" "}
+                      {cand.moq.value} {cand.moq.unit} (
                       {cand.moq.description ?? "standard"})
                     </div>
                     <div>
-                      <strong>Capacity:</strong>{" "}
+                      <strong style={{ color: "#0f172a" }}>Capacity:</strong>{" "}
                       {cand.capacity.volume.toLocaleString()}{" "}
                       {cand.capacity.unit} / {cand.capacity.annual_or_monthly}
                     </div>
                     <div>
-                      <strong>Incoterms:</strong>{" "}
+                      <strong style={{ color: "#0f172a" }}>Incoterms:</strong>{" "}
                       {cand.logistics.supported_incoterms.join(", ")}
                     </div>
                     <div>
-                      <strong>Ports:</strong>{" "}
+                      <strong style={{ color: "#0f172a" }}>Ports:</strong>{" "}
                       {cand.logistics.primary_shipping_ports.join(", ") ||
                         "Standard"}
                     </div>
@@ -1656,6 +2165,7 @@ export function ConsultantResearchOutputView({
               fontSize: "1.35rem",
               fontWeight: 700,
               marginBottom: "1rem",
+              color: "#f8fafc",
             }}
           >
             Evidence & Fact Traceability
@@ -1669,6 +2179,7 @@ export function ConsultantResearchOutputView({
                   fontSize: "1rem",
                   fontWeight: 600,
                   marginBottom: "0.5rem",
+                  color: "#f8fafc",
                 }}
               >
                 Attributed Research Claims
@@ -1705,7 +2216,7 @@ export function ConsultantResearchOutputView({
                         style={{
                           fontSize: "0.75rem",
                           fontWeight: 700,
-                          color: "#64748b",
+                          color: "#475569",
                         }}
                       >
                         {claim.claim_id} ({claim.claim_type})
@@ -1715,6 +2226,7 @@ export function ConsultantResearchOutputView({
                           style={{
                             fontSize: "0.75rem",
                             background: "#f1f5f9",
+                            color: "#0f172a",
                             padding: "1px 6px",
                             borderRadius: "4px",
                           }}
@@ -1742,7 +2254,12 @@ export function ConsultantResearchOutputView({
                       </div>
                     </div>
                     <p
-                      style={{ margin: 0, fontSize: "0.9rem", lineHeight: 1.4 }}
+                      style={{
+                        margin: 0,
+                        fontSize: "0.9rem",
+                        lineHeight: 1.4,
+                        color: "#1e293b",
+                      }}
                     >
                       <bdi dir="auto">{claim.claim_text}</bdi>
                     </p>
@@ -1751,7 +2268,7 @@ export function ConsultantResearchOutputView({
                         style={{
                           marginTop: "0.25rem",
                           fontSize: "0.75rem",
-                          color: "#64748b",
+                          color: "#475569",
                         }}
                       >
                         Supported by: {claim.evidence_ids.join(", ")}
@@ -1771,6 +2288,7 @@ export function ConsultantResearchOutputView({
                   fontSize: "1rem",
                   fontWeight: 600,
                   marginBottom: "0.5rem",
+                  color: "#f8fafc",
                 }}
               >
                 Cited Primary Sources & Excerpts
@@ -1817,6 +2335,8 @@ export function ConsultantResearchOutputView({
                         style={{
                           fontSize: "0.75rem",
                           background: "#e2e8f0",
+                          color: "#0f172a",
+                          fontWeight: 600,
                           padding: "1px 6px",
                           borderRadius: "4px",
                         }}
@@ -1827,7 +2347,7 @@ export function ConsultantResearchOutputView({
                     <div
                       style={{
                         fontSize: "0.8rem",
-                        color: "#64748b",
+                        color: "#475569",
                         marginBottom: "0.5rem",
                       }}
                     >
@@ -1870,6 +2390,7 @@ export function ConsultantResearchOutputView({
               fontSize: "1.35rem",
               fontWeight: 700,
               marginBottom: "1rem",
+              color: "#f8fafc",
             }}
           >
             Disclosed Unknowns, Assumptions & Boundary Limitations
@@ -1911,6 +2432,8 @@ export function ConsultantResearchOutputView({
                     style={{
                       fontSize: "0.75rem",
                       background: "#fef3c7",
+                      color: "#78350f",
+                      fontWeight: 600,
                       padding: "1px 6px",
                       borderRadius: "4px",
                     }}
@@ -1964,6 +2487,8 @@ export function ConsultantResearchOutputView({
                     style={{
                       fontSize: "0.75rem",
                       background: "#ede9fe",
+                      color: "#5b21b6",
+                      fontWeight: 600,
                       padding: "1px 6px",
                       borderRadius: "4px",
                     }}
@@ -2004,13 +2529,21 @@ export function ConsultantResearchOutputView({
                     marginBottom: "0.25rem",
                   }}
                 >
-                  <span style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                  <span
+                    style={{
+                      fontWeight: 700,
+                      fontSize: "0.85rem",
+                      color: "#0f172a",
+                    }}
+                  >
                     {lim.title}
                   </span>
                   <span
                     style={{
                       fontSize: "0.75rem",
                       background: "#e2e8f0",
+                      color: "#0f172a",
+                      fontWeight: 600,
                       padding: "1px 6px",
                       borderRadius: "4px",
                     }}
@@ -2026,6 +2559,96 @@ export function ConsultantResearchOutputView({
           </div>
         </section>
       ) : null}
+
+      {/* Secondary / Advanced Data Export Section (F03) */}
+      <section
+        style={{
+          marginTop: "2rem",
+          marginBottom: "1rem",
+          background: "#f8fafc",
+          border: "1px solid #cbd5e1",
+          borderRadius: "8px",
+          padding: "1rem 1.25rem",
+        }}
+      >
+        <details>
+          <summary
+            style={{
+              fontWeight: 600,
+              fontSize: "0.95rem",
+              color: "#0f172a",
+              cursor: "pointer",
+              userSelect: "none",
+            }}
+          >
+            Technical Details & Data Export
+          </summary>
+          <div
+            style={{
+              marginTop: "1rem",
+              paddingTop: "1rem",
+              borderTop: "1px solid #e2e8f0",
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.75rem",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "1rem",
+              }}
+            >
+              <div>
+                <button
+                  className="secondary-action"
+                  type="button"
+                  onClick={() => {
+                    const dataStr =
+                      "data:text/json;charset=utf-8," +
+                      encodeURIComponent(JSON.stringify(result, null, 2));
+                    const downloadAnchor = document.createElement("a");
+                    downloadAnchor.setAttribute("href", dataStr);
+                    downloadAnchor.setAttribute(
+                      "download",
+                      `consultant-v2-${result.run_id}.json`,
+                    );
+                    document.body.appendChild(downloadAnchor);
+                    downloadAnchor.click();
+                    downloadAnchor.remove();
+                  }}
+                  aria-label="Export structured data (JSON)"
+                  style={{
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                  }}
+                >
+                  Export structured data (JSON)
+                </button>
+              </div>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "0.85rem",
+                  color: "#475569",
+                  fontStyle: "italic",
+                }}
+              >
+                Demonstration dataset — not live market evidence
+              </p>
+            </div>
+            <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+              <span>Schema: {result.schema_version}</span> &bull;{" "}
+              <span>Run ID: {result.run_id}</span>
+            </div>
+          </div>
+        </details>
+      </section>
 
       {/* DECISION SUPPORT / ADVISORY BOUNDARY */}
       <footer
@@ -2134,7 +2757,7 @@ export function ConsultantResearchOutputView({
             onClick={onBack}
             type="button"
             style={{
-              background: "#3b82f6",
+              background: "#1d4ed8",
               color: "#ffffff",
               border: "none",
               borderRadius: "6px",

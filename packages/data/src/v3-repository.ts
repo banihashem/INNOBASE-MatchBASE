@@ -1,0 +1,1170 @@
+import { createHash, randomUUID } from "node:crypto";
+import type { Queryable } from "./database.js";
+import type {
+  ConsultantResearchOutputV3,
+  ProductClassificationRecord,
+  SupplierEntityV3,
+} from "@matchbase/contracts";
+
+export interface SaveConsultantOutputV3Params {
+  readonly account_id: string;
+  readonly output: ConsultantResearchOutputV3;
+}
+
+export interface SavePdfReportLedgerParams {
+  readonly account_id: string;
+  readonly run_id: string;
+  readonly output_id: string;
+  readonly filename: string;
+  readonly pdf_bytes: Buffer;
+  readonly page_count: number;
+}
+
+export interface PdfReportLedgerRow {
+  readonly report_id: string;
+  readonly account_id: string;
+  readonly run_id: string;
+  readonly output_id: string;
+  readonly filename: string;
+  readonly pdf_sha256: Buffer;
+  readonly file_size_bytes: number;
+  readonly page_count: number;
+  readonly landscape_orientation: boolean;
+  readonly generated_at: string;
+}
+
+export async function saveProductClassification(
+  db: Queryable,
+  accountId: string,
+  record: ProductClassificationRecord,
+): Promise<void> {
+  await db.query(
+    `INSERT INTO product_classification (
+      classification_id,
+      account_id,
+      scheme,
+      code,
+      version,
+      jurisdiction,
+      level,
+      label,
+      description,
+      confidence,
+      assigned_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    ON CONFLICT (classification_id)
+    DO UPDATE SET
+      label = EXCLUDED.label,
+      description = EXCLUDED.description,
+      confidence = EXCLUDED.confidence,
+      assigned_at = EXCLUDED.assigned_at;`,
+    [
+      record.classification_id,
+      accountId,
+      record.scheme,
+      record.code,
+      record.version,
+      record.jurisdiction ?? null,
+      record.level,
+      record.label,
+      record.description,
+      record.confidence,
+      record.assigned_at,
+    ],
+  );
+}
+
+export async function saveConsultantResearchExecution(
+  db: Queryable,
+  accountId: string,
+  output: ConsultantResearchOutputV3,
+): Promise<void> {
+  const telemetry = output.telemetry;
+  await db.query(
+    `INSERT INTO consultant_research_execution (
+      execution_id,
+      account_id,
+      run_id,
+      user_profile_id,
+      classification_id,
+      lanes_executed,
+      verification_loops_count,
+      total_input_tokens,
+      total_output_tokens,
+      total_cost_usd,
+      execution_latency_ms,
+      synthesis_model_id,
+      status,
+      started_at,
+      completed_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    ON CONFLICT (execution_id)
+    DO UPDATE SET
+      total_input_tokens = EXCLUDED.total_input_tokens,
+      total_output_tokens = EXCLUDED.total_output_tokens,
+      total_cost_usd = EXCLUDED.total_cost_usd,
+      execution_latency_ms = EXCLUDED.execution_latency_ms,
+      status = EXCLUDED.status,
+      completed_at = EXCLUDED.completed_at;`,
+    [
+      output.execution_id,
+      accountId,
+      output.research_run_id,
+      output.user_profile_id,
+      output.classification_id,
+      telemetry.lanes_executed,
+      telemetry.verification_loops_count,
+      telemetry.total_input_tokens,
+      telemetry.total_output_tokens,
+      telemetry.total_cost_usd,
+      telemetry.execution_latency_ms,
+      telemetry.synthesis_model_id,
+      "completed",
+      telemetry.executed_at,
+      output.generated_at,
+    ],
+  );
+}
+
+export async function saveConsultantOutputV3(
+  db: Queryable,
+  params: SaveConsultantOutputV3Params,
+): Promise<void> {
+  const { account_id, output } = params;
+
+  // 1. Ensure classification exists
+  await saveProductClassification(
+    db,
+    account_id,
+    output.primary_classification,
+  );
+
+  // 2. Ensure execution record exists
+  await saveConsultantResearchExecution(db, account_id, output);
+
+  // 3. Save primary consultant_output_v3 document
+  const payloadJson = JSON.stringify(output);
+  const docSha256 = createHash("sha256").update(payloadJson, "utf8").digest();
+
+  await db.query(
+    `INSERT INTO consultant_output_v3 (
+      output_id,
+      account_id,
+      run_id,
+      execution_id,
+      classification_id,
+      user_profile_id,
+      schema_version,
+      schema_contract_version,
+      title,
+      subtitle,
+      generated_at,
+      as_of_date,
+      research_mode,
+      research_status,
+      target_candidates_count,
+      total_candidates_found,
+      document_payload,
+      document_sha256
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+    ON CONFLICT (account_id, run_id)
+    DO UPDATE SET
+      execution_id = EXCLUDED.execution_id,
+      classification_id = EXCLUDED.classification_id,
+      user_profile_id = EXCLUDED.user_profile_id,
+      generated_at = EXCLUDED.generated_at,
+      as_of_date = EXCLUDED.as_of_date,
+      research_mode = EXCLUDED.research_mode,
+      research_status = EXCLUDED.research_status,
+      title = EXCLUDED.title,
+      subtitle = EXCLUDED.subtitle,
+      document_payload = EXCLUDED.document_payload,
+      document_sha256 = EXCLUDED.document_sha256,
+      total_candidates_found = EXCLUDED.total_candidates_found;`,
+    [
+      output.research_run_id, // using run_id as output_id for 1:1 mapping
+      account_id,
+      output.research_run_id,
+      output.execution_id,
+      output.classification_id,
+      output.user_profile_id,
+      output.schema_version,
+      output.schema_contract_version,
+      output.title,
+      output.subtitle ?? null,
+      output.generated_at,
+      output.as_of_date,
+      output.research_mode,
+      output.research_status,
+      output.target_candidates_count,
+      output.total_candidates_found,
+      payloadJson,
+      docSha256,
+    ],
+  );
+
+  // 4. Save individual supplier entities for fast querying / filtering
+  await db.query(
+    `DELETE FROM consultant_supplier_entity_v3 WHERE account_id=$1 AND run_id=$2
+    AND NOT (candidate_id = ANY($3::text[]))`,
+    [
+      account_id,
+      output.research_run_id,
+      output.supplier_candidates.map((supplier) => supplier.candidate_id),
+    ],
+  );
+  for (const supp of output.supplier_candidates) {
+    await db.query(
+      `INSERT INTO consultant_supplier_entity_v3 (
+        entity_id,
+        account_id,
+        run_id,
+        candidate_id,
+        legal_name,
+        trading_name,
+        brand_names,
+        aliases,
+        parent_entity_id,
+        supplier_type,
+        manufacturer_status,
+        country_of_registration,
+        headquarters_address,
+        website,
+        primary_domain,
+        rank,
+        compatibility_score,
+        fit_band,
+        evidence_confidence,
+        identity_confidence,
+        data_completeness,
+        raw_entity_json
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+      ON CONFLICT (account_id, run_id, candidate_id)
+      DO UPDATE SET
+        legal_name = EXCLUDED.legal_name,
+        trading_name = EXCLUDED.trading_name,
+        rank = EXCLUDED.rank,
+        compatibility_score = EXCLUDED.compatibility_score,
+        fit_band = EXCLUDED.fit_band,
+        data_completeness = EXCLUDED.data_completeness,
+        raw_entity_json = EXCLUDED.raw_entity_json;`,
+      [
+        randomUUID(),
+        account_id,
+        output.research_run_id,
+        supp.candidate_id,
+        supp.legal_name,
+        supp.trading_name ?? null,
+        supp.brand_names,
+        supp.aliases,
+        supp.parent_entity_id ?? null,
+        supp.supplier_type,
+        supp.manufacturer_status,
+        supp.country_of_registration,
+        supp.headquarters_address,
+        supp.website,
+        supp.primary_domain,
+        supp.assessment.rank,
+        supp.assessment.compatibility_score,
+        supp.assessment.fit_band,
+        supp.assessment.evidence_confidence,
+        supp.assessment.identity_confidence,
+        supp.assessment.data_completeness,
+        JSON.stringify(supp),
+      ],
+    );
+  }
+}
+
+export async function getConsultantOutputV3ByRunId(
+  db: Queryable,
+  accountId: string,
+  runId: string,
+): Promise<ConsultantResearchOutputV3 | null> {
+  const result = await db.query<{
+    document_payload: string | Record<string, unknown>;
+  }>(
+    `SELECT document_payload
+     FROM consultant_output_v3
+     WHERE account_id = $1 AND run_id = $2;`,
+    [accountId, runId],
+  );
+  if (result.rows.length === 0) return null;
+  const payload = result.rows[0]!.document_payload;
+  if (typeof payload === "string") {
+    return JSON.parse(payload) as ConsultantResearchOutputV3;
+  }
+  return payload as unknown as ConsultantResearchOutputV3;
+}
+
+export async function getConsultantSupplierEntitiesV3(
+  db: Queryable,
+  accountId: string,
+  runId: string,
+): Promise<readonly SupplierEntityV3[]> {
+  const result = await db.query<{
+    raw_entity_json: string | Record<string, unknown>;
+  }>(
+    `SELECT raw_entity_json
+     FROM consultant_supplier_entity_v3
+     WHERE account_id = $1 AND run_id = $2
+     ORDER BY rank ASC;`,
+    [accountId, runId],
+  );
+  return result.rows.map((row) => {
+    if (typeof row.raw_entity_json === "string") {
+      return JSON.parse(row.raw_entity_json) as SupplierEntityV3;
+    }
+    return row.raw_entity_json as unknown as SupplierEntityV3;
+  });
+}
+
+export async function savePdfReportLedger(
+  db: Queryable,
+  params: SavePdfReportLedgerParams,
+): Promise<PdfReportLedgerRow> {
+  const { account_id, run_id, output_id, filename, pdf_bytes, page_count } =
+    params;
+  const report_id = output_id;
+  const pdf_sha256 = createHash("sha256").update(pdf_bytes).digest();
+  const file_size_bytes = pdf_bytes.length;
+
+  const res = await db.query<PdfReportLedgerRow>(
+    `INSERT INTO consultant_pdf_report_ledger (
+      report_id,
+      account_id,
+      run_id,
+      output_id,
+      filename,
+      pdf_sha256,
+      file_size_bytes,
+      page_count,
+      landscape_orientation
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+    ON CONFLICT (account_id, run_id)
+    DO UPDATE SET
+      filename = EXCLUDED.filename,
+      pdf_sha256 = EXCLUDED.pdf_sha256,
+      file_size_bytes = EXCLUDED.file_size_bytes,
+      page_count = EXCLUDED.page_count,
+      generated_at = clock_timestamp()
+    RETURNING *;`,
+    [
+      report_id,
+      account_id,
+      run_id,
+      output_id,
+      filename,
+      pdf_sha256,
+      file_size_bytes,
+      page_count,
+    ],
+  );
+
+  return res.rows[0]!;
+}
+
+export async function getPdfReportLedgerByRunId(
+  db: Queryable,
+  accountId: string,
+  runId: string,
+): Promise<PdfReportLedgerRow | null> {
+  const res = await db.query<PdfReportLedgerRow>(
+    `SELECT * FROM consultant_pdf_report_ledger WHERE account_id = $1 AND run_id = $2;`,
+    [accountId, runId],
+  );
+  return res.rows[0] ?? null;
+}
+
+export interface ConsultantWorkflowSessionRecord {
+  readonly session_id: string;
+  readonly account_id: string;
+  readonly run_id: string;
+  readonly user_profile_id: string;
+  readonly current_state: string;
+  readonly original_intake: Record<string, unknown>;
+  readonly draft_revision?: Record<string, unknown> | null;
+  readonly approved_request_revision?: Record<string, unknown> | null;
+  readonly advisory_output?: Record<string, unknown> | null;
+  readonly advisory_loop_records?: readonly Record<string, unknown>[] | null;
+  readonly deep_prompt_revision?: Record<string, unknown> | null;
+  readonly approvals?: readonly Record<string, unknown>[];
+  readonly classification?: Record<string, unknown> | null;
+  readonly execution_id?: string | null;
+  readonly last_checkpoint?: string | null;
+  readonly workflow_metadata?: Record<string, unknown>;
+  readonly is_invalidated?: boolean;
+  readonly invalidation_reason?: string | null;
+  readonly created_at?: string;
+  readonly updated_at?: string;
+}
+
+export async function saveConsultantWorkflowSession(
+  db: Queryable,
+  session: ConsultantWorkflowSessionRecord,
+): Promise<void> {
+  await db.query(
+    `INSERT INTO consultant_workflow_session (
+      session_id,
+      account_id,
+      run_id,
+      user_profile_id,
+      current_state,
+      original_intake,
+      draft_revision,
+      approved_request_revision,
+      advisory_output,
+      advisory_loop_records,
+      deep_prompt_revision,
+      approvals,
+      classification,
+      execution_id,
+      last_checkpoint,
+      is_invalidated,
+      invalidation_reason,
+      workflow_metadata,
+      updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, clock_timestamp())
+    ON CONFLICT (account_id, run_id)
+    DO UPDATE SET
+      current_state = EXCLUDED.current_state,
+      draft_revision = EXCLUDED.draft_revision,
+      approved_request_revision = EXCLUDED.approved_request_revision,
+      advisory_output = EXCLUDED.advisory_output,
+      advisory_loop_records = EXCLUDED.advisory_loop_records,
+      deep_prompt_revision = EXCLUDED.deep_prompt_revision,
+      approvals = EXCLUDED.approvals,
+      classification = EXCLUDED.classification,
+      execution_id = EXCLUDED.execution_id,
+      last_checkpoint = EXCLUDED.last_checkpoint,
+      is_invalidated = EXCLUDED.is_invalidated,
+      invalidation_reason = EXCLUDED.invalidation_reason,
+      workflow_metadata = EXCLUDED.workflow_metadata,
+      updated_at = clock_timestamp()
+    WHERE NOT consultant_workflow_session.is_invalidated
+      AND NOT (consultant_workflow_session.execution_id=EXCLUDED.execution_id
+        AND consultant_workflow_session.last_checkpoint IS NOT DISTINCT FROM 'user_cancelled')
+      AND NOT EXISTS (SELECT 1 FROM consultant_workflow_job j
+        WHERE j.account_id=EXCLUDED.account_id AND j.run_id=EXCLUDED.run_id
+          AND j.execution_id=EXCLUDED.execution_id AND j.error_code='user-cancelled');`,
+    [
+      session.session_id,
+      session.account_id,
+      session.run_id,
+      session.user_profile_id,
+      session.current_state,
+      JSON.stringify(session.original_intake),
+      session.draft_revision ? JSON.stringify(session.draft_revision) : null,
+      session.approved_request_revision
+        ? JSON.stringify(session.approved_request_revision)
+        : null,
+      session.advisory_output ? JSON.stringify(session.advisory_output) : null,
+      session.advisory_loop_records
+        ? JSON.stringify(session.advisory_loop_records)
+        : null,
+      session.deep_prompt_revision
+        ? JSON.stringify(session.deep_prompt_revision)
+        : null,
+      JSON.stringify(session.approvals ?? []),
+      session.classification ? JSON.stringify(session.classification) : null,
+      session.execution_id ?? null,
+      session.last_checkpoint ?? null,
+      session.is_invalidated ?? false,
+      session.invalidation_reason ?? null,
+      JSON.stringify(session.workflow_metadata ?? {}),
+    ],
+  );
+}
+
+export async function getConsultantWorkflowSessionByRunId(
+  db: Queryable,
+  accountId: string,
+  runId: string,
+): Promise<ConsultantWorkflowSessionRecord | null> {
+  const res = await db.query<{
+    session_id: string;
+    account_id: string;
+    run_id: string;
+    user_profile_id: string;
+    current_state: string;
+    original_intake: Record<string, unknown> | string;
+    draft_revision: Record<string, unknown> | string | null;
+    approved_request_revision: Record<string, unknown> | string | null;
+    advisory_output: Record<string, unknown> | string | null;
+    advisory_loop_records: readonly Record<string, unknown>[] | string | null;
+    deep_prompt_revision: Record<string, unknown> | string | null;
+    approvals: readonly Record<string, unknown>[] | string | null;
+    classification: Record<string, unknown> | string | null;
+    execution_id: string | null;
+    last_checkpoint: string | null;
+    workflow_metadata: Record<string, unknown>;
+    created_at: Date;
+    updated_at: Date;
+  }>(
+    `SELECT * FROM consultant_workflow_session WHERE account_id = $1 AND run_id = $2;`,
+    [accountId, runId],
+  );
+  if (res.rows.length === 0) return null;
+  const row = res.rows[0]!;
+  const parseJson = <T>(val: unknown): T =>
+    typeof val === "string" ? (JSON.parse(val) as T) : (val as T);
+
+  return {
+    session_id: row.session_id,
+    account_id: row.account_id,
+    run_id: row.run_id,
+    user_profile_id: row.user_profile_id,
+    current_state: row.current_state,
+    original_intake: parseJson(row.original_intake),
+    draft_revision: row.draft_revision ? parseJson(row.draft_revision) : null,
+    approved_request_revision: row.approved_request_revision
+      ? parseJson(row.approved_request_revision)
+      : null,
+    advisory_output: row.advisory_output
+      ? parseJson(row.advisory_output)
+      : null,
+    advisory_loop_records: row.advisory_loop_records
+      ? parseJson(row.advisory_loop_records)
+      : null,
+    deep_prompt_revision: row.deep_prompt_revision
+      ? parseJson(row.deep_prompt_revision)
+      : null,
+    approvals: row.approvals ? parseJson(row.approvals) : [],
+    classification: row.classification ? parseJson(row.classification) : null,
+    execution_id: row.execution_id,
+    last_checkpoint: row.last_checkpoint,
+    workflow_metadata: row.workflow_metadata ?? {},
+    is_invalidated: Boolean((row as any).is_invalidated),
+    invalidation_reason: (row as any).invalidation_reason ?? null,
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
+  };
+}
+
+export async function listConsultantWorkflowSessions(
+  db: Queryable,
+  accountId: string,
+  limit = 20,
+): Promise<readonly ConsultantWorkflowSessionRecord[]> {
+  const res = await db.query<{
+    session_id: string;
+    account_id: string;
+    run_id: string;
+    user_profile_id: string;
+    current_state: string;
+    original_intake: Record<string, unknown> | string;
+    draft_revision: Record<string, unknown> | string | null;
+    approved_request_revision: Record<string, unknown> | string | null;
+    advisory_output: Record<string, unknown> | string | null;
+    advisory_loop_records: readonly Record<string, unknown>[] | string | null;
+    deep_prompt_revision: Record<string, unknown> | string | null;
+    approvals: readonly Record<string, unknown>[] | string | null;
+    classification: Record<string, unknown> | string | null;
+    execution_id: string | null;
+    last_checkpoint: string | null;
+    is_invalidated?: boolean;
+    invalidation_reason?: string | null;
+    created_at: Date;
+    updated_at: Date;
+  }>(
+    `SELECT * FROM consultant_workflow_session
+     WHERE account_id = $1
+     ORDER BY updated_at DESC
+     LIMIT $2;`,
+    [accountId, limit],
+  );
+
+  const parseJson = <T>(val: unknown): T =>
+    typeof val === "string" ? (JSON.parse(val) as T) : (val as T);
+
+  return res.rows.map((row) => ({
+    session_id: row.session_id,
+    account_id: row.account_id,
+    run_id: row.run_id,
+    user_profile_id: row.user_profile_id,
+    current_state: row.current_state,
+    original_intake: parseJson(row.original_intake),
+    draft_revision: row.draft_revision ? parseJson(row.draft_revision) : null,
+    approved_request_revision: row.approved_request_revision
+      ? parseJson(row.approved_request_revision)
+      : null,
+    advisory_output: row.advisory_output
+      ? parseJson(row.advisory_output)
+      : null,
+    advisory_loop_records: row.advisory_loop_records
+      ? parseJson(row.advisory_loop_records)
+      : null,
+    deep_prompt_revision: row.deep_prompt_revision
+      ? parseJson(row.deep_prompt_revision)
+      : null,
+    approvals: row.approvals ? parseJson(row.approvals) : [],
+    classification: row.classification ? parseJson(row.classification) : null,
+    execution_id: row.execution_id,
+    last_checkpoint: row.last_checkpoint,
+    is_invalidated: Boolean(row.is_invalidated),
+    invalidation_reason: row.invalidation_reason ?? null,
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
+  }));
+}
+
+export interface ConsultantIntakeSnapshotRecord {
+  readonly snapshot_id: string;
+  readonly account_id: string;
+  readonly user_profile_id: string;
+  readonly run_id: string;
+  readonly revision_number: number;
+  readonly product_requirement: string;
+  readonly technical_compliance: string;
+  readonly order_profile: string;
+  readonly content_hash: string;
+  readonly created_at?: string;
+}
+
+export interface ConsultantDraftSessionRecord {
+  readonly draft_id: string;
+  readonly account_id: string;
+  readonly user_profile_id: string;
+  readonly tier: "consultant";
+  readonly current_run_id?: string | null;
+  readonly snapshot_id?: string | null;
+  readonly draft_version: number;
+  readonly status: "active" | "submitted" | "abandoned";
+  readonly draft_data: Record<string, unknown>;
+  readonly updated_at?: string;
+  readonly created_at?: string;
+}
+
+export function computeIntakeContentHash(
+  productRequirement: string,
+  technicalCompliance: string,
+  orderProfile: string,
+): string {
+  return createHash("sha256")
+    .update(
+      `${productRequirement.trim()}\n---\n${technicalCompliance.trim()}\n---\n${orderProfile.trim()}`,
+    )
+    .digest("hex");
+}
+
+export async function saveConsultantIntakeSnapshot(
+  db: Queryable,
+  snapshot: ConsultantIntakeSnapshotRecord,
+): Promise<void> {
+  await db.query(
+    `INSERT INTO consultant_intake_snapshot (
+      snapshot_id, account_id, user_profile_id, run_id, revision_number,
+      product_requirement, technical_compliance, order_profile, content_hash
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    ON CONFLICT (snapshot_id) DO NOTHING;`,
+    [
+      snapshot.snapshot_id,
+      snapshot.account_id,
+      snapshot.user_profile_id,
+      snapshot.run_id,
+      snapshot.revision_number,
+      snapshot.product_requirement,
+      snapshot.technical_compliance,
+      snapshot.order_profile,
+      snapshot.content_hash,
+    ],
+  );
+}
+
+export async function getConsultantIntakeSnapshot(
+  db: Queryable,
+  accountId: string,
+  snapshotId: string,
+): Promise<ConsultantIntakeSnapshotRecord | null> {
+  const res = await db.query<{
+    snapshot_id: string;
+    account_id: string;
+    user_profile_id: string;
+    run_id: string;
+    revision_number: number;
+    product_requirement: string;
+    technical_compliance: string;
+    order_profile: string;
+    content_hash: string;
+    created_at: Date;
+  }>(
+    `SELECT * FROM consultant_intake_snapshot
+     WHERE account_id = $1 AND snapshot_id = $2;`,
+    [accountId, snapshotId],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  return {
+    snapshot_id: row.snapshot_id,
+    account_id: row.account_id,
+    user_profile_id: row.user_profile_id,
+    run_id: row.run_id,
+    revision_number: row.revision_number,
+    product_requirement: row.product_requirement,
+    technical_compliance: row.technical_compliance,
+    order_profile: row.order_profile,
+    content_hash: row.content_hash,
+    created_at: row.created_at.toISOString(),
+  };
+}
+
+export async function createConsultantDraftSession(
+  db: Queryable,
+  accountId: string,
+  userProfileId: string,
+): Promise<{ draft_id: string; draft_version: number }> {
+  const draft_id = randomUUID();
+  await db.query(
+    `INSERT INTO consultant_draft_session (
+      draft_id, account_id, user_profile_id, tier, current_run_id,
+      snapshot_id, draft_version, status, draft_data, updated_at, created_at
+    ) VALUES ($1, $2, $3, 'consultant', null, null, 1, 'active', '{}'::jsonb, clock_timestamp(), clock_timestamp());`,
+    [draft_id, accountId, userProfileId],
+  );
+  return { draft_id, draft_version: 1 };
+}
+
+export async function getConsultantDraftSessionById(
+  db: Queryable,
+  accountId: string,
+  userProfileId: string,
+  draftId: string,
+): Promise<ConsultantDraftSessionRecord | null> {
+  const res = await db.query<{
+    draft_id: string;
+    account_id: string;
+    user_profile_id: string;
+    tier: "consultant";
+    current_run_id: string | null;
+    snapshot_id: string | null;
+    draft_version: number;
+    status: "active" | "submitted" | "abandoned";
+    draft_data: Record<string, unknown> | string;
+    updated_at: Date;
+    created_at: Date;
+  }>(
+    `SELECT * FROM consultant_draft_session
+     WHERE draft_id = $1 AND account_id = $2 AND user_profile_id = $3
+     LIMIT 1;`,
+    [draftId, accountId, userProfileId],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  const parseJson = (val: unknown): Record<string, unknown> =>
+    typeof val === "string"
+      ? JSON.parse(val)
+      : (val as Record<string, unknown>);
+  return {
+    draft_id: row.draft_id,
+    account_id: row.account_id,
+    user_profile_id: row.user_profile_id,
+    tier: row.tier,
+    current_run_id: row.current_run_id,
+    snapshot_id: row.snapshot_id,
+    draft_version: row.draft_version,
+    status: row.status,
+    draft_data: parseJson(row.draft_data),
+    updated_at: row.updated_at.toISOString(),
+    created_at: row.created_at.toISOString(),
+  };
+}
+
+export async function saveConsultantDraftSession(
+  db: Queryable,
+  draft: ConsultantDraftSessionRecord,
+  expectedVersion?: number,
+): Promise<{ draft_id: string; draft_version: number }> {
+  // Check if draft already exists
+  const checkRes = await db.query<{
+    draft_id: string;
+    draft_version: number;
+    account_id: string;
+    status: string;
+    user_profile_id: string;
+    draft_data: Record<string, unknown> | string;
+  }>(
+    `SELECT draft_id, draft_version, account_id, user_profile_id, status, draft_data
+     FROM consultant_draft_session
+     WHERE draft_id = $1;`,
+    [draft.draft_id],
+  );
+
+  const existing = checkRes.rows[0];
+  if (existing) {
+    if (
+      existing.account_id !== draft.account_id ||
+      existing.user_profile_id !== draft.user_profile_id
+    ) {
+      const err = new Error("Unauthorized to modify this draft.");
+      (err as any).status = 403;
+      (err as any).code = "MB-403-FORBIDDEN";
+      throw err;
+    }
+
+    // Optimistic Concurrency Check: If caller supplied an expectedVersion and it doesn't match
+    if (
+      typeof expectedVersion === "number" &&
+      existing.draft_version !== expectedVersion
+    ) {
+      const conflictErr = new Error("This draft was updated in another tab.");
+      (conflictErr as any).status = 409;
+      (conflictErr as any).code = "MB-409-DRAFT-CONFLICT";
+      (conflictErr as any).current_version = existing.draft_version;
+      (conflictErr as any).submitted_version = expectedVersion;
+      (conflictErr as any).recoverable = true;
+      throw conflictErr;
+    }
+
+    const nextVersion = existing.draft_version + 1;
+    const updated = await db.query<{ draft_id: string; draft_version: number }>(
+      `UPDATE consultant_draft_session
+       SET current_run_id = $2,
+           snapshot_id = $3,
+           draft_version = $4,
+           status = $5,
+           draft_data = $6,
+           updated_at = clock_timestamp()
+       WHERE draft_id = $1 AND account_id = $7 AND user_profile_id=$8
+          AND draft_version=$9 AND status='active'
+       RETURNING draft_id, draft_version;`,
+      [
+        draft.draft_id,
+        draft.current_run_id ?? null,
+        draft.snapshot_id ?? null,
+        nextVersion,
+        draft.status,
+        JSON.stringify(draft.draft_data),
+        draft.account_id,
+        draft.user_profile_id,
+        expectedVersion ?? existing.draft_version,
+      ],
+    );
+    if (!updated.rows[0]) {
+      const latest = await getConsultantDraftSessionById(
+        db,
+        draft.account_id,
+        draft.user_profile_id,
+        draft.draft_id,
+      );
+      const error = Object.assign(
+        new Error("This draft was updated or submitted in another request."),
+        {
+          status: 409,
+          code: "MB-409-DRAFT-CONFLICT",
+          current_version: latest?.draft_version ?? existing.draft_version,
+          submitted_version: expectedVersion ?? existing.draft_version,
+          recoverable: true,
+        },
+      );
+      throw error;
+    }
+    return updated.rows[0];
+  } else {
+    // New draft insertion
+    const initialVersion = draft.draft_version || 1;
+    const inserted = await db.query<{
+      draft_id: string;
+      draft_version: number;
+    }>(
+      `INSERT INTO consultant_draft_session (
+        draft_id, account_id, user_profile_id, tier, current_run_id,
+        snapshot_id, draft_version, status, draft_data, updated_at, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp(), clock_timestamp())
+      ON CONFLICT (draft_id) DO NOTHING RETURNING draft_id,draft_version;`,
+      [
+        draft.draft_id,
+        draft.account_id,
+        draft.user_profile_id,
+        draft.tier,
+        draft.current_run_id ?? null,
+        draft.snapshot_id ?? null,
+        initialVersion,
+        draft.status,
+        JSON.stringify(draft.draft_data),
+      ],
+    );
+    if (!inserted.rows[0]) {
+      throw Object.assign(
+        new Error("This draft was created by another request."),
+        {
+          status: 409,
+          code: "MB-409-DRAFT-CONFLICT",
+          submitted_version: expectedVersion ?? 1,
+          recoverable: true,
+        },
+      );
+    }
+    return inserted.rows[0];
+  }
+}
+
+/** Call inside the same transaction that persists the initial workflow session. */
+export async function admitConsultantDraftSubmission(
+  db: Queryable,
+  input: {
+    draft_id: string;
+    expected_version: number;
+    mode: "live" | "demonstration" | "hybrid";
+    snapshot: ConsultantIntakeSnapshotRecord;
+  },
+): Promise<{
+  replay: boolean;
+  run_id: string;
+  draft_id: string;
+  draft_version: number;
+}> {
+  const { snapshot } = input;
+  const result = await db.query<{
+    draft_version: number;
+    status: string;
+    current_run_id: string | null;
+    draft_data: Record<string, unknown>;
+  }>(
+    `SELECT draft_version, status, current_run_id, draft_data
+       FROM consultant_draft_session
+      WHERE draft_id=$1 AND account_id=$2 AND user_profile_id=$3
+      FOR UPDATE`,
+    [input.draft_id, snapshot.account_id, snapshot.user_profile_id],
+  );
+  const existing = result.rows[0];
+  if (!existing)
+    throw Object.assign(new Error("Draft not found."), {
+      status: 404,
+      code: "MB-404-DRAFT",
+    });
+  const draftData = {
+    product_requirement: snapshot.product_requirement,
+    technical_compliance: snapshot.technical_compliance,
+    order_profile: snapshot.order_profile,
+    execution_mode: input.mode,
+  };
+  if (
+    existing.status === "submitted" &&
+    existing.current_run_id &&
+    [existing.draft_version, existing.draft_version - 1].includes(
+      input.expected_version,
+    ) &&
+    Object.entries(draftData).every(
+      ([key, value]) => existing.draft_data[key] === value,
+    )
+  )
+    return {
+      replay: true,
+      run_id: existing.current_run_id,
+      draft_id: input.draft_id,
+      draft_version: existing.draft_version,
+    };
+  if (
+    existing.status !== "active" ||
+    existing.current_run_id ||
+    existing.draft_version !== input.expected_version
+  )
+    throw Object.assign(
+      new Error(
+        "This draft was changed or submitted. Its submitted intake cannot be replaced.",
+      ),
+      {
+        status: 409,
+        code: "MB-409-DRAFT-CONFLICT",
+        current_version: existing.draft_version,
+        submitted_version: input.expected_version,
+        draft_id: input.draft_id,
+        ...(existing.current_run_id ? { run_id: existing.current_run_id } : {}),
+      },
+    );
+  await saveConsultantIntakeSnapshot(db, snapshot);
+  const updated = await db.query<{ draft_version: number }>(
+    `UPDATE consultant_draft_session
+        SET current_run_id=$4, snapshot_id=$5, draft_version=draft_version+1,
+            status='submitted', draft_data=$6, updated_at=clock_timestamp()
+      WHERE draft_id=$1 AND account_id=$2 AND user_profile_id=$3
+        AND status='active' AND current_run_id IS NULL AND draft_version=$7
+      RETURNING draft_version`,
+    [
+      input.draft_id,
+      snapshot.account_id,
+      snapshot.user_profile_id,
+      snapshot.run_id,
+      snapshot.snapshot_id,
+      JSON.stringify(draftData),
+      input.expected_version,
+    ],
+  );
+  if (!updated.rows[0])
+    throw Object.assign(
+      new Error("This draft was submitted in another request."),
+      {
+        status: 409,
+        code: "MB-409-DRAFT-CONFLICT",
+      },
+    );
+  return {
+    replay: false,
+    run_id: snapshot.run_id,
+    draft_id: input.draft_id,
+    draft_version: updated.rows[0].draft_version,
+  };
+}
+
+export async function getActiveConsultantDraftSession(
+  db: Queryable,
+  accountId: string,
+  userProfileId: string,
+): Promise<ConsultantDraftSessionRecord | null> {
+  const res = await db.query<{
+    draft_id: string;
+    account_id: string;
+    user_profile_id: string;
+    tier: "consultant";
+    current_run_id: string | null;
+    snapshot_id: string | null;
+    draft_version: number;
+    status: "active" | "submitted" | "abandoned";
+    draft_data: Record<string, unknown> | string;
+    updated_at: Date;
+    created_at: Date;
+  }>(
+    `SELECT * FROM consultant_draft_session
+     WHERE account_id = $1 AND user_profile_id = $2 AND status = 'active'
+     ORDER BY updated_at DESC
+     LIMIT 1;`,
+    [accountId, userProfileId],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  const parseJson = (val: unknown): Record<string, unknown> =>
+    typeof val === "string"
+      ? JSON.parse(val)
+      : (val as Record<string, unknown>);
+  return {
+    draft_id: row.draft_id,
+    account_id: row.account_id,
+    user_profile_id: row.user_profile_id,
+    tier: row.tier,
+    current_run_id: row.current_run_id,
+    snapshot_id: row.snapshot_id,
+    draft_version: row.draft_version,
+    status: row.status,
+    draft_data: parseJson(row.draft_data),
+    updated_at: row.updated_at.toISOString(),
+    created_at: row.created_at.toISOString(),
+  };
+}
+
+export async function listActiveConsultantDraftSessions(
+  db: Queryable,
+  accountId: string,
+  userProfileId?: string | null,
+  limit = 20,
+): Promise<ConsultantDraftSessionRecord[]> {
+  const params: unknown[] = [accountId];
+  let query = `SELECT * FROM consultant_draft_session
+     WHERE account_id = $1 AND status = 'active'`;
+  if (userProfileId) {
+    params.push(userProfileId);
+    query += ` AND user_profile_id = $${params.length}`;
+  }
+  params.push(limit);
+  query += ` ORDER BY updated_at DESC LIMIT $${params.length};`;
+
+  const res = await db.query<{
+    draft_id: string;
+    account_id: string;
+    user_profile_id: string;
+    tier: "consultant";
+    current_run_id: string | null;
+    snapshot_id: string | null;
+    draft_version: number;
+    status: "active" | "submitted" | "abandoned";
+    draft_data: Record<string, unknown> | string;
+    updated_at: Date;
+    created_at: Date;
+  }>(query, params);
+
+  const parseJson = (val: unknown): Record<string, unknown> =>
+    typeof val === "string"
+      ? JSON.parse(val)
+      : (val as Record<string, unknown>);
+
+  return res.rows.map((row) => ({
+    draft_id: row.draft_id,
+    account_id: row.account_id,
+    user_profile_id: row.user_profile_id,
+    tier: row.tier,
+    current_run_id: row.current_run_id,
+    snapshot_id: row.snapshot_id,
+    draft_version: row.draft_version,
+    status: row.status,
+    draft_data: parseJson(row.draft_data),
+    updated_at: row.updated_at.toISOString(),
+    created_at: row.created_at.toISOString(),
+  }));
+}
+
+export async function abandonConsultantDraftSession(
+  db: Queryable,
+  accountId: string,
+  draftId?: string | null,
+  userProfileId?: string | null,
+): Promise<void> {
+  if (draftId) {
+    await db.query(
+      `UPDATE consultant_draft_session
+       SET status = 'abandoned', updated_at = clock_timestamp()
+       WHERE account_id = $1 AND draft_id = $2;`,
+      [accountId, draftId],
+    );
+  } else if (userProfileId) {
+    await db.query(
+      `UPDATE consultant_draft_session
+       SET status = 'abandoned', updated_at = clock_timestamp()
+       WHERE account_id = $1 AND user_profile_id = $2 AND status = 'active';`,
+      [accountId, userProfileId],
+    );
+  }
+}
+
+export async function getConsultantDraftSessionByRunId(
+  db: Queryable,
+  accountId: string,
+  runId: string,
+): Promise<ConsultantDraftSessionRecord | null> {
+  const res = await db.query<{
+    draft_id: string;
+    account_id: string;
+    user_profile_id: string;
+    tier: "consultant";
+    current_run_id: string | null;
+    snapshot_id: string | null;
+    draft_version: number;
+    status: "active" | "submitted" | "abandoned";
+    draft_data: Record<string, unknown> | string;
+    updated_at: Date;
+    created_at: Date;
+  }>(
+    `SELECT * FROM consultant_draft_session
+     WHERE current_run_id = $1 AND account_id = $2
+     ORDER BY updated_at DESC
+     LIMIT 1;`,
+    [runId, accountId],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  const parseJson = (val: unknown): Record<string, unknown> =>
+    typeof val === "string"
+      ? JSON.parse(val)
+      : (val as Record<string, unknown>);
+  return {
+    draft_id: row.draft_id,
+    account_id: row.account_id,
+    user_profile_id: row.user_profile_id,
+    tier: row.tier,
+    current_run_id: row.current_run_id,
+    snapshot_id: row.snapshot_id,
+    draft_version: row.draft_version,
+    status: row.status,
+    draft_data: parseJson(row.draft_data),
+    updated_at: row.updated_at.toISOString(),
+    created_at: row.created_at.toISOString(),
+  };
+}

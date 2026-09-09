@@ -1,115 +1,33 @@
 # MatchBASE
 
-Private, unlicensed implementation workspace for the MatchBASE evidence-gated delivery program.
+Evidence-based B2B supplier research for Consultant users. Multilingual intake becomes an approved English request and research plan. Separately priced research rounds return ranked supplier dossiers, source evidence, available dated prices and English PDF reports. Live research uses OpenRouter; fixture tests remain explicitly synthetic.
 
-## Current scope
+## Current source and runtime
 
-Slice 1 adds a production-structured, local-only authenticated Demo reference path to the verified Slice 0 governance baseline. It includes fail-closed Google OIDC contracts, an explicitly non-production simulator, PostgreSQL 18 persistence, canonical-English intake, atomic rolling quota, three global execution leases, fixture-only provider execution, hidden evidence storage, strict Demo projection, and responsive product UI. It does not call live identity or AI providers and does not deploy infrastructure or product workloads.
+Product version is the root `package.json` version. Workspace packages are private internal units, not separately released products. Git tags identify checked source releases; running image digests and local acceptance records are separate. A successful build or five-model execution does not imply complete commercial qualification or production readiness.
 
-## Development and Verification Workflows
+Canonical local authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`. Canonical implementation root: `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE`. This GitHub repository contains implementation/build/test material; private governance, source research and customer data remain outside it.
 
-### 1. Developer Fast Feedback (`check:dev`)
+Local startup uses Docker Compose project `matchbase-local`. Read [local Docker launcher](https://github.com/banihashem/INNOBASE-MatchBASE/blob/main/deployment/local/README.md). On the canonical host use `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE/deployment/local/Manage-LocalDocker.ps1 -Action Status`. Build qualifies host unit tests before Docker; Up refuses active research. Preserve saved data and volumes. Host-process startup is historical compatibility guidance.
 
-Runs formatting check, linting, boundary verification, protected baseline checks, candidate secret scan, and TypeScript typechecking across all workspace packages:
+## Engineering map
 
-```powershell
-pnpm run check:dev
-```
+| Area                                          | Responsibility                                                        |
+| --------------------------------------------- | --------------------------------------------------------------------- |
+| `apps/web`                                    | Consultant entry, profile/dashboard, approvals, progress and results  |
+| `packages/application`                        | Research orchestration, provider routing, durable worker and recovery |
+| `packages/contracts`, `packages/ai-evidence`  | Validated requirements, supplier evidence and output contracts        |
+| `packages/data`                               | PostgreSQL persistence, additive migrations and usage records         |
+| `packages/auth`, `packages/security`          | Identity, ownership, authorization and boundary controls              |
+| `packages/reporting`                          | Evidence-based English reports and PDF generation                     |
+| `apps/dashboard`, `packages/artifact-indexer` | Historical delivery evidence and read-only artifact projection        |
 
-### 2. Full Gate Verification (`check:full` / `check`)
+## Development
 
-Runs the comprehensive test and governance gate, including slow archival, deep secretlint, and git history scans:
+Use Node 24.14.0 and the exact package manager in `package.json`. Install with `pnpm install --frozen-lockfile`. `pnpm run check:dev` gives fast feedback; `pnpm run test:ci` executes the full release gate with an explicitly configured disposable database. Never point tests or seed tools at saved research data. No live model credentials belong in CI.
 
-```powershell
-pnpm run check:full
-```
+Read [delivery lifecycle](https://github.com/banihashem/INNOBASE-MatchBASE/blob/main/docs/DELIVERY_LIFECYCLE.md), [command catalog](https://github.com/banihashem/INNOBASE-MatchBASE/blob/main/docs/DEVELOPER_COMMANDS.md), [documentation map](https://github.com/banihashem/INNOBASE-MatchBASE/blob/main/docs/DOCUMENTATION_MAP.md), [contributing](https://github.com/banihashem/INNOBASE-MatchBASE/blob/main/CONTRIBUTING.md) and [security policy](https://github.com/banihashem/INNOBASE-MatchBASE/blob/main/SECURITY.md).
 
-### 3. Unit and Integration Tests
+The configuration schema is `.env.example`; provide values through process/runtime secrets rather than creating credential files. Server key: `MATCHBASE_OPENROUTER_API_KEY`. Configured BYOK must be verified in provider metadata; additional-family credit use requires its own approved quote. Never prefix secret or model configuration with `NEXT_PUBLIC_`.
 
-```powershell
-# Run workspace package tests
-pnpm run test:unit
-
-# Run API and integration test suites
-pnpm run test:integration
-
-# Run all automated tests
-pnpm test
-```
-
-### 4. Build Workspace
-
-```powershell
-pnpm run build
-```
-
-## Runtime Configuration
-
-MatchBASE uses environment variables for runtime configuration. A template is provided in [`.env.example`](.env.example).
-
-### Configuration Rules:
-
-- **Server-Side Only:** The canonical key for external model routing is `MATCHBASE_OPENROUTER_API_KEY`.
-- **Never Client-Exposed:** Never prefix model keys or secrets with `NEXT_PUBLIC_`.
-- **No Committed Secrets:** Never commit `.env`, `.env.local`, API keys, or credentials to Git history or files.
-- **Local Dev:** Use Windows User environment variables or local shell environment variables.
-
-## Local verification
-
-```powershell
-corepack enable
-pnpm install --frozen-lockfile
-$env:MATCHBASE_TEST_DATABASE_PASSWORD='local-synthetic-db-only'
-$env:DATABASE_URL = ('postgresql://{0}:{1}@127.0.0.1:55432/matchbase_slice1' -f 'matchbase_test', 'local-synthetic-db-only')
-$env:MATCHBASE_DATABASE_URL=$env:DATABASE_URL
-$env:MATCHBASE_ENVIRONMENT='test'
-$env:MATCHBASE_OIDC_SIMULATOR='true'
-$env:MATCHBASE_SYNTHETIC_FIXTURE='true'
-$env:MATCHBASE_ORIGIN='http://127.0.0.1:3010'
-$env:MATCHBASE_DIGEST_KEY='local-synthetic-digest-key-32-bytes-minimum'
-docker compose up -d postgres
-pnpm --filter @matchbase/data build
-pnpm --filter @matchbase/data migrate
-pnpm --filter @matchbase/data seed:local
-pnpm test:ci
-```
-
-The exact one-command local acceptance runner performs the frozen install,
-PostgreSQL startup, migration, synthetic seed, and complete gate with the same
-explicit local-only environment:
-
-```powershell
-pnpm slice1:validate:local
-```
-
-Run the dashboard with the generated sanitized snapshot:
-
-```powershell
-pnpm snapshot:generate
-pnpm --filter @matchbase/dashboard dev
-```
-
-The indexer reads only explicitly allowlisted MatchBASE roots and writes sanitized derived data inside this repository. Source artifacts are never changed or copied into Git.
-
-Run the product surface after building it:
-
-```powershell
-pnpm --filter @matchbase/web build
-pnpm --filter @matchbase/application worker:synthetic
-pnpm --filter @matchbase/web start
-```
-
-Run the worker and web commands in separate terminals with the same environment.
-The web start command executes the packaged standalone server directly at exactly `http://127.0.0.1:3010`; the worker health endpoint binds exactly to `http://127.0.0.1:3011/health`.
-
-The local simulator and synthetic fixture flags are forbidden in production. Startup fails closed if either is enabled with `MATCHBASE_ENVIRONMENT=production`.
-
-## Boundaries
-
-- Repository visibility must remain private. Public release is not authorized.
-- No `LICENSE` is included. The code is `UNLICENSED` pending an owner/counsel decision.
-- No code, assets, schemas, prompts, fixtures, configuration, or documentation from INNOBASE-MEP may be reused.
-- `C:\INNOBASE\MatchBASE\00_Authoritative_Sources`, `C:\INNOBASE\MatchBASE\01_Product_Management`, and `C:\INNOBASE\MatchBASE\02_Product_Research_and_Planning` are read-only external evidence roots and must not be copied into this repository.
-- Do not commit credentials, original personal data, original intake text, or provider payloads.
-
-See `SECURITY.md`, `CONTRIBUTING.md`, `governance/README.md`, and `docs/LOCAL_OPERATIONS_RUNBOOK.md` before changing code or recovering a failed local run.
+Source is publicly visible but remains UNLICENSED; visibility is not a software distribution license. Production deployment and paid research require their own explicit authorization.

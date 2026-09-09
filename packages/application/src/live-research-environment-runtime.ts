@@ -386,7 +386,7 @@ function auditedOpenRouterRoute(value: unknown): Readonly<{
     !identity ||
     routing.strategy !== "direct" ||
     routing.attempt !== 1 ||
-    ("is_byok" in routing && routing.is_byok !== false) ||
+    routing.is_byok !== true ||
     (routing.pipeline !== undefined &&
       (!Array.isArray(routing.pipeline) ||
         routing.pipeline.length > 64 ||
@@ -555,7 +555,7 @@ export class EnvironmentProviderTransport implements ProviderTransport {
       )?.[0]?.finish_reason;
       const promptTokens = usage?.prompt_tokens;
       const completionTokens = usage?.completion_tokens;
-      const totalCost = Number(usage?.cost);
+      const totalCost = usage?.cost;
       if (
         envelope.model !== selectedRoute.requestedModel ||
         typeof finishReason !== "string" ||
@@ -563,8 +563,9 @@ export class EnvironmentProviderTransport implements ProviderTransport {
         Number(promptTokens) < 0 ||
         !Number.isSafeInteger(completionTokens) ||
         Number(completionTokens) < 0 ||
+        typeof totalCost !== "number" ||
         !Number.isFinite(totalCost) ||
-        totalCost <= 0
+        totalCost < 0
       )
         throw new Error("OpenRouter generation metadata did not reconcile.");
       openRouterMetadata = {
@@ -577,6 +578,7 @@ export class EnvironmentProviderTransport implements ProviderTransport {
         tokens_prompt: promptTokens,
         tokens_completion: completionTokens,
         total_cost: totalCost,
+        is_byok: true,
       };
     }
     const modelFromPath = decodeURIComponent(

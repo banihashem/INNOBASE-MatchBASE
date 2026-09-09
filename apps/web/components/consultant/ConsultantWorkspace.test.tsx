@@ -134,10 +134,12 @@ test("ProductRouter resolves Consultant into the visible Consultant workspace", 
   );
   render(<ProductRouter authPath="/auth/simulator/start" />);
   expect(
-    await screen.findByRole("heading", { name: "Your sourcing runs" }),
+    await screen.findByRole("heading", {
+      name: "Your sourcing dashboard",
+    }),
   ).toBeVisible();
   expect(
-    screen.getByText("Consultant", { selector: ".tier-badge" }),
+    screen.getByRole("navigation", { name: "Consultant navigation" }),
   ).toBeVisible();
   expect(
     screen.queryByText(/No product workflow is enabled/iu),

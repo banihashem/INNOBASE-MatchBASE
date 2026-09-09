@@ -225,7 +225,7 @@ postgresTest(
       await installFoundationOnly(pool);
       const foundationCatalog = await catalogSnapshot(pool);
       assert.deepEqual(await getMigrationStatus(pool), {
-        latestMigrationId: "0013_domain_pack_v2_and_legacy_annotation",
+        latestMigrationId: "0020_consultant_research_rounds",
         appliedMigrationIds: ["0001_slice_1_foundation"],
         pendingMigrationIds: [
           "0002_slice_2_standard_workspace",
@@ -240,6 +240,13 @@ postgresTest(
           "0011_admin_system_scope_and_run_tier_immutability",
           "0012_consultant_pdf_render_ledger",
           "0013_domain_pack_v2_and_legacy_annotation",
+          "0014_consultant_v3_agentic_workflow",
+          "0015_consultant_v3_workflow_persistence",
+          "0016_consultant_v3_draft_isolation_and_snapshots",
+          "0017_consultant_v3_fixture_truth_relaxation",
+          "0018_consultant_live_execution",
+          "0019_consultant_honest_execution_metadata",
+          "0020_consultant_research_rounds",
         ],
         unknownMigrationIds: [],
         ready: false,
@@ -677,10 +684,17 @@ postgresTest(
         },
       );
 
-      assert.equal(
-        await migrateDownLatest(pool),
+      for (const migration of [
+        "0020_consultant_research_rounds",
+        "0019_consultant_honest_execution_metadata",
+        "0018_consultant_live_execution",
+        "0017_consultant_v3_fixture_truth_relaxation",
+        "0016_consultant_v3_draft_isolation_and_snapshots",
+        "0015_consultant_v3_workflow_persistence",
+        "0014_consultant_v3_agentic_workflow",
         "0013_domain_pack_v2_and_legacy_annotation",
-      );
+      ])
+        assert.equal(await migrateDownLatest(pool), migration);
       assert.equal(
         await migrateDownLatest(pool),
         "0012_consultant_pdf_render_ledger",

@@ -5,7 +5,10 @@ import type { WebConfig } from "./config";
 
 const DEFAULT_POLICY_PATH = "config/slice3/research-route-policy.v1.json";
 
-export function loadServerOwnedResearchAdmission(config: WebConfig) {
+export function loadServerOwnedResearchAdmission(
+  config: WebConfig,
+  now?: () => Date,
+) {
   const policyPath = config.testLivePolicyPath
     ? config.testLivePolicyPath
     : [
@@ -27,5 +30,6 @@ export function loadServerOwnedResearchAdmission(config: WebConfig) {
     // execution use the qualified live pipeline and their existing closed
     // disclosure contracts. This allowlist is server-owned.
     eligibleTiers: ["demo", "consultant", "admin"],
+    ...(now ? { now } : {}),
   });
 }

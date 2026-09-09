@@ -1,9 +1,11 @@
 import type { RefObject } from "react";
-import type {
-  ConsultantResultProjectionV1,
-  ConsultantResultProjectionV2,
-  ConsultantResearchOutputV2,
-  DemoProjectionV1,
+import {
+  type ConsultantResultProjectionV1,
+  type ConsultantResultProjectionV2,
+  type ConsultantResearchOutputV2,
+  type ConsultantResearchOutputV3,
+  type DemoProjectionV1,
+  adaptV3ToV2ConsultantOutput,
 } from "@matchbase/contracts";
 import { StandardResult } from "../standard/StandardResult";
 import type { StandardResultProjectionV1 } from "../standard/types";
@@ -14,7 +16,8 @@ export type ConsultantVisibleResult =
   | StandardResultProjectionV1
   | ConsultantResultProjectionV1
   | ConsultantResultProjectionV2
-  | ConsultantResearchOutputV2;
+  | ConsultantResearchOutputV2
+  | ConsultantResearchOutputV3;
 
 export interface ResultArtifactDownload {
   readonly run_id: string;
@@ -34,6 +37,15 @@ export function ConsultantResultView({
   headingRef?: RefObject<HTMLHeadingElement | null>;
   artifactDownload?: ResultArtifactDownload | null | undefined;
 }) {
+  if (result.schema_version === "consultant-research-output.v3")
+    return (
+      <ConsultantResearchOutputView
+        result={adaptV3ToV2ConsultantOutput(result)}
+        onBack={onBack}
+        {...(headingRef ? { headingRef } : {})}
+        {...(artifactDownload ? { artifactDownload } : {})}
+      />
+    );
   if (result.schema_version === "consultant-research-output.v2")
     return (
       <ConsultantResearchOutputView

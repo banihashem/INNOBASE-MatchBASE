@@ -22,7 +22,7 @@ const jetBrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "MatchBASE sourcing workspace",
   description:
-    "Governed multilingual sourcing research with server-owned access boundaries.",
+    "Find, assess and compare B2B suppliers with evidence, pricing and research you control.",
 };
 
 export default function RootLayout({

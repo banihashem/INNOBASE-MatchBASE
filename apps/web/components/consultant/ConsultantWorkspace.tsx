@@ -1,10 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   parseDemoProjectionV1,
   parseConsultantResultProjectionV1,
   parseConsultantResultProjectionV2,
+  parseConsultantResearchOutputV2,
   parseConsultantRunHistoryV1,
   parseStandardResultProjectionV1,
 } from "@matchbase/contracts";
@@ -77,7 +84,8 @@ export function ConsultantWorkspace({
   useEffect(() => {
     if (initialView === "runs") void loadRuns();
   }, [initialView, loadRuns]);
-  useEffect(() => {
+  // Consume navigation focus during commit, before another click can queue a view.
+  useLayoutEffect(() => {
     if (view.state === "loading" || !moveFocusAfterLoad.current) return;
     moveFocusAfterLoad.current = false;
     headingRef.current?.focus();
@@ -101,6 +109,8 @@ export function ConsultantWorkspace({
         throw new Error("Consultant result schema is invalid.");
       const result = (() => {
         switch (body.schema_version) {
+          case "consultant-research-output.v2":
+            return parseConsultantResearchOutputV2(body);
           case "consultant-result-projection.v1":
             return parseConsultantResultProjectionV1(body);
           case "consultant-result-projection.v2":

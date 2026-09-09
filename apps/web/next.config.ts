@@ -11,6 +11,11 @@ if (
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  ...(process.env.NODE_ENV === "development" &&
+  process.env.MATCHBASE_ENVIRONMENT === "test" &&
+  process.env.MATCHBASE_ORIGIN
+    ? { allowedDevOrigins: [new URL(process.env.MATCHBASE_ORIGIN).hostname] }
+    : {}),
   ...(qualifiedLiveTestDistDir ? { distDir: qualifiedLiveTestDistDir } : {}),
   output: "standalone",
   poweredByHeader: false,

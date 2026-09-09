@@ -31,6 +31,14 @@ export const CONSULTANT_PDF_RENDER_LEDGER_MIGRATION_ID =
   "0012_consultant_pdf_render_ledger";
 export const DOMAIN_PACK_V2_AND_LEGACY_ANNOTATION_MIGRATION_ID =
   "0013_domain_pack_v2_and_legacy_annotation";
+export const CONSULTANT_V3_AGENTIC_WORKFLOW_MIGRATION_ID =
+  "0014_consultant_v3_agentic_workflow";
+export const CONSULTANT_V3_WORKFLOW_PERSISTENCE_MIGRATION_ID =
+  "0015_consultant_v3_workflow_persistence";
+export const CONSULTANT_V3_DRAFT_ISOLATION_MIGRATION_ID =
+  "0016_consultant_v3_draft_isolation_and_snapshots";
+export const CONSULTANT_V3_FIXTURE_TRUTH_RELAXATION_MIGRATION_ID =
+  "0017_consultant_v3_fixture_truth_relaxation";
 
 export interface MigrationDefinition {
   readonly id: string;
@@ -52,6 +60,15 @@ export const MIGRATIONS: readonly MigrationDefinition[] = Object.freeze([
   }),
   Object.freeze({ id: CONSULTANT_PDF_RENDER_LEDGER_MIGRATION_ID }),
   Object.freeze({ id: DOMAIN_PACK_V2_AND_LEGACY_ANNOTATION_MIGRATION_ID }),
+  Object.freeze({ id: CONSULTANT_V3_AGENTIC_WORKFLOW_MIGRATION_ID }),
+  Object.freeze({ id: CONSULTANT_V3_WORKFLOW_PERSISTENCE_MIGRATION_ID }),
+  Object.freeze({ id: CONSULTANT_V3_DRAFT_ISOLATION_MIGRATION_ID }),
+  Object.freeze({
+    id: CONSULTANT_V3_FIXTURE_TRUTH_RELAXATION_MIGRATION_ID,
+  }),
+  Object.freeze({ id: "0018_consultant_live_execution" }),
+  Object.freeze({ id: "0019_consultant_honest_execution_metadata" }),
+  Object.freeze({ id: "0020_consultant_research_rounds" }),
 ]);
 
 export const LATEST_MIGRATION_ID =

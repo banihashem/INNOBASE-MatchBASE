@@ -237,6 +237,7 @@ postgresTest(
             state === "complete" ? 2 : 0,
             JSON.stringify({
               schema_version: "complete-result-foundation.v2",
+              claims: [],
               landscape: {
                 eligible_count: state === "complete" ? 2 : 0,
                 displayed_count: state === "complete" ? 2 : 0,
@@ -275,6 +276,7 @@ postgresTest(
           runId: item.run,
           result: {
             schema_version: "complete-result-foundation.v2",
+            claims: [],
             landscape: {
               eligible_count: state === "complete" ? 2 : 0,
               displayed_count: state === "complete" ? 2 : 0,

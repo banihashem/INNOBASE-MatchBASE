@@ -26,3 +26,18 @@ export * from "./v2/structured-request.js";
 export * from "./v2/standard-projection.js";
 export * from "./v2/consultant-research-output.js";
 export * from "./v2/golden-scenarios.js";
+export * from "./v3/consultant-research-output.js";
+export * from "./v3/golden-scenarios.js";
+export * from "./v3/adapter.js";
+export * from "./v3/integrity-validator.js";
+export * from "./v3/semantic-coherence-validator.js";
+export * from "./v3/requirement-fidelity.js";
+export * from "./v3/approved-request.js";
+export type {
+  ResearchDepth,
+  ResearchTier,
+  ResearchModelRate,
+  ResearchRoundPlan,
+  ResearchRoundView,
+  ResearchCostSummary,
+} from "./v3/research-round.js";

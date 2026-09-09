@@ -1,5 +1,7 @@
 # MatchBASE PDF Renderer and Validator Toolchain Research
 
+> Historical record retained for compatibility and decision provenance. Its state and deployment statements apply to its original date. Current product authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`. Current engineering lifecycle: [DELIVERY_LIFECYCLE](https://github.com/banihashem/INNOBASE-MatchBASE/blob/main/docs/DELIVERY_LIFECYCLE.md).
+
 Date: 2026-09-01  
 Decision status: **CONDITIONAL**  
 Scope: production Worker image; offline-at-render-time PDF generation and validation; no implementation or deployment authorization.

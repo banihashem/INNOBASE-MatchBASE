@@ -27,7 +27,14 @@ const reviewed = new Set([
 ]);
 
 const reviewedPackageLicenses = new Map([
-  ["LGPL-3.0-or-later", new Set(["@img/sharp-libvips-linux-x64@1.3.2"])],
+  // Exact Linux patch review: docs/DELIVERY_LIFECYCLE.md; no blanket LGPL admission.
+  [
+    "LGPL-3.0-or-later",
+    new Set([
+      "@img/sharp-libvips-linux-x64@1.3.2",
+      "@img/sharp-libvips-linux-x64@1.3.3",
+    ]),
+  ],
 ]);
 
 export function validateLicenseInventory(inventory) {

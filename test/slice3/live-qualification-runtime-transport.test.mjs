@@ -23,6 +23,7 @@ function completion(overrides = {}) {
     openrouter_metadata: {
       requested: "google/gemini-3.6-flash",
       strategy: "direct",
+      is_byok: true,
       attempt: 1,
       endpoints: {
         total: 1,
@@ -47,6 +48,7 @@ function azureCompletion(overrides = {}) {
     openrouter_metadata: {
       requested: "openai/gpt-5.4-mini",
       strategy: "direct",
+      is_byok: true,
       attempt: 1,
       endpoints: {
         total: 1,
@@ -59,7 +61,6 @@ function azureCompletion(overrides = {}) {
         ],
       },
       pipeline: [],
-      is_byok: false,
     },
     ...overrides,
   });
@@ -114,7 +115,6 @@ test("production OpenRouter transport rejects an OpenAI provider on the Azure-on
               },
             ],
           },
-          is_byok: true,
         },
       }),
       { "x-generation-id": "generation-runtime-id" },

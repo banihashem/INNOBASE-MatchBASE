@@ -24,7 +24,7 @@ describe("L07 Consultant journey", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "Interpreting and structuring your request in English",
     );
-    expect(screen.getByRole("status")).toHaveTextContent("Keep this page open");
+    expect(screen.getByText(/Keep this page open/)).toBeInTheDocument();
     rerender(
       <WorkflowActivity
         state="workflow_failed"
@@ -148,9 +148,7 @@ describe("L07 Consultant journey", () => {
         ]}
       />,
     );
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "No research is running",
-    );
+    expect(screen.getByText(/No research is running/)).toBeInTheDocument();
     expect(screen.getByText(/Stopped at:/)).toHaveTextContent(
       "Verification round 2",
     );

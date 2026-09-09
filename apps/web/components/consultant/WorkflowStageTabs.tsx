@@ -42,11 +42,11 @@ export function WorkflowStageTabs({
   researchAvailable: boolean;
 }) {
   const tabs = [
-    { stage: 1, label: "Section 1: Request", enabled: true },
-    { stage: 2, label: "Section 2: Preparation", enabled: submitted },
+    { stage: 1, label: "Your request", enabled: true },
+    { stage: 2, label: "Review & prepare", enabled: submitted },
     {
       stage: 3,
-      label: "Section 3: Research & Results",
+      label: "Research & results",
       enabled: researchAvailable,
     },
   ] as const;
@@ -54,7 +54,7 @@ export function WorkflowStageTabs({
     <div
       role="tablist"
       aria-label="Consultant workflow sections"
-      className="flex flex-wrap gap-2"
+      className="workflow-stage-tabs"
     >
       {tabs.map((tab) => (
         <button
@@ -65,6 +65,13 @@ export function WorkflowStageTabs({
           aria-selected={stage === tab.stage}
           aria-controls={`workflow-panel-${tab.stage}`}
           disabled={!tab.enabled}
+          title={
+            !tab.enabled
+              ? tab.stage === 2
+                ? "Submit your request first."
+                : "Approve the research plan first."
+              : undefined
+          }
           tabIndex={stage === tab.stage ? 0 : -1}
           onClick={() => onChange(tab.stage)}
           onKeyDown={(event) => {
@@ -88,9 +95,12 @@ export function WorkflowStageTabs({
           }}
           className={`rounded-lg border px-4 py-3 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed ${stage === tab.stage ? "border-sky-500 bg-sky-900 text-white" : "border-slate-700 bg-slate-900 text-slate-300"}`}
         >
+          <span className="workflow-stage-number" aria-hidden="true">
+            {tab.stage}
+          </span>
           {tab.label}
           {tab.stage === 1 && submitted && (
-            <span className="ml-2 text-xs">(Locked)</span>
+            <span className="ml-2 text-xs">Saved</span>
           )}
         </button>
       ))}

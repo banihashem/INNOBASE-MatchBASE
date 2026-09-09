@@ -1,0 +1,252 @@
+.consultant-entry {
+  min-height: 100vh;
+  background: #0b1220;
+  color: #e8eef7;
+  font-family: var(--font-inter), sans-serif;
+}
+.ce-header,
+.ce-hero,
+.ce-principles,
+.ce-footer {
+  max-width: 1280px;
+  margin: auto;
+  padding-left: 40px;
+  padding-right: 40px;
+}
+.ce-header {
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid #263247;
+}
+.ce-brand {
+  color: #f5f8fc;
+  font-size: 24px;
+  font-weight: 750;
+  text-decoration: none;
+  letter-spacing: -0.7px;
+}
+.ce-brand > span {
+  color: #5eead4;
+}
+.ce-brand small {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #9cacbf;
+  margin-top: 5px;
+}
+.ce-label,
+.ce-caption,
+.ce-footer {
+  color: #a9b8ca;
+  font-size: 13px;
+}
+.ce-hero {
+  display: grid;
+  grid-template-columns: 1.12fr 1fr;
+  gap: 64px;
+  align-items: center;
+  padding-top: 80px;
+  padding-bottom: 72px;
+}
+.ce-eyebrow {
+  color: #5eead4;
+  font-size: 12px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  font-weight: 650;
+  margin: 0 0 22px;
+}
+.ce-hero h1 {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: clamp(36px, 4.5vw, 62px);
+  line-height: 1.07;
+  letter-spacing: -2px;
+  margin: 0 0 26px;
+}
+.ce-hero h1 > span {
+  color: #96a9c1;
+}
+.ce-lead {
+  color: #b4c2d4;
+  line-height: 1.8;
+  font-size: 16px;
+  margin-bottom: 32px;
+  max-width: 560px;
+}
+.ce-primary,
+.ce-notice button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  background: #5eead4;
+  color: #082b2a;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 14px 22px;
+  min-height: 48px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.ce-primary:hover,
+.ce-notice button:hover {
+  background: #99f6e4;
+}
+.ce-caption {
+  line-height: 1.6;
+  margin-top: 16px;
+}
+.ce-preview {
+  background: #121e30;
+  border: 1px solid #2b3d55;
+  border-radius: 18px;
+  box-shadow: 0 22px 70px #0003;
+  overflow: hidden;
+}
+.ce-preview-heading {
+  padding: 24px 28px;
+  border-bottom: 1px solid #2b3d55;
+  font-size: 14px;
+  font-weight: 650;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ce-dot {
+  width: 7px;
+  height: 7px;
+  background: #5eead4;
+  border-radius: 50%;
+}
+.ce-preview ol {
+  padding: 12px 28px;
+  list-style: none;
+  margin: 0;
+}
+.ce-preview li {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 22px 0;
+}
+.ce-preview li > span {
+  color: #5eead4;
+  font-size: 12px;
+  border: 1px solid #32545b;
+  border-radius: 8px;
+  padding: 9px;
+}
+.ce-preview h2 {
+  font-size: 16px;
+  margin: 0 0 8px;
+  font-weight: 650;
+}
+.ce-preview p {
+  font-size: 14px;
+  color: #a9b8ca;
+  line-height: 1.65;
+  margin: 0;
+}
+.ce-preview-footer {
+  background: #101b2c;
+  padding: 20px 28px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #b4c2d4;
+}
+.ce-preview-footer span {
+  color: #5eead4;
+  padding: 0 6px;
+}
+.ce-principles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 42px;
+  padding-top: 32px;
+  padding-bottom: 56px;
+  border-top: 1px solid #263247;
+}
+.ce-principles h2 {
+  font-size: 15px;
+  font-weight: 650;
+  margin: 0 0 12px;
+}
+.ce-principles p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #a9b8ca;
+  margin: 0;
+}
+.ce-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding-top: 24px;
+  padding-bottom: 32px;
+  border-top: 1px solid #263247;
+}
+.ce-notice {
+  padding: 20px;
+  border: 1px solid #6e5732;
+  border-radius: 8px;
+  background: #292317;
+  margin: 20px 0;
+  line-height: 1.7;
+}
+.ce-notice h2 {
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+.ce-notice p {
+  font-size: 14px;
+  margin: 8px 0 18px;
+}
+.ce-notice button:disabled {
+  opacity: 0.65;
+}
+.consultant-entry :focus-visible {
+  outline: 3px solid #5eead4;
+  outline-offset: 4px;
+}
+@media (max-width: 850px) {
+  .ce-hero {
+    gap: 32px;
+    padding-top: 48px;
+    grid-template-columns: 1fr;
+  }
+  .ce-principles {
+    gap: 24px;
+  }
+}
+@media (max-width: 540px) {
+  .ce-header,
+  .ce-hero,
+  .ce-principles,
+  .ce-footer {
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+  .ce-header {
+    min-height: 84px;
+  }
+  .ce-label {
+    display: none;
+  }
+  .ce-principles {
+    grid-template-columns: 1fr;
+  }
+  .ce-hero h1 {
+    letter-spacing: -1px;
+  }
+  .ce-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ce-preview ol {
+    padding: 8px 20px;
+  }
+}

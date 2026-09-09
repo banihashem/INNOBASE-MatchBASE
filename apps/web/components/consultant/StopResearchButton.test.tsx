@@ -66,6 +66,10 @@ it("L09 user cancellation is distinct from provider failure and retains restart 
   expect(
     screen.getByRole("heading", { name: "Stopped by you" }),
   ).toBeInTheDocument();
-  expect(screen.getByRole("status")).toHaveTextContent("new execution");
+  expect(
+    screen.getByText(
+      /No new execution starts without a fresh cost estimate and your approval/,
+    ),
+  ).toBeVisible();
   expect(screen.getByRole("status")).not.toHaveTextContent("Action needed");
 });

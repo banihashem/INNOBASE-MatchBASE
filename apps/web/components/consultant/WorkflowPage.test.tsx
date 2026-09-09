@@ -190,15 +190,11 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     );
     render(<ConsultantWorkflowPage />);
     await screen.findByRole("button", { name: "Stop research" });
-    fireEvent.click(
-      screen.getByRole("tab", { name: "Section 2: Preparation" }),
-    );
+    fireEvent.click(screen.getByRole("tab", { name: "Review & prepare" }));
     expect(
       screen.queryByRole("button", { name: "Stop research" }),
     ).not.toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("tab", { name: "Section 3: Research & Results" }),
-    );
+    fireEvent.click(screen.getByRole("tab", { name: "Research & results" }));
     fireEvent.click(screen.getByRole("button", { name: "Stop research" }));
     await screen.findByRole("button", {
       name: "Review a new research estimate",
@@ -284,15 +280,13 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     );
     await openDraft();
     edit("Rejected local edit");
-    fireEvent.click(
-      screen.getByRole("button", { name: /Submit Intake & Proceed/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Continue to review/ }));
     await tick();
     expect(window.location.search).toBe(
       "?draft_id=draft-1&run_id=accepted-run",
     );
     expect(
-      screen.getByRole("tab", { name: "Section 3: Research & Results" }),
+      screen.getByRole("tab", { name: "Research & results" }),
     ).toHaveAttribute("aria-selected", "true");
     expect(
       screen.getByText("Existing research is still running"),
@@ -300,7 +294,7 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     expect(
       screen.queryByRole("button", { name: /Retry/ }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: /Section 1: Request/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Your request/ }));
     expect(screen.getByLabelText("Product Requirement")).toHaveValue(
       "Accepted pump",
     );
@@ -311,9 +305,7 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
       "Accepted 10 units",
     );
     expect(screen.getByLabelText("Product Requirement")).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "+ New Consultant Research" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "New research" })).toBeDisabled();
     expect(
       requests.some((item) =>
         [
@@ -386,11 +378,9 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
       }),
     );
     render(<ConsultantWorkflowPage />);
-    const prompt = await screen.findByLabelText(
-      "Editable Synthesized Research Prompt",
-    );
+    const prompt = await screen.findByLabelText("Editable research plan");
     const researchTab = screen.getByRole("tab", {
-      name: "Section 3: Research & Results",
+      name: "Research & results",
     });
     expect(researchTab).toBeDisabled();
     fireEvent.change(prompt, {
@@ -400,7 +390,7 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     });
     expect(requests).toHaveLength(0);
     fireEvent.click(
-      screen.getByRole("button", { name: /Approve Prompt & Review Cost/ }),
+      screen.getByRole("button", { name: /Approve plan & review cost/ }),
     );
     await waitFor(() => expect(requests).toHaveLength(1));
     expect(requests[0]?.edited_prompt).toBe(
@@ -431,12 +421,8 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     await screen.findByText("First verification loop underway");
     expect(researchTab).toHaveAttribute("aria-selected", "true");
     expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
-    expect(
-      screen.getByRole("button", { name: "+ New Consultant Research" }),
-    ).toBeDisabled();
-    fireEvent.click(
-      screen.getByRole("tab", { name: "Section 2: Preparation" }),
-    );
+    expect(screen.getByRole("button", { name: "New research" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("tab", { name: "Review & prepare" }));
     expect(prompt).toBeDisabled();
     expect(
       screen.getByLabelText("Editable English Interpretation"),
@@ -504,19 +490,15 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     );
     await openDraft();
     edit();
-    fireEvent.click(
-      screen.getByRole("button", { name: /Submit Intake & Proceed/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Continue to review/ }));
     await tick();
     expect(window.location.search).toBe(
       "?draft_id=draft-1&run_id=failed-intake",
     );
     expect(
-      screen.getByRole("tab", { name: "Section 2: Preparation" }),
+      screen.getByRole("tab", { name: "Review & prepare" }),
     ).toHaveAttribute("aria-selected", "true");
-    expect(
-      screen.getByRole("button", { name: "+ New Consultant Research" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "New research" })).toBeDisabled();
     expect(screen.getByLabelText("Product Requirement")).toBeDisabled();
     expect(
       screen.queryByLabelText("Editable English Interpretation"),
@@ -533,7 +515,7 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
       screen.getByLabelText("Editable English Interpretation"),
     ).toHaveValue("Product A. Technical A. Order A.");
     expect(
-      screen.getByRole("button", { name: "Approve Interpretation & Proceed" }),
+      screen.getByRole("button", { name: "Approve interpretation & continue" }),
     ).toBeEnabled();
     expect(
       requests.filter((item) => item.action === "retry_interpretation"),
@@ -578,10 +560,10 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
       />,
     );
     const row = screen.getByRole("row", { name: /Supplier representation/ });
-    expect(within(row).getByText("omitted")).toBeInTheDocument();
-    expect(within(row).queryByText("preserved")).not.toBeInTheDocument();
+    expect(within(row).getByText("Missing")).toBeInTheDocument();
+    expect(within(row).queryByText("Preserved")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Approval Gated (Fidelity Issues)" }),
+      screen.getByRole("button", { name: "Review flagged requirements" }),
     ).toBeDisabled();
     expect(
       screen.getByText(/a passed check does not establish/),
@@ -747,7 +729,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     );
     render(<ConsultantWorkflowPage />);
     const approve = await screen.findByRole("button", {
-      name: "Approve Interpretation & Proceed",
+      name: "Approve interpretation & continue",
     });
     await waitFor(() =>
       expect(
@@ -795,21 +777,20 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     );
     await openDraft();
     edit();
-    expect(
-      screen.getByRole("tab", { name: "Section 1: Request" }),
-    ).toHaveAttribute("aria-selected", "true");
-    expect(
-      screen.getByRole("tab", { name: "Section 2: Preparation" }),
-    ).toBeDisabled();
-    fireEvent.click(
-      screen.getByRole("button", { name: /Submit Intake & Proceed/ }),
+    expect(screen.getByRole("tab", { name: "Your request" })).toHaveAttribute(
+      "aria-selected",
+      "true",
     );
+    expect(
+      screen.getByRole("tab", { name: "Review & prepare" }),
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Continue to review/ }));
     await tick();
     expect(requests.some((request) => request.action === "submit_intake")).toBe(
       true,
     );
     const startNew = screen.getByRole("button", {
-      name: "+ New Consultant Research",
+      name: "New research",
     });
     expect(startNew).toBeDisabled();
     fireEvent.click(startNew);
@@ -847,16 +828,16 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
       screen.getByLabelText("Editable English Interpretation"),
     ).toHaveValue("Product A. Technical A. Order A.");
     expect(
-      screen.getByRole("tab", { name: "Section 2: Preparation" }),
+      screen.getByRole("tab", { name: "Review & prepare" }),
     ).toHaveAttribute("aria-selected", "true");
     expect(
-      screen.getByRole("tab", { name: "Section 3: Research & Results" }),
+      screen.getByRole("tab", { name: "Research & results" }),
     ).toBeDisabled();
     expect(startNew).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "Resume Research" }),
     ).toBeDisabled();
-    const requestTab = screen.getByRole("tab", { name: /Section 1: Request/ });
+    const requestTab = screen.getByRole("tab", { name: /Your request/ });
     fireEvent.click(requestTab);
     expect(screen.getByLabelText("Product Requirement")).toBeDisabled();
     expect(
@@ -864,11 +845,11 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     ).toBeDisabled();
     expect(screen.getByLabelText("Order & Supplier Profile")).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: /Submit Intake & Proceed/ }),
+      screen.getByRole("button", { name: /Continue to review/ }),
     ).toBeDisabled();
     fireEvent.keyDown(requestTab, { key: "ArrowRight" });
     const preparationTab = screen.getByRole("tab", {
-      name: "Section 2: Preparation",
+      name: "Review & prepare",
     });
     expect(preparationTab).toHaveFocus();
     expect(preparationTab).toHaveAttribute("aria-selected", "true");
@@ -947,14 +928,14 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     });
     await tick();
     expect(
-      screen.getByRole("button", { name: "Approval Gated (Fidelity Issues)" }),
+      screen.getByRole("button", { name: "Review flagged requirements" }),
     ).toBeDisabled();
     await act(async () => {
       older.resolve(response({ success: true, fidelity: { valid: true } }));
     });
     await tick();
     expect(
-      screen.getByRole("button", { name: "Approval Gated (Fidelity Issues)" }),
+      screen.getByRole("button", { name: "Review flagged requirements" }),
     ).toBeDisabled();
     expect(interpretation).toHaveValue("Current invalid version");
   });
@@ -1015,9 +996,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     );
     render(<ConsultantWorkflowPage />);
     await screen.findByText("Server checkpoint");
-    expect(
-      screen.getByRole("status", { name: "Workflow progress" }),
-    ).toHaveTextContent("Loop 1 of up to 3");
+    expect(screen.getByText("Research step 1 of up to 3")).toBeVisible();
     await screen.findByText(
       "Evidence from trade sources",
       {},
@@ -1031,9 +1010,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     expect(
       screen.getByText("Evidence from supplier sources"),
     ).toBeInTheDocument();
-    const prompt = screen.getByLabelText(
-      "Editable Synthesized Research Prompt",
-    );
+    const prompt = screen.getByLabelText("Editable research plan");
     expect(prompt).toBeEnabled();
     fireEvent.change(prompt, { target: { value: "My edited prompt" } });
     expect(prompt).toHaveValue("My edited prompt");
@@ -1200,11 +1177,9 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     render(<ConsultantWorkflowPage />);
     await screen.findByText(/Showing 5 of 20/);
     expect(
-      screen.getByRole("tab", { name: "Section 3: Research & Results" }),
+      screen.getByRole("tab", { name: "Research & results" }),
     ).toHaveAttribute("aria-selected", "true");
-    expect(
-      screen.getByRole("button", { name: "+ New Consultant Research" }),
-    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: "New research" })).toBeEnabled();
     const best = [...output.supplier_candidates].sort(
       (a, b) =>
         b.assessment.compatibility_score - a.assessment.compatibility_score,
@@ -1212,7 +1187,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     expect(
       within(
         screen.getByRole("region", {
-          name: "Section 3: Ranked Supplier Candidates & Dossiers",
+          name: "Supplier shortlist",
         }),
       )
         .getAllByRole("heading", { level: 3 })
@@ -1224,15 +1199,15 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     ).toHaveTextContent(best.legal_name);
     for (const count of [10, 15, 20]) {
       fireEvent.click(
-        screen.getByRole("button", { name: /Reveal 5 More Candidates/ }),
+        screen.getByRole("button", { name: /Show next suppliers/ }),
       );
       await screen.findByText(new RegExp(`Showing ${count} of 20`));
     }
     expect(
-      screen.queryByRole("button", { name: /Reveal 5 More Candidates/ }),
+      screen.queryByRole("button", { name: /Show next suppliers/ }),
     ).not.toBeInTheDocument();
     fireEvent.click(
-      screen.getAllByRole("button", { name: /View Full Dossier/ })[0]!,
+      screen.getAllByRole("button", { name: /View supplier details/ })[0]!,
     );
     expect(screen.getByRole("dialog")).toHaveTextContent(best.legal_name);
     expect(screen.getByRole("dialog")).toHaveTextContent("Sources inspected");
@@ -1253,9 +1228,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     await tick(800);
     expect(requests.filter((r) => r.action === "save_draft")).toHaveLength(1);
     edit("B");
-    fireEvent.click(
-      screen.getByRole("button", { name: "+ New Consultant Research" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "New research" }));
     fireEvent.click(screen.getByRole("button", { name: "Save & Start New" }));
     await tick();
     fireEvent.keyDown(window, { key: "Escape" });
@@ -1297,9 +1270,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     save = async () => response({ error: "Storage unavailable" }, 503);
     await openDraft();
     edit();
-    fireEvent.click(
-      screen.getByRole("button", { name: "+ New Consultant Research" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "New research" }));
     fireEvent.click(screen.getByRole("button", { name: "Save & Start New" }));
     await tick();
     expect(screen.getByText("Storage unavailable")).toBeInTheDocument();
@@ -1319,9 +1290,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     await tick(800);
     await tick(5000);
     expect(requests.filter((r) => r.action === "save_draft")).toHaveLength(1);
-    fireEvent.click(
-      screen.getByRole("button", { name: "+ New Consultant Research" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "New research" }));
     await tick();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(created).toBe(2);
@@ -1332,7 +1301,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     await openDraft();
     edit();
     const trigger = screen.getByRole("button", {
-      name: "+ New Consultant Research",
+      name: "New research",
     });
     trigger.focus();
     fireEvent.click(trigger);
@@ -1391,7 +1360,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     );
     render(<ConsultantWorkflowPage />);
     const launch = await screen.findByRole("button", {
-      name: /Approve Prompt & Review Cost/,
+      name: /Approve plan & review cost/,
     });
     fireEvent.click(launch);
     await screen.findByText("Prompt version rejected");
@@ -1399,4 +1368,30 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
       "approve_step3",
     ]);
   });
+});
+
+it("DEV-004 does not claim a retained interpretation was approved after a failed step", () => {
+  render(
+    <InterpretationApprovalStep
+      workflowState="workflow_failed"
+      isLoading={false}
+      step1Translation="Retained English text"
+      step1Fidelity={null}
+      isFidelityValidating={false}
+      showFullLedger={false}
+      setShowFullLedger={() => {}}
+      onTranslationChange={() => {}}
+      onRetryValidation={() => {}}
+      handleApproveStep1={async () => {}}
+    />,
+  );
+  expect(
+    screen.getByRole("button", { name: "Approval unavailable while stopped" }),
+  ).toBeDisabled();
+  expect(
+    screen.queryByText("Your approved interpretation is saved."),
+  ).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Editable English Interpretation")).toHaveValue(
+    "Retained English text",
+  );
 });

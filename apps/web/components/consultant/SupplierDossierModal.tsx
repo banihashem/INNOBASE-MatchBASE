@@ -115,13 +115,13 @@ export function SupplierDossierModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-900 animate-in fade-in zoom-in-95 duration-200">
+      <div className="supplier-dossier bg-white rounded-xl shadow-2xl border border-slate-200 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-900 animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-bold uppercase tracking-wider text-sky-400">
-                Candidate Dossier &bull; #{assessment.rank}
+              <span className="text-sm font-bold uppercase tracking-wider text-sky-400">
+                Supplier details &bull; #{assessment.rank}
               </span>
               <span
                 className={`text-xs px-2 py-0.5 rounded font-bold uppercase ${
@@ -157,7 +157,7 @@ export function SupplierDossierModal({
                 {assessment.compatibility_score}
                 <span className="text-sm font-normal text-slate-400">/100</span>
               </div>
-              <div className="text-xs text-slate-300 font-semibold">
+              <div className="text-sm text-slate-300 font-semibold">
                 {isIllustrative ? "Illustrative Score" : assessment.fit_band}
               </div>
             </div>
@@ -369,10 +369,10 @@ export function SupplierDossierModal({
               <h4 className="font-bold text-slate-800 mb-2">
                 Technical Offering & Quality Specs
               </h4>
-              <p className="text-xs text-slate-600 mb-2">
+              <p className="text-sm text-slate-600 mb-2">
                 <strong>Product:</strong> {supplier.offering.product_name}
               </p>
-              <div className="text-xs space-y-1">
+              <div className="text-sm space-y-1">
                 {Object.entries(supplier.offering.specifications).map(
                   ([k, v]) => (
                     <div
@@ -401,7 +401,7 @@ export function SupplierDossierModal({
                 claims={claims}
                 detailed
               />
-              <div className="text-xs space-y-1.5">
+              <div className="text-sm space-y-1.5">
                 <div className="flex justify-between border-b border-slate-100 py-0.5">
                   <span className="text-slate-500">Production Capacity:</span>
                   <span className="font-medium text-slate-800">
@@ -483,7 +483,7 @@ export function SupplierDossierModal({
                                     </a>
                                   ) : (
                                     <span key={id} className="block">
-                                      Evidence unavailable ({id})
+                                      Source details unavailable
                                     </span>
                                   );
                                 })
@@ -500,12 +500,12 @@ export function SupplierDossierModal({
 
           <section className="border border-slate-200 rounded-lg p-4 space-y-3">
             <h3 className="font-bold">Certification, Logistics & Evidence</h3>
-            <p className="text-xs">
+            <p className="text-sm">
               Identity confidence: {supplier.identity_confidence}. Evidence
               confidence: {assessment.evidence_confidence}. Data completeness:{" "}
               {assessment.data_completeness}%.
             </p>
-            <p className="text-xs">
+            <p className="text-sm">
               Payment terms:{" "}
               {supplier.commercial.payment_terms ??
                 "Not found in inspected sources"}
@@ -524,7 +524,7 @@ export function SupplierDossierModal({
                 ))}
               </ul>
             ) : (
-              <p className="text-xs">
+              <p className="text-sm">
                 No supporting certification record found.
               </p>
             )}
@@ -587,12 +587,12 @@ export function SupplierDossierModal({
                 ))}
               </ul>
             ) : (
-              <p className="text-xs">
+              <p className="text-sm">
                 No linked evidence available for this supplier.
               </p>
             )}
             {supplierClaims.length > 0 && (
-              <ul className="text-xs space-y-2">
+              <ul className="text-sm space-y-2">
                 {supplierClaims.map((claim) => (
                   <li key={claim.claim_id}>
                     {claim.claim_text} — {claim.status}, {claim.confidence}{" "}
@@ -628,7 +628,7 @@ export function SupplierDossierModal({
             <h4 className="font-bold text-sky-900 mb-1">
               Strategic Synthesis & Recommended Action
             </h4>
-            <div className="text-xs text-sky-800 space-y-1">
+            <div className="text-sm text-sky-800 space-y-1">
               <p>
                 <strong>Drivers:</strong>{" "}
                 {assessment.positive_drivers.join("; ")}
@@ -649,7 +649,7 @@ export function SupplierDossierModal({
 
         {/* Footer */}
         <div className="bg-slate-100 px-6 py-3 flex justify-between items-center border-t border-slate-200">
-          <span className="text-xs text-slate-500">
+          <span className="text-sm text-slate-500">
             {isIllustrative
               ? "Demonstration Profile: Illustrative fixture candidate for workflow evaluation. Not live market evidence."
               : "Evidence status and source limitations are listed in this dossier."}

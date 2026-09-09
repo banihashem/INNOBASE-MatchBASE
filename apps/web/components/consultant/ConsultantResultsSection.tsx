@@ -2,6 +2,7 @@ import type {
   ConsultantResearchOutputV3,
   SupplierEntityV3,
 } from "@matchbase/contracts";
+import "./consultant-results.css";
 import { ApprovedRequestSummary } from "./ApprovedRequestSummary";
 import { ResearchPricing, SupplierPriceSummary } from "./ResearchPricing";
 
@@ -33,7 +34,7 @@ export function ConsultantResultsSection({
   return (
     <section
       aria-labelledby="section-3-heading"
-      className="bg-slate-800/60 rounded-xl border border-slate-700 p-6 shadow-lg backdrop-blur space-y-6"
+      className="consultant-results bg-slate-800/60 rounded-xl border border-slate-700 p-6 shadow-lg backdrop-blur space-y-6"
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-700 pb-4">
         <div>
@@ -47,7 +48,7 @@ export function ConsultantResultsSection({
             >
               3
             </span>
-            Section 3: Ranked Supplier Candidates &amp; Dossiers
+            Supplier shortlist
           </h2>
           <p className="text-xs text-slate-400 mt-1">
             Showing {visibleSuppliers.length} of {suppliers.length} assessed
@@ -82,28 +83,31 @@ export function ConsultantResultsSection({
               : "Download Full PDF Report"}
           </button>
 
-          <button
-            type="button"
-            onClick={handleJsonExport}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold rounded-lg border border-slate-600 transition-colors flex items-center gap-2"
-          >
-            <svg
-              className="w-4 h-4 text-slate-400"
-              width={16}
-              height={16}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+          <details className="result-export-details">
+            <summary>More export options</summary>
+            <button
+              type="button"
+              onClick={handleJsonExport}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold rounded-lg border border-slate-600 transition-colors flex items-center gap-2"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              />
-            </svg>
-            Export Structured JSON
-          </button>
+              <svg
+                className="w-4 h-4 text-slate-400"
+                width={16}
+                height={16}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                />
+              </svg>
+              Export research data (JSON)
+            </button>
+          </details>
         </div>
       </div>
 
@@ -111,7 +115,7 @@ export function ConsultantResultsSection({
         <h3 className="font-semibold text-white">
           {suppliers.length
             ? "Research findings"
-            : "No publishable candidates in this saved round"}
+            : "No supplier profiles ready in this round"}
         </h3>
         <p className="text-sm text-slate-200 whitespace-pre-line">
           {output.executive_summary.direct_answer}
@@ -140,7 +144,7 @@ export function ConsultantResultsSection({
           return (
             <div
               key={supp.candidate_id}
-              className="bg-slate-900/90 rounded-xl border border-slate-700 p-5 hover:border-slate-500 transition-all shadow-md flex flex-col justify-between"
+              className="supplier-result-card bg-slate-900/90 rounded-xl border border-slate-700 p-5 hover:border-slate-500 transition-all shadow-md flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-start justify-between gap-2 mb-2">
@@ -177,6 +181,7 @@ export function ConsultantResultsSection({
                   <div className="text-right">
                     <div className="text-2xl font-black text-sky-400 leading-none">
                       {supp.assessment.compatibility_score}
+                      <span className="supplier-score-scale"> / 100</span>
                     </div>
                     <div className="text-[10px] text-slate-400 uppercase font-semibold mt-1">
                       {isIllustrative
@@ -187,7 +192,7 @@ export function ConsultantResultsSection({
                 </div>
 
                 {/* Details row */}
-                <div className="text-xs space-y-1 my-3 bg-slate-800/60 p-2.5 rounded border border-slate-700/60">
+                <div className="supplier-key-facts text-sm space-y-1 my-3 bg-slate-800/60 p-2.5 rounded border border-slate-700/60">
                   <div className="flex justify-between">
                     <span className="text-slate-400">Country / Origin:</span>
                     <span className="font-mono font-medium text-slate-200">
@@ -196,7 +201,7 @@ export function ConsultantResultsSection({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Capacity &amp; MOQ:</span>
-                    <span className="text-slate-200 truncate max-w-[200px]">
+                    <span className="text-slate-200 text-right break-words">
                       {supp.commercial.production_capacity ?? "Not found"}{" "}
                       &bull; {supp.commercial.moq ?? "Not found"}
                     </span>
@@ -239,12 +244,22 @@ export function ConsultantResultsSection({
                   evidence={output.evidence_sources}
                   claims={output.claims}
                 />
-                <p className="text-xs text-slate-300 line-clamp-2 mb-4">
+                <p className="text-sm text-slate-300 mb-4">
                   {supp.assessment.positive_drivers.join("; ")}
+                </p>
+                {supp.assessment.limiting_gaps.length > 0 && (
+                  <p className="supplier-card-gap">
+                    <strong>Needs confirmation: </strong>
+                    {supp.assessment.limiting_gaps.slice(0, 2).join("; ")}
+                  </p>
+                )}
+                <p className="supplier-evidence-note">
+                  Evidence confidence: {supp.assessment.evidence_confidence}.
+                  Fit score is an assessment, not a guarantee.
                 </p>
               </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+              <div className="supplier-card-actions flex items-center justify-between pt-3 border-t border-slate-800">
                 <span className="text-[11px] text-slate-400">
                   Next:{" "}
                   <strong className="text-slate-200">
@@ -256,7 +271,7 @@ export function ConsultantResultsSection({
                   onClick={() => onSelectSupplier(supp)}
                   className="px-3 py-1.5 bg-slate-800 hover:bg-sky-600 text-slate-200 hover:text-white rounded-md text-xs font-bold transition-colors border border-slate-700"
                 >
-                  View Full Dossier &rarr;
+                  View supplier details &rarr;
                 </button>
               </div>
             </div>
@@ -288,8 +303,8 @@ export function ConsultantResultsSection({
                 d="M19 9l-7 7-7-7"
               />
             </svg>
-            Reveal 5 More Candidates ({visibleSuppliers.length} of{" "}
-            {suppliers.length} shown)
+            Show next suppliers ({visibleSuppliers.length} of {suppliers.length}{" "}
+            shown)
           </button>
         </div>
       )}

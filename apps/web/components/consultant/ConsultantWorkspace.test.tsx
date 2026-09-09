@@ -135,7 +135,7 @@ test("ProductRouter resolves Consultant into the visible Consultant workspace", 
   render(<ProductRouter authPath="/auth/simulator/start" />);
   expect(
     await screen.findByRole("heading", {
-      name: "From buying requirements to supplier evidence",
+      name: "Your sourcing dashboard",
     }),
   ).toBeVisible();
   expect(

@@ -1,0 +1,122 @@
+.consultant-results {
+  color: #d7e1ef;
+  min-width: 0;
+}
+.consultant-results .supplier-result-card {
+  padding: 24px;
+  box-shadow: none;
+  border-color: #2e4057;
+  min-width: 0;
+}
+.supplier-result-card h3 {
+  font-size: 19px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.supplier-key-facts > div {
+  gap: 18px;
+  align-items: baseline;
+}
+.supplier-key-facts > div > span:first-child {
+  flex-shrink: 0;
+}
+.supplier-score-scale {
+  font-size: 11px;
+  font-weight: 500;
+  color: #9aaec4;
+  white-space: nowrap;
+}
+.supplier-evidence-note {
+  font-size: 12px;
+  line-height: 1.65;
+  color: #9eafc4;
+  margin: 12px 0 20px;
+}
+.supplier-card-gap {
+  font-size: 13px;
+  line-height: 1.65;
+  color: #e9c681;
+  margin: 12px 0;
+}
+.supplier-card-actions {
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+.supplier-card-actions > span {
+  flex: 1 1 170px;
+  line-height: 1.7;
+}
+.supplier-card-actions > button {
+  min-height: 44px;
+  font-size: 13px;
+}
+.result-export-details {
+  position: relative;
+  font-size: 13px;
+}
+.result-export-details summary {
+  cursor: pointer;
+  padding: 12px 0;
+}
+.result-export-details button {
+  margin-top: 8px;
+}
+.supplier-dossier {
+  line-height: 1.65;
+}
+.supplier-dossier :focus-visible {
+  outline: 3px solid #0284c7;
+  outline-offset: 3px;
+}
+.supplier-dossier h2 {
+  overflow-wrap: anywhere;
+}
+.supplier-dossier dl dd {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+@media (max-width: 600px) {
+  .consultant-results {
+    padding: 18px;
+  }
+  .consultant-results .supplier-result-card {
+    padding: 18px;
+  }
+  .supplier-key-facts > div {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+  .supplier-dossier > div {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .supplier-dossier dl {
+    grid-template-columns: 1fr;
+  }
+  .supplier-dossier dl dd {
+    grid-column: auto;
+  }
+}
+/* Keep the dismiss control legible and tappable beside long supplier names. */
+.supplier-dossier button[aria-label="Close modal"] {
+  min-width: 44px;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 10px;
+}
+.supplier-dossier button[aria-label="Close modal"] svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.supplier-dossier > div:first-child > div:first-child {
+  min-width: 0;
+}
+.supplier-dossier > div:first-child > div:last-child {
+  flex-shrink: 0;
+  gap: 8px;
+}

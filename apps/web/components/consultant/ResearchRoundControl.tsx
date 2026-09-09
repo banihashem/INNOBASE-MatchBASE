@@ -29,11 +29,13 @@ type Quote = {
 export function ResearchRoundControl({
   runId,
   workflowState,
+  hasResults = false,
   onStarted,
   onPreview,
 }: {
   runId: string;
   workflowState: string;
+  hasResults?: boolean;
   onStarted: () => void;
   onPreview: (output: ConsultantResearchOutputV3, roundId: string) => void;
 }) {
@@ -44,38 +46,70 @@ export function ResearchRoundControl({
   const [model, setModel] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const visibleError = error || loadError;
   const [notice, setNotice] = useState("");
-  const refresh = useCallback(async () => {
-    const response = await fetch(
-      `${endpoint}?run_id=${encodeURIComponent(runId)}`,
-      { cache: "no-store" },
-    );
-    const data = await response.json();
-    if (!response.ok)
-      throw new Error(data.error ?? "Cost records are unavailable.");
-    if (
-      !Array.isArray(data.rounds) ||
-      !data.costs ||
-      typeof data.next_round !== "number"
-    )
-      throw new Error(
-        "Cost records are unavailable. Research has not started.",
+  const refresh = useCallback(
+    async (signal?: AbortSignal) => {
+      const response = await fetch(
+        `${endpoint}?run_id=${encodeURIComponent(runId)}`,
+        { cache: "no-store", ...(signal ? { signal } : {}) },
       );
-    setOverview(data);
-  }, [runId]);
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error ?? "Cost records are unavailable.");
+      if (
+        !Array.isArray(data.rounds) ||
+        !data.costs ||
+        typeof data.next_round !== "number"
+      )
+        throw new Error(
+          "Cost records are unavailable. Research has not started.",
+        );
+      if (!signal?.aborted) {
+        setOverview(data);
+        setLoadError("");
+      }
+    },
+    [runId],
+  );
   useEffect(() => {
-    let disposed = false;
-    const read = () => {
-      if (!disposed)
-        void refresh().catch((e) => {
-          if (!disposed) setError(e.message);
-        });
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    let reading = false;
+    const read = async () => {
+      clearTimeout(timer);
+      if (controller.signal.aborted || reading) return;
+      if (!document.hidden) {
+        reading = true;
+        try {
+          await refresh(controller.signal);
+        } catch (e) {
+          if (!controller.signal.aborted)
+            setLoadError(
+              e instanceof Error ? e.message : "Cost records unavailable.",
+            );
+        } finally {
+          reading = false;
+        }
+      }
+      if (!controller.signal.aborted)
+        timer = setTimeout(
+          () => void read(),
+          /running|dispatching|verif|synthesi/.test(workflowState)
+            ? 5000
+            : 30000,
+        );
     };
-    read();
-    const timer = setInterval(read, 5000);
+    const visible = () => {
+      if (!document.hidden) void read();
+    };
+    void read();
+    document.addEventListener("visibilitychange", visible);
     return () => {
-      disposed = true;
-      clearInterval(timer);
+      controller.abort();
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", visible);
     };
   }, [refresh, workflowState]);
   async function request(action: "quote" | "approve") {
@@ -233,209 +267,239 @@ export function ResearchRoundControl({
           </details>
         </div>
       ) : (
-        <p role="status">Loading recorded costs…</p>
-      )}
-      {overview && overview.rounds.some((r) => r.status !== "proposed") && (
-        <div>
-          <h3 className="font-semibold">Saved rounds and attempts</h3>
-          <ul className="divide-y divide-slate-700">
-            {overview.rounds
-              .filter((r) => r.status !== "proposed")
-              .map((r) => (
-                <li
-                  key={r.round_id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
-                >
-                  <span>
-                    Round {r.round_number} ·{" "}
-                    {r.plan.recovery_source_execution_id
-                      ? "Recovered saved evidence"
-                      : r.status}{" "}
-                    {r.candidate_count !== null
-                      ? `· ${r.candidate_count} suppliers`
-                      : ""}
-                    <small className="block text-slate-400">
-                      {r.plan.recovery_source_execution_id
-                        ? "$0.00 · local recovery, no provider calls"
-                        : r.plan.mode === "demonstration"
-                          ? "$0.00 · demonstration"
-                          : r.execution_id &&
-                              costs?.by_execution[r.execution_id]
-                            ? `${money(costs.by_execution[r.execution_id]!.recorded_usd)} recorded${costs.by_execution[r.execution_id]!.unpriced_calls ? " · incomplete" : ""}`
-                            : "Cost records pending"}
-                    </small>
-                  </span>
-                  {r.output_available && (
-                    <button
-                      type="button"
-                      className={button}
-                      disabled={busy}
-                      onClick={() => void preview(r.round_id)}
-                    >
-                      View round {r.round_number} result
-                    </button>
-                  )}
-                </li>
-              ))}
-          </ul>
-        </div>
-      )}
-      {active ? (
-        <p role="status" className="text-sky-200">
-          An approved round is in progress. Its result will be saved here; any
-          previous result remains available.
+        <p role="status">
+          {visibleError
+            ? "Recorded costs are currently unavailable."
+            : "Loading recorded costs…"}
         </p>
-      ) : overview && next <= 5 ? (
-        <div className="space-y-4">
-          <h3 className="font-semibold text-lg">
-            {next === 1
-              ? "Review the first-round estimate"
-              : next <= 3
-                ? `Optional round ${next}`
-                : `Optional public social research · round ${next}`}
-          </h3>
-          <p className="text-sm text-slate-300">
-            {currentRound >= 3
-              ? "The normal research path is complete. Further work is optional and requires a new estimate and your approval."
-              : currentRound > 0
-                ? "Your result is ready. Continue only if unresolved evidence could change your decision. Existing findings will be reused."
-                : "The approved plan is saved. No new research round has started."}
-          </p>
-          {next >= 2 && (
-            <div className="flex flex-wrap gap-4">
-              <label className="text-sm">
-                Research depth
-                <select
-                  aria-label="Research depth"
-                  className="block rounded bg-slate-800 border border-slate-500 p-2 mt-1"
-                  value={depth}
-                  onChange={(e) => {
-                    setDepth(e.target.value as ResearchDepth);
-                    setQuote(null);
-                  }}
-                >
-                  <option value="simple">Simple · lower cost</option>
-                  <option value="deep">Thoughtful · deeper analysis</option>
-                </select>
-              </label>
-              <label className="text-sm">
-                Model selection
-                <select
-                  aria-label="Research model"
-                  className="block rounded bg-slate-800 border border-slate-500 p-2 mt-1 max-w-full"
-                  value={model}
-                  onChange={(e) => {
-                    setModel(e.target.value);
-                    setQuote(null);
-                  }}
-                >
-                  <option value="">System recommendation</option>
-                  {choices.map((m) => (
-                    <option value={m.model} key={m.model}>
-                      {m.model}
-                    </option>
+      )}
+      <details open={!hasResults || active} className="research-round-options">
+        <summary className="cursor-pointer font-semibold">
+          {hasResults
+            ? "Review rounds or research further"
+            : "Plan this research round"}
+        </summary>
+        <div className="space-y-5 mt-4">
+          {overview && overview.rounds.some((r) => r.status !== "proposed") && (
+            <div>
+              <h3 className="font-semibold">Saved rounds and attempts</h3>
+              <ul className="divide-y divide-slate-700">
+                {overview.rounds
+                  .filter((r) => r.status !== "proposed")
+                  .map((r) => (
+                    <li
+                      key={r.round_id}
+                      className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+                    >
+                      <span>
+                        Round {r.round_number} ·{" "}
+                        {r.plan.recovery_source_execution_id
+                          ? "Recovered saved evidence"
+                          : r.status}{" "}
+                        {r.candidate_count !== null
+                          ? `· ${r.candidate_count} suppliers`
+                          : ""}
+                        <small className="block text-slate-400">
+                          {r.plan.recovery_source_execution_id
+                            ? "$0.00 · local recovery, no provider calls"
+                            : r.plan.mode === "demonstration"
+                              ? "$0.00 · demonstration"
+                              : r.execution_id &&
+                                  costs?.by_execution[r.execution_id]
+                                ? `${money(costs.by_execution[r.execution_id]!.recorded_usd)} recorded${costs.by_execution[r.execution_id]!.unpriced_calls ? " · incomplete" : ""}`
+                                : "Cost records pending"}
+                        </small>
+                      </span>
+                      {r.output_available && (
+                        <button
+                          type="button"
+                          className={button}
+                          disabled={busy}
+                          onClick={() => void preview(r.round_id)}
+                        >
+                          View round {r.round_number} result
+                        </button>
+                      )}
+                    </li>
                   ))}
-                </select>
-              </label>
+              </ul>
             </div>
           )}
-          <button
-            type="button"
-            disabled={busy}
-            className={button}
-            onClick={() => void request("quote")}
-          >
-            {busy
-              ? "Working…"
-              : quote
-                ? "Refresh estimate"
-                : "Get cost estimate · no research starts"}
-          </button>
-          {quote && (
-            <div className="border border-sky-700 rounded-lg p-4 space-y-3">
-              <h4 className="font-bold">
-                Round {quote.plan.round_number} · {quote.plan.title}
-              </h4>
-              <p>{quote.plan.purpose}</p>
-              <p className="text-xl font-bold text-sky-200">
-                Estimated additional cost: {money(quote.plan.estimated_low_usd)}
-                –{money(quote.plan.estimated_high_usd)}
+          {active ? (
+            <p role="status" className="text-sky-200">
+              An approved round is in progress. Its result will be saved here;
+              any previous result remains available.
+            </p>
+          ) : overview && next <= 5 ? (
+            <div className="space-y-4">
+              <h3 className="font-semibold text-lg">
+                {next === 1
+                  ? "Review the first-round estimate"
+                  : next <= 3
+                    ? `Optional round ${next}`
+                    : `Optional public social research · round ${next}`}
+              </h3>
+              <p className="text-sm text-slate-300">
+                {currentRound >= 3
+                  ? "The normal research path is complete. Further work is optional and requires a new estimate and your approval."
+                  : overview.rounds.some((round) => round.status !== "proposed")
+                    ? overview.rounds.some((round) => round.output_available)
+                      ? "Your saved findings are available. Continue only if unresolved evidence could change your decision. Existing findings will be reused."
+                      : "The previous attempt did not produce a report. Review the new estimate before starting another attempt."
+                    : "The approved plan is saved. No new research round has started."}
               </p>
-              <p className="text-xs text-slate-300">
-                An estimate, not a guaranteed spending cap. Valid until{" "}
-                {new Date(quote.plan.expires_at).toLocaleTimeString()}.
-              </p>
-              {quote.plan.mode === "demonstration" ? (
-                <p className="text-sm text-amber-200">
-                  Demonstration: fixed sample data; no provider calls.
-                </p>
-              ) : (
-                <p className="text-sm">
-                  Search: {quote.plan.research_models.join(" + ")} ·{" "}
-                  {quote.plan.search_engine} web
-                  <br />
-                  Analysis: {quote.plan.synthesis_model}
-                  <br />
-                  Extraction: {quote.plan.extraction_model}
-                </p>
+              {next >= 2 && (
+                <div className="flex flex-wrap gap-4">
+                  <label className="text-sm">
+                    Research depth
+                    <select
+                      aria-label="Research depth"
+                      className="block rounded bg-slate-800 border border-slate-500 p-2 mt-1"
+                      value={depth}
+                      onChange={(e) => {
+                        setDepth(e.target.value as ResearchDepth);
+                        setQuote(null);
+                      }}
+                    >
+                      <option value="simple">Simple · lower cost</option>
+                      <option value="deep">Thoughtful · deeper analysis</option>
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    Model selection
+                    <select
+                      aria-label="Research model"
+                      className="block rounded bg-slate-800 border border-slate-500 p-2 mt-1 max-w-full"
+                      value={model}
+                      onChange={(e) => {
+                        setModel(e.target.value);
+                        setQuote(null);
+                      }}
+                    >
+                      <option value="">System recommendation</option>
+                      {choices.map((m) => (
+                        <option value={m.model} key={m.model}>
+                          {m.model}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
               )}
-              {quote.plan.focus_requirements.length > 0 && (
-                <details>
-                  <summary className="cursor-pointer text-sm">
-                    Research focus and unresolved evidence
-                  </summary>
-                  <ul className="list-disc pl-5 text-sm mt-2">
-                    {quote.plan.focus_requirements.map((g, i) => (
-                      <li key={i}>{g}</li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-              <details>
-                <summary className="cursor-pointer text-sm">
-                  Estimate assumptions and call limits
-                </summary>
-                <p className="text-sm mt-2">
-                  Up to {quote.plan.max_calls} model calls; up to{" "}
-                  {quote.plan.max_output_tokens_per_call.toLocaleString()}{" "}
-                  output tokens per call. Primary web retrieval can add elapsed
-                  time.
-                </p>
-                <ul className="list-disc pl-5 text-xs mt-2">
-                  {quote.plan.assumptions.map((a) => (
-                    <li key={a}>{a}</li>
-                  ))}
-                </ul>
-              </details>
               <button
                 type="button"
+                disabled={busy}
                 className={button}
-                disabled={busy || expired}
-                onClick={() => void request("approve")}
+                onClick={() => void request("quote")}
               >
-                {expired
-                  ? "Estimate expired · refresh first"
-                  : `Approve cost estimate & start round ${quote.plan.round_number}`}
+                {busy
+                  ? "Working…"
+                  : quote
+                    ? "Refresh estimate"
+                    : "Get cost estimate · no research starts"}
               </button>
+              {quote && (
+                <div className="border border-sky-700 rounded-lg p-4 space-y-3">
+                  <h4 className="font-bold">
+                    Round {quote.plan.round_number} · {quote.plan.title}
+                  </h4>
+                  <p>{quote.plan.purpose}</p>
+                  <p className="text-xl font-bold text-sky-200">
+                    Estimated additional cost:{" "}
+                    {money(quote.plan.estimated_low_usd)}–
+                    {money(quote.plan.estimated_high_usd)}
+                  </p>
+                  <p className="text-xs text-slate-300">
+                    An estimate, not a guaranteed spending cap. Valid until{" "}
+                    {new Date(quote.plan.expires_at).toLocaleTimeString()}.
+                  </p>
+                  {quote.plan.mode === "demonstration" ? (
+                    <p className="text-sm text-amber-200">
+                      Demonstration: fixed sample data; no provider calls.
+                    </p>
+                  ) : (
+                    <details className="text-sm">
+                      <summary className="cursor-pointer">
+                        Selected models and search method
+                      </summary>
+                      <p className="mt-2">
+                        Search: {quote.plan.research_models.join(" + ")} ·{" "}
+                        {quote.plan.search_engine} web
+                        <br />
+                        Analysis: {quote.plan.synthesis_model}
+                        <br />
+                        Extraction: {quote.plan.extraction_model}
+                      </p>
+                    </details>
+                  )}
+                  {quote.plan.focus_requirements.length > 0 && (
+                    <details>
+                      <summary className="cursor-pointer text-sm">
+                        Research focus and unresolved evidence
+                      </summary>
+                      <ul className="list-disc pl-5 text-sm mt-2">
+                        {quote.plan.focus_requirements.map((g, i) => (
+                          <li key={i}>{g}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                  <details>
+                    <summary className="cursor-pointer text-sm">
+                      Estimate assumptions and call limits
+                    </summary>
+                    <p className="text-sm mt-2">
+                      Up to {quote.plan.max_calls} model calls; up to{" "}
+                      {quote.plan.max_output_tokens_per_call.toLocaleString()}{" "}
+                      output tokens per call. Primary web retrieval can add
+                      elapsed time.
+                    </p>
+                    <ul className="list-disc pl-5 text-xs mt-2">
+                      {quote.plan.assumptions.map((a) => (
+                        <li key={a}>{a}</li>
+                      ))}
+                    </ul>
+                  </details>
+                  <button
+                    type="button"
+                    className={button}
+                    disabled={busy || expired}
+                    onClick={() => void request("approve")}
+                  >
+                    {expired
+                      ? "Estimate expired · refresh first"
+                      : `Approve cost estimate & start round ${quote.plan.round_number}`}
+                  </button>
+                </div>
+              )}
             </div>
+          ) : (
+            overview && (
+              <p className="text-emerald-300">
+                Five research rounds have been recorded. No further round is
+                scheduled.
+              </p>
+            )
           )}
         </div>
-      ) : (
-        overview && (
-          <p className="text-emerald-300">
-            All five optional rounds are complete. No more work is scheduled.
-          </p>
-        )
-      )}
+      </details>
       {notice && (
         <p role="status" className="text-sky-200">
           {notice}
         </p>
       )}
-      {error && (
-        <p role="alert" className="text-amber-200">
-          {error}
-        </p>
+      {visibleError && (
+        <div className="text-amber-200 space-y-2">
+          <p role="alert">
+            {/MB-\d|execution.?id|HTTP \d|SQL|provider/i.test(visibleError)
+              ? "This action could not be completed. Your saved research is retained. Check the current progress before trying again."
+              : visibleError}
+          </p>
+          <details className="text-xs">
+            <summary className="cursor-pointer">Support details</summary>
+            <p className="break-words mt-2">{visibleError}</p>
+          </details>
+        </div>
       )}
     </section>
   );

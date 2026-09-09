@@ -50,6 +50,7 @@ export function WorkflowActivity({
   const ready = resultReady(state);
   const awaiting =
     state.includes("awaiting_approval") ||
+    state === "prep_step2_advisory_ready" ||
     state === "prep_step3_prompt_approved";
   const active =
     !failed &&
@@ -95,14 +96,87 @@ export function WorkflowActivity({
     "English interpretation · Your approval",
     "Advisory research · 3 rounds",
     "Research plan · Your approval",
-    "Gemini + OpenAI supplier discovery",
+    "Supplier discovery across independent research sources",
     "Evidence review · one approved round at a time",
     "Ranked results and supplier details",
     "PDF download",
   ];
+  const recordedActivity = (
+    <div className="activity-recorded" aria-label="Recorded execution activity">
+      <h3>Current work and completed steps</h3>
+      {activity.length > 0 && (
+        <p className="activity-counts">
+          {finishedOperations} operation(s) completed
+          {active && !connectionError && pendingOperations > 0
+            ? ` · ${pendingOperations} in progress`
+            : ""}
+          {failed ? " · Execution stopped" : ""}
+        </p>
+      )}
+      {activity.length ? (
+        <ul className="activity-log">
+          {activity.map((step) => {
+            const pending = step.started > step.completed + step.failed;
+            const status = pending
+              ? failed || ready || awaiting || state === "invalidated"
+                ? "Interrupted"
+                : connectionError
+                  ? "Last recorded: in progress"
+                  : step.failed
+                    ? "Retry in progress"
+                    : "In progress"
+              : step.failed
+                ? failed
+                  ? "Stopped"
+                  : step.completed
+                    ? "Completed with recovered or incomplete attempts"
+                    : active
+                      ? "Recovery in progress"
+                      : "Incomplete"
+                : step.completed
+                  ? "Completed"
+                  : "Recorded";
+            return (
+              <li key={`${step.phase}:${step.loop}`} data-status={status}>
+                <span className="activity-operation-name">
+                  <span className="activity-operation-icon" aria-hidden="true">
+                    {status === "Completed"
+                      ? "✓"
+                      : status === "Stopped" || status === "Interrupted"
+                        ? "!"
+                        : "·"}
+                  </span>
+                  {phaseLabel(step.phase, step.loop)}
+                </span>
+                <strong className="activity-operation-status">{status}</strong>
+                {(step.completed > 0 || step.started > 1) && (
+                  <small>
+                    {step.completed} completed · {step.started} started
+                    {step.failed > 0 ? ` · ${step.failed} stopped` : ""}
+                  </small>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p>
+          Detailed activity appears after the server records a research stage.
+        </p>
+      )}
+    </div>
+  );
   return (
     <section className="workflow-activity" aria-label="Research activity">
-      <div role="status" aria-label="Workflow progress" aria-live="polite">
+      <div>
+        <p
+          className="sr-only"
+          role="status"
+          aria-label="Workflow progress"
+          aria-live="polite"
+        >
+          {heading}
+        </p>
         <p className="activity-kicker">
           {failed
             ? stoppedByUser
@@ -125,7 +199,7 @@ export function WorkflowActivity({
                   ? "Preparing download"
                   : ready
                     ? "Result saved"
-                    : "Live execution"}
+                    : "Research in progress"}
               </span>
               <span>
                 {ready && !pdfBusy ? "100%" : "Completion time not yet known"}
@@ -163,14 +237,14 @@ export function WorkflowActivity({
                   ? "Open any supplier for the full evidence and contact details. Download the report from the results section."
                   : initialInterpretation
                     ? "Your saved request is being interpreted in English. Keep this page open until the interpretation is ready for review."
-                    : "The server is processing your saved request. You can leave this page and return from Home; reopening it does not start another research execution."}
+                    : "The server is processing your saved request. You can leave this page and return from Dashboard; reopening it does not start another research execution."}
         </p>
         {active && !connectionError && progress?.message && (
           <p
             className="activity-current-operation"
             aria-label="Current operation"
           >
-            {progress.message}
+            {phaseLabel(progress.phase || "queued", progress.loop)}
           </p>
         )}
         {failure && failed && (
@@ -185,9 +259,8 @@ export function WorkflowActivity({
           progress.loop > 0 &&
           (progress.max_loops ?? 0) > 1 && (
             <p>
-              Loop {progress.loop}
-              {progress.max_loops ? ` of up to ${progress.max_loops}` : ""} ·
-              Reported by the server
+              Research step {progress.loop}
+              {progress.max_loops ? ` of up to ${progress.max_loops}` : ""}
             </p>
           )}
       </div>
@@ -205,91 +278,28 @@ export function WorkflowActivity({
       ) : null}
       {progress?.updated_at && (
         <p className="activity-time">
-          Last server update:{" "}
+          Last update:{" "}
           <time dateTime={progress.updated_at}>
             {new Date(progress.updated_at).toLocaleString()}
           </time>
         </p>
       )}
-      <div
-        className="activity-recorded"
-        aria-label="Recorded execution activity"
-      >
-        <h3>Current work and completed steps</h3>
-        {activity.length > 0 && (
-          <p className="activity-counts" aria-live="polite">
-            {finishedOperations} operation(s) completed
-            {active && !connectionError && pendingOperations > 0
-              ? ` · ${pendingOperations} in progress`
-              : ""}
-            {failed ? " · Execution stopped" : ""}
-          </p>
-        )}
-        {activity.length ? (
-          <ul className="activity-log">
-            {activity.map((step) => {
-              const pending = step.started > step.completed + step.failed;
-              const status = pending
-                ? failed || ready || awaiting || state === "invalidated"
-                  ? "Interrupted"
-                  : connectionError
-                    ? "Last recorded: in progress"
-                    : step.failed
-                      ? "Retry in progress"
-                      : "In progress"
-                : step.failed
-                  ? failed
-                    ? "Stopped"
-                    : step.completed
-                      ? "Completed with recovered or incomplete attempts"
-                      : active
-                        ? "Recovery in progress"
-                        : "Incomplete"
-                  : step.completed
-                    ? "Completed"
-                    : "Recorded";
-              return (
-                <li key={`${step.phase}:${step.loop}`} data-status={status}>
-                  <span className="activity-operation-name">
-                    <span
-                      className="activity-operation-icon"
-                      aria-hidden="true"
-                    >
-                      {status === "Completed"
-                        ? "✓"
-                        : status === "Stopped" || status === "Interrupted"
-                          ? "!"
-                          : "·"}
-                    </span>
-                    {phaseLabel(step.phase, step.loop)}
-                  </span>
-                  <strong className="activity-operation-status">
-                    {status}
-                  </strong>
-                  {(step.completed > 0 || step.started > 1) && (
-                    <small>
-                      {step.completed} completed · {step.started} started
-                      {step.failed > 0 ? ` · ${step.failed} stopped` : ""}
-                    </small>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p>
-            Detailed activity appears after the server records a research stage.
-          </p>
-        )}
-      </div>
+      {ready ? (
+        <details className="activity-details activity-completed-history">
+          <summary>View completed research steps</summary>
+          {recordedActivity}
+        </details>
+      ) : (
+        recordedActivity
+      )}
       <details className="activity-details">
-        <summary>View research plan and technical details</summary>
+        <summary>Research roadmap and support details</summary>
         <ol className="activity-roadmap" aria-label="Research plan">
           {stages.map((label) => (
             <li key={label}>{label}</li>
           ))}
         </ol>
-        {progress?.message && (!active || connectionError) && (
+        {progress?.message && (
           <details>
             <summary>Latest technical checkpoint</summary>
             <p>{progress.message}</p>

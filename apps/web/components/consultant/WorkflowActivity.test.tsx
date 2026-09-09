@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { WorkflowActivity } from "./WorkflowActivity";
 
@@ -105,7 +105,7 @@ it("L10 disconnects pause the activity indicator without declaring server work s
   expect(screen.getByText("Last recorded: in progress")).toBeVisible();
 });
 
-it("L15 an in-place retry remains active and exposes its exact server message", () => {
+it("L15 an in-place retry remains active with readable status and retains the server message in support details", () => {
   render(
     <WorkflowActivity
       state="lane_openai_running"
@@ -126,8 +126,82 @@ it("L15 an in-place retry remains active and exposes its exact server message", 
   );
   expect(screen.getByText("Retry in progress")).toBeVisible();
   expect(screen.getByLabelText("Current operation")).toHaveTextContent(
-    "Attempt 2 of 3",
+    "OpenAI · Extracting supplier details",
   );
   expect(screen.queryByText("Stopped")).not.toBeInTheDocument();
   expect(screen.getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
+});
+
+it("DEV-004 keeps raw checkpoints out of live announcements and main progress copy", () => {
+  render(
+    <WorkflowActivity
+      state="research_dispatching"
+      progress={{
+        phase: "discovery_openai",
+        message: "MB-502 trace 123 extraction_batch started",
+      }}
+      activity={[{ ...started, phase: "discovery_openai" }]}
+    />,
+  );
+  expect(screen.getByLabelText("Current operation")).not.toHaveTextContent(
+    "MB-502",
+  );
+  expect(screen.getByRole("status")).not.toHaveTextContent("MB-502");
+  const checkpoint = screen.getByText(
+    "MB-502 trace 123 extraction_batch started",
+  );
+  expect(checkpoint.closest("details")).not.toHaveAttribute("open");
+});
+
+it("DEV-004 legacy advisory-ready waits for plan approval without presenting active research", () => {
+  render(
+    <WorkflowActivity
+      state="prep_step2_advisory_ready"
+      progress={{ phase: "preparation", updated_at: started.updated_at }}
+      activity={[{ ...started, phase: "preparation" }]}
+    />,
+  );
+  expect(
+    screen.getByRole("heading", { name: "Review research plan" }),
+  ).toBeVisible();
+  expect(screen.getByRole("status")).toHaveTextContent("Review research plan");
+  expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  expect(screen.getByText(/Research waits for your approval/)).toBeVisible();
+  expect(screen.queryByText("In progress")).not.toBeInTheDocument();
+  expect(screen.queryByText(/No new stage update/)).not.toBeInTheDocument();
+});
+
+it("DEV-004 completed research history is secondary while active work remains visible", () => {
+  const completed = { ...started, completed: 1 };
+  const { rerender } = render(
+    <WorkflowActivity
+      state="progressive_reveal_ready"
+      progress={{ phase: "progressive_reveal_ready" }}
+      activity={[completed]}
+    />,
+  );
+  expect(
+    screen.getByRole("heading", { name: "Your supplier results are ready" }),
+  ).toBeVisible();
+  expect(screen.getByRole("progressbar")).toHaveAttribute(
+    "aria-valuenow",
+    "100",
+  );
+  const summary = screen.getByText("View completed research steps");
+  expect(summary.closest("details")).not.toHaveAttribute("open");
+  expect(screen.getByText("Completed")).not.toBeVisible();
+  fireEvent.click(summary);
+  expect(screen.getByText("Completed")).toBeVisible();
+  rerender(
+    <WorkflowActivity
+      state="lane_openai_running"
+      progress={{ phase: "discovery_openai" }}
+      activity={[completed, { ...started, phase: "discovery_openai" }]}
+    />,
+  );
+  expect(
+    screen.queryByText("View completed research steps"),
+  ).not.toBeInTheDocument();
+  expect(screen.getByText("Completed")).toBeVisible();
+  expect(screen.getByText("In progress")).toBeVisible();
 });

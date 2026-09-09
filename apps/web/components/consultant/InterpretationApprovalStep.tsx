@@ -50,25 +50,25 @@ export function InterpretationApprovalStep({
             Step 1
           </span>
           <h3 className="font-bold text-white text-sm">
-            English Interpretation &amp; Tariff Classification Gate
+            Check your English interpretation
           </h3>
         </div>
       </div>
 
       <p className="text-xs text-slate-300 mb-2">
-        The intake has been translated and normalized into international
-        commercial English. You may edit this interpretation before approving
-        (edits will automatically propagate downstream):
+        Check that this English version preserves your original requirements.
+        Edit it as needed; the approved version will guide the advisory brief
+        and supplier research.
       </p>
 
       <textarea
         id="step1-translation-input"
         aria-label="Editable English Interpretation"
         disabled={isLoading || workflowState !== "prep_step1_awaiting_approval"}
-        rows={4}
+        rows={8}
         value={step1Translation}
         onChange={(e) => onTranslationChange(e.target.value)}
-        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 font-mono mb-3 focus:ring-2 focus:ring-sky-500"
+        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 mb-3 focus:ring-2 focus:ring-sky-500"
       />
 
       <p className="mb-3 text-xs text-slate-300">
@@ -107,10 +107,7 @@ export function InterpretationApprovalStep({
                 <span className="text-lg" aria-hidden="true">
                   🚫
                 </span>
-                <span>
-                  Approval Gated: Directional / Qualifier Fidelity Mismatch
-                  Detected
-                </span>
+                <span>Review these requirements before continuing</span>
               </div>
               <p className="text-slate-300 text-[11px]">
                 The automated check could not match every detected requirement
@@ -125,7 +122,8 @@ export function InterpretationApprovalStep({
                 step1Fidelity.mutated_items.length > 0 && (
                   <div className="space-y-1.5 mt-2">
                     <div className="font-semibold text-rose-300 text-[11px] uppercase tracking-wider">
-                      Mutated Requirements ({step1Fidelity.mutated_count}):
+                      Requirements with changed meaning (
+                      {step1Fidelity.mutated_count}):
                     </div>
                     {step1Fidelity.mutated_items.map(
                       (item: any, idx: number) => (
@@ -141,14 +139,14 @@ export function InterpretationApprovalStep({
                             : {item.explanation}
                           </div>
                           <div className="text-slate-300 text-[10px] mt-0.5">
-                            <strong>Source Span:</strong> "
+                            <strong>Your original wording:</strong> "
                             {item.requirement?.source_span_or_reference ||
                               item.requirement?.source_text}
                             "
                           </div>
                           {item.prohibited_value && (
                             <div className="text-rose-400 text-[10px]">
-                              <strong>Mutated Value:</strong> "
+                              <strong>Wording to review:</strong> "
                               {item.prohibited_value}"
                             </div>
                           )}
@@ -163,7 +161,8 @@ export function InterpretationApprovalStep({
                 step1Fidelity.omitted_items.length > 0 && (
                   <div className="space-y-1.5 mt-2">
                     <div className="font-semibold text-amber-300 text-[11px] uppercase tracking-wider">
-                      Omitted Requirements ({step1Fidelity.omitted_count}):
+                      Requirements not found in the interpretation (
+                      {step1Fidelity.omitted_count}):
                     </div>
                     {step1Fidelity.omitted_items.map(
                       (item: any, idx: number) => (
@@ -172,11 +171,16 @@ export function InterpretationApprovalStep({
                           className="bg-amber-900/30 border border-amber-700/50 p-2 rounded text-[11px]"
                         >
                           <div className="font-bold text-amber-200">
-                            ⚠️ Omitted: {item.label || item.normalized_label} (
-                            {item.concept})
+                            Missing:{" "}
+                            {item.label ||
+                              item.normalized_label ||
+                              String(item.concept ?? "Requirement").replaceAll(
+                                "_",
+                                " ",
+                              )}
                           </div>
                           <div className="text-slate-300 text-[10px] mt-0.5">
-                            <strong>Source Span:</strong> "
+                            <strong>Your original wording:</strong> "
                             {item.source_span_or_reference || item.source_text}"
                           </div>
                         </div>
@@ -201,82 +205,14 @@ export function InterpretationApprovalStep({
               ) : (
                 <span className="font-semibold text-rose-400 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
                   <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse"></span>
-                  Requirement Fidelity Gated ({step1Fidelity.mutated_count ?? 0}{" "}
-                  Mutated &bull; {step1Fidelity.omitted_count ?? 0} Omitted)
+                  Requirements need review ({step1Fidelity.mutated_count ?? 0}{" "}
+                  changed &bull; {step1Fidelity.omitted_count ?? 0} missing)
                 </span>
               )}
               <span className="text-[10px] text-slate-400">
-                Mutations: {step1Fidelity.mutated_count ?? 0} &bull; Omissions:{" "}
+                Changed: {step1Fidelity.mutated_count ?? 0} &bull; Missing:{" "}
                 {step1Fidelity.omitted_count ?? 0}
               </span>
-            </div>
-
-            {/* Compact Summary Metrics (Section 10.2) */}
-            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-1">
-              <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
-                <span className="text-slate-400 text-[10px] block">
-                  Detected
-                </span>
-                <span className="font-bold text-white text-xs">
-                  {step1Fidelity.ledger?.total_explicit_count ?? 0}
-                </span>
-              </div>
-              <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
-                <span className="text-emerald-400 text-[10px] block">
-                  Preserved
-                </span>
-                <span className="font-bold text-emerald-300 text-xs">
-                  {step1Fidelity.preserved_count ?? 0}
-                </span>
-              </div>
-              <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
-                <span className="text-sky-400 text-[10px] block">
-                  Normalized
-                </span>
-                <span className="font-bold text-sky-300 text-xs">
-                  {step1Fidelity.normalized_count ?? 0}
-                </span>
-              </div>
-              <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
-                <span className="text-slate-400 text-[10px] block">
-                  Clarifications
-                </span>
-                <span className="font-bold text-slate-300 text-xs">
-                  {step1Fidelity.ambiguities_count ?? 0}
-                </span>
-              </div>
-              <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
-                <span
-                  className={
-                    step1Fidelity.omitted_count > 0
-                      ? "text-amber-400 font-semibold text-[10px] block"
-                      : "text-slate-400 text-[10px] block"
-                  }
-                >
-                  Omitted
-                </span>
-                <span
-                  className={`font-bold text-xs ${step1Fidelity.omitted_count > 0 ? "text-amber-400" : "text-slate-300"}`}
-                >
-                  {step1Fidelity.omitted_count ?? 0}
-                </span>
-              </div>
-              <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-center">
-                <span
-                  className={
-                    step1Fidelity.mutated_count > 0
-                      ? "text-rose-400 font-semibold text-[10px] block"
-                      : "text-slate-400 text-[10px] block"
-                  }
-                >
-                  Mutated
-                </span>
-                <span
-                  className={`font-bold text-xs ${step1Fidelity.mutated_count > 0 ? "text-rose-400" : "text-slate-300"}`}
-                >
-                  {step1Fidelity.mutated_count ?? 0}
-                </span>
-              </div>
             </div>
 
             {/* Progressive Disclosure Toggle */}
@@ -284,21 +220,26 @@ export function InterpretationApprovalStep({
               <button
                 type="button"
                 onClick={() => setShowFullLedger(!showFullLedger)}
+                aria-expanded={showFullLedger}
+                aria-controls="interpretation-requirement-checks"
                 className="text-sky-400 hover:text-sky-300 text-[11px] underline font-medium"
               >
                 {showFullLedger
-                  ? "Hide Structured Requirement Ledger"
-                  : `View Structured Requirement Ledger (${step1Fidelity.ledger?.requirements?.length ?? 0} clauses)`}
+                  ? "Hide requirement checks"
+                  : `View requirement checks (${step1Fidelity.ledger?.requirements?.length ?? 0} clauses)`}
               </button>
 
               {showFullLedger && step1Fidelity.ledger?.requirements && (
-                <div className="max-h-60 overflow-y-auto mt-2 border border-slate-800 rounded bg-slate-900/90 text-[10px]">
+                <div
+                  id="interpretation-requirement-checks"
+                  className="max-h-60 overflow-auto mt-2 border border-slate-800 rounded bg-slate-900/90 text-[10px]"
+                >
                   <table className="w-full text-left">
                     <thead className="bg-slate-800/80 text-slate-300 sticky top-0">
                       <tr>
                         <th className="p-1.5">Requirement</th>
-                        <th className="p-1.5">Original Source Span</th>
-                        <th className="p-1.5">Requested Normalized Value</th>
+                        <th className="p-1.5">Original wording</th>
+                        <th className="p-1.5">Interpreted requirement</th>
                         <th className="p-1.5">Operator</th>
                         <th className="p-1.5">Status</th>
                       </tr>
@@ -333,7 +274,15 @@ export function InterpretationApprovalStep({
                                         : "bg-slate-800 text-slate-300"
                                   }`}
                                 >
-                                  {status}
+                                  {status === "mutated"
+                                    ? "Changed"
+                                    : status === "omitted"
+                                      ? "Missing"
+                                      : status === "preserved"
+                                        ? "Preserved"
+                                        : status === "normalized_equivalent"
+                                          ? "Same meaning"
+                                          : status.replaceAll("_", " ")}
                                 </span>
                               </td>
                             </tr>
@@ -351,8 +300,7 @@ export function InterpretationApprovalStep({
               step1Fidelity.model_suggestions.length > 0 && (
                 <div className="mt-2 pt-2 border-t border-slate-800/80">
                   <div className="text-amber-300 font-semibold text-[11px] flex items-center gap-1 mb-1">
-                    <span>💡</span> Model Suggestions (Separated from Approved
-                    Facts):
+                    <span>💡</span> Suggestions to consider:
                   </div>
                   {step1Fidelity.model_suggestions.map(
                     (s: any, idx: number) => (
@@ -368,8 +316,7 @@ export function InterpretationApprovalStep({
                           {s.reasoning}
                         </span>{" "}
                         <span className="text-slate-400 text-[10px] block mt-0.5">
-                          [Status: Kept as suggestion only; not injected into
-                          mandatory requirements]
+                          This is a suggestion, not an approved requirement.
                         </span>
                       </div>
                     ),
@@ -391,23 +338,14 @@ export function InterpretationApprovalStep({
         />
       )}
 
-      <div className="flex justify-between items-center">
-        <span className="text-xs text-emerald-400 flex items-center gap-1">
-          <svg
-            className="w-4 h-4"
-            width={16}
-            height={16}
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <path
-              fillRule="evenodd"
-              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-              clipRule="evenodd"
-            />
-          </svg>
-          Harmonized Tariff System Classification &amp; Normalized Specs
-        </span>
+      <div className="flex flex-wrap gap-4 justify-between items-center">
+        <p className="text-xs text-slate-300">
+          {workflowState === "prep_step1_awaiting_approval"
+            ? "Your approval starts advisory research and prepares the research plan."
+            : workflowState === "workflow_failed"
+              ? "Your last saved interpretation is shown. Resolve the stopped step to continue."
+              : "Your approved interpretation is saved."}
+        </p>
         <button
           type="button"
           onClick={handleApproveStep1}
@@ -419,16 +357,18 @@ export function InterpretationApprovalStep({
           }
           title={
             step1Fidelity?.valid === false
-              ? "Approval disabled: mandatory requirements contain mutations or omissions. Edit the English interpretation to correct them."
+              ? "Review the flagged requirements or apply a suggested correction before approving."
               : undefined
           }
           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {workflowState === "prep_step1_awaiting_approval"
             ? step1Fidelity?.valid === false
-              ? "Approval Gated (Fidelity Issues)"
-              : "Approve Interpretation & Proceed"
-            : "Approved \u2713"}
+              ? "Review flagged requirements"
+              : "Approve interpretation & continue"
+            : workflowState === "workflow_failed"
+              ? "Approval unavailable while stopped"
+              : "Approved \u2713"}
         </button>
       </div>
     </div>

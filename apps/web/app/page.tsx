@@ -5,8 +5,7 @@ export const dynamic = "force-dynamic";
 export default function Page() {
   const signedOutResearchMode =
     process.env.MATCHBASE_LIVE_RESEARCH_ENABLED === "true" &&
-    process.env.MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED === "true" &&
-    process.env.MATCHBASE_SYNTHETIC_FIXTURE !== "true"
+    process.env.MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED === "true"
       ? {
           id: "qualified_live_research" as const,
           label: "Qualified live research" as const,
@@ -19,10 +18,11 @@ export default function Page() {
         };
   const authPath =
     process.env.MATCHBASE_OIDC_SIMULATOR === "true"
-      ? "/auth/simulator/start"
+      ? "/auth/simulator/start?fixture=consultant"
       : "/auth/google/start";
   return (
     <ProductRouter
+      consultantOnly
       authPath={authPath}
       signedOutResearchMode={signedOutResearchMode}
     />

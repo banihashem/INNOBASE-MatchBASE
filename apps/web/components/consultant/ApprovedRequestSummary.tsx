@@ -8,7 +8,7 @@ export function ApprovedRequestSummary({
   if (!snapshot)
     return (
       <p className="text-xs">
-        Approved request lineage is unavailable for this historical result.
+        The approved request is unavailable for this older result.
       </p>
     );
   return (
@@ -33,13 +33,19 @@ export function ApprovedRequestSummary({
       </dl>
       {snapshot.unknown_fields.length > 0 && (
         <p className="mt-2 text-xs">
-          Not specified: {snapshot.unknown_fields.join(", ")}
+          Not specified:{" "}
+          {snapshot.unknown_fields
+            .map((field) => field.replaceAll("_", " "))
+            .join(", ")}
         </p>
       )}
-      <p className="mt-2 break-all font-mono text-[10px]">
-        Request revision: {snapshot.revision_id} · Content hash:{" "}
-        {snapshot.content_hash}
-      </p>
+      <details className="mt-3 workflow-support">
+        <summary>Support details</summary>
+        <p className="mt-2 break-all font-mono text-[10px]">
+          Request revision: {snapshot.revision_id} · Content hash:{" "}
+          {snapshot.content_hash}
+        </p>
+      </details>
     </details>
   );
 }

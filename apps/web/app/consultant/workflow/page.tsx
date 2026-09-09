@@ -1542,7 +1542,7 @@ export default function ConsultantWorkflowPage() {
                   </span>
                   <span>Your request</span>
                   {draftStatus === "saving" && (
-                    <span className="text-[11px] font-medium text-amber-400 animate-pulse ml-2 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800">
+                    <span className="text-[11px] font-medium text-amber-400 ml-2 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800">
                       Draft saving...
                     </span>
                   )}

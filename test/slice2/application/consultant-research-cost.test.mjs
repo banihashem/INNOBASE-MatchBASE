@@ -148,4 +148,23 @@ test("MB-UX-COST-001 model choices exclude batch variants before economical sele
   const choices = await researchModelChoices();
   assert.ok(choices.length >= 2);
   assert.ok(choices.every((c) => !c.model.includes(":")));
+  const { plan } = await buildResearchRoundPlan({
+    round_number: 3,
+    depth: "deep",
+    selected_model: "openai/gpt-5.2",
+    parent_round_id: "parent",
+    request_hash: "hash",
+    focus_requirements: ["Primary identity evidence"],
+    mode: "live",
+  });
+  assert.equal(plan.extraction_model, "openai/gpt-5.2");
+  assert.equal(plan.synthesis_model, "openai/gpt-5.2");
+  assert.ok(plan.rates.some((rate) => rate.model === plan.extraction_model));
+  await assert.rejects(
+    createRoundCallGuard(plan)(
+      { model: "openai/gpt-4o-mini", messages: [], max_tokens: 1 },
+      false,
+    ),
+    { code: "MB-409-ROUND-PROVIDER" },
+  );
 });

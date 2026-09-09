@@ -28,6 +28,7 @@ import {
   ingestLiveEvidence,
   stableCandidateKey,
   assembleLiveSuppliers,
+  evaluateLiveCandidate,
   type LiveDiscoveryPayload,
   type LiveEvidenceRecord,
   type LiveCandidateRecord,
@@ -339,6 +340,20 @@ export async function executeDualLaneResearch(
               mandatory_criteria: requirements,
               instruction,
               current_roster: [...roster.values()],
+              publication_blockers: [...roster.values()].flatMap(
+                (candidate) => {
+                  const blockers = evaluateLiveCandidate(
+                    candidate,
+                    requirements,
+                    evidence,
+                  );
+                  return blockers.length
+                    ? [{ legal_name: candidate.legal_name, blockers }]
+                    : [];
+                },
+              ),
+              publication_review_instruction:
+                "Resolve publication_blockers before commercial refinements. Existing roster status and model-written quotes are unverified assertions until supported by the actual cited primary source. Seek exact legal-name and relevant product or service passages; missing price or RFQ-specific terms alone do not exclude an otherwise evidenced conditional candidate.",
               previous_gaps: previous?.remaining_gaps ?? [],
               previously_cited_sources: [...evidence.values()].map(
                 (item) => item.source,

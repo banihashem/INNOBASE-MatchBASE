@@ -943,13 +943,27 @@ test("MB-UX-LIVE-001 L11 extraction receives retrieved source text before buildi
 
 test("MB-UX-LIVE-001 L11 a later round retries a previously unavailable cited source once", async () => {
   let retrievals = 0;
-  dispatch = () =>
-    respond(discovery(), [
+  dispatch = (body) => {
+    if (!body.response_format) {
+      const sent = JSON.parse(body.messages[1].content);
+      assert.equal(sent.publication_blockers.length, 1);
+      assert.ok(
+        sent.publication_blockers[0].blockers.some((reason) =>
+          reason.includes("Corporate identity"),
+        ),
+      );
+      assert.match(
+        sent.publication_review_instruction,
+        /before commercial refinements/,
+      );
+    }
+    return respond(discovery(), [
       {
         type: "url_citation",
         url_citation: { url, title: "Official catalog" },
       },
     ]);
+  };
   const result = await executeDualLaneResearch(intake, {
     mode: "live",
     round_plan: {
@@ -958,7 +972,7 @@ test("MB-UX-LIVE-001 L11 a later round retries a previously unavailable cited so
       research_models: ["openai/gpt-5.2"],
     },
     continuation: {
-      roster: [],
+      roster: [["verified-manufacturer.com", discovery().candidates[0]]],
       evidence: [],
       retrieved: [[url, null]],
       remaining_gaps: [],

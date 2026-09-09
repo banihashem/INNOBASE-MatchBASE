@@ -332,7 +332,13 @@ test("MB-UX-LIVE-001 L05 twenty rich records use bounded batches and account for
     assert.ok(names.length <= 5);
     assert.deepEqual(
       body.response_format.json_schema.schema.properties.candidates.items,
-      LIVE_DISCOVERY_SCHEMA.properties.candidates.items,
+      {
+        ...LIVE_DISCOVERY_SCHEMA.properties.candidates.items,
+        properties: {
+          ...LIVE_DISCOVERY_SCHEMA.properties.candidates.items.properties,
+          legal_name: { type: "string", enum: names },
+        },
+      },
     );
     assert.equal(
       body.response_format.json_schema.schema.properties.candidates.maxItems,
@@ -471,11 +477,16 @@ test("MB-UX-LIVE-001 L06 grounded index repairs are audited without granting new
 test("MB-UX-LIVE-001 L05 batches reject missing duplicate or unassigned names", async (t) => {
   const data = dataset(2);
   let mutate = (payload) => payload;
-  const calls = fixture(t, (body) =>
-    schemaName(body) === INDEX
-      ? data.index
-      : mutate(data.batch(input(body).assigned_candidate_names)),
-  );
+  const calls = fixture(t, (body) => {
+    if (schemaName(body) === INDEX) return data.index;
+    const names = input(body).assigned_candidate_names;
+    const schema =
+      body.response_format.json_schema.schema.properties.candidates;
+    assert.deepEqual(schema.items.properties.legal_name.enum, names);
+    assert.equal(schema.minItems, names.length);
+    assert.equal(schema.maxItems, names.length);
+    return mutate(data.batch(names));
+  });
   for (const change of [
     (payload) => ({ ...payload, candidates: payload.candidates.slice(0, 1) }),
     (payload) => ({
@@ -496,7 +507,10 @@ test("MB-UX-LIVE-001 L05 batches reject missing duplicate or unassigned names", 
       extractNativeDiscoveryPayload(data.native, "openai/gpt-5.2", context, {
         on_checkpoint: (event) => events.push(event),
       }),
-      (error) => error.code === "MB-422-LIVE-EXTRACTION-SCOPE",
+      (error) =>
+        ["MB-422-LIVE-SCHEMA", "MB-422-LIVE-EXTRACTION-SCOPE"].includes(
+          error.code,
+        ),
     );
     const failed = events.find((event) => event.state === "failed");
     assert.ok(failed.response_content);

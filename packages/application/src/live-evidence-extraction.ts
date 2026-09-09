@@ -302,7 +302,19 @@ export async function extractNativeDiscoveryPayload(
           ...LIVE_DISCOVERY_SCHEMA,
           properties: {
             ...properties,
-            candidates: { ...properties.candidates, maxItems: batch.length },
+            candidates: {
+              ...properties.candidates,
+              minItems: batch.length,
+              maxItems: batch.length,
+              items: {
+                ...(properties.candidates!.items as JsonSchema),
+                properties: {
+                  ...((properties.candidates!.items as JsonSchema)
+                    .properties as Record<string, JsonSchema>),
+                  legal_name: { type: "string", enum: names },
+                },
+              },
+            },
           },
         };
         return await extractStructured<LiveDiscoveryPayload>(

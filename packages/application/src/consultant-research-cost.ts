@@ -331,7 +331,10 @@ export async function buildResearchRoundPlan(input: {
       ? [configured.lane_gemini, configured.lane_openai]
       : [selected?.model ?? "demonstration"];
   const synthesis = selected?.model ?? "demonstration";
-  const extraction = cheapest?.model ?? "demonstration";
+  // Deep research must not silently downgrade its evidence extraction to the
+  // cheapest model. Include the selected model's extraction cost in approval.
+  const extraction =
+    (input.depth === "deep" ? selected : cheapest)?.model ?? "demonstration";
   const rateIds = [...new Set([...research, synthesis, extraction])];
   const rates =
     input.mode === "demonstration"

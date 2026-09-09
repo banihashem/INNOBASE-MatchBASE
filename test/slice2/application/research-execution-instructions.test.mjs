@@ -462,7 +462,15 @@ test("MB-UX-LIVE-001 L04 evidence extraction preserves native inputs and usage w
           ...LIVE_DISCOVERY_SCHEMA.properties,
           candidates: {
             ...LIVE_DISCOVERY_SCHEMA.properties.candidates,
+            minItems: 1,
             maxItems: 1,
+            items: {
+              ...LIVE_DISCOVERY_SCHEMA.properties.candidates.items,
+              properties: {
+                ...LIVE_DISCOVERY_SCHEMA.properties.candidates.items.properties,
+                legal_name: { type: "string", enum: ["Aster Pump Works"] },
+              },
+            },
           },
         },
       },

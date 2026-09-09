@@ -236,6 +236,134 @@ export function stableCandidateKey(candidate: LiveCandidateRecord): string {
     ? new URL(website).hostname.replace(/^www\./, "")
     : `${candidate.legal_name.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "")}:${candidate.country.toLowerCase()}`;
 }
+function normalizedEvidence(text: string): string {
+  return text.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+}
+function candidateProofQuotes(
+  records: readonly LiveCandidateRecord[],
+): Map<string, string[]> {
+  const quotes = new Map<string, string[]>();
+  for (const candidate of records) {
+    for (const proof of [
+      candidate.identity,
+      candidate.product,
+      ...candidate.facts,
+      ...candidate.certifications,
+      ...candidate.constraints,
+    ]) {
+      if (!proof.quote.trim()) continue;
+      for (const raw of proof.source_urls) {
+        const url = safePublicEvidenceUrl(raw);
+        if (url)
+          quotes.set(url, [
+            ...new Set([...(quotes.get(url) ?? []), proof.quote]),
+          ]);
+      }
+    }
+  }
+  return quotes;
+}
+function publishedExcerptSummary(
+  excerpts: readonly { excerpt: string }[],
+): string {
+  const unique = [...new Set(excerpts.map((item) => item.excerpt))];
+  return unique.length === 1
+    ? unique[0]!
+    : unique
+        .map((excerpt, index) => `Verified excerpt ${index + 1}:\n${excerpt}`)
+        .join("\n\n");
+}
+// The legacy record joined page text and native snippets. Never accept a quote
+// that crosses that artificial boundary when recovering retained evidence.
+function retainedAuthoritySegments(
+  text: string,
+  nativeContent?: string,
+): string[] {
+  if (nativeContent && text.endsWith(`\n${nativeContent}`))
+    return [text.slice(0, -(nativeContent.length + 1)), nativeContent].filter(
+      Boolean,
+    );
+  return [text];
+}
+export function revalidateRetainedLiveEvidence(
+  roster: readonly LiveCandidateRecord[],
+  evidence: Map<string, LiveEvidenceRecord>,
+): void {
+  for (const [url, quotes] of candidateProofQuotes(roster)) {
+    const record = evidence.get(url);
+    if (
+      !record ||
+      record.source.source_url !== url ||
+      record.source.verification_status !== "externally_verified" ||
+      !safePublicEvidenceUrl(record.native_citation.url)
+    )
+      continue;
+    const contexts = record.verified_excerpts ?? [
+      {
+        excerpt: record.source.excerpt_summary,
+        authoritative_text: record.authoritative_text,
+        source_type: record.source.source_type,
+      },
+    ];
+    // Invalid selected excerpts do not invalidate their retained source text.
+    // Filter published quotations separately from authoritative contexts.
+    const verified = contexts.flatMap((item) =>
+      retainedAuthoritySegments(
+        item.authoritative_text,
+        record.native_citation.content,
+      )
+        .filter(
+          (segment) =>
+            item.excerpt.trim() &&
+            normalizedEvidence(segment).includes(
+              normalizedEvidence(item.excerpt),
+            ),
+        )
+        .map((segment) => ({ ...item, authoritative_text: segment })),
+    );
+    for (const quote of quotes) {
+      for (const context of contexts) {
+        const sourceType = conservativeSourceType(
+          record.source.source_type,
+          context.source_type,
+        );
+        for (const authoritative of retainedAuthoritySegments(
+          context.authoritative_text,
+          record.native_citation.content,
+        )) {
+          if (
+            !normalizedEvidence(authoritative).includes(
+              normalizedEvidence(quote),
+            )
+          )
+            continue;
+          if (
+            !verified.some(
+              (item) =>
+                item.excerpt === quote &&
+                item.authoritative_text === authoritative &&
+                item.source_type === sourceType,
+            )
+          )
+            verified.push({
+              excerpt: quote,
+              authoritative_text: authoritative,
+              source_type: sourceType,
+            });
+        }
+      }
+    }
+    evidence.set(url, {
+      ...record,
+      source: {
+        ...record.source,
+        excerpt_summary: publishedExcerptSummary(verified),
+      },
+      verified_excerpts: verified,
+    });
+  }
+}
+
 export function ingestLiveEvidence(
   payload: LiveDiscoveryPayload,
   citations: readonly OpenRouterCitation[],
@@ -247,21 +375,23 @@ export function ingestLiveEvidence(
     const actual = retrieved.get(citation.url);
     if (actual) native.set(actual.url, citation);
   }
-  for (const entry of payload.evidence) {
+  const proofQuotes = candidateProofQuotes(payload.candidates);
+  for (const entry of payload.evidence.flatMap((entry) => [
+    entry,
+    ...(proofQuotes.get(safePublicEvidenceUrl(entry.url) ?? "") ?? []).map(
+      (excerpt) => ({ ...entry, excerpt }),
+    ),
+  ])) {
     const url = safePublicEvidenceUrl(entry.url);
     const citation = url ? native.get(url) : undefined;
     if (!url || !citation || !entry.excerpt.trim()) continue;
     const actual = retrieved.get(citation.url);
     const authoritative = [actual?.text, citation.content]
       .filter((text): text is string => Boolean(text))
-      .join("\n");
-    const normalized = (text: string) =>
-      text.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
-    if (
-      !authoritative ||
-      !normalized(authoritative).includes(normalized(entry.excerpt))
-    )
-      continue;
+      .find((text) =>
+        normalizedEvidence(text).includes(normalizedEvidence(entry.excerpt)),
+      );
+    if (!authoritative) continue;
     const id = `evidence-${createHash("sha256").update(url).digest("hex").slice(0, 20)}`;
     const previous = evidence.get(url);
     const verifiedExcerpts = [
@@ -289,9 +419,6 @@ export function ingestLiveEvidence(
         authoritative_text: authoritative,
         source_type: entry.source_type,
       });
-    const publishedExcerpts = [
-      ...new Set(verifiedExcerpts.map((item) => item.excerpt)),
-    ];
     evidence.set(url, {
       source: {
         evidence_id: id,
@@ -306,15 +433,7 @@ export function ingestLiveEvidence(
         retrieved_at: actual?.retrieved_at ?? new Date().toISOString(),
         freshness_status: "current",
         verification_status: "externally_verified",
-        excerpt_summary:
-          publishedExcerpts.length === 1
-            ? publishedExcerpts[0]!
-            : publishedExcerpts
-                .map(
-                  (excerpt, index) =>
-                    `Verified excerpt ${index + 1}:\n${excerpt}`,
-                )
-                .join("\n\n"),
+        excerpt_summary: publishedExcerptSummary(verifiedExcerpts),
         supports_claim_ids: [],
         contradicts_claim_ids: [],
       },

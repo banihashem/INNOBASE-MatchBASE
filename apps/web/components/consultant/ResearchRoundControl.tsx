@@ -247,16 +247,22 @@ export function ResearchRoundControl({
                   className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
                 >
                   <span>
-                    Round {r.round_number} · {r.status}{" "}
+                    Round {r.round_number} ·{" "}
+                    {r.plan.recovery_source_execution_id
+                      ? "Recovered saved evidence"
+                      : r.status}{" "}
                     {r.candidate_count !== null
                       ? `· ${r.candidate_count} suppliers`
                       : ""}
                     <small className="block text-slate-400">
-                      {r.plan.mode === "demonstration"
-                        ? "$0.00 · demonstration"
-                        : r.execution_id && costs?.by_execution[r.execution_id]
-                          ? `${money(costs.by_execution[r.execution_id]!.recorded_usd)} recorded${costs.by_execution[r.execution_id]!.unpriced_calls ? " · incomplete" : ""}`
-                          : "Cost records pending"}
+                      {r.plan.recovery_source_execution_id
+                        ? "$0.00 · local recovery, no provider calls"
+                        : r.plan.mode === "demonstration"
+                          ? "$0.00 · demonstration"
+                          : r.execution_id &&
+                              costs?.by_execution[r.execution_id]
+                            ? `${money(costs.by_execution[r.execution_id]!.recorded_usd)} recorded${costs.by_execution[r.execution_id]!.unpriced_calls ? " · incomplete" : ""}`
+                            : "Cost records pending"}
                     </small>
                   </span>
                   {r.output_available && (

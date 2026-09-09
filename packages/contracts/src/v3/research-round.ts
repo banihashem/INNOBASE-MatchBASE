@@ -11,6 +11,8 @@ export interface ResearchModelRate {
   source_url: string;
 }
 export interface ResearchRoundPlan {
+  /** Local reprocessing keeps the source execution immutable and makes no paid calls. */
+  recovery_source_execution_id?: string;
   version: "research-round.v1";
   round_number: number;
   depth: ResearchDepth;

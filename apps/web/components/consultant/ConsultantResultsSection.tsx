@@ -106,6 +106,24 @@ export function ConsultantResultsSection({
         </div>
       </div>
 
+      <div className="rounded-lg border border-slate-600 bg-slate-900 p-4 space-y-2">
+        <h3 className="font-semibold text-white">
+          {suppliers.length
+            ? "Research findings"
+            : "No publishable candidates in this saved round"}
+        </h3>
+        <p className="text-sm text-slate-200 whitespace-pre-line">
+          {output.executive_summary.direct_answer}
+        </p>
+        {!suppliers.length && (
+          <p className="text-sm text-amber-200">
+            Discovered names alone are not verified supplier profiles. No
+            candidate in this round passed the required evidence and mandatory
+            requirement checks. This does not establish that no suitable
+            suppliers exist.
+          </p>
+        )}
+      </div>
       <ApprovedRequestSummary snapshot={output.approved_request_snapshot} />
       {/* Candidate Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

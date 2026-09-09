@@ -311,8 +311,10 @@ test("live requires five actual verification calls after both native web discove
     requests.every(
       (body) =>
         body.reasoning.effort ===
-        (body.response_format?.json_schema?.name ===
-        "matchbase_native_candidate_index"
+        ([
+          "matchbase_native_candidate_index",
+          "matchbase_native_evidence_extraction",
+        ].includes(body.response_format?.json_schema?.name)
           ? "low"
           : "high"),
     ),
@@ -861,6 +863,118 @@ test("bounded primary retrieval is cached per execution and content hashes reach
         checkpoint.content_sha256 === hash,
     ),
   );
+});
+
+test("MB-UX-LIVE-001 L11 extraction receives retrieved source text before building grounded candidates", async () => {
+  const finalUrl = "https://verified-manufacturer.com/company/catalog";
+  const sourceText =
+    "Navigation Home Contact Products ".repeat(700) +
+    quote +
+    " Acme Industrial GmbH registered office Germany.";
+  let fetched = 0;
+  const checkpoints = [];
+  dispatch = (body) => {
+    const schema = body.response_format?.json_schema?.name;
+    if (schema === "matchbase_native_evidence_extraction") {
+      const supplied = JSON.parse(body.messages[1].content).native_citations;
+      assert.equal(
+        fetched,
+        1,
+        "Source must be fetched before any detail extraction",
+      );
+      assert.ok(
+        supplied.some(
+          (item) =>
+            item.url === finalUrl && item.content_excerpt.includes(quote),
+        ),
+      );
+      assert.ok(supplied.every((item) => item.content_excerpt.length <= 6000));
+      const payload = discovery();
+      for (const record of payload.candidates) {
+        record.identity.source_urls = [finalUrl];
+        record.product.source_urls = [finalUrl];
+      }
+      payload.evidence[0].url = finalUrl;
+      return respond(payload, []);
+    }
+    return respond(discovery(), [
+      {
+        type: "url_citation",
+        url_citation: {
+          url,
+          title: "Official Acme Industrial product catalog",
+        },
+      },
+    ]);
+  };
+  const result = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: partialRound,
+    source_retriever: async () => {
+      fetched++;
+      return {
+        url: finalUrl,
+        text: sourceText,
+        content_sha256: createHash("sha256").update(sourceText).digest("hex"),
+        retrieved_at: new Date().toISOString(),
+      };
+    },
+    on_checkpoint: async (checkpoint) => checkpoints.push(checkpoint),
+  });
+  assert.equal(result.candidates.length, 1);
+  assert.equal(fetched, 1, "Parallel discovery shares native URL retrieval");
+  assert.ok(
+    result.evidence_sources.some((source) => source.source_url === finalUrl),
+  );
+  const completedFetch = checkpoints.findIndex(
+    (item) => item.phase === "source_retrieval" && item.state === "completed",
+  );
+  const firstBatch = checkpoints.findIndex(
+    (item) =>
+      item.phase.endsWith("extraction_batch") && item.state === "started",
+  );
+  assert.ok(completedFetch >= 0 && firstBatch > completedFetch);
+  assert.equal(
+    result.lane_g_result.citations[0].content,
+    undefined,
+    "Raw provider citation is unchanged",
+  );
+});
+
+test("MB-UX-LIVE-001 L11 a later round retries a previously unavailable cited source once", async () => {
+  let retrievals = 0;
+  dispatch = () =>
+    respond(discovery(), [
+      {
+        type: "url_citation",
+        url_citation: { url, title: "Official catalog" },
+      },
+    ]);
+  const result = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: {
+      ...partialRound,
+      round_number: 2,
+      research_models: ["openai/gpt-5.2"],
+    },
+    continuation: {
+      roster: [],
+      evidence: [],
+      retrieved: [[url, null]],
+      remaining_gaps: [],
+    },
+    source_retriever: async () => {
+      retrievals++;
+      return {
+        url,
+        text: quote,
+        content_sha256: createHash("sha256").update(quote).digest("hex"),
+        retrieved_at: new Date().toISOString(),
+      };
+    },
+  });
+  assert.equal(retrievals, 1);
+  assert.equal(result.candidates.length, 1);
 });
 
 test("MB-UX-COST-001 approved rounds publish after one pass and reuse the saved roster", async () => {

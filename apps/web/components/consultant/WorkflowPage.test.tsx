@@ -1211,7 +1211,13 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
         screen.getByRole("region", {
           name: "Section 3: Ranked Supplier Candidates & Dossiers",
         }),
-      ).getAllByRole("heading", { level: 3 })[0],
+      )
+        .getAllByRole("heading", { level: 3 })
+        .filter((heading) =>
+          output.supplier_candidates.some(
+            (candidate) => heading.textContent === candidate.legal_name,
+          ),
+        )[0],
     ).toHaveTextContent(best.legal_name);
     for (const count of [10, 15, 20]) {
       fireEvent.click(

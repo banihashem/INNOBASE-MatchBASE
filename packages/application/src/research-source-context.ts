@@ -95,13 +95,65 @@ function host(url: string): string | null {
   }
 }
 
+function mentionsCompanyName(text: string, name: string): boolean {
+  const normalized = text.normalize("NFKC").toLowerCase().replace(/\s+/g, " ");
+  const needle = name
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!needle) return false;
+  for (let offset = 0; offset < normalized.length;) {
+    const start = normalized.indexOf(needle, offset);
+    if (start < 0) return false;
+    const before = Array.from(normalized.slice(0, start)).at(-1) ?? "";
+    const after = Array.from(normalized.slice(start + needle.length))[0] ?? "";
+    if (!/[\p{L}\p{N}]/u.test(before) && !/[\p{L}\p{N}]/u.test(after))
+      return true;
+    offset = start + needle.length;
+  }
+  return false;
+}
+
+/** L04: spend the bounded extraction allowance on source-backed leads first.
+ * This changes scheduling only; it never promotes an identity or a claim. */
+export function prioritizeSourceBackedCandidates(
+  candidates: CandidateIndex["candidates"],
+  citations: readonly OpenRouterCitation[],
+): CandidateIndex["candidates"] {
+  return candidates
+    .map((candidate, index) => {
+      const sources = candidateSourceCitations(candidate, citations);
+      const readable = sources.filter((source) => source.content?.trim());
+      const named = readable.filter((source) =>
+        mentionsCompanyName(source.content!, candidate.legal_name),
+      );
+      return {
+        candidate,
+        index,
+        named: named.length,
+        readable: readable.length,
+        cited: sources.length,
+      };
+    })
+    .sort(
+      (a, b) =>
+        Number(b.named > 0) - Number(a.named > 0) ||
+        Number(b.readable > 0) - Number(a.readable > 0) ||
+        Number(b.cited > 0) - Number(a.cited > 0) ||
+        Math.min(b.named, 3) - Math.min(a.named, 3) ||
+        a.index - b.index,
+    )
+    .map(({ candidate }) => candidate);
+}
+
 export function candidateSourceCitations(
   candidate: CandidateIndex["candidates"][number],
   citations: readonly OpenRouterCitation[],
 ): OpenRouterCitation[] {
   const assigned = new Set(candidate.source_urls);
   const named = citations.filter((source) =>
-    source.content?.toLowerCase().includes(candidate.legal_name.toLowerCase()),
+    mentionsCompanyName(source.content ?? "", candidate.legal_name),
   );
   const namedHosts = new Set(
     named.map((source) => host(source.url)).filter(Boolean),

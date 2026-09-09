@@ -14,6 +14,7 @@ import {
   researchSearchEngineForModel,
   getOpenRouterApiKey,
   getOpenRouterModelCapabilities,
+  getOpenRouterZdrEndpoints,
   type OpenRouterCompletionParams,
 } from "./openrouter-model-policy.js";
 
@@ -251,6 +252,7 @@ export async function currentResearchModelRate(
     );
   type Endpoint = {
     tag: string;
+    status?: number;
     provider_name?: string;
     pricing: Record<string, unknown>;
     supported_parameters?: string[];
@@ -259,20 +261,23 @@ export async function currentResearchModelRate(
   const usable = (body.data?.endpoints ?? []).filter(
     (entry) =>
       typeof entry.tag === "string" &&
+      (!credit || entry.status === undefined || entry.status === 0) &&
       /^[a-z][a-z0-9-]*(?:\/[a-z0-9-]+)*$/.test(entry.tag) &&
       !/\/(flex|fast|priority)$/.test(entry.tag),
   );
   if (credit) {
+    const zdr = await getOpenRouterZdrEndpoints();
     const candidates = usable.filter(
       (entry) =>
         (entry.supported_parameters?.includes("max_tokens") ||
           entry.supported_parameters?.includes("max_completion_tokens")) &&
         decimal(entry.pricing?.prompt) !== null &&
         decimal(entry.pricing?.completion) !== null &&
-        (!model.startsWith("anthropic/") || entry.tag === "anthropic") &&
+        zdr.has(`${model}:${entry.tag}`) &&
         (!model.startsWith("x-ai/") ||
           entry.tag === "xai" ||
-          entry.tag === "x-ai"),
+          entry.tag === "x-ai" ||
+          /^(xai|x-ai)\/zdr$/.test(entry.tag)),
     );
     candidates.sort(
       (a, b) =>
@@ -332,6 +337,22 @@ export async function currentResearchModelRate(
     source_url: `https://openrouter.ai/api/v1/models/${model}/endpoints`,
   };
 }
+// A research-fit rubric precedes price; cheap coding/experimental variants are not supplier researchers.
+export function researchModelSuitability(model: string): number {
+  if (
+    /(?:^|[-/:])(?:build|coder|coding|codex|code|distill|exp|experimental|vision|image|audio|multi-agent)(?:[-/:]|$)/.test(
+      model,
+    )
+  )
+    return -1;
+  if (model.startsWith("anthropic/claude-sonnet-")) return 40;
+  if (model.startsWith("anthropic/claude-opus-")) return 35;
+  if (model.startsWith("deepseek/deepseek-v4-pro")) return 40;
+  if (/^deepseek\/deepseek-v3\.2$/.test(model)) return 35;
+  if (model.startsWith("deepseek/deepseek-v4-flash")) return 30;
+  if (model.startsWith("x-ai/grok-4")) return 40;
+  return 0;
+}
 export async function researchModelChoices() {
   const configured = getConfiguredLiveModels();
   const models = (await userModels())
@@ -342,6 +363,7 @@ export async function researchModelChoices() {
           (m.supported_parameters?.includes("max_tokens") ||
             m.supported_parameters?.includes("max_completion_tokens")) &&
           !/:|image|audio/.test(m.id) &&
+          researchModelSuitability(m.id) >= 0 &&
           (!m.architecture?.output_modalities ||
             m.architecture.output_modalities.every((x) => x === "text"))
         );
@@ -351,9 +373,11 @@ export async function researchModelChoices() {
     })
     .sort(
       (a, b) =>
+        researchModelSuitability(b.id) - researchModelSuitability(a.id) ||
         Number(a.pricing?.prompt ?? 99) +
-        Number(a.pricing?.completion ?? 99) -
-        (Number(b.pricing?.prompt ?? 99) + Number(b.pricing?.completion ?? 99)),
+          Number(a.pricing?.completion ?? 99) -
+          (Number(b.pricing?.prompt ?? 99) +
+            Number(b.pricing?.completion ?? 99)),
     );
   const ids = [
     ...new Set([
@@ -473,10 +497,11 @@ export async function buildResearchRoundPlan(input: {
       : [selected?.model ?? "demonstration"];
   const qualityOrder = (a: ResearchModelRate, b: ResearchModelRate) =>
     Number(b.reasoning) - Number(a.reasoning) ||
-    Number(b.structured_outputs !== false) -
-      Number(a.structured_outputs !== false) ||
     Number(b.model === configured.synthesis) -
       Number(a.model === configured.synthesis) ||
+    researchModelSuitability(b.model) - researchModelSuitability(a.model) ||
+    Number(b.structured_outputs !== false) -
+      Number(a.structured_outputs !== false) ||
     a.input_usd_per_token +
       a.output_usd_per_token -
       (b.input_usd_per_token + b.output_usd_per_token) ||
@@ -574,7 +599,12 @@ export async function buildResearchRoundPlan(input: {
   const searchEngines = Object.fromEntries(
     research.map((model) => [
       model,
-      native ? researchSearchEngineForModel(model) : "exa",
+      native
+        ? researchSearchEngineForModel(
+            model,
+            actualRates.find((rate) => rate.model === model)?.provider,
+          )
+        : "exa",
     ]),
   ) as Record<string, "native" | "exa">;
   const priceModel = research[0]!;
@@ -703,14 +733,14 @@ export async function buildResearchRoundPlan(input: {
       rates: actualRates,
       assumptions: [
         "Dedicated price research includes a seven-day web pass and structured extraction; a thirty-day fallback and extraction are included only when the first pass has no usable sourced recent price. Four calls are reserved, with at most two web searches.",
-        "DeepSeek and later-round Exa search incurs an additional OpenRouter platform search charge (Exa Auto at USD0.007 per request including up to ten results; this plan limits results to eight), independent of BYOK model inference (OpenRouter web-search documentation checked 2026-09-09). Native search follows the explicitly selected model family; unsupported endpoints fail rather than silently switching engines.",
+        "DeepSeek and later-round Exa search incurs an additional OpenRouter platform search charge (Exa Auto at USD0.007 per request including up to ten results; this plan limits results to eight), independent of BYOK model inference (OpenRouter web-search documentation checked 2026-09-09). Native search follows the explicitly selected model and provider; hosted Anthropic endpoints use priced Exa search. Unsupported endpoints fail rather than silently switching engines.",
         "Evidence extraction uses the model named in this estimate; its actual configured rates are included. A more economical research choice does not silently downgrade source attribution to the cheapest model.",
         "Estimate in USD, not a guaranteed maximum or invoice.",
         "Range assumes 4,000 output tokens per call at the low end and the full approved output allowance at the high end; input volume varies.",
         "Native search can issue multiple billable queries. Search allowance is an estimate; platform BYOK fee allowance is conservatively 5%.",
         "One approval authorizes this round only, including up to three attempts per recoverable stage and six shared recovery calls within the total call allowance. No following round starts automatically.",
         "Two suppliers are extracted per dossier batch. The estimate includes the six-call recovery reserve at the highest approved token and search rates; actual usage may be lower. Saved successful stages are reused when possible.",
-        "Each model billing mode is frozen in this estimate. Google/OpenAI and explicitly configured BYOK routes remain strict BYOK. Additional families without a configured BYOK route use the named OpenRouter-credit endpoint only after you approve this estimate. No failed BYOK call falls back to credits.",
+        "Each model billing mode is frozen in this estimate. Google/OpenAI and explicitly configured BYOK routes remain strict BYOK. Additional families without a configured BYOK route use the named zero-data-retention OpenRouter-credit endpoint only after you approve this estimate. No failed BYOK call falls back to credits.",
         "Model listing does not prove provider-key health or sufficient balance. Actual route, billing mode and usage are checked on every response.",
       ],
       request_hash: input.request_hash,

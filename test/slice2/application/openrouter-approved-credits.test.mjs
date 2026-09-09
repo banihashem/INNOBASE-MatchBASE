@@ -19,6 +19,7 @@ const originalEnv = Object.fromEntries(
   names.map((name) => [name, process.env[name]]),
 );
 let posts, reads, model, provider, display, body, metadata, pricing;
+let endpointName, endpointModel, zdrEligible, endpointStatus;
 const rate = () => ({
   model,
   provider,
@@ -37,6 +38,10 @@ const request = () => ({
 });
 function setupFamily(id, tag, name) {
   model = id;
+  endpointName = `${name} | ${id}`;
+  endpointModel = id;
+  zdrEligible = true;
+  endpointStatus = 0;
   provider = tag;
   display = name;
   body = {
@@ -84,13 +89,19 @@ beforeEach(() => {
           },
         ],
       });
+    if (url.endsWith("/endpoints/zdr"))
+      return Response.json({
+        data: zdrEligible ? [{ model_id: model, tag: provider }] : [],
+      });
     if (url.endsWith("/endpoints"))
       return Response.json({
         data: {
           endpoints: [
             {
               tag: provider,
-              model_id: model,
+              model_id: endpointModel,
+              status: endpointStatus,
+              name: endpointName,
               provider_name: display,
               supported_parameters: [
                 "max_tokens",
@@ -270,5 +281,85 @@ test("actual provider drift rejects the completed response with usage retained",
       error.code === "MB-502-LIVE-PROVIDER-DRIFT" &&
       error.audited_response.cost_usd === 0.032,
   );
+  assert.equal(posts.length, 1);
+});
+
+test("MB-UX-DEV-004 L04 accepts only the exact selected endpoint's declared canonical model alias", async () => {
+  setupFamily(
+    "deepseek/deepseek-v4-flash-0731",
+    "open-inference/fp8",
+    "OpenInference",
+  );
+  endpointName = "OpenInference | deepseek/deepseek-v4-flash-20260731";
+  body.openrouter_metadata.endpoints = {
+    available: [
+      {
+        selected: true,
+        provider: display,
+        model: "deepseek/deepseek-v4-flash-20260731",
+      },
+    ],
+  };
+  const result = await callOpenRouterCompletion({
+    ...request(),
+    approved_rate: rate(),
+  });
+  assert.equal(result.is_byok, false);
+  body.openrouter_metadata.endpoints.available[0].model =
+    "deepseek/deepseek-v4-pro-20260813";
+  await assert.rejects(
+    callOpenRouterCompletion({ ...request(), approved_rate: rate() }),
+    (error) => error.code === "MB-502-LIVE-PROVIDER-DRIFT",
+  );
+  assert.equal(posts[0].provider.zdr, true);
+});
+test("MB-UX-DEV-004 L04 a non-ZDR credit endpoint is rejected before billing", async () => {
+  zdrEligible = false;
+  await assert.rejects(
+    callOpenRouterCompletion({ ...request(), approved_rate: rate() }),
+    (error) => error.code === "MB-409-ROUND-PRIVACY",
+  );
+  assert.equal(posts.length, 0);
+});
+test("MB-UX-DEV-004 L04 hosted Anthropic requires its explicitly priced Exa route", async () => {
+  setupFamily(
+    "anthropic/claude-sonnet-5",
+    "amazon-bedrock/global",
+    "Amazon Bedrock",
+  );
+  await assert.rejects(
+    callOpenRouterCompletion({
+      ...request(),
+      approved_rate: rate(),
+      plugins: [{ id: "web", engine: "native" }],
+    }),
+    (error) => error.code === "MB-409-ROUND-SEARCH-ENGINE",
+  );
+  assert.equal(posts.length, 0);
+  await callOpenRouterCompletion({
+    ...request(),
+    approved_rate: rate(),
+    plugins: [{ id: "web", engine: "exa", max_results: 8 }],
+  });
+  assert.deepEqual(posts[0].provider.only, ["amazon-bedrock/global"]);
+  assert.equal(posts[0].plugins[0].engine, "exa");
+});
+
+test("MB-UX-DEV-004 L04 a catalog-declared offline approved endpoint fails before a completion", async () => {
+  endpointStatus = -5;
+  await assert.rejects(
+    callOpenRouterCompletion({ ...request(), approved_rate: rate() }),
+    (error) => error.code === "MB-422-MODEL-CAPABILITY",
+  );
+  assert.equal(posts.length, 0);
+});
+test("MB-UX-DEV-004 L04 transient catalog health does not silently replace a fixed BYOK route", async () => {
+  process.env.MATCHBASE_PROVIDER_ANTHROPIC = "anthropic";
+  endpointStatus = -2;
+  body.openrouter_metadata.is_byok = true;
+  body.usage.cost_details = { upstream_inference_cost: 0.01 };
+  const result = await callOpenRouterCompletion(request());
+  assert.equal(result.is_byok, true);
+  assert.deepEqual(posts[0].provider.only, ["anthropic"]);
   assert.equal(posts.length, 1);
 });

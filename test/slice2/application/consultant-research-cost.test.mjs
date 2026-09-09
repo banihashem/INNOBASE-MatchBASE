@@ -7,6 +7,7 @@ import {
   createRoundCallGuard,
   researchModelChoices,
   configuredResearchTierAvailability,
+  researchModelSuitability,
 } from "../../../packages/application/dist/consultant-research-cost.js";
 const event = (detail, phase = "research", execution_id = "execution") => ({
   execution_id,
@@ -374,6 +375,13 @@ test("MB-UX-DEV-004 L02 tiers preserve all required families, price engines and 
           pricing: { prompt: "0.000001", completion: "0.000002" },
         })),
       });
+    if (url.endsWith("/endpoints/zdr"))
+      return Response.json({
+        data: ids.map((model_id) => ({
+          model_id,
+          tag: providers[model_id.split("/")[0]],
+        })),
+      });
     const id = decodeURIComponent(
       new URL(url).pathname.split("/models/")[1].replace(/\/endpoints$/, ""),
     );
@@ -521,4 +529,180 @@ test("MB-UX-DEV-004 L02 tiers preserve all required families, price engines and 
   process.env.MATCHBASE_PROVIDER_ROUTES = "{}";
   delete process.env.MATCHBASE_OPENROUTER_API_KEY;
   assert.equal(configuredResearchTierAvailability().ultra.configured, false);
+});
+
+test("MB-UX-DEV-004 L04 research suitability excludes coding-only and experimental variants before price", () => {
+  for (const id of [
+    "x-ai/grok-build-0.1",
+    "openai/gpt-5-codex",
+    "deepseek/deepseek-v4-flash-vision-exp",
+    "deepseek/deepseek-r1-distill-llama-70b",
+    "x-ai/grok-4.20-multi-agent",
+  ])
+    assert.equal(researchModelSuitability(id), -1, id);
+  assert.ok(
+    researchModelSuitability("deepseek/deepseek-v4-pro-0813") >
+      researchModelSuitability("deepseek/deepseek-v4-flash-0731"),
+  );
+  assert.ok(
+    researchModelSuitability("anthropic/claude-sonnet-5") >
+      researchModelSuitability("anthropic/claude-haiku-4.5"),
+  );
+  assert.ok(
+    researchModelSuitability("x-ai/grok-4.3") >
+      researchModelSuitability("x-ai/grok-3"),
+  );
+});
+test("MB-UX-DEV-004 L04 Ultra quotes search-fit models on ZDR routes and prices hosted Claude Exa", async (t) => {
+  const values = {
+    MATCHBASE_OPENROUTER_API_KEY: randomUUID(),
+    MATCHBASE_PROVIDER_ROUTES: "{}",
+    MATCHBASE_PROVIDER_OPENAI: "openai",
+    MATCHBASE_PROVIDER_GOOGLE: "google-ai-studio",
+    MATCHBASE_MODEL_LANE_OPENAI: "openai/gpt-5.2",
+    MATCHBASE_MODEL_LANE_GEMINI: "google/gemini-3.8-flash",
+    MATCHBASE_MODEL_SYNTHESIS: "openai/gpt-5.2",
+    MATCHBASE_PROVIDER_ANTHROPIC: "",
+    MATCHBASE_PROVIDER_DEEPSEEK: "",
+    MATCHBASE_PROVIDER_XAI: "",
+  };
+  const old = Object.fromEntries(
+    Object.keys(values).map((key) => [key, process.env[key]]),
+  );
+  Object.assign(process.env, values);
+  t.after(() => {
+    for (const [key, value] of Object.entries(old)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  const models = [
+    "openai/gpt-5.2",
+    "google/gemini-3.8-flash",
+    "anthropic/claude-sonnet-5",
+    "anthropic/claude-haiku-4.5",
+    "deepseek/deepseek-v4-pro-0813",
+    "deepseek/deepseek-v4-flash-0731",
+    "deepseek/deepseek-v4-flash-vision-exp",
+    "x-ai/grok-4.3",
+    "x-ai/grok-build-0.1",
+  ];
+  const params = ["max_tokens", "reasoning", "structured_outputs"];
+  const hosted = {
+    google: "google-ai-studio",
+    openai: "openai",
+    anthropic: "amazon-bedrock/global",
+    deepseek: "deepinfra/fp8",
+    "x-ai": "xai/zdr",
+  };
+  const endpoint = (model, tag) => ({
+    status: 0,
+    model_id: model,
+    tag,
+    provider_name: tag === "amazon-bedrock/global" ? "Amazon Bedrock" : tag,
+    supported_parameters: model.includes("v4-pro")
+      ? params.filter((value) => value !== "structured_outputs")
+      : params,
+    pricing: {
+      prompt: model.includes("pro") ? "0.00001" : "0.000001",
+      completion: "0.000002",
+      web_search: "0.01",
+    },
+  });
+  t.mock.method(globalThis, "fetch", async (target) => {
+    const url = String(target);
+    assert.ok(
+      !url.includes("chat/completions"),
+      "Quote performs metadata reads only",
+    );
+    if (url.endsWith("/models/user"))
+      return Response.json({
+        data: models.map((id) => ({
+          id,
+          supported_parameters: params,
+          pricing: {
+            prompt: id.includes("build") ? "0.000000001" : "0.000001",
+            completion: "0.000002",
+          },
+        })),
+      });
+    if (url.endsWith("/endpoints/zdr"))
+      return Response.json({
+        data: models.flatMap((id) => [
+          endpoint(id, hosted[id.split("/")[0]]),
+          ...(id.startsWith("deepseek/") ? [endpoint(id, "fireworks")] : []),
+        ]),
+      });
+    const model = new URL(url).pathname
+      .split("/models/")[1]
+      .replace(/\/endpoints$/, "");
+    const family = model.split("/")[0];
+    const rows = [endpoint(model, hosted[family])];
+    if (family === "deepseek")
+      rows.unshift({
+        ...endpoint(model, "fireworks"),
+        status: -5,
+        pricing: { prompt: "0.000000001", completion: "0.000000001" },
+      });
+    if (family === "anthropic")
+      rows.unshift({
+        ...endpoint(model, "anthropic"),
+        pricing: { prompt: "0.00000001", completion: "0.00000001" },
+      });
+    return Response.json({ data: { endpoints: rows } });
+  });
+  const { plan, choices } = await buildResearchRoundPlan({
+    mode: "live",
+    round_number: 1,
+    research_tier: "ultra",
+    depth: "simple",
+    request_hash: "research-fit",
+    parent_round_id: null,
+    focus_requirements: [],
+  });
+  assert.deepEqual(plan.research_models, [
+    "google/gemini-3.8-flash",
+    "openai/gpt-5.2",
+    "anthropic/claude-sonnet-5",
+    "deepseek/deepseek-v4-pro-0813",
+    "x-ai/grok-4.3",
+  ]);
+  assert.ok(
+    choices.every(
+      (rate) =>
+        !rate.model.includes("build") && !rate.model.includes("vision-exp"),
+    ),
+  );
+  assert.equal(
+    plan.rates.find((rate) => rate.model.startsWith("anthropic/")).provider,
+    "amazon-bedrock/global",
+  );
+  assert.equal(plan.search_engines["anthropic/claude-sonnet-5"], "exa");
+  assert.equal(plan.search_engines["deepseek/deepseek-v4-pro-0813"], "exa");
+  assert.equal(
+    plan.rates.find((rate) => rate.model.startsWith("deepseek/")).provider,
+    "deepinfra/fp8",
+    "An offline cheaper endpoint cannot win the quote",
+  );
+  assert.equal(plan.search_engines["x-ai/grok-4.3"], "native");
+  const guard = createRoundCallGuard(plan);
+  await assert.rejects(
+    guard(
+      {
+        model: "anthropic/claude-sonnet-5",
+        messages: [],
+        plugins: [{ id: "web", engine: "native" }],
+      },
+      true,
+    ),
+    { code: "MB-409-ROUND-SEARCH-ENGINE" },
+  );
+  await guard(
+    {
+      model: "anthropic/claude-sonnet-5",
+      messages: [],
+      plugins: [{ id: "web", engine: "exa", max_results: 8 }],
+    },
+    true,
+  );
 });

@@ -655,6 +655,28 @@ function proofSources(
     return [record.source];
   });
 }
+/** Fill an omitted website only from an already verified official identity page.
+ * Conflicting domains and registry/directory evidence cannot establish a website. */
+export function restoreVerifiedOfficialWebsites(
+  candidates: readonly LiveCandidateRecord[],
+  evidence: Map<string, LiveEvidenceRecord>,
+): LiveCandidateRecord[] {
+  return candidates.map((candidate) => {
+    if (candidate.website || candidate.identity.status !== "verified")
+      return candidate;
+    const official = proofSources(candidate.identity, evidence).filter(
+      (source) => source.source_type === "official_website",
+    );
+    const hosts = new Set(
+      official.map((source) =>
+        new URL(source.source_url).hostname.replace(/^www\./, ""),
+      ),
+    );
+    if (hosts.size !== 1 || !official[0]) return candidate;
+    return { ...candidate, website: official[0].source_url };
+  });
+}
+
 export function evaluateLiveCandidate(
   candidate: LiveCandidateRecord,
   requirements: readonly string[],

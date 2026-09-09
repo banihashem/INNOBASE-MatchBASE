@@ -4,7 +4,52 @@ import {
   researchCitationInventory,
   candidateSourceCitations,
   selectResearchSourceExcerpt,
+  prioritizeSourceBackedCandidates,
 } from "../../../packages/application/dist/research-source-context.js";
+
+test("L04 grounded late leads precede empty names before the extraction cap without changing evidence", () => {
+  const empty = Array.from({ length: 10 }, (_, i) => ({
+    legal_name: `Unbacked ${i}`,
+    anchor_quote: `Unbacked ${i}`,
+    source_urls: [],
+  }));
+  const supported = {
+    legal_name: "Ocean Logistics Limited",
+    anchor_quote: "Ocean Logistics Limited",
+    source_urls: ["https://ocean.example/about"],
+  };
+  const native = [
+    {
+      url: supported.source_urls[0],
+      title: "About",
+      content: "Ocean Logistics Limited provides ocean freight.",
+    },
+  ];
+  const inputs = [...empty, supported];
+  const before = structuredClone(inputs);
+  const prioritized = prioritizeSourceBackedCandidates(inputs, native);
+  assert.equal(prioritized.slice(0, 4)[0], supported);
+  assert.equal(prioritized.length, inputs.length);
+  assert.deepEqual(inputs, before);
+  assert.deepEqual(prioritized.slice(1), empty);
+});
+
+test("L04 short company names do not acquire unrelated source assignments through word substrings", () => {
+  const candidate = { legal_name: "ONE", anchor_quote: "ONE", source_urls: [] };
+  const unrelated = {
+    url: "https://unrelated.example/",
+    title: "Someone",
+    content: "Someone offers container shipping.",
+  };
+  const own = {
+    url: "https://one.example/",
+    title: "ONE",
+    content: "ONE provides container shipping.",
+  };
+  assert.deepEqual(candidateSourceCitations(candidate, [unrelated, own]), [
+    own,
+  ]);
+});
 
 test("L14 continuation keeps fetched seller evidence even when previous extraction accepted no facts", () => {
   const old = {

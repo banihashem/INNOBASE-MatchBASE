@@ -82,3 +82,33 @@ test("MB-UX-LIVE-001 source text preserves visible evidence and removes executab
     "A & B 500 L — 10 bar",
   );
 });
+
+test("L04 source evidence decodes typographic entities identically to visible Unicode without changing literal wording", () => {
+  const visible =
+    "MSC “Shipper’s instructions” — origin–destination; ‘cargo’ «details» ‹note› „terms‚ rate €500 / £400 / ¥600; …";
+  const encoded =
+    "<p>MSC &ldquo;Shipper&rsquo;s instructions&rdquo; &mdash; origin&ndash;destination; &lsquo;cargo&rsquo; &laquo;details&raquo; &lsaquo;note&rsaquo; &bdquo;terms&sbquo; rate &euro;500 / &pound;400 / &yen;600; &hellip;</p>";
+  const decoded = extractPrimaryEvidenceText(encoded);
+  assert.equal(decoded, extractPrimaryEvidenceText(visible));
+  assert.ok(decoded.includes("MSC “Shipper’s instructions”"));
+  assert.equal(decoded.includes("MSC “Consignee’s instructions”"), false);
+  assert.equal(
+    extractPrimaryEvidenceText(
+      "&#8220;Shipper&#8217;s instructions&#8221; &#x2014; cargo",
+    ),
+    "“Shipper’s instructions” — cargo",
+  );
+  assert.equal(
+    extractPrimaryEvidenceText("A&ensp;B&emsp;C&thinsp;D"),
+    "A B C D",
+  );
+});
+
+test("L04 source entity decoding is single-pass and preserves unknown literals", () => {
+  assert.equal(
+    extractPrimaryEvidenceText(
+      "<p>&amp;ldquo;literal&amp;rdquo; &unrecognized; &lt;cargo&gt;</p><script>&ldquo;injected&rdquo;</script>",
+    ),
+    "&ldquo;literal&rdquo; &unrecognized; <cargo>",
+  );
+});

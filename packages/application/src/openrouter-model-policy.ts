@@ -213,12 +213,74 @@ export function getConfiguredLiveModels() {
   };
 }
 /** Explicit plugin routing; DeepSeek uses the separately priced Exa service. */
-export function researchSearchEngineForModel(model: string): "native" | "exa" {
+export function researchSearchEngineForModel(
+  model: string,
+  provider?: string,
+): "native" | "exa" {
+  if (model.startsWith("anthropic/") && provider && provider !== "anthropic")
+    return "exa";
   return /^(google\/gemini-|openai\/|anthropic\/claude-|x-ai\/grok-)/.test(
     model,
   )
     ? "native"
     : "exa";
+}
+// MB-UX-DEV-004 L04: public endpoint privacy eligibility is independent of account-wide settings.
+let zdrCatalog:
+  | {
+      fingerprint: string;
+      expires: number;
+      result: Promise<ReadonlySet<string>>;
+    }
+  | undefined;
+export function getOpenRouterZdrEndpoints(): Promise<ReadonlySet<string>> {
+  const credential = getOpenRouterApiKey();
+  if (!credential)
+    throw new LiveResearchError(
+      "MB-503-LIVE-CREDENTIAL",
+      "Server OpenRouter credential is not configured.",
+    );
+  const fingerprint = createHash("sha256").update(credential).digest("hex");
+  if (
+    zdrCatalog &&
+    zdrCatalog.fingerprint === fingerprint &&
+    zdrCatalog.expires > Date.now()
+  )
+    return zdrCatalog.result;
+  const result = (async () => {
+    const response = await fetch("https://openrouter.ai/api/v1/endpoints/zdr", {
+      headers: { Authorization: `Bearer ${credential}` },
+      signal: AbortSignal.timeout(15000),
+      redirect: "error",
+      cache: "no-store",
+    });
+    if (!response.ok)
+      throw new LiveResearchError(
+        "MB-503-MODEL-PRIVACY",
+        "Endpoint privacy eligibility is unavailable.",
+      );
+    const body = (await response.json()) as {
+      data?: { model_id?: unknown; tag?: unknown }[];
+    };
+    if (!Array.isArray(body.data))
+      throw new LiveResearchError(
+        "MB-503-MODEL-PRIVACY",
+        "Endpoint privacy eligibility is invalid.",
+      );
+    return new Set(
+      body.data
+        .filter(
+          (entry) =>
+            typeof entry.model_id === "string" && typeof entry.tag === "string",
+        )
+        .map((entry) => `${entry.model_id}:${entry.tag}`),
+    );
+  })();
+  zdrCatalog = { fingerprint, expires: Date.now() + 300000, result };
+  void result.catch(() => {
+    if (zdrCatalog?.result === result) zdrCatalog = undefined;
+  });
+  return result;
 }
 let catalogCache:
   | {
@@ -327,6 +389,7 @@ export async function getOpenRouterModelCapabilities(
     data?: {
       endpoints?: {
         name?: unknown;
+        status?: number;
         provider_name?: unknown;
         pricing?: Record<string, unknown>;
         model_id?: unknown;
@@ -340,6 +403,9 @@ export async function getOpenRouterModelCapabilities(
     ? endpoints.filter(
         (entry) =>
           typeof entry.tag === "string" &&
+          (!providerOverride ||
+            entry.status === undefined ||
+            entry.status === 0) &&
           (entry.tag === provider ||
             (!providerOverride &&
               entry.tag.startsWith(`${provider}/`) &&
@@ -390,7 +456,8 @@ export async function getOpenRouterModelCapabilities(
               : undefined;
           return entry.model_id === model &&
             dated &&
-            dated.startsWith(`${model}-`)
+            /^[a-z0-9-]+\/[a-z0-9._-]+$/.test(dated) &&
+            dated.startsWith(`${model.split("/")[0]}/`)
             ? [dated]
             : [];
         }),
@@ -576,6 +643,24 @@ export async function callOpenRouterCompletion(
         "MB-409-ROUND-PROVIDER",
         "Approved provider identity no longer matches current endpoint metadata.",
       );
+    if (
+      credit &&
+      !(await getOpenRouterZdrEndpoints()).has(`${params.model}:${provider}`)
+    )
+      throw new LiveResearchError(
+        "MB-409-ROUND-PRIVACY",
+        "The approved credit endpoint does not satisfy zero data retention. Review a new estimate.",
+      );
+    if (
+      params.plugins?.some(
+        (plugin) => plugin.id === "web" && plugin.engine === "native",
+      ) &&
+      researchSearchEngineForModel(params.model, provider) !== "native"
+    )
+      throw new LiveResearchError(
+        "MB-409-ROUND-SEARCH-ENGINE",
+        "This provider requires an explicitly approved Exa search route.",
+      );
     if (credit && params.approved_rate) {
       const ceilings: Record<string, number> = {
         prompt: params.approved_rate.input_usd_per_token,
@@ -652,6 +737,7 @@ export async function callOpenRouterCompletion(
           order: [provider],
           require_parameters: true,
           allow_fallbacks: false,
+          ...(credit ? { zdr: true } : {}),
         },
       }),
       signal,
@@ -1083,7 +1169,7 @@ async function runLiveCompletionAttempt(
     if (
       context.require_web &&
       options.web_engine !== "exa" &&
-      researchSearchEngineForModel(request.model) !== "native"
+      researchSearchEngineForModel(request.model, provider) !== "native"
     )
       throw new LiveResearchError(
         "MB-422-MODEL-CAPABILITY",

@@ -4,6 +4,7 @@ import { repairSourceTranscription } from "../../../packages/application/dist/so
 import {
   assembleLiveSuppliers,
   ingestLiveEvidence,
+  restoreVerifiedOfficialWebsites,
 } from "../../../packages/application/dist/live-supplier-evidence.js";
 
 function fixture() {
@@ -181,4 +182,53 @@ test("L14 existing unmet capability and unknown mentions cannot become verified 
       0,
     );
   }
+});
+
+test("L04 omitted websites recover only from unambiguous verified official identity evidence", () => {
+  const { candidate, citations, retrieved } = fixture();
+  const repaired = repairSourceTranscription([candidate], citations, retrieved);
+  const evidence = new Map();
+  ingestLiveEvidence(repaired, citations, evidence, retrieved);
+  const missing = { ...repaired.candidates[0], website: null };
+  const restored = restoreVerifiedOfficialWebsites([missing], evidence)[0];
+  assert.equal(restored.website, citations[0].url);
+  assert.equal(missing.website, null);
+  assert.equal(
+    assembleLiveSuppliers([restored], [], evidence, 20).candidates.length,
+    1,
+  );
+  for (const sourceType of [
+    "company_registry",
+    "government_trade_portal",
+    "b2b_directory",
+  ]) {
+    const external = structuredClone(evidence);
+    external.get(citations[0].url).source.source_type = sourceType;
+    assert.equal(
+      restoreVerifiedOfficialWebsites([missing], external)[0].website,
+      null,
+    );
+  }
+  const unsupported = {
+    ...missing,
+    identity: { ...missing.identity, quote: "invented legal identity" },
+  };
+  assert.equal(
+    restoreVerifiedOfficialWebsites([unsupported], evidence)[0].website,
+    null,
+  );
+  const second = structuredClone(evidence.get(citations[0].url));
+  second.source.source_url = "https://other.example.com/about";
+  evidence.set(second.source.source_url, second);
+  const ambiguous = {
+    ...missing,
+    identity: {
+      ...missing.identity,
+      source_urls: [...missing.identity.source_urls, second.source.source_url],
+    },
+  };
+  assert.equal(
+    restoreVerifiedOfficialWebsites([ambiguous], evidence)[0].website,
+    null,
+  );
 });

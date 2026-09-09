@@ -81,24 +81,40 @@ export function extractPrimaryEvidenceText(content: string): string {
     quot: '"',
     apos: "'",
     nbsp: " ",
+    lsquo: "‘",
+    rsquo: "’",
+    sbquo: "‚",
+    ldquo: "“",
+    rdquo: "”",
+    bdquo: "„",
+    laquo: "«",
+    raquo: "»",
+    lsaquo: "‹",
+    rsaquo: "›",
+    ndash: "–",
+    mdash: "—",
+    hellip: "…",
+    ensp: "\u2002",
+    emsp: "\u2003",
+    thinsp: "\u2009",
+    euro: "€",
+    pound: "£",
+    yen: "¥",
+    cent: "¢",
   };
   return content
     .replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
     .replace(/<[^>]*>/g, " ")
-    .replace(
-      /&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi,
-      (whole, entity: string) => {
-        if (!entity.startsWith("#"))
-          return named[entity.toLowerCase()] ?? whole;
-        const value =
-          entity[1]?.toLowerCase() === "x"
-            ? Number.parseInt(entity.slice(2), 16)
-            : Number.parseInt(entity.slice(1), 10);
-        return value >= 0 && value <= 0x10ffff
-          ? String.fromCodePoint(value)
-          : " ";
-      },
-    )
+    .replace(/&(#x[\da-f]+|#\d+|[a-z][a-z\d]+);/gi, (whole, entity: string) => {
+      if (!entity.startsWith("#")) return named[entity.toLowerCase()] ?? whole;
+      const value =
+        entity[1]?.toLowerCase() === "x"
+          ? Number.parseInt(entity.slice(2), 16)
+          : Number.parseInt(entity.slice(1), 10);
+      return value >= 0 && value <= 0x10ffff
+        ? String.fromCodePoint(value)
+        : " ";
+    })
     .normalize("NFKC")
     .replace(/\s+/g, " ")
     .trim();

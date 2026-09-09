@@ -35,6 +35,7 @@ import {
   sameLiveCandidateIdentity,
   assembleLiveSuppliers,
   evaluateLiveCandidate,
+  restoreVerifiedOfficialWebsites,
   type LiveDiscoveryPayload,
   type LiveEvidenceRecord,
   type LiveCandidateRecord,
@@ -578,7 +579,10 @@ export async function executeDualLaneResearch(
     );
     const retained = [...roster.values()];
     const reconciled = reconcileLiveCandidateRecords(
-      [...retained, ...payload.candidates],
+      restoreVerifiedOfficialWebsites(
+        [...retained, ...payload.candidates],
+        evidence,
+      ),
       evidence,
     );
     roster.clear();

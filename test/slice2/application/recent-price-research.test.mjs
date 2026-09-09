@@ -204,7 +204,7 @@ const provider = {
   deepseek: ["deepseek", "DeepSeek"],
   "x-ai": ["xai", "xAI"],
 };
-function setup(t, row, failedModel = null) {
+function setup(t, row, failedModel = null, override = (response) => response) {
   const vars = {
     MATCHBASE_OPENROUTER_API_KEY: randomUUID(),
     MATCHBASE_PROVIDER_GOOGLE: "google-ai-studio",
@@ -262,46 +262,54 @@ function setup(t, row, failedModel = null) {
                 summary: "No grounded supplier",
               }
             : "Public price evidence and no supplier identity.";
-    return Response.json({
-      id: `price-test-${requests.length}`,
-      model: body.model,
-      openrouter_metadata: {
-        is_byok: true,
-        endpoints: {
-          available: [
+    return Response.json(
+      override(
+        {
+          id: `price-test-${requests.length}`,
+          model: body.model,
+          openrouter_metadata: {
+            is_byok: true,
+            endpoints: {
+              available: [
+                {
+                  selected: true,
+                  model: body.model,
+                  provider: provider[body.model.split("/")[0]][1],
+                },
+              ],
+            },
+          },
+          choices: [
             {
-              selected: true,
-              model: body.model,
-              provider: provider[body.model.split("/")[0]][1],
+              finish_reason:
+                body.plugins && body.model === failedModel ? "length" : "stop",
+              message: {
+                content:
+                  typeof payload === "string"
+                    ? payload
+                    : JSON.stringify(payload),
+                annotations: body.plugins
+                  ? [
+                      {
+                        type: "url_citation",
+                        url_citation: citations(row ?? observation())[0],
+                      },
+                    ]
+                  : [],
+              },
             },
           ],
-        },
-      },
-      choices: [
-        {
-          finish_reason:
-            body.plugins && body.model === failedModel ? "length" : "stop",
-          message: {
-            content:
-              typeof payload === "string" ? payload : JSON.stringify(payload),
-            annotations: body.plugins
-              ? [
-                  {
-                    type: "url_citation",
-                    url_citation: citations(row ?? observation())[0],
-                  },
-                ]
-              : [],
+          usage: {
+            prompt_tokens: 10,
+            completion_tokens: 20,
+            cost: 0.01,
+            cost_details: { upstream_inference_cost: 0.02 },
           },
         },
-      ],
-      usage: {
-        prompt_tokens: 10,
-        completion_tokens: 20,
-        cost: 0.01,
-        cost_details: { upstream_inference_cost: 0.02 },
-      },
-    });
+        body,
+        requests.length,
+      ),
+    );
   });
   return requests;
 }
@@ -367,6 +375,115 @@ test("L02 exhausted price allowance is explicit incomplete research without inve
   assert.equal(result.search.status, "incomplete");
   assert.equal(result.search.observations.length, 0);
   assert.match(result.search.limitations.join(" "), /allowance/);
+});
+
+test("L04 price-only briefing excludes supplier-report instructions and retains approved commercial scope", async (t) => {
+  const row = observation(
+    new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10),
+  );
+  const requests = setup(t, row);
+  await executeRecentPriceResearch(
+    {
+      product_requirement: "Original superseded intake",
+      deep_prompt:
+        "Write a complete executive summary and twenty supplier profiles.",
+      approved_request_snapshot: {
+        approved_translation:
+          "Grade A rice, FOB India, 40 MT total, packaged in 25 kg bags.",
+        product_name: "Grade A rice",
+      },
+      mandatory_requirements: ["40 MT total"],
+    },
+    plan(),
+    { before_call: async () => {} },
+    async () => citations(row),
+  );
+  const input = JSON.parse(requests[0].messages[1].content);
+  assert.match(input.approved_translation, /40 MT total/);
+  assert.deepEqual(input.mandatory_requirements, ["40 MT total"]);
+  assert.equal(input.deep_prompt, undefined);
+  assert.doesNotMatch(
+    requests[0].messages[1].content,
+    /twenty supplier profiles|superseded/,
+  );
+  assert.match(
+    requests[0].messages[0].content,
+    /only the price-evidence subtask/,
+  );
+});
+
+test("L04 truncated audited price briefing with zero reported output tokens preserves sources and reaches grounded extraction", async (t) => {
+  const row = observation(
+    new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10),
+  );
+  const requests = setup(t, row, null, (response, body) => {
+    if (body.plugins) {
+      response.choices[0].finish_reason = "length";
+      response.usage.completion_tokens = 0;
+      response.usage.completion_tokens_details = { reasoning_tokens: 0 };
+    }
+    return response;
+  });
+  const events = [];
+  const result = await executeRecentPriceResearch(
+    {},
+    plan(),
+    {
+      before_call: async () => {},
+      on_checkpoint: (e) => events.push(e),
+    },
+    async () => citations(row),
+  );
+  assert.equal(requests.length, 2);
+  assert.equal(result.search.status, "prices_found");
+  assert.equal(result.search.observations.length, 1);
+  assert.equal(result.calls.length, 2);
+  assert.equal(result.calls[0].finish_reason, "length");
+  assert.equal(result.calls[0].output_tokens, 0);
+  assert.equal(events.filter((e) => e.state === "failed").length, 1);
+  assert.match(result.search.limitations.join(" "), /truncated/);
+});
+
+test("L04 unusable first-window response falls back to thirty-day search within four approved calls", async (t) => {
+  const row = observation(
+    new Date(Date.now() - 12 * 86400000).toISOString().slice(0, 10),
+  );
+  const requests = setup(t, row, null, (response, _body, call) => {
+    if (call === 1) {
+      response.choices[0].finish_reason = "length";
+      response.choices[0].message = { content: "", annotations: [] };
+      response.usage.completion_tokens = 0;
+    }
+    return response;
+  });
+  const result = await executeRecentPriceResearch(
+    {},
+    plan(),
+    { before_call: async () => {} },
+    async () => citations(row),
+  );
+  assert.equal(requests.length, 3);
+  assert.deepEqual(result.search.searched_windows_days, [7, 30]);
+  assert.equal(result.search.status, "prices_found");
+  assert.equal(result.search.observations[0].recency, "under_30_days");
+  assert.equal(result.calls.length, 3);
+});
+
+test("L04 truncated price prose without actual retrieved source evidence cannot become a price", async (t) => {
+  const row = observation(
+    new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10),
+  );
+  const requests = setup(t, row, models[1]);
+  const result = await executeRecentPriceResearch(
+    {},
+    plan(),
+    { before_call: async () => {} },
+    async () => [],
+  );
+  assert.equal(requests.length, 4);
+  assert.equal(result.search.observations.length, 0);
+  assert.deepEqual(result.search.searched_windows_days, [7, 30]);
+  assert.equal(result.calls.length, 4);
 });
 for (const count of [2, 3, 5])
   test(`L02 approved ${count} model lanes dispatch exact engines and retain price output without admitted suppliers`, async (t) => {

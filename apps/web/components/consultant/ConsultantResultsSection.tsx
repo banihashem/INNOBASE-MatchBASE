@@ -3,6 +3,7 @@ import type {
   SupplierEntityV3,
 } from "@matchbase/contracts";
 import { ApprovedRequestSummary } from "./ApprovedRequestSummary";
+import { ResearchPricing, SupplierPriceSummary } from "./ResearchPricing";
 
 interface ConsultantResultsSectionProps {
   output: ConsultantResearchOutputV3;
@@ -125,6 +126,7 @@ export function ConsultantResultsSection({
         )}
       </div>
       <ApprovedRequestSummary snapshot={output.approved_request_snapshot} />
+      <ResearchPricing output={output} />
       {/* Candidate Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {visibleSuppliers.map((supp) => {
@@ -232,6 +234,11 @@ export function ConsultantResultsSection({
                   )}
                 </div>
 
+                <SupplierPriceSummary
+                  supplier={supp}
+                  evidence={output.evidence_sources}
+                  claims={output.claims}
+                />
                 <p className="text-xs text-slate-300 line-clamp-2 mb-4">
                   {supp.assessment.positive_drivers.join("; ")}
                 </p>

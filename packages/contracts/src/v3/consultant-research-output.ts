@@ -96,6 +96,8 @@ export interface CommercialDataV3 {
   readonly payment_terms?: string;
   readonly quotation_required?: boolean;
   readonly commercial_confidence: ConfidenceLevelV2;
+  /** Explicit source publication/update date for the price, never retrieval or expiry. */
+  readonly price_date?: string;
   readonly price_validity?: string;
   readonly commercial_evidence_ids: readonly string[];
 }
@@ -462,6 +464,8 @@ export function parseConsultantResearchOutputV3(
     strings(offering.use_cases, "offering.use_cases");
     strings(offering.product_evidence_ids, "offering.product_evidence_ids");
     const commercial = object(supplier.commercial, "supplier.commercial");
+    if (commercial.price_date !== undefined)
+      string(commercial.price_date, "commercial.price_date");
     strings(
       commercial.commercial_evidence_ids,
       "commercial.commercial_evidence_ids",

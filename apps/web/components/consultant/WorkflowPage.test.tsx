@@ -630,7 +630,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
         }}
       />,
     );
-    expect(screen.getByText("EUR 12 - 16 / unit")).toBeInTheDocument();
+    expect(screen.getByText("EUR 12 – 16 / unit")).toBeInTheDocument();
     expect(
       screen.getByText("Supplier indicative quotation"),
     ).toBeInTheDocument();
@@ -1145,7 +1145,10 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
         }),
       );
     });
-    expect((await screen.findAllByText("Current run supplier")).length).toBe(5);
+    expect(
+      (await screen.findAllByRole("heading", { name: "Current run supplier" }))
+        .length,
+    ).toBe(5);
     expect(screen.getByText(/Showing 5 of 20/)).toBeVisible();
   });
 

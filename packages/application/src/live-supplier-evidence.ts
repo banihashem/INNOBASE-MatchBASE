@@ -40,6 +40,7 @@ export const LIVE_FACT_FIELD_PATHS = [
   "commercial.payment_terms",
   "commercial.incoterm",
   "commercial.incoterm_location",
+  "commercial.price_date",
   "commercial.price_validity",
   "commercial.currency",
   "commercial.unit",
@@ -47,7 +48,7 @@ export const LIVE_FACT_FIELD_PATHS = [
   "commercial.price_max",
 ] as const;
 const liveFactFieldPattern = `^(?:${LIVE_FACT_FIELD_PATHS.map((path) => path.replaceAll(".", "\\.")).join("|")}|specifications\\.[a-z][a-z0-9_]{0,63})$`;
-export const LIVE_FACT_FIELD_INSTRUCTIONS = `Use only these facts[].field_path values: ${LIVE_FACT_FIELD_PATHS.join(", ")}, or specifications.<lowercase_snake_case_key> (1-64 letters/digits/underscores, starting with a letter). Product name/family belong in the required candidate product_name/product_family fields. Do not create presence, identity.country, product.name, facts.*, or offering.* paths. Extract every explicitly published useful business contact and commercial term using the canonical paths, not a combined prose fact. Keep each value a literal substring of its exact source quote. Numeric price values must be plain decimal numbers without currency symbols; record the source currency separately. Never infer stock or delivery availability from a model listing or a public price. Keep unpublished commercial terms unknown and require an RFQ.`;
+export const LIVE_FACT_FIELD_INSTRUCTIONS = `Use only these facts[].field_path values: ${LIVE_FACT_FIELD_PATHS.join(", ")}, or specifications.<lowercase_snake_case_key> (1-64 letters/digits/underscores, starting with a letter). Product name/family belong in the required candidate product_name/product_family fields. Do not create presence, identity.country, product.name, facts.*, or offering.* paths. Extract every explicitly published useful business contact and commercial term using the canonical paths, not a combined prose fact. Keep each value a literal substring of its exact source quote. Numeric price values must be plain decimal numbers without currency symbols; record the source currency separately. commercial.price_date is the explicit publication/update/as-of date attached to a price, copied literally with its date wording in the quote and cited from the same price source. It is never the research date, retrieval date, copyright date or quotation expiry. commercial.price_validity is a separately published validity/expiry period; do not use it for a publication/update date. Never infer stock or delivery availability from a model listing or a public price. Keep unpublished commercial terms unknown and require an RFQ.`;
 const proofSchema = objectSchema({
   status: { type: "string", enum: ["verified", "unmet", "unknown"] },
   source_urls: stringListSchema,
@@ -833,6 +834,34 @@ export function assembleLiveSuppliers(
         !fact.quote.toLowerCase().includes(fact.value.toLowerCase())
       )
         continue;
+      if (fact.field_path === "commercial.price_date") {
+        const dateSources = proofSources(fact, evidence);
+        const priceSources = candidate.facts
+          .filter(
+            (entry) =>
+              ["commercial.price_min", "commercial.price_max"].includes(
+                entry.field_path,
+              ) &&
+              /^\d+(?:\.\d+)?$/.test(entry.value) &&
+              entry.quote.includes(entry.value),
+          )
+          .flatMap((entry) => proofSources(entry, evidence));
+        // A crawl timestamp or validity deadline is not the date of a price.
+        if (
+          !/\b(?:updated|published|as of|dated|price date|quotation date|quoted on|effective from)\b/i.test(
+            fact.quote,
+          ) ||
+          /\b(?:retrieved|accessed|crawled|copyright|valid until|expires?)\b/i.test(
+            fact.quote,
+          ) ||
+          !dateSources.some((source) =>
+            priceSources.some(
+              (price) => price.evidence_id === source.evidence_id,
+            ),
+          )
+        )
+          continue;
+      }
       const ids = makeClaim(
         `${fact.field_path}: ${fact.value}`,
         fact,
@@ -890,6 +919,7 @@ export function assembleLiveSuppliers(
       "commercial.payment_terms",
       "commercial.incoterm",
       "commercial.incoterm_location",
+      "commercial.price_date",
       "commercial.price_validity",
       "commercial.currency",
       "commercial.unit",

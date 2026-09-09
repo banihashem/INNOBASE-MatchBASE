@@ -30,6 +30,7 @@ const factValues = {
   "commercial.payment_terms": "bank transfer",
   "commercial.incoterm": "EXW",
   "commercial.incoterm_location": "Dubai",
+  "commercial.price_date": "14 November 2024",
   "commercial.price_validity": "30 September 2026",
   "commercial.currency": "AED",
   "commercial.unit": "unit",
@@ -38,7 +39,13 @@ const factValues = {
   "specifications.model": "X100",
   "specifications.stock_status": "Sold out",
 };
-const sourceText = [identity, product, ...Object.values(factValues)].join("\n");
+const priceDateQuote = "Price updated on 14 November 2024";
+const sourceText = [
+  identity,
+  product,
+  ...Object.values(factValues),
+  priceDateQuote,
+].join("\n");
 const proof = (quote) => ({ status: "verified", source_urls: [url], quote });
 function fixture() {
   const candidate = {
@@ -62,7 +69,7 @@ function fixture() {
           ? "product_spec"
           : "identity",
       source_urls: [url],
-      quote: value,
+      quote: field_path === "commercial.price_date" ? priceDateQuote : value,
     })),
     certifications: [],
     constraints: [],
@@ -85,11 +92,11 @@ function fixture() {
     summary: "Supplier listing, public contacts and observed price.",
   };
 }
-function assemble(payload) {
+function assemble(payload, nativeText = sourceText) {
   const evidence = new Map();
   ingestLiveEvidence(
     payload,
-    [{ url, title: "Catalog", content: sourceText }],
+    [{ url, title: "Catalog", content: nativeText }],
     evidence,
   );
   return {
@@ -115,6 +122,81 @@ test("L14 canonical contact, identity, specification and price fields project wi
   assert.equal(c.offering.specifications.stock_status, "Sold out");
   for (const field of LIVE_FACT_FIELD_PATHS)
     assert.ok(result.claims.some((claim) => claim.field_path === field));
+});
+
+test("L16 price publication date preserves literal source text separately from validity and retrieval", () => {
+  const result = assemble(fixture());
+  const commercial = result.candidates[0].commercial;
+  assert.equal(commercial.price_date, "14 November 2024");
+  assert.equal(commercial.price_validity, "30 September 2026");
+  const dateClaim = result.claims.find(
+    (claim) => claim.field_path === "commercial.price_date",
+  );
+  assert.ok(dateClaim.evidence_ids.length);
+  assert.ok(
+    dateClaim.evidence_ids.every((id) =>
+      commercial.commercial_evidence_ids.includes(id),
+    ),
+  );
+  assert.notEqual(
+    commercial.price_date,
+    result.evidence.get(url).source.retrieved_at,
+  );
+});
+
+test("L16 legacy validity and source retrieval dates do not become price publication dates", () => {
+  const p = fixture();
+  p.candidates[0].facts = p.candidates[0].facts.filter(
+    (fact) => fact.field_path !== "commercial.price_date",
+  );
+  const commercial = assemble(p).candidates[0].commercial;
+  assert.equal(commercial.price_date, undefined);
+  assert.equal(commercial.price_validity, "30 September 2026");
+});
+
+test("L16 unsupported, retrieval, expiry and unrelated-source dates are not attached to prices", () => {
+  for (const quote of [
+    "Price updated on 20 November 2024",
+    "Retrieved on 14 November 2024",
+    "Price valid until 14 November 2024",
+    "Copyright 14 November 2024",
+  ]) {
+    const p = fixture();
+    const fact = p.candidates[0].facts.find(
+      (entry) => entry.field_path === "commercial.price_date",
+    );
+    fact.quote = quote;
+    const native = quote.includes("20 November")
+      ? sourceText
+      : `${sourceText}\n${quote}`;
+    const result = assemble(p, native);
+    assert.equal(result.candidates[0].commercial.price_date, undefined, quote);
+    assert.ok(
+      !result.claims.some(
+        (claim) => claim.field_path === "commercial.price_date",
+      ),
+      quote,
+    );
+  }
+  const p = fixture();
+  const fact = p.candidates[0].facts.find(
+    (entry) => entry.field_path === "commercial.price_date",
+  );
+  fact.source_urls = ["https://unrelated-supplier.com/price"];
+  assert.equal(assemble(p).candidates[0].commercial.price_date, undefined);
+});
+
+test("L16 publication date requires a grounded numeric price from the same source", () => {
+  const p = fixture();
+  for (const fact of p.candidates[0].facts) {
+    if (
+      ["commercial.price_min", "commercial.price_max"].includes(fact.field_path)
+    ) {
+      fact.value = "9999";
+      fact.quote = "9999";
+    }
+  }
+  assert.equal(assemble(p).candidates[0].commercial.price_date, undefined);
 });
 test("L14 noncanonical and malformed fact paths fail extraction schema validation", () => {
   for (const field of [

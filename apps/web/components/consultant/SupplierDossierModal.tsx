@@ -9,6 +9,7 @@ import type {
 } from "@matchbase/contracts";
 
 import { ApprovedRequestSummary } from "./ApprovedRequestSummary";
+import { SupplierPriceSummary } from "./ResearchPricing";
 
 export interface SupplierDossierModalProps {
   readonly supplier: SupplierEntityV3 | null;
@@ -394,6 +395,12 @@ export function SupplierDossierModal({
               <h4 className="font-bold text-slate-800 mb-2">
                 Commercial Terms & Capacity
               </h4>
+              <SupplierPriceSummary
+                supplier={supplier}
+                evidence={evidenceSources}
+                claims={claims}
+                detailed
+              />
               <div className="text-xs space-y-1.5">
                 <div className="flex justify-between border-b border-slate-100 py-0.5">
                   <span className="text-slate-500">Production Capacity:</span>
@@ -411,21 +418,6 @@ export function SupplierDossierModal({
                       "Not found in inspected sources"}
                   </span>
                 </div>
-                {supplier.commercial.price_min !== undefined && (
-                  <div className="flex justify-between border-b border-slate-100 py-0.5">
-                    <span className="text-slate-500">Source Price Range:</span>
-                    <span className="font-bold text-emerald-700">
-                      {supplier.commercial.currency ?? "Currency not stated"}{" "}
-                      {supplier.commercial.price_min}
-                      {supplier.commercial.price_max !== undefined
-                        ? ` - ${supplier.commercial.price_max}`
-                        : ""}
-                      {supplier.commercial.unit
-                        ? ` / ${supplier.commercial.unit}`
-                        : ""}
-                    </span>
-                  </div>
-                )}
                 <div className="flex justify-between border-b border-slate-100 py-0.5">
                   <span className="text-slate-500">Price Type:</span>
                   <span>{supplier.commercial.price_type ?? "Not stated"}</span>

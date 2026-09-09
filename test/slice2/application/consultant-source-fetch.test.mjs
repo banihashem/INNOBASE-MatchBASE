@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { gzipSync, deflateSync, brotliCompressSync } from "node:zlib";
 import {
   isPublicEvidenceAddress,
   extractPrimaryEvidenceText,
   fetchPrimaryEvidenceText,
+  decodePrimaryEvidenceBody,
 } from "../../../packages/application/dist/live-source-fetch.js";
 
 test("MB-UX-LIVE-001 source fetch refuses private, local, translated and documentation addresses", async () => {
@@ -34,6 +36,41 @@ test("MB-UX-LIVE-001 source fetch refuses private, local, translated and documen
   );
   assert.equal(
     await fetchPrimaryEvidenceText("https://user:password@example.org/"),
+    null,
+  );
+});
+test("L17 decodes gzip, deflate and Brotli before source extraction", () => {
+  const html = "<h1>Supplier — ماشین</h1><p>USD 1110 / MT</p>";
+  for (const [codec, encode] of [
+    ["gzip", gzipSync],
+    ["deflate", deflateSync],
+    ["br", brotliCompressSync],
+  ]) {
+    assert.equal(
+      decodePrimaryEvidenceBody(encode(Buffer.from(html)), codec),
+      html,
+    );
+  }
+  assert.equal(decodePrimaryEvidenceBody(Buffer.from(html)), html);
+  assert.equal(
+    decodePrimaryEvidenceBody(Buffer.from("<p>Supplier\fUSD 1110</p>")),
+    "<p>Supplier\fUSD 1110</p>",
+  );
+});
+test("L17 rejects corrupt, mislabelled, binary and oversized decompressed source bodies", () => {
+  assert.equal(
+    decodePrimaryEvidenceBody(gzipSync(Buffer.from("<p>Supplier</p>"))),
+    null,
+  );
+  assert.equal(
+    decodePrimaryEvidenceBody(Buffer.from("bad gzip"), "gzip"),
+    null,
+  );
+  assert.equal(decodePrimaryEvidenceBody(Buffer.from([0xff, 0xfe])), null);
+  assert.equal(decodePrimaryEvidenceBody(Buffer.from("A\u0000B")), null);
+  assert.equal(decodePrimaryEvidenceBody(Buffer.from("text"), "unknown"), null);
+  assert.equal(
+    decodePrimaryEvidenceBody(gzipSync(Buffer.alloc(2_000_001, 65)), "gzip"),
     null,
   );
 });

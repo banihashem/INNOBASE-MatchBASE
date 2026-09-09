@@ -3,6 +3,42 @@ import { isIP } from "node:net";
 import { request as httpsRequest } from "node:https";
 import { request as httpRequest } from "node:http";
 import { createHash } from "node:crypto";
+import { gunzipSync, inflateSync, brotliDecompressSync } from "node:zlib";
+
+const MAX_EVIDENCE_BYTES = 2_000_000;
+
+/** Decode a bounded wire body before interpreting it as evidence. Unsupported or corrupt data is not evidence. */
+export function decodePrimaryEvidenceBody(
+  body: Buffer,
+  encoding = "identity",
+): string | null {
+  try {
+    if (body.length > MAX_EVIDENCE_BYTES) return null;
+    const options = { maxOutputLength: MAX_EVIDENCE_BYTES };
+    const codec = encoding.trim().toLowerCase();
+    const decoded =
+      codec === "gzip" || codec === "x-gzip"
+        ? gunzipSync(body, options)
+        : codec === "deflate"
+          ? inflateSync(body, options)
+          : codec === "br"
+            ? brotliDecompressSync(body, options)
+            : codec === "identity" || !codec
+              ? body
+              : null;
+    if (!decoded || decoded.length > MAX_EVIDENCE_BYTES) return null;
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(decoded);
+    return Array.from(text).some(
+      (char) =>
+        char.charCodeAt(0) < 32 &&
+        ![9, 10, 12, 13].includes(char.charCodeAt(0)),
+    )
+      ? null
+      : text;
+  } catch {
+    return null;
+  }
+}
 
 export interface PrimaryEvidenceText {
   readonly url: string;
@@ -149,14 +185,18 @@ export async function fetchPrimaryEvidenceText(
             const chunks: Buffer[] = [];
             response.on("data", (chunk: Buffer) => {
               bytes += chunk.length;
-              if (bytes > 2_000_000) {
+              if (bytes > MAX_EVIDENCE_BYTES) {
                 response.destroy();
                 resolve({});
               } else chunks.push(chunk);
             });
-            response.on("end", () =>
-              resolve({ content: Buffer.concat(chunks).toString("utf8") }),
-            );
+            response.on("end", () => {
+              const content = decodePrimaryEvidenceBody(
+                Buffer.concat(chunks),
+                response.headers["content-encoding"],
+              );
+              resolve(content === null ? {} : { content });
+            });
             response.on("error", () => resolve({}));
           },
         );
@@ -172,7 +212,14 @@ export async function fetchPrimaryEvidenceText(
       return fetchPrimaryEvidenceText(fetched.redirect, redirects + 1);
     if (!fetched.content) return null;
     const text = extractPrimaryEvidenceText(fetched.content);
-    if (!text) return null;
+    if (
+      !text ||
+      text.includes("\0") ||
+      /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/u.test(
+        text,
+      )
+    )
+      return null;
     return {
       url: url.href,
       text,

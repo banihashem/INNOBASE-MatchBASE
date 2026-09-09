@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { serializeWorkflowEventDetail } from "./workflow-event-json.js";
 import {
   inTransaction,
   type ConnectionPool,
@@ -239,7 +240,7 @@ export async function appendConsultantWorkflowEvent(
       identity.execution_id,
       identity.classification_id,
       phase,
-      JSON.stringify(detail),
+      serializeWorkflowEventDetail(detail),
     ],
   );
 }

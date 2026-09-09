@@ -1607,7 +1607,8 @@ postgresTest(
       );
       assert.deepEqual(stateByRun.get(dispatcherLiveRunId), {
         run_id: dispatcherLiveRunId,
-        state: "complete",
+        // This dispatcher fixture deliberately returns an empty evidence graph.
+        state: "no_responsible_match",
         research_mode: "qualified_live_research",
       });
       assert.deepEqual(stateByRun.get(dispatcherSyntheticRunId), {
@@ -1617,7 +1618,7 @@ postgresTest(
       });
       assert.deepEqual(stateByRun.get(dispatcherConsultantRunId), {
         run_id: dispatcherConsultantRunId,
-        state: "complete",
+        state: "no_responsible_match",
         research_mode: "qualified_live_research",
       });
       const consultantProjectionBinding = await pool.query(

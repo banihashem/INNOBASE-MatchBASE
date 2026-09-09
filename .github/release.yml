@@ -1,0 +1,8 @@
+changelog:
+  exclude:
+    labels: ["skip-release-notes"]
+  categories:
+    - title: Security and maintenance
+      labels: ["security", "dependencies", "maintenance"]
+    - title: Product changes
+      labels: ["*"]

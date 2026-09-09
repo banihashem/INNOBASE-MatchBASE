@@ -23,6 +23,7 @@ apps/dashboard/public/current-snapshot.json
 # Local execution residue and explicitly non-public publication controls.
 .artifacts/
 /tmp/
+/output/
 /-
 /scripts/lib/slice3-s4-windows-durable-publication-contract.mjs
 

@@ -1,0 +1,24 @@
+name: Maintenance or product improvement
+description: Define a bounded, verifiable change without private research data.
+title: "[MB-MAINT] "
+labels: ["maintenance"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Problem and intended outcome
+      description: Describe observable behavior and affected product area.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria and verification
+      description: Include compatibility, data preservation and relevant automated or manual checks.
+    validations:
+      required: true
+  - type: textarea
+    id: rollout
+    attributes:
+      label: Release and rollback considerations
+      description: Identify migrations, runtime changes and any separate deployment authorization.

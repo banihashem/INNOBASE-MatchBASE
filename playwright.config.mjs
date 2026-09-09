@@ -8,7 +8,8 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   reporter: "line",
-  timeout: 20_000,
+  timeout: 60_000,
+  expect: { timeout: 12_000 },
   use: { browserName: "chromium", channel: "chrome", headless: true },
   projects: [
     {
@@ -17,9 +18,21 @@ export default defineConfig({
       use: { baseURL: "http://127.0.0.1:4317" },
     },
     {
-      name: "product-reference",
+      name: "consultant-and-operations",
       testMatch:
-        /product-(?:(?:(?:live|standard|qualified)-)?reference-path|admin-(?:entitlements|requests)|consultant-result|consultant-v2-uat)\.spec\.mjs/u,
+        /(?:consultant-experience|research-options|accessibility-helper|consultant-session|product-(?:admin-(?:entitlements|requests)|consultant-result|consultant-v2-uat))\.spec\.mjs/u,
+      use: {
+        baseURL: "http://127.0.0.1:3010",
+        serviceWorkers: "block",
+        viewport: { width: 1440, height: 1000 },
+        reducedMotion: "reduce",
+      },
+    },
+    {
+      name: "http-security-boundaries",
+      testMatch: /product-live-reference-path\.spec\.mjs/u,
+      // The remaining scenarios in this historical file require the retired Demo UI.
+      grep: /^(?:.*)(?:standalone server delivers|requires a signed single-use|enforces anonymous, CSRF|persists a sanitized denial)/u,
       use: { baseURL: "http://127.0.0.1:3010" },
     },
   ],

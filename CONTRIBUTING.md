@@ -1,25 +1,9 @@
-# Contributing to MatchBASE
+# Contributing
 
-This is a private, evidence-gated implementation repository.
+Canonical local authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`. This source repository is public; packages remain private and UNLICENSED. Do not publish private governance, customer inputs, provider payloads, credentials or internal audit records.
 
-## Branch and Development Conventions
+Use a short-lived `codex/<activity>-<description>` branch and `[ACTIVITY-CODE]` commit prefixes. Preserve recovery branches and public history; never force-push. Define observable acceptance criteria and retain compatibility/migration contracts.
 
-1. **Branching:** Work on short-lived branches created from `main` with clear naming:
-   - `foundation/<description>` for infrastructure and tooling readiness
-   - `feature/<activity-code>-<description>` for product features
-   - `fix/<activity-code>-<description>` for defect fixes
-2. **Preserved Branches:** Do not force-push, rewrite, or delete historical recovery branches (e.g., `recovery/mb-ux-remediation`).
-3. **Commit Discipline:** Every commit message must begin with the activity code or scope:
-   - `[ACTIVITY-CODE] Descriptive summary`
-4. **Verification Discipline:**
-   - Run `pnpm run check:dev` frequently during local iteration for fast feedback.
-   - Run `pnpm run check:full` and `pnpm test` before committing or merging to `main`.
-   - Never weaken, bypass, or mock out checks to manufacture a false pass.
-5. **Secret Hygiene:**
-   - Never commit credentials, tokens, passwords, `.env`, or `.env.local` files.
-   - Server-side runtime variables must use `MATCHBASE_OPENROUTER_API_KEY` (or `OPENROUTER_API_KEY`).
-   - Never use `NEXT_PUBLIC_` prefixes on secret variables.
-6. **Deployment Policy:**
-   - Never trigger production deployments or billing actions without explicit Human approval.
+Follow [delivery lifecycle](https://github.com/banihashem/INNOBASE-MatchBASE/blob/main/docs/DELIVERY_LIFECYCLE.md). Install frozen dependencies, prepare snapshots, run full checks and use disposable databases for tests. The required CI check is `verify`. Review the exact candidate before merge. Keep independent review evidence in local governance without impersonating another reviewer on GitHub.
 
-No public contribution or external distribution is authorized.
+Do not auto-merge dependency changes, weaken a failing check or deploy from a pull-request workflow. GitHub release publication does not authorize production deployment or model spending. Report security issues privately under [SECURITY.md](https://github.com/banihashem/INNOBASE-MatchBASE/blob/main/SECURITY.md).

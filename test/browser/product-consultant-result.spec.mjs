@@ -93,7 +93,7 @@ test("Consultant result is keyboard operable, complete, and responsive", async (
     }),
   );
 
-  await page.goto("/");
+  await page.goto("/?view=archive");
   const historyHeading = page.getByRole("heading", {
     name: "Your sourcing runs",
   });

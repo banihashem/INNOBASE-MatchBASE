@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
 
 permissions:
   contents: read
@@ -15,7 +18,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:18.1-bookworm@sha256:cc9f4143a8d2fa8cf3749d0cb4d26ecf2d53a77a2ac807e9ebd67ae22426221a
@@ -31,24 +34,28 @@ jobs:
           --health-timeout 3s
           --health-retries 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 11.19.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24.14.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:ci
         env:
           MATCHBASE_EXTERNAL_EVIDENCE_MODE: ANCHOR_ONLY_CI
           DATABASE_URL: postgresql://matchbase_ci:matchbase_ci@127.0.0.1:5432/matchbase_slice1
+          MATCHBASE_CONSULTANT_TEST_DATABASE_URL: postgresql://matchbase_ci:matchbase_ci@127.0.0.1:5432/matchbase_slice1
           MATCHBASE_ENVIRONMENT: test
           MATCHBASE_OIDC_SIMULATOR: "true"
           MATCHBASE_SYNTHETIC_FIXTURE: "true"
           MATCHBASE_ORIGIN: http://127.0.0.1:3010
           MATCHBASE_DIGEST_KEY: ci-synthetic-digest-material-not-a-secret
       - run: pnpm dependency:audit
+      - run: node --test deployment/local/*.test.mjs

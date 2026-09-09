@@ -633,7 +633,7 @@ test(
 );
 
 test(
-  "canonical Windows authoritative tree equals the frozen UTF-8 byte-ordered 14-path set",
+  "canonical Windows source tree retains frozen V5 inputs plus the six adopted successors",
   { skip: !CANONICAL_WINDOWS_WORKSPACE },
   async () => {
     const files = [];
@@ -649,7 +649,26 @@ test(
     files.sort((left, right) =>
       Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8")),
     );
-    assert.deepEqual(files, V5_AUTHORITATIVE_SOURCE_PATHS);
+    // V5's signed 14-file contract is immutable; later source adoption does not rewrite it.
+    const adopted = [
+      "INNOBASE-MatchBASE_Universal_Request_Structuring_Framework_v2.0.docx",
+      "MatchBASE_Public_Social_Evidence_Protocol_v3.1.md",
+      "MatchBASE_Universal_Request_Classifier_Prompt_v3.0.md",
+      "MatchBASE_Universal_Request_Classifier_Prompt_v3.1.md",
+      "MatchBASE_Universal_Request_and_Research_Prompt_Specification_v3.0.docx",
+      "MatchBASE_Universal_Request_and_Research_Prompt_Specification_v3.1.docx",
+    ].map((name) =>
+      join(
+        V5_TPM_CONTRACT.authoritativeRoot,
+        "ProductDefinationInstruction",
+        name,
+      ),
+    );
+    const expected = [...V5_AUTHORITATIVE_SOURCE_PATHS, ...adopted].sort(
+      (left, right) =>
+        Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8")),
+    );
+    assert.deepEqual(files, expected);
   },
 );
 

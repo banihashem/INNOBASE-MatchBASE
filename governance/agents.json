@@ -769,7 +769,9 @@
           "outputHashes": [
             {
               "path": ".github/workflows/ci.yml",
-              "sha256": "9DFB7C0C6C8CFEC4C3BA80AE66E4C5F5F0894929CAF89A837EAFB6AB4CC02E07"
+              "sha256": "9DFB7C0C6C8CFEC4C3BA80AE66E4C5F5F0894929CAF89A837EAFB6AB4CC02E07",
+              "gitCommit": "039471b3566f2f3b59408df9a8ccc0640c36abf0",
+              "gitBlob": "784dd4f3cfd71c0d65032145941363f2baada877"
             }
           ]
         }

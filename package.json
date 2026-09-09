@@ -1,8 +1,8 @@
 {
   "name": "@innobase/matchbase",
-  "version": "0.0.0-private",
+  "version": "0.6.0-rc.1",
   "private": true,
-  "description": "Private MatchBASE autonomous delivery workspace",
+  "description": "MatchBASE Consultant research implementation workspace",
   "license": "UNLICENSED",
   "packageManager": "pnpm@11.19.0",
   "engines": {
@@ -105,12 +105,12 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
-    "@secretlint/quick-start": "13.0.4",
     "@playwright/test": "1.62.1",
+    "@secretlint/quick-start": "13.0.4",
     "oxlint": "1.78.0",
     "prettier": "3.9.6",
     "secretlint": "13.0.4",
     "typescript": "7.0.2",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   }
 }

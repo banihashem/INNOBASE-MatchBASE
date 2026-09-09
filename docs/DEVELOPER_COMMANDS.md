@@ -1,6 +1,6 @@
 # Developer command catalog
 
-Activity: **MB-UX-LIVE-001 L02**. This catalog classifies the existing command surface; it does not rename commands or retire compatibility consumers. Run commands from the implementation repository. `pnpm run` and each workspace's `package.json` remain the exact executable index.
+Activity: **MB-UX-GOV-003 L01**. This catalog classifies the existing command surface; it does not rename commands or retire compatibility consumers. Run commands from `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE`. Current startup uses Docker; the host lifecycle descriptions below are compatibility context and must not run alongside Docker. `pnpm run` and each workspace's `package.json` remain the exact executable index.
 
 ## Current development and Consultant runtime
 

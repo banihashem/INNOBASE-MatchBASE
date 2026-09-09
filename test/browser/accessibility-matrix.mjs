@@ -14,6 +14,17 @@ export async function overflowingElements(page) {
     elements
       .filter((element) => {
         const rectangle = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        // Screen-reader text is deliberately clipped; visible clipped controls still fail.
+        if (
+          style.position === "absolute" &&
+          rectangle.width <= 1 &&
+          rectangle.height <= 1 &&
+          style.overflow === "hidden" &&
+          (style.clip === "rect(0px, 0px, 0px, 0px)" ||
+            style.clipPath === "inset(50%)")
+        )
+          return false;
         if (
           rectangle.right <= document.documentElement.clientWidth + 0.5 &&
           rectangle.left >= -0.5

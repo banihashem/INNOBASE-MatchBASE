@@ -44,7 +44,7 @@ function declaration(selector, property) {
 test("web build emits layout, spacing and responsive Consultant utilities", () => {
   assert.equal(declaration(".flex", "display"), "flex");
   assert.equal(declaration(".p-6", "padding"), "1.5rem");
-  assert.equal(declaration(".max-w-6xl", "max-width"), "72rem");
+  assert.equal(declaration(".max-w-lg", "max-width"), "32rem");
   assert.equal(declaration(".text-3xl", "font-size"), "1.875rem");
   assert.equal(declaration(".text-\\[11px\\]", "font-size"), "11px");
   assert.equal(declaration(".border", "border-style"), "solid");
@@ -54,9 +54,9 @@ test("web build emits layout, spacing and responsive Consultant utilities", () =
   let responsivePadding = false;
   generated.root.walkAtRules("media", (rule) => {
     if (rule.params !== "(min-width: 640px)") return;
-    rule.walkRules(".sm\\:p-8", (entry) => {
+    rule.walkRules(".sm\\:p-6", (entry) => {
       entry.walkDecls("padding", (padding) => {
-        responsivePadding = padding.value === "2rem";
+        responsivePadding = padding.value === "1.5rem";
       });
     });
   });

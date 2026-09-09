@@ -1,5 +1,7 @@
 # MatchBASE current state and phase gate
 
+> Historical record retained for compatibility and decision provenance. Its state and deployment statements apply to its original date. Current product authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`. Current engineering lifecycle: [DELIVERY_LIFECYCLE](https://github.com/banihashem/INNOBASE-MatchBASE/blob/main/docs/DELIVERY_LIFECYCLE.md).
+
 ## Precedence
 
 This is an additive current-state projection. Historical planning, execution

@@ -88,11 +88,23 @@ test("switching accounts uses CSRF and idempotency and retains context on failur
   );
 });
 
-test("local sign-in fixtures do not falsely label verified live research as demonstration-only", () => {
-  vi.stubEnv("MATCHBASE_LIVE_RESEARCH_ENABLED", "true");
-  vi.stubEnv("MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED", "true");
-  vi.stubEnv("MATCHBASE_SYNTHETIC_FIXTURE", "true");
-  expect(Page().props.signedOutResearchMode.live_qualified).toBe(true);
+test("L05 Consultant Home does not infer demonstration research from legacy flags or local sign-in fixtures", async () => {
+  vi.stubEnv("MATCHBASE_LIVE_RESEARCH_ENABLED", "false");
   vi.stubEnv("MATCHBASE_LIVE_RESEARCH_CREDENTIALS_VERIFIED", "false");
-  expect(Page().props.signedOutResearchMode.live_qualified).toBe(false);
+  vi.stubEnv("MATCHBASE_SYNTHETIC_FIXTURE", "true");
+  vi.stubEnv("MATCHBASE_OIDC_SIMULATOR", "true");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("{}", { status: 401 })),
+  );
+  render(<Page />);
+  expect(
+    await screen.findByRole("link", { name: /Sign in as Consultant/ }),
+  ).toBeVisible();
+  expect(
+    screen.queryByText(/This environment uses demonstration data/),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/does not perform live supplier research/),
+  ).not.toBeInTheDocument();
 });

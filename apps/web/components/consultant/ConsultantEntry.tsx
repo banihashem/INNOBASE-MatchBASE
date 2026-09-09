@@ -6,12 +6,10 @@ import "./consultant-entry.css";
 export function ConsultantEntry({
   authPath,
   state,
-  demonstration = false,
   csrfToken,
 }: {
   authPath: string;
   state: "signed-out" | "access-required" | "error";
-  demonstration?: boolean;
   csrfToken?: string | undefined;
 }) {
   const [signingOut, setSigningOut] = useState(false);
@@ -97,12 +95,6 @@ export function ConsultantEntry({
                   Your requests, approvals and reports stay in your workspace.
                 </p>
               </>
-            )}
-            {demonstration && (
-              <p className="ce-notice">
-                This environment uses demonstration data. It does not perform
-                live supplier research.
-              </p>
             )}
           </div>
           <aside

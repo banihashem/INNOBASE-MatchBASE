@@ -86,7 +86,6 @@ export function ProductRouter({
               ? "signed-out"
               : "access-required"
         }
-        demonstration={signedOutResearchMode?.live_qualified === false}
         csrfToken={
           "session" in resolution ? resolution.session?.csrf_token : undefined
         }

@@ -300,8 +300,7 @@ test("discloses a terminal Demo failure without moving existing focus", async ()
         return new Promise<Response>((resolve) => {
           resolvePoll = resolve;
         });
-      }
-      else throw new Error(`Unexpected request: ${method} ${url}`);
+      } else throw new Error(`Unexpected request: ${method} ${url}`);
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { "Content-Type": "application/json" },

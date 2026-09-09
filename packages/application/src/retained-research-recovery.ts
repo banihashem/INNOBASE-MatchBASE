@@ -8,6 +8,7 @@ import type { ResearchContinuation } from "./dual-lane-orchestrator.js";
 import {
   assembleLiveSuppliers,
   revalidateRetainedLiveEvidence,
+  reconcileLiveCandidateRecords,
 } from "./live-supplier-evidence.js";
 
 export interface RetainedResearchRecoveryInput {
@@ -49,8 +50,9 @@ export function buildRetainedResearchRecovery(
   const continuation = structuredClone(input.continuation);
   const evidence = new Map(continuation.evidence);
   const entityIds = new Map(continuation.entity_ids);
-  const roster = continuation.roster.map(([, candidate]) => candidate);
-  revalidateRetainedLiveEvidence(roster, evidence);
+  const retainedRoster = continuation.roster.map(([, candidate]) => candidate);
+  revalidateRetainedLiveEvidence(retainedRoster, evidence);
+  const roster = reconcileLiveCandidateRecords(retainedRoster, evidence);
   const assembled = assembleLiveSuppliers(
     roster,
     requirements,

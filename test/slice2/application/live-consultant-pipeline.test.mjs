@@ -1042,6 +1042,80 @@ const partialRound = {
   synthesis_model: "openai/gpt-5.2",
   candidate_limit_per_search: 10,
 };
+test("MB-UX-LIVE-001 L13 complementary same-company evidence survives a missing website in the next round", async () => {
+  const unknown = { status: "unknown", source_urls: [], quote: "" };
+  dispatch = () =>
+    respond(
+      discovery({
+        candidates: [{ ...structuredClone(candidate), product: unknown }],
+      }),
+    );
+  const first = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: partialRound,
+  });
+  assert.equal(first.candidates.length, 0);
+  const before = JSON.stringify(first.continuation);
+  dispatch = () =>
+    respond(
+      discovery({
+        candidates: [
+          { ...structuredClone(candidate), identity: unknown, website: null },
+        ],
+      }),
+    );
+  const next = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: {
+      ...partialRound,
+      round_number: 2,
+      research_models: ["openai/gpt-5.2"],
+    },
+    continuation: first.continuation,
+    web_engine: "exa",
+  });
+  assert.equal(next.candidates.length, 1);
+  assert.equal(next.candidates[0].legal_name, candidate.legal_name);
+  assert.equal(next.continuation.roster.length, 1);
+  assert.equal(JSON.stringify(first.continuation), before);
+  assert.equal(next.candidates[0].commercial.price_min, undefined);
+  assert.equal(next.candidates[0].assessment.fit_band, "Potential Fit");
+});
+test("MB-UX-LIVE-001 L13 three same-domain names in different countries remain separate retained records", async () => {
+  const first = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: partialRound,
+  });
+  const retained = structuredClone(first.continuation);
+  retained.roster = ["Germany", "France", "Italy"].map((country) => [
+    country,
+    { ...structuredClone(candidate), country },
+  ]);
+  dispatch = () => respond(discovery({ candidates: [] }));
+  const next = await executeDualLaneResearch(
+    { ...intake, target_supplier_count: 3 },
+    {
+      mode: "live",
+      round_plan: {
+        ...partialRound,
+        round_number: 2,
+        research_models: ["openai/gpt-5.2"],
+      },
+      continuation: retained,
+      web_engine: "exa",
+    },
+  );
+  assert.equal(next.continuation.roster.length, 3);
+  assert.deepEqual(
+    next.continuation.roster.map(([, item]) => item.country).sort(),
+    ["France", "Germany", "Italy"],
+  );
+  assert.equal(
+    new Set(next.candidates.map((item) => item.supplier_entity_id)).size,
+    3,
+  );
+});
+
 const exhaustedResponse = () =>
   respond("Incomplete notes must never become suppliers.", [], {
     choices: [

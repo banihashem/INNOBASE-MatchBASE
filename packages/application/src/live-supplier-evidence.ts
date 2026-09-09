@@ -236,8 +236,155 @@ export function stableCandidateKey(candidate: LiveCandidateRecord): string {
     ? new URL(website).hostname.replace(/^www\./, "")
     : `${candidate.legal_name.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "")}:${candidate.country.toLowerCase()}`;
 }
+function knownCountry(country: string): string | undefined {
+  const value = country.normalize("NFKC").trim().toLowerCase();
+  return ["", "unknown", "unspecified", "not specified"].includes(value)
+    ? undefined
+    : value;
+}
+function companyHost(raw: string | null): string | undefined {
+  const url = raw && safePublicEvidenceUrl(raw);
+  return url ? new URL(url).hostname.replace(/^www\./, "") : undefined;
+}
+function relatedCompanyHosts(a: string, b: string): boolean {
+  // Explicit parent/subdomain relationships only; never guess registrable domains.
+  return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
+}
+export function sameLiveCandidateIdentity(
+  a: LiveCandidateRecord,
+  b: LiveCandidateRecord,
+): boolean {
+  const name = (value: string) =>
+    value.normalize("NFKC").trim().toLowerCase().replace(/\s+/g, " ");
+  if (!name(a.legal_name) || name(a.legal_name) !== name(b.legal_name))
+    return false;
+  if (
+    knownCountry(a.country) &&
+    knownCountry(b.country) &&
+    knownCountry(a.country) !== knownCountry(b.country)
+  )
+    return false;
+  const aHost = companyHost(a.website),
+    bHost = companyHost(b.website);
+  if (aHost && bHost) return relatedCompanyHosts(aHost, bHost);
+  const established = aHost ?? bHost;
+  if (!established) return true;
+  const other = aHost ? b : a;
+  const proofHosts = [
+    ...other.identity.source_urls,
+    ...other.product.source_urls,
+  ]
+    .map(companyHost)
+    .filter((host): host is string => Boolean(host));
+  return (
+    !proofHosts.length ||
+    proofHosts.some((host) => relatedCompanyHosts(established, host))
+  );
+}
+export function reconcileLiveCandidateRecords(
+  records: readonly LiveCandidateRecord[],
+  evidence: Map<string, LiveEvidenceRecord>,
+): LiveCandidateRecord[] {
+  const result: LiveCandidateRecord[] = [];
+  const supported = (proof: Pick<LiveProof, "source_urls" | "quote">) =>
+    proofSources(proof, evidence).length > 0;
+  const bestProof = (a: LiveProof, b: LiveProof) => {
+    const rank = (proof: LiveProof) =>
+      proof.status !== "unknown" && supported(proof)
+        ? 2
+        : proof.status !== "unknown"
+          ? 1
+          : 0;
+    return rank(b) > rank(a) ? b : a;
+  };
+  for (const record of records) {
+    const next = structuredClone(record);
+    const matches = result.filter((candidate) =>
+      sameLiveCandidateIdentity(candidate, next),
+    );
+    const old = matches.length === 1 ? matches[0] : undefined;
+    if (!old) {
+      result.push(next);
+      continue;
+    }
+    const identity = bestProof(old.identity, next.identity);
+    const product = bestProof(old.product, next.product);
+    const facts = [...old.facts];
+    for (const fact of next.facts) {
+      const index = facts.findIndex(
+        (item) => item.field_path === fact.field_path,
+      );
+      if (index < 0) facts.push(fact);
+      else if (!supported(facts[index]!) && supported(fact))
+        facts[index] = fact;
+    }
+    const constraints = new Map<
+      string,
+      LiveCandidateRecord["constraints"][number]
+    >();
+    for (const constraint of [...old.constraints, ...next.constraints]) {
+      const previous = constraints.get(constraint.constraint);
+      const rank = (value: typeof constraint) =>
+        supported(value)
+          ? value.status === "unmet"
+            ? 3
+            : value.status === "verified"
+              ? 2
+              : 0
+          : 0;
+      if (!previous || rank(constraint) > rank(previous))
+        constraints.set(constraint.constraint, constraint);
+    }
+    const certifications = [...old.certifications];
+    for (const cert of next.certifications) {
+      const index = certifications.findIndex((item) => item.name === cert.name);
+      if (index < 0) certifications.push(cert);
+      else if (!supported(certifications[index]!) && supported(cert))
+        certifications[index] = cert;
+    }
+    Object.assign(old, {
+      country: knownCountry(old.country) ? old.country : next.country,
+      headquarters: knownCountry(old.headquarters)
+        ? old.headquarters
+        : next.headquarters,
+      website: old.website ?? next.website,
+      identity,
+      product,
+      ...(product === next.product
+        ? {
+            product_name: next.product_name,
+            product_family: next.product_family,
+            product_origin: next.product_origin,
+          }
+        : {}),
+      facts,
+      constraints: [...constraints.values()],
+      certifications,
+      unknowns: [...new Set([...old.unknowns, ...next.unknowns])],
+      risks: [...new Set([...old.risks, ...next.risks])],
+    });
+  }
+  return result;
+}
+
 function normalizedEvidence(text: string): string {
-  return text.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+  let literal = text.trim();
+  for (const [left, right] of [
+    ["“", "”"],
+    ["‘", "’"],
+    ['"', '"'],
+    ["'", "'"],
+  ]) {
+    if (
+      literal.length > 1 &&
+      literal.startsWith(left!) &&
+      literal.endsWith(right!)
+    ) {
+      literal = literal.slice(left!.length, -right!.length).trim();
+      break;
+    }
+  }
+  return literal.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
 }
 function candidateProofQuotes(
   records: readonly LiveCandidateRecord[],
@@ -251,7 +398,7 @@ function candidateProofQuotes(
       ...candidate.certifications,
       ...candidate.constraints,
     ]) {
-      if (!proof.quote.trim()) continue;
+      if (!normalizedEvidence(proof.quote)) continue;
       for (const raw of proof.source_urls) {
         const url = safePublicEvidenceUrl(raw);
         if (url)
@@ -314,7 +461,7 @@ export function revalidateRetainedLiveEvidence(
       )
         .filter(
           (segment) =>
-            item.excerpt.trim() &&
+            normalizedEvidence(item.excerpt).length > 0 &&
             normalizedEvidence(segment).includes(
               normalizedEvidence(item.excerpt),
             ),
@@ -384,7 +531,7 @@ export function ingestLiveEvidence(
   ])) {
     const url = safePublicEvidenceUrl(entry.url);
     const citation = url ? native.get(url) : undefined;
-    if (!url || !citation || !entry.excerpt.trim()) continue;
+    if (!url || !citation || !normalizedEvidence(entry.excerpt)) continue;
     const actual = retrieved.get(citation.url);
     const authoritative = [actual?.text, citation.content]
       .filter((text): text is string => Boolean(text))
@@ -453,9 +600,8 @@ function proofSources(
   proof: Pick<LiveProof, "source_urls" | "quote">,
   evidence: Map<string, LiveEvidenceRecord>,
 ): EvidenceSourceV3[] {
-  if (!proof.quote.trim()) return [];
-  const normalize = (value: string) =>
-    value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+  if (!normalizedEvidence(proof.quote)) return [];
+  const normalize = normalizedEvidence;
   return proof.source_urls.flatMap((raw) => {
     const url = safePublicEvidenceUrl(raw);
     const record = url ? evidence.get(url) : undefined;
@@ -548,6 +694,7 @@ export function assembleLiveSuppliers(
   const claims: ClaimV3[] = [];
   const excluded: { legal_name: string; reason: string }[] = [];
   const sourceClaims = new Map<string, string[]>();
+  const assignedKeys = new Map<string, string>();
   for (const candidate of records) {
     const problems = evaluateLiveCandidate(candidate, requirements, evidence);
     if (problems.length) {
@@ -558,7 +705,16 @@ export function assembleLiveSuppliers(
       continue;
     }
     if (candidates.length >= limit) continue;
-    const key = stableCandidateKey(candidate);
+    const baseKey = stableCandidateKey(candidate);
+    const identity = `${candidate.legal_name.normalize("NFKC").trim().toLowerCase()}:${knownCountry(candidate.country) ?? "unknown"}`;
+    const previousIdentity = assignedKeys.get(baseKey);
+    const distinctKey = `${baseKey}:${createHash("sha256").update(identity).digest("hex").slice(0, 12)}`;
+    const key =
+      entityIds.has(distinctKey) ||
+      (previousIdentity && previousIdentity !== identity)
+        ? distinctKey
+        : baseKey;
+    if (key === baseKey) assignedKeys.set(baseKey, identity);
     const entityId = entityIds.get(key) ?? randomUUID();
     entityIds.set(key, entityId);
     const makeClaim = (

@@ -1,8 +1,48 @@
 import {
   formatApprovedFactV3,
+  parseApprovedRequestFactsV3,
   type ConsultantResearchOutputV3,
   type SupplierEntityV3,
 } from "@matchbase/contracts";
+
+/** Detect untranslated scripts without treating accented legal names or units as a translation. */
+const hasUntranslatedScript = (text: string): boolean =>
+  /[^\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}]/u.test(
+    text.replace(/[\u03a9\u03bc]/gu, ""),
+  );
+
+export class ConsultantReportLanguageError extends Error {
+  readonly code = "MB-422-PDF-ENGLISH-REQUIRED";
+  readonly status = 422;
+  constructor() {
+    super(
+      "An English report cannot be produced from untranslated content. The saved findings remain unchanged; an English interpretation of that content is required.",
+    );
+    this.name = "ConsultantReportLanguageError";
+  }
+}
+
+function englishOverview(output: ConsultantResearchOutputV3): string {
+  const count = output.supplier_candidates.length;
+  const approved = output.approved_request_snapshot;
+  const product =
+    approved?.product_name || output.request_snapshot.product_name;
+  const scope =
+    product && !hasUntranslatedScript(product) ? ` for ${product}` : "";
+  const priceCount = output.supplier_candidates.filter(
+    (s) =>
+      s.commercial.price_min !== undefined ||
+      s.commercial.price_max !== undefined,
+  ).length;
+  const contactCount = output.supplier_candidates.filter(
+    (s) =>
+      s.contacts?.sales_email ||
+      s.contacts?.export_email ||
+      s.contacts?.general_email ||
+      s.contacts?.phone,
+  ).length;
+  return `${count} supplier profiles, ${output.evidence_sources.length} evidence sources and ${output.claims.length} claims are retained${scope}. ${count ? "The supplier dossiers retain their recorded fit assessments and unresolved validation requirements; inclusion does not establish full compliance with the buyer's request." : "No supplier profile passed the publication requirements in this result, so no supplier ranking can be presented. Recorded sources remain available in the source register; their existence alone does not establish an eligible supplier."} ${priceCount} profiles contain an observed price and ${contactCount} contain business contact data. The complete approved English request below remains authoritative, including requirements not represented by typed fields. Review source observations, missing evidence, commercial limitations and recorded costs in the remaining report sections.`;
+}
 
 const esc = (value: unknown): string =>
   String(value ?? "")
@@ -49,6 +89,26 @@ export function generateConsultantLandscapeHtml(
   const suppliers = output.supplier_candidates ?? [];
   const approved = output.approved_request_snapshot;
   const demo = output.research_mode === "fixture";
+  const reconstructedOverview = hasUntranslatedScript(
+    output.executive_summary.direct_answer,
+  );
+  const directAnswer = reconstructedOverview
+    ? englishOverview(output)
+    : output.executive_summary.direct_answer;
+  // Report-only display projection: never rewrite the approved snapshot or its audit hashes.
+  const reconstructedFacts =
+    !!approved &&
+    hasUntranslatedScript(
+      JSON.stringify([approved.facts, approved.unparsed_clauses]),
+    );
+  const approvedDisplay =
+    approved && reconstructedFacts
+      ? parseApprovedRequestFactsV3(approved.approved_translation)
+      : approved;
+  const presentationNotice =
+    reconstructedOverview || reconstructedFacts
+      ? '<p class="presentation-note">English presentation reconstructed from the saved structured findings and approved English request. This is not a new research or translation call. The original narrative and approval record remain unchanged; source observations, requirements, uncertainty and recorded costs are retained below.</p>'
+      : "";
   const sections: string[] = [];
   const banner = demo
     ? '<div class="notice">DEMONSTRATION - Illustrative profiles and commercial observations. External supplier capability has not been verified.</div>'
@@ -61,12 +121,12 @@ export function generateConsultantLandscapeHtml(
 
   section(
     "Supplier Landscape and Procurement Assessment",
-    `<div class="cover-title">${esc(output.request_snapshot.product_name || output.title)}</div><p class="lead">${esc(output.executive_summary.direct_answer)}</p><div class="metrics"><div><b>${suppliers.length}</b><span>Distinct supplier profiles</span></div><div><b>${output.evidence_sources.length}</b><span>Recorded evidence sources</span></div><div><b>${output.claims.length}</b><span>Recorded claims</span></div><div><b>${esc(output.executive_summary.confidence_assessment)}</b><span>Evidence confidence</span></div></div><h2>Executive findings</h2>${list(output.executive_summary.key_findings)}<h2>Reading this report</h2><p>The approved request defines the buyer's requirements. The landscape and detailed supplier dossiers describe observed offerings. Compatibility, evidence confidence and unresolved commercial questions are presented separately.</p><ol><li><a href="#approved-request">Approved request and traceability</a></li><li><a href="#methodology">Evaluation method and evidence boundaries</a></li><li><a href="#landscape-0">Complete supplier landscape</a></li><li><a href="#supplier-0">Detailed supplier dossiers and claim evidence</a></li><li><a href="#rfq">RFQ and due diligence plan</a></li><li><a href="#source-register">Source register and disclosures</a></li></ol>`,
+    `<div class="cover-title">${esc(output.request_snapshot.product_name || output.title)}</div><p class="lead">${esc(directAnswer)}</p>${presentationNotice}<div class="metrics"><div><b>${suppliers.length}</b><span>Distinct supplier profiles</span></div><div><b>${output.evidence_sources.length}</b><span>Recorded evidence sources</span></div><div><b>${output.claims.length}</b><span>Recorded claims</span></div><div><b>${esc(output.executive_summary.confidence_assessment)}</b><span>Evidence confidence</span></div></div><h2>Executive findings</h2>${list(output.executive_summary.key_findings)}<h2>Reading this report</h2><p>The approved request defines the buyer's requirements. The landscape and detailed supplier dossiers describe observed offerings. Compatibility, evidence confidence and unresolved commercial questions are presented separately.</p><ol><li><a href="#approved-request">Approved request and traceability</a></li><li><a href="#methodology">Evaluation method and evidence boundaries</a></li><li><a href="#landscape-0">Complete supplier landscape</a></li><li><a href="#supplier-0">Detailed supplier dossiers and claim evidence</a></li><li><a href="#rfq">RFQ and due diligence plan</a></li><li><a href="#source-register">Source register and disclosures</a></li></ol>`,
     "executive-summary",
   );
 
   const factRows =
-    approved?.facts
+    approvedDisplay?.facts
       .map(
         (fact) =>
           `<tr><td>${esc(fact.label)}</td><td>${esc(formatApprovedFactV3(fact))}</td><td>${esc(fact.operator)}</td><td>${esc(fact.source_clause)}</td></tr>`,
@@ -84,7 +144,7 @@ export function generateConsultantLandscapeHtml(
             "Product classification",
             `${output.primary_classification.scheme} ${output.primary_classification.code} - ${output.primary_classification.label} (${output.primary_classification.confidence})`,
           ],
-        ])}<h2>Approved interpretation - complete text</h2><div class="approved-text">${esc(approved.approved_translation)}</div><h2>Structured buyer requirements</h2>${factRows ? `<table><thead><tr><th>Requirement</th><th>Approved value</th><th>Operator</th><th>Provenance in approved text</th></tr></thead><tbody>${factRows}</tbody></table>` : "<p>No typed facts were extracted. The complete approved interpretation remains authoritative; no values have been substituted.</p>"}${approved.unparsed_clauses.length ? `<h2>Additional approved clauses</h2><p>These clauses remain part of the request even where a typed projection is unavailable.</p>${list(approved.unparsed_clauses)}` : ""}`
+        ])}<h2>Approved interpretation - complete text</h2><div class="approved-text">${esc(approved.approved_translation)}</div><h2>Structured buyer requirements</h2>${factRows ? `<table><thead><tr><th>Requirement</th><th>Approved value</th><th>Operator</th><th>Provenance in approved text</th></tr></thead><tbody>${factRows}</tbody></table>` : "<p>No typed facts were extracted. The complete approved interpretation remains authoritative; no values have been substituted.</p>"}${approvedDisplay?.unparsed_clauses.length ? `<h2>Additional approved clauses</h2><p>These clauses remain part of the request even where a typed projection is unavailable.</p>${list(approvedDisplay.unparsed_clauses)}` : ""}`
       : '<div class="notice">This historical record has no trustworthy approved request snapshot. Buyer facts are unknown. Historical template values have not been backfilled.</div>',
     "approved-request",
   );
@@ -118,7 +178,9 @@ export function generateConsultantLandscapeHtml(
   for (let offset = 0; offset < Math.max(suppliers.length, 1); offset += 5) {
     const group = suppliers.slice(offset, offset + 5);
     section(
-      `Supplier Landscape - ${offset + 1} to ${Math.min(offset + 5, suppliers.length)} of ${suppliers.length}`,
+      suppliers.length
+        ? `Supplier Landscape - ${offset + 1} to ${Math.min(offset + 5, suppliers.length)} of ${suppliers.length}`
+        : "Supplier Landscape - No Published Profiles",
       group.length
         ? `<table class="landscape"><thead><tr><th>Rank / supplier</th><th>Country / role</th><th>Product / model</th><th>Fit / evidence</th><th>Observed price / terms</th><th>Principal gap</th></tr></thead><tbody>${group.map((s, i) => `<tr><td><a href="#supplier-${offset + i}">${s.assessment.rank}. ${esc(s.legal_name)}</a></td><td>${esc(s.country_of_registration)}<br>${esc(s.manufacturer_status)}</td><td>${esc(s.offering.product_name)}<br>${display(s.offering.model_or_sku)}</td><td>${esc(s.assessment.compatibility_score)} / ${esc(s.assessment.fit_band)}<br>Evidence: ${esc(s.assessment.evidence_confidence)}</td><td>${esc(price(s))}<br>${display(s.commercial.incoterm)} ${display(s.commercial.incoterm_location)}</td><td>${display(s.assessment.limiting_gaps[0] ?? s.assessment.unknowns[0])}</td></tr>`).join("")}</tbody></table>`
         : "<p>No supplier candidates were returned. Buyer requirements remain available above; no company profiles have been invented.</p>",
@@ -281,6 +343,12 @@ export function generateConsultantLandscapeHtml(
     "source-register",
   );
 
+  const visibleContent = sections.join("\n").replace(/<[^>]*>/g, "");
+  if (
+    hasUntranslatedScript(visibleContent) ||
+    hasUntranslatedScript(output.title)
+  )
+    throw new ConsultantReportLanguageError();
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(output.title)}</title><style>
   @page{size:A4 landscape}*{box-sizing:border-box}body{margin:0;font:8.5pt/1.25 Arial,Helvetica,sans-serif;color:#172b3a;background:#fff}a{color:#155e75;text-decoration:none;overflow-wrap:anywhere}h1{font-size:17pt;line-height:1.15;margin:8px 0 10px;letter-spacing:-.4px}h2{font-size:10.5pt;color:#123e55;margin:9px 0 5px}h3{font-size:9pt;margin:6px 0 3px}p{margin:4px 0 6px}ul,ol{margin:4px 0 8px;padding-left:19px}li{margin:2px 0}.page{break-before:page;padding:0}.page:first-child{break-before:auto}header{display:flex;justify-content:space-between;border-bottom:2px solid #0d766e;padding-bottom:8px;color:#164e63;font-size:9pt;font-weight:bold}footer{border-top:1px solid #ccd8dd;margin-top:12px;padding-top:6px;font-size:8pt;color:#475b67;overflow-wrap:anywhere}.notice,.live{padding:5px 8px;font-size:8pt;margin-top:8px;border-left:4px solid #b7791f;background:#fffbeb;color:#713f12}.live{border-color:#0f766e;background:#f0fdfa;color:#115e59}.cover-title{font-size:23pt;color:#0f4b60;margin:16px 0 10px;font-weight:bold;line-height:1.2}.lead{font-size:10pt;max-width:95%}.metrics{display:flex;gap:15px;margin:16px 0}.metrics>div{flex:1;background:#f0f6f8;border-top:3px solid #0f766e;padding:10px}.metrics b{display:block;font-size:20pt}.metrics span{display:block;font-size:9pt}.columns{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:6px 0;align-items:start}.profile-top{display:flex;justify-content:space-between;background:#eaf4f5;padding:7px;gap:12px}.approved-text{white-space:pre-wrap;border-left:3px solid #0f766e;padding:12px;background:#f8fafc;overflow-wrap:anywhere}.muted{color:#5b6871}table{width:100%;border-collapse:collapse;table-layout:fixed;margin:6px 0 8px;font-size:8pt}th,td{text-align:left;vertical-align:top;padding:2px 5px;border:1px solid #d5dfe3;overflow-wrap:anywhere}th{background:#e9f1f4;font-weight:bold}thead{display:table-header-group}tr{break-inside:avoid}.facts th{width:34%;color:#29434f}.facts td{background:#fff}.landscape th:nth-child(1){width:19%}.landscape th:nth-child(3){width:20%}.source{break-inside:avoid;border-bottom:1px solid #d5dfe3;margin:12px 0;padding-bottom:7px}h1,h2,h3{break-after:avoid}article{margin:10px 0}p,li{orphans:3;widows:3}
   .page[id^="dossier-"] h1{font-size:15pt;margin-bottom:6px}.page[id^="dossier-"] h2{margin-top:6px}.page[id^="dossier-"] .columns{margin:4px 0}footer{display:none}

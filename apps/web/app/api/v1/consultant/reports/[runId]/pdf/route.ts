@@ -11,6 +11,7 @@ import {
 import {
   generateConsultantPdf,
   ConsultantPdfRendererUnavailableError,
+  ConsultantReportLanguageError,
 } from "@matchbase/reporting";
 import { getAppDatabasePool } from "../../../../../../../src/db-client";
 import { resolveRequestSession } from "../../../../../../../src/fetch-runtime";
@@ -168,7 +169,10 @@ async function handlePdfRequest(
       pdfBuffer = await generateConsultantPdf(output);
     } catch (renderError) {
       console.error("Consultant PDF generation failed:", renderError);
-      if (renderError instanceof ConsultantPdfRendererUnavailableError) {
+      if (
+        renderError instanceof ConsultantPdfRendererUnavailableError ||
+        renderError instanceof ConsultantReportLanguageError
+      ) {
         return NextResponse.json(
           {
             error: renderError.message,

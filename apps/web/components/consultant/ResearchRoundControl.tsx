@@ -432,6 +432,14 @@ export function ResearchRoundControl({
                     are labeled separately from supplier quotes. Missing current
                     evidence is reported.
                   </p>
+                  {researchTier !== "default" && (
+                    <p className="text-sm text-slate-300">
+                      Existing provider keys remain in use. Additional models
+                      without a configured provider key can use OpenRouter
+                      credits. The estimate identifies the payment source for
+                      each model before you approve.
+                    </p>
+                  )}
                 </fieldset>
               )}
               {next >= 2 && (
@@ -510,6 +518,35 @@ export function ResearchRoundControl({
                     An estimate, not a guaranteed spending cap. Valid until{" "}
                     {new Date(quote.plan.expires_at).toLocaleTimeString()}.
                   </p>
+                  {quote.plan.mode !== "demonstration" &&
+                    quote.plan.rates?.some(
+                      (rate) => rate.billing_mode === "openrouter_credits",
+                    ) && (
+                      <section
+                        aria-label="Payment sources for this estimate"
+                        className="rounded-lg border border-amber-700 bg-amber-950/30 p-3 text-sm"
+                      >
+                        <p className="font-semibold">
+                          Includes OpenRouter credit usage
+                        </p>
+                        <p className="mt-1">
+                          Approving this estimate authorizes OpenRouter credit
+                          charges for the models listed below. Models marked
+                          BYOK continue to use your configured provider keys.
+                          These charges are included in the total estimate.
+                        </p>
+                        <ul className="mt-2 space-y-1 break-words">
+                          {quote.plan.rates.map((rate) => (
+                            <li key={rate.model}>
+                              {rate.model}:{" "}
+                              {rate.billing_mode === "openrouter_credits"
+                                ? "OpenRouter credits"
+                                : "BYOK · provider account"}
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    )}
                   {quote.plan.mode === "demonstration" ? (
                     <p className="text-sm text-amber-200">
                       Demonstration: fixed sample data; no provider calls.

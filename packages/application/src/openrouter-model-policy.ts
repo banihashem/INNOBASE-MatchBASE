@@ -6,6 +6,7 @@ import { fetchPrimaryEvidenceText } from "./live-source-fetch.js";
 import {
   auditOpenRouterByok,
   getConfiguredProviderRoute,
+  getApprovedProviderRoute,
   OpenRouterByokError,
   type OpenRouterByokAudit,
 } from "./openrouter-byok-policy.js";
@@ -80,6 +81,8 @@ export interface OpenRouterModelCapabilities {
   readonly structured_outputs: boolean;
   readonly reasoning: boolean;
   readonly served_model_ids?: readonly string[];
+  readonly provider_names?: readonly string[];
+  readonly endpoint_prices?: readonly Record<string, unknown>[];
 }
 export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
   readonly recovery_attempt?: number;
@@ -162,6 +165,12 @@ function byokCheckpointFields(
   if (!result.requested_provider) return {};
   return {
     requested_provider: result.requested_provider,
+    ...(result.approved_billing_mode
+      ? {
+          approved_billing_mode: result.approved_billing_mode,
+          openrouter_cost_usd: result.openrouter_cost_usd ?? null,
+        }
+      : {}),
     actual_provider: result.actual_provider ?? null,
     is_byok: result.is_byok ?? null,
     upstream_inference_cost: result.upstream_inference_cost ?? null,
@@ -227,6 +236,7 @@ const endpointCapabilityCache = new Map<
 >();
 export async function getOpenRouterModelCapabilities(
   model: string,
+  providerOverride?: string,
 ): Promise<OpenRouterModelCapabilities> {
   const credential = getOpenRouterApiKey();
   if (!credential)
@@ -289,8 +299,13 @@ export async function getOpenRouterModelCapabilities(
       "MB-422-MODEL-UNAVAILABLE",
       "Configured model is absent from the current provider catalog.",
     );
-  const provider = getConfiguredProviderRoute(model);
-  const cacheKey = `${fingerprint}:${model}:${provider}`;
+  const provider = providerOverride ?? getConfiguredProviderRoute(model);
+  if (!/^[a-z][a-z0-9/-]{1,100}$/.test(provider))
+    throw new LiveResearchError(
+      "MB-422-MODEL-CAPABILITY",
+      "Invalid provider identity for capability lookup.",
+    );
+  const cacheKey = `${fingerprint}:${model}:${provider}:${providerOverride ? "exact" : "configured"}`;
   const cachedEndpoint = endpointCapabilityCache.get(cacheKey);
   if (cachedEndpoint && cachedEndpoint.expires > Date.now())
     return cachedEndpoint.capabilities;
@@ -312,6 +327,8 @@ export async function getOpenRouterModelCapabilities(
     data?: {
       endpoints?: {
         name?: unknown;
+        provider_name?: unknown;
+        pricing?: Record<string, unknown>;
         model_id?: unknown;
         tag?: unknown;
         supported_parameters?: unknown;
@@ -324,7 +341,8 @@ export async function getOpenRouterModelCapabilities(
         (entry) =>
           typeof entry.tag === "string" &&
           (entry.tag === provider ||
-            (entry.tag.startsWith(`${provider}/`) &&
+            (!providerOverride &&
+              entry.tag.startsWith(`${provider}/`) &&
               !/\/(flex|fast|priority)$/.test(entry.tag))) &&
           Array.isArray(entry.supported_parameters),
       )
@@ -345,6 +363,20 @@ export async function getOpenRouterModelCapabilities(
   );
   const selectedCapabilities: OpenRouterModelCapabilities = {
     id: model,
+    endpoint_prices: matches.map((entry) => entry.pricing ?? {}),
+    provider_names: [
+      ...new Set(
+        matches.flatMap((entry) => {
+          const name =
+            typeof entry.provider_name === "string"
+              ? entry.provider_name
+              : typeof entry.name === "string"
+                ? entry.name.split("|")[0]!.trim()
+                : "";
+          return /^[a-zA-Z][a-zA-Z0-9 ._/-]{0,79}$/.test(name) ? [name] : [];
+        }),
+      ),
+    ],
     supported_parameters: supported,
     structured_outputs: supported.includes("structured_outputs"),
     reasoning: supported.includes("reasoning"),
@@ -396,7 +428,7 @@ export async function validateLiveModelConfiguration() {
       "Discovery requires separate Gemini and OpenAI models.",
     );
   const capabilities = await Promise.all(
-    Object.values(models).map(getOpenRouterModelCapabilities),
+    Object.values(models).map((model) => getOpenRouterModelCapabilities(model)),
   );
   for (const id of [models.preparation, models.synthesis]) {
     if (
@@ -524,13 +556,50 @@ export async function callOpenRouterCompletion(
   let dispatcher: Agent | undefined;
   try {
     signal.throwIfAborted();
-    const provider = getConfiguredProviderRoute(params.model);
-    if (params.approved_rate && params.approved_rate.provider !== provider)
+    const provider = getApprovedProviderRoute(
+      params.model,
+      params.approved_rate,
+    );
+    const credit = params.approved_rate?.billing_mode === "openrouter_credits";
+    const capabilities = await getOpenRouterModelCapabilities(
+      params.model,
+      credit ? provider : undefined,
+    );
+    if (
+      credit &&
+      params.approved_rate?.provider_display_name &&
+      !capabilities.provider_names?.includes(
+        params.approved_rate.provider_display_name,
+      )
+    )
       throw new LiveResearchError(
         "MB-409-ROUND-PROVIDER",
-        "Provider route changed after cost approval.",
+        "Approved provider identity no longer matches current endpoint metadata.",
       );
-    const capabilities = await getOpenRouterModelCapabilities(params.model);
+    if (credit && params.approved_rate) {
+      const ceilings: Record<string, number> = {
+        prompt: params.approved_rate.input_usd_per_token,
+        completion: params.approved_rate.output_usd_per_token,
+        request: params.approved_rate.request_usd,
+        web_search: params.approved_rate.web_search_usd,
+      };
+      for (const prices of capabilities.endpoint_prices ?? [])
+        for (const [field, ceiling] of Object.entries(ceilings)) {
+          const raw = prices[field];
+          const current =
+            raw === undefined && !["prompt", "completion"].includes(field)
+              ? 0
+              : typeof raw === "number" ||
+                  (typeof raw === "string" && raw.trim())
+                ? Number(raw)
+                : NaN;
+          if (!Number.isFinite(current) || current < 0 || current > ceiling)
+            throw new LiveResearchError(
+              "MB-409-ROUND-PRICING",
+              "Endpoint pricing no longer fits the approved rate. Review a new estimate.",
+            );
+        }
+    }
     signal.throwIfAborted();
     const supported = new Set(capabilities.supported_parameters);
     const tokenParameter = supported.has("max_completion_tokens")
@@ -719,10 +788,20 @@ export async function callOpenRouterCompletion(
       requested_model: params.model,
       allowed_model_ids: capabilities.served_model_ids ?? [params.model],
       requested_provider: provider,
+      ...(params.approved_rate ? { approved_rate: params.approved_rate } : {}),
+      ...(capabilities.provider_names
+        ? { allowed_provider_names: capabilities.provider_names }
+        : {}),
       api_key: apiKey,
       signal,
     });
-    auditedResponse = { ...auditedResponse, ...audit };
+    auditedResponse = {
+      ...auditedResponse,
+      ...audit,
+      ...(credit && audit.openrouter_cost_usd != null
+        ? { cost_usd: audit.openrouter_cost_usd, cost_reported: true }
+        : {}),
+    };
     if (choice?.finish_reason === "length")
       throw new LiveResearchError(
         "MB-422-LIVE-OUTPUT-LIMIT",
@@ -769,7 +848,18 @@ export async function callOpenRouterCompletion(
         error.code,
         error.message,
         false,
-        auditedResponse ? { ...auditedResponse, ...error.audit } : undefined,
+        auditedResponse
+          ? {
+              ...auditedResponse,
+              ...error.audit,
+              ...(error.audit?.openrouter_cost_usd != null
+                ? {
+                    cost_usd: error.audit.openrouter_cost_usd,
+                    cost_reported: true,
+                  }
+                : {}),
+            }
+          : undefined,
       );
     if (error instanceof LiveResearchError) throw error;
     throw new LiveResearchError(
@@ -961,7 +1051,27 @@ async function runLiveCompletionAttempt(
         "MB-503-LIVE-CREDENTIAL",
         "Server OpenRouter credential is not configured.",
       );
-    const capabilities = await getOpenRouterModelCapabilities(request.model);
+    const selectedRate = options.approved_rates?.find(
+      (rate) => rate.model === request.model,
+    );
+    const approvedRate = selectedRate
+      ? Object.freeze({ ...selectedRate })
+      : undefined;
+    if (
+      approvedRate?.billing_mode === "openrouter_credits" &&
+      !options.before_call
+    )
+      throw new LiveResearchError(
+        "MB-409-ROUND-BILLING",
+        "Credit-funded calls require the approved round guard.",
+      );
+    const provider = getApprovedProviderRoute(request.model, approvedRate);
+    const capabilities = await getOpenRouterModelCapabilities(
+      request.model,
+      approvedRate?.billing_mode === "openrouter_credits"
+        ? provider
+        : undefined,
+    );
     if (
       request.response_format?.type === "json_schema" &&
       !capabilities.structured_outputs
@@ -982,7 +1092,7 @@ async function runLiveCompletionAttempt(
     checkpoint = {
       ...checkpoint,
       reasoning_effort: capabilities.reasoning ? effort : "unsupported",
-      requested_provider: getConfiguredProviderRoute(request.model),
+      requested_provider: provider,
       actual_provider: null,
       is_byok: null,
       upstream_inference_cost: null,
@@ -1014,13 +1124,7 @@ async function runLiveCompletionAttempt(
     let result = await callOpenRouterCompletion({
       ...request,
       request_id: checkpointId,
-      ...(options.approved_rates?.find((rate) => rate.model === request.model)
-        ? {
-            approved_rate: options.approved_rates.find(
-              (rate) => rate.model === request.model,
-            )!,
-          }
-        : {}),
+      ...(approvedRate ? { approved_rate: approvedRate } : {}),
       timeout_ms: timeoutMs,
       ...(capabilities.reasoning
         ? {

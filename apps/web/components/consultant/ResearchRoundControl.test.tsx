@@ -40,6 +40,96 @@ const plan = {
   max_output_tokens_per_call: 12000,
   assumptions: ["No automatic next round"],
 };
+it("L03 discloses credit-funded Ultra models before separate cost approval", async () => {
+  const actions: string[] = [];
+  const started = vi.fn();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url: string, options?: RequestInit) => {
+      if (!options?.body)
+        return Response.json({
+          costs,
+          rounds: [],
+          next_round: 1,
+          research_tiers: {
+            default: { configured: true, missing_families: [] },
+            advanced: { configured: true, missing_families: [] },
+            ultra: { configured: true, missing_families: [] },
+          },
+        });
+      const body = JSON.parse(String(options.body));
+      actions.push(body.action);
+      return Response.json(
+        body.action === "quote"
+          ? {
+              quote_id: "credit-quote",
+              choices: [],
+              plan: {
+                ...plan,
+                mode: "live",
+                research_tier: "ultra",
+                research_models: [
+                  "google/gemini",
+                  "openai/gpt",
+                  "anthropic/claude",
+                  "deepseek/model",
+                  "x-ai/grok",
+                ],
+                rates: [
+                  { model: "google/gemini", billing_mode: "byok" },
+                  { model: "openai/gpt", billing_mode: "byok" },
+                  {
+                    model: "anthropic/claude",
+                    billing_mode: "openrouter_credits",
+                  },
+                  {
+                    model: "deepseek/model",
+                    billing_mode: "openrouter_credits",
+                  },
+                  { model: "x-ai/grok", billing_mode: "openrouter_credits" },
+                ],
+              },
+            }
+          : { success: true },
+      );
+    }),
+  );
+  render(
+    <ResearchRoundControl
+      runId="run"
+      workflowState="prep_step3_prompt_approved"
+      onStarted={started}
+      onPreview={vi.fn()}
+    />,
+  );
+  const ultra = await screen.findByRole("radio", { name: /^Ultra/ });
+  expect(ultra).toBeEnabled();
+  fireEvent.click(ultra);
+  expect(actions).toEqual([]);
+  fireEvent.click(screen.getByRole("button", { name: /Get cost estimate/ }));
+  expect(
+    await screen.findByRole("region", {
+      name: "Payment sources for this estimate",
+    }),
+  ).toHaveTextContent(
+    "Approving this estimate authorizes OpenRouter credit charges",
+  );
+  expect(
+    screen.getByText("anthropic/claude: OpenRouter credits"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("google/gemini: BYOK · provider account"),
+  ).toBeInTheDocument();
+  expect(actions).toEqual(["quote"]);
+  expect(started).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Approve cost estimate & start round 1",
+    }),
+  );
+  await waitFor(() => expect(started).toHaveBeenCalledOnce());
+  expect(actions).toEqual(["quote", "approve"]);
+});
 it("COST-001 shows known costs and requires separate quote and spend approval", async () => {
   const actions: string[] = [];
   const started = vi.fn();

@@ -42,6 +42,10 @@ function makePlan(tier = "default") {
     estimated_high_usd: lanes.length,
     expires_at: "2099-01-01T00:00:00Z",
     research_models: lanes,
+    rates: lanes.map((model, index) => ({
+      model,
+      billing_mode: index < 2 ? "byok" : "openrouter_credits",
+    })),
     extraction_model: models[1],
     synthesis_model: models[1],
     search_engine: "native",
@@ -315,6 +319,19 @@ test("L02 default, advanced and ultra estimates keep approval tied to the select
     "quote",
     "quote",
   ]);
+  const payment = page.getByRole("region", {
+    name: "Payment sources for this estimate",
+  });
+  await expect(payment).toBeVisible();
+  await expect(payment).toContainText(
+    "Approving this estimate authorizes OpenRouter credit charges",
+  );
+  await expect(payment).toContainText(
+    "anthropic/claude-fixture: OpenRouter credits",
+  );
+  await expect(payment).toContainText(
+    "google/gemini-fixture: BYOK · provider account",
+  );
   await visualChecks(page, "three-tier-estimate", testInfo);
   await page
     .getByRole("button", { name: "Approve cost estimate & start round 1" })

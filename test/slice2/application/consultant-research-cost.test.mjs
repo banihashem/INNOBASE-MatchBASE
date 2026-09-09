@@ -6,6 +6,7 @@ import {
   buildResearchRoundPlan,
   createRoundCallGuard,
   researchModelChoices,
+  configuredResearchTierAvailability,
 } from "../../../packages/application/dist/consultant-research-cost.js";
 const event = (detail, phase = "research", execution_id = "execution") => ({
   execution_id,
@@ -457,12 +458,67 @@ test("MB-UX-DEV-004 L02 tiers preserve all required families, price engines and 
     true,
   );
   process.env.MATCHBASE_PROVIDER_ROUTES = "{}";
+  assert.equal(configuredResearchTierAvailability().ultra.configured, true);
+  const { plan: craftedDefault } = await buildResearchRoundPlan({
+    ...input,
+    depth: "deep",
+    research_tier: "default",
+    selected_model: "anthropic/claude-sonnet-5",
+  });
+  assert.equal(craftedDefault.extraction_model, "openai/gpt-5.2");
+  assert.ok(
+    craftedDefault.rates.every(
+      (rate) =>
+        /^(google|openai)\//.test(rate.model) && rate.billing_mode === "byok",
+    ),
+    "A stale or crafted later-round model cannot add credit models to Default",
+  );
+  const { plan: creditUltra } = await buildResearchRoundPlan({
+    ...input,
+    research_tier: "ultra",
+  });
+  assert.deepEqual(
+    creditUltra.rates
+      .filter((r) => r.billing_mode === "openrouter_credits")
+      .map((r) => r.model.split("/")[0]),
+    ["anthropic", "deepseek", "x-ai"],
+  );
+  assert.ok(
+    creditUltra.rates
+      .filter((r) => /^(google|openai)\//.test(r.model))
+      .every((r) => r.billing_mode === "byok"),
+  );
+  assert.equal(
+    creditUltra.rates.find((r) => r.model.startsWith("deepseek/")).provider,
+    "novita",
+  );
+  assert.ok(
+    ultra.rates.every((r) => r.billing_mode === "byok"),
+    "A new credit quote does not mutate earlier BYOK approvals",
+  );
+  const deepseekRequest = {
+    model: "deepseek/deepseek-v4-flash",
+    messages: [],
+    plugins: [{ id: "web", engine: "exa", max_results: 8 }],
+  };
+  await createRoundCallGuard(creditUltra)(deepseekRequest, true);
+  process.env.MATCHBASE_PROVIDER_ROUTES = JSON.stringify({
+    deepseek: "unavailable-provider",
+  });
   await assert.rejects(
-    buildResearchRoundPlan({ ...input, research_tier: "advanced" }),
-    { code: "MB-422-RESEARCH-TIER-UNAVAILABLE" },
+    createRoundCallGuard(creditUltra)(deepseekRequest, true),
+    { code: "MB-409-ROUND-PROVIDER" },
   );
   await assert.rejects(
     buildResearchRoundPlan({ ...input, research_tier: "ultra" }),
     { code: "MB-422-RESEARCH-TIER-UNAVAILABLE" },
   );
+  process.env.MATCHBASE_PROVIDER_ROUTES = "{";
+  await assert.rejects(
+    buildResearchRoundPlan({ ...input, research_tier: "ultra" }),
+    { code: "MB-422-MODEL-UNAVAILABLE" },
+  );
+  process.env.MATCHBASE_PROVIDER_ROUTES = "{}";
+  delete process.env.MATCHBASE_OPENROUTER_API_KEY;
+  assert.equal(configuredResearchTierAvailability().ultra.configured, false);
 });

@@ -4,6 +4,10 @@ export type ResearchTier = "default" | "advanced" | "ultra";
 export interface ResearchModelRate {
   model: string;
   provider: string;
+  /** Absent on historical approvals means strict BYOK. Credit billing requires a new explicit quote approval. */
+  billing_mode?: "byok" | "openrouter_credits";
+  /** Provider display name from the selected endpoint catalog, for exact audit reconciliation. */
+  provider_display_name?: string;
   input_usd_per_token: number;
   output_usd_per_token: number;
   request_usd: number;

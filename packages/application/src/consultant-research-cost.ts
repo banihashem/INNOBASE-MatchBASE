@@ -192,6 +192,36 @@ const decimal = (v: unknown) =>
   Number(v) >= 0
     ? Number(v)
     : null;
+const extraCreditFamily = (model: string) =>
+  /^(anthropic|deepseek|x-ai)\//.test(model);
+function hasExplicitProviderConfiguration(model: string): boolean {
+  const family = model.split("/")[0]!;
+  let routes: unknown;
+  try {
+    routes = JSON.parse(process.env.MATCHBASE_PROVIDER_ROUTES || "{}");
+  } catch {
+    return true;
+  } // Malformed explicit configuration must never enable credit fallback.
+  if (!routes || typeof routes !== "object" || Array.isArray(routes))
+    return true;
+  const familyEnvironment: Record<string, string> = {
+    anthropic: "ANTHROPIC",
+    deepseek: "DEEPSEEK",
+    "x-ai": "XAI",
+  };
+  const env = familyEnvironment[family];
+  return (
+    Object.prototype.hasOwnProperty.call(routes, family) ||
+    Boolean(env && process.env[`MATCHBASE_PROVIDER_${env}`]?.trim())
+  );
+}
+function permitsCreditRoute(model: string): boolean {
+  return (
+    extraCreditFamily(model) &&
+    !hasExplicitProviderConfiguration(model) &&
+    Boolean(getOpenRouterApiKey())
+  );
+}
 export async function currentResearchModelRate(
   model: string,
 ): Promise<ResearchModelRate> {
@@ -201,8 +231,14 @@ export async function currentResearchModelRate(
       "MB-422-MODEL-VARIANT",
       "This model variant is not supported by synchronous research.",
     );
-  const provider = getConfiguredProviderRoute(model);
-  const capabilities = await getOpenRouterModelCapabilities(model);
+  const credit = permitsCreditRoute(model);
+  let provider = credit ? undefined : getConfiguredProviderRoute(model);
+  if (credit && !(await userModels()).some((entry) => entry.id === model))
+    throw new ResearchRoundFault(
+      422,
+      "MB-422-MODEL-UNAVAILABLE",
+      "The selected credit model is not available to this OpenRouter account.",
+    );
   const response = await fetch(
     `https://openrouter.ai/api/v1/models/${model.split("/").map(encodeURIComponent).join("/")}/endpoints`,
     { signal: AbortSignal.timeout(15000), redirect: "error" },
@@ -213,34 +249,80 @@ export async function currentResearchModelRate(
       "MB-503-MODEL-PRICING",
       "Endpoint pricing is unavailable.",
     );
-  const body = (await response.json()) as {
-    data?: { endpoints?: { tag: string; pricing: Record<string, unknown> }[] };
+  type Endpoint = {
+    tag: string;
+    provider_name?: string;
+    pricing: Record<string, unknown>;
+    supported_parameters?: string[];
   };
-  const endpoints = body.data?.endpoints?.filter(
-    (e) =>
-      e.tag === provider ||
-      (e.tag?.startsWith(provider + "/") &&
-        !/\/(flex|fast|priority)$/.test(e.tag)),
+  const body = (await response.json()) as { data?: { endpoints?: Endpoint[] } };
+  const usable = (body.data?.endpoints ?? []).filter(
+    (entry) =>
+      typeof entry.tag === "string" &&
+      /^[a-z][a-z0-9-]*(?:\/[a-z0-9-]+)*$/.test(entry.tag) &&
+      !/\/(flex|fast|priority)$/.test(entry.tag),
   );
-  if (!endpoints?.length)
+  if (credit) {
+    const candidates = usable.filter(
+      (entry) =>
+        (entry.supported_parameters?.includes("max_tokens") ||
+          entry.supported_parameters?.includes("max_completion_tokens")) &&
+        decimal(entry.pricing?.prompt) !== null &&
+        decimal(entry.pricing?.completion) !== null &&
+        (!model.startsWith("anthropic/") || entry.tag === "anthropic") &&
+        (!model.startsWith("x-ai/") ||
+          entry.tag === "xai" ||
+          entry.tag === "x-ai"),
+    );
+    candidates.sort(
+      (a, b) =>
+        Number(a.pricing.prompt) +
+          Number(a.pricing.completion) -
+          (Number(b.pricing.prompt) + Number(b.pricing.completion)) ||
+        a.tag.localeCompare(b.tag),
+    );
+    provider = candidates[0]?.tag;
+  }
+  if (!provider)
+    throw new ResearchRoundFault(
+      422,
+      "MB-422-MODEL-PRICING",
+      "No eligible priced endpoint is available for the requested billing route.",
+    );
+  const endpoints = usable.filter(
+    (entry) =>
+      entry.tag === provider ||
+      (!credit && entry.tag.startsWith(provider + "/")),
+  );
+  if (!endpoints.length)
     throw new ResearchRoundFault(
       422,
       "MB-422-MODEL-PRICING",
       "No priced endpoint is available for the configured provider.",
     );
+  const capabilities = await getOpenRouterModelCapabilities(
+    model,
+    credit ? provider : undefined,
+  );
   const maximum = (field: string, required = false) => {
-    const numbers = endpoints.map((e) => decimal(e.pricing?.[field]));
-    if (required && numbers.some((v) => v === null))
+    const numbers = endpoints.map((entry) => decimal(entry.pricing?.[field]));
+    if (required && numbers.some((value) => value === null))
       throw new ResearchRoundFault(
         503,
         "MB-503-MODEL-PRICING",
         "Selected endpoint omitted required token pricing.",
       );
-    return Math.max(...numbers.map((v) => v ?? 0));
+    return Math.max(...numbers.map((value) => value ?? 0));
   };
   return {
     model,
     provider,
+    billing_mode: credit ? "openrouter_credits" : "byok",
+    ...(credit &&
+    endpoints[0]?.provider_name &&
+    /^[a-zA-Z][a-zA-Z0-9 ._/-]{0,79}$/.test(endpoints[0].provider_name)
+      ? { provider_display_name: endpoints[0].provider_name }
+      : {}),
     input_usd_per_token: maximum("prompt", true),
     output_usd_per_token: maximum("completion", true),
     request_usd: maximum("request"),
@@ -255,7 +337,7 @@ export async function researchModelChoices() {
   const models = (await userModels())
     .filter((m) => {
       try {
-        getConfiguredProviderRoute(m.id);
+        if (!permitsCreditRoute(m.id)) getConfiguredProviderRoute(m.id);
         return (
           (m.supported_parameters?.includes("max_tokens") ||
             m.supported_parameters?.includes("max_completion_tokens")) &&
@@ -296,7 +378,7 @@ export function configuredResearchTierAvailability(): Record<
   const models = getConfiguredLiveModels();
   const configured = (model: string) => {
     try {
-      getConfiguredProviderRoute(model);
+      if (!permitsCreditRoute(model)) getConfiguredProviderRoute(model);
       return true;
     } catch {
       return false;
@@ -363,12 +445,14 @@ export async function buildResearchRoundPlan(input: {
         (b.input_usd_per_token + b.output_usd_per_token),
     );
   const cheapest = ordered[0];
-  const selected = input.selected_model
-    ? choices.find((c) => c.model === input.selected_model)
-    : input.depth === "deep"
-      ? (choices.find((c) => c.model === configured.synthesis && c.reasoning) ??
-        ordered.find((c) => c.reasoning))
-      : cheapest;
+  const selected =
+    input.round_number > 1 && input.selected_model
+      ? choices.find((c) => c.model === input.selected_model)
+      : input.depth === "deep"
+        ? (choices.find(
+            (c) => c.model === configured.synthesis && c.reasoning,
+          ) ?? ordered.find((c) => c.reasoning))
+        : cheapest;
   if (input.mode === "live" && (!selected || !cheapest))
     throw new ResearchRoundFault(
       422,
@@ -417,7 +501,7 @@ export async function buildResearchRoundPlan(input: {
         throw new ResearchRoundFault(
           422,
           "MB-422-RESEARCH-TIER-UNAVAILABLE",
-          "Advanced research needs a priced, explicitly configured Anthropic, DeepSeek or Grok BYOK route. No research has started.",
+          "Advanced research needs a priced Anthropic, DeepSeek or Grok route, using configured BYOK or explicitly approved OpenRouter credits. No research has started.",
         );
       research.push(extra.model);
     } else {
@@ -427,7 +511,7 @@ export async function buildResearchRoundPlan(input: {
           throw new ResearchRoundFault(
             422,
             "MB-422-RESEARCH-TIER-UNAVAILABLE",
-            `Ultra research requires all five families. The ${family} family has no eligible priced, explicitly configured BYOK route. No reduced tier or research was started.`,
+            `Ultra research requires all five families. The ${family} family has no eligible priced BYOK or OpenRouter-credit route. No reduced tier or research was started.`,
           );
         research.push(extra.model);
       }
@@ -451,13 +535,13 @@ export async function buildResearchRoundPlan(input: {
     );
   const synthesis = synthesisRate?.model ?? "demonstration";
   // Evidence dossiers require source attribution and uncertainty reasoning.
-  // Use the configured synthesis model for simple-round extraction instead of
-  // selecting it solely by price; deep rounds retain the explicit model choice.
+  // First-round extraction is fixed independently of a stale later-round model
+  // dropdown; only later deep rounds retain the explicit model choice.
   // All resulting calls are priced before the human approves this new plan.
   const extraction =
     input.mode === "demonstration"
       ? "demonstration"
-      : input.depth === "deep"
+      : input.round_number > 1 && input.depth === "deep"
         ? selected!.model
         : configured.synthesis;
   const rateIds = [...new Set([...research, synthesis, extraction])];
@@ -472,6 +556,20 @@ export async function buildResearchRoundPlan(input: {
       "Pricing for a required discovery model is unavailable.",
     );
   const actualRates = rates as ResearchModelRate[];
+  if (
+    input.round_number === 1 &&
+    tier === "default" &&
+    actualRates.some(
+      (rate) =>
+        !/^(google|openai)\//.test(rate.model) ||
+        rate.billing_mode === "openrouter_credits",
+    )
+  )
+    throw new ResearchRoundFault(
+      422,
+      "MB-422-RESEARCH-TIER",
+      "Default research requires Google/OpenAI BYOK models for discovery, extraction and synthesis. Review the configured synthesis model.",
+    );
   const native = input.round_number === 1;
   const searchEngines = Object.fromEntries(
     research.map((model) => [
@@ -612,7 +710,8 @@ export async function buildResearchRoundPlan(input: {
         "Native search can issue multiple billable queries. Search allowance is an estimate; platform BYOK fee allowance is conservatively 5%.",
         "One approval authorizes this round only, including up to three attempts per recoverable stage and six shared recovery calls within the total call allowance. No following round starts automatically.",
         "Two suppliers are extracted per dossier batch. The estimate includes the six-call recovery reserve at the highest approved token and search rates; actual usage may be lower. Saved successful stages are reused when possible.",
-        "A model being listed does not prove provider-key health or sufficient balance; actual BYOK is checked on every response.",
+        "Each model billing mode is frozen in this estimate. Google/OpenAI and explicitly configured BYOK routes remain strict BYOK. Additional families without a configured BYOK route use the named OpenRouter-credit endpoint only after you approve this estimate. No failed BYOK call falls back to credits.",
+        "Model listing does not prove provider-key health or sufficient balance. Actual route, billing mode and usage are checked on every response.",
       ],
       request_hash: input.request_hash,
       parent_round_id: input.parent_round_id,
@@ -629,7 +728,10 @@ export function createRoundCallGuard(plan: ResearchRoundPlan) {
     const rate = plan.rates.find((r) => r.model === request.model);
     if (
       plan.mode === "live" &&
-      (!rate || getConfiguredProviderRoute(request.model) !== rate.provider)
+      (!rate ||
+        (rate.billing_mode === "openrouter_credits"
+          ? !permitsCreditRoute(request.model)
+          : getConfiguredProviderRoute(request.model) !== rate.provider))
     )
       throw new ResearchRoundFault(
         409,

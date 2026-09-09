@@ -7,6 +7,7 @@ import type {
 } from "@matchbase/contracts";
 import { ResearchRoundFault } from "@matchbase/data";
 import { getConfiguredProviderRoute } from "./openrouter-byok-policy.js";
+import { normalizeResearchGaps } from "./research-gap-normalizer.js";
 import {
   getConfiguredLiveModels,
   getOpenRouterApiKey,
@@ -331,10 +332,16 @@ export async function buildResearchRoundPlan(input: {
       ? [configured.lane_gemini, configured.lane_openai]
       : [selected?.model ?? "demonstration"];
   const synthesis = selected?.model ?? "demonstration";
-  // Deep research must not silently downgrade its evidence extraction to the
-  // cheapest model. Include the selected model's extraction cost in approval.
+  // Evidence dossiers require source attribution and uncertainty reasoning.
+  // Use the configured synthesis model for simple-round extraction instead of
+  // selecting it solely by price; deep rounds retain the explicit model choice.
+  // All resulting calls are priced before the human approves this new plan.
   const extraction =
-    (input.depth === "deep" ? selected : cheapest)?.model ?? "demonstration";
+    input.mode === "demonstration"
+      ? "demonstration"
+      : input.depth === "deep"
+        ? selected!.model
+        : configured.synthesis;
   const rateIds = [...new Set([...research, synthesis, extraction])];
   const rates =
     input.mode === "demonstration"
@@ -386,8 +393,8 @@ export async function buildResearchRoundPlan(input: {
     "Independent social and evidence audit",
   ];
   const purposes = [
-    "Discover up to 20 companies through two search paths, retrieve supporting sources, and publish the first evidence-backed result.",
-    "Reuse the saved roster and focus on missing or conflicting requirements that could change your shortlist.",
+    "Discover up to 20 companies through two search paths. Establish seller identity, relevant product or service evidence and published contacts first; publish conditional findings with unresolved quotation requirements.",
+    "Reuse the saved roster and resolve missing seller identity and product or service evidence before refining quotation, warranty and order-specific details. Preserve unknown requirements as explicit gaps.",
     "Choose a simpler or more thoughtful analysis of the existing result. This is the normal final round.",
     "Check relevant accessible public corporate profiles, identity linkage and dated business claims. Missing profiles are not a qualification failure.",
     "Challenge source independence, contradictions and unresolved claims; seek better primary evidence. No private accounts or supplier contact.",
@@ -400,7 +407,7 @@ export async function buildResearchRoundPlan(input: {
       depth: input.depth,
       title: titles[input.round_number - 1]!,
       purpose: purposes[input.round_number - 1]!,
-      focus_requirements: input.focus_requirements.slice(0, 12),
+      focus_requirements: normalizeResearchGaps(input.focus_requirements),
       research_models: research,
       extraction_model: extraction,
       synthesis_model: synthesis,
@@ -415,6 +422,7 @@ export async function buildResearchRoundPlan(input: {
       expires_at: new Date(now.getTime() + 15 * 60000).toISOString(),
       rates: actualRates,
       assumptions: [
+        "Evidence extraction uses the model named in this estimate; its actual configured rates are included. A more economical research choice does not silently downgrade source attribution to the cheapest model.",
         "Estimate in USD, not a guaranteed maximum or invoice.",
         "Range assumes 4,000 output tokens per call at the low end and the full approved output allowance at the high end; input volume varies.",
         "Native search can issue multiple billable queries. Search allowance is an estimate; platform BYOK fee allowance is conservatively 5%.",

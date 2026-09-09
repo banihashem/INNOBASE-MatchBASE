@@ -502,8 +502,14 @@ test("MB-UX-LIVE-001 L04 evidence extraction preserves native inputs and usage w
   };
   assert.deepEqual(JSON.parse(indexRequest.messages[1].content), originalInput);
   assert.deepEqual(JSON.parse(request.messages[1].content), {
-    ...originalInput,
+    buyer_mandatory_criteria: originalInput.buyer_mandatory_criteria,
     native_citations: [originalInput.native_citations[0]],
+    assigned_candidate_sources: [
+      {
+        legal_name: companyName,
+        source_urls: [originalInput.native_citations[0].url],
+      },
+    ],
     assigned_candidate_names: [companyName],
     batch_index: 1,
     batch_count: 1,
@@ -669,7 +675,13 @@ test("MB-UX-LIVE-001 L04 canonical buyer criteria survive paraphrased notes and 
   const requests = stubProvider(t, (body) => {
     const supplied = JSON.parse(body.messages[1].content);
     assert.deepEqual(supplied.buyer_mandatory_criteria, criteria);
-    assert.equal(supplied.native_research_notes, original.text);
+    assert.equal(
+      supplied.native_research_notes,
+      body.response_format?.json_schema?.name ===
+        "matchbase_native_candidate_index"
+        ? original.text
+        : undefined,
+    );
     if (
       body.response_format?.json_schema?.name ===
       "matchbase_native_candidate_index"

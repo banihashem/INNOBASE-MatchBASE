@@ -49,6 +49,15 @@ export function validateJsonSchema(
     value.length < schema.minLength
   )
     fail();
+  if (typeof value === "string") {
+    if (typeof schema.maxLength === "number" && value.length > schema.maxLength)
+      fail();
+    if (
+      typeof schema.pattern === "string" &&
+      !new RegExp(schema.pattern, "u").test(value)
+    )
+      fail();
+  }
   if (Array.isArray(value)) {
     if (typeof schema.maxItems === "number" && value.length > schema.maxItems)
       fail();

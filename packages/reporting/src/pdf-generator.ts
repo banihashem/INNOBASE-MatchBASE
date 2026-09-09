@@ -118,7 +118,7 @@ export class ConsultantPdfRenderer {
       .digest("hex")
       .slice(0, 16);
     // Derived immutable key: runId + contentHash + template version + locale
-    const artifactKey = `${runId}_${contentHash}_v4_approved_en`;
+    const artifactKey = `${runId}_${contentHash}_v5_approved_en_sources`;
     const cacheDir = this.getCacheDir();
     const cacheFilePath = path.join(cacheDir, `${artifactKey}.pdf`);
 

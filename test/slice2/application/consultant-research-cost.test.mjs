@@ -168,3 +168,117 @@ test("MB-UX-COST-001 model choices exclude batch variants before economical sele
     { code: "MB-409-ROUND-PROVIDER" },
   );
 });
+
+test("MB-UX-LIVE-001 L14 simple extraction uses the configured source-attribution model and includes its rate before approval", async (t) => {
+  const values = {
+    MATCHBASE_OPENROUTER_API_KEY: randomUUID(),
+    MATCHBASE_PROVIDER_OPENAI: "openai",
+    MATCHBASE_PROVIDER_GOOGLE: "google-ai-studio",
+    MATCHBASE_MODEL_SYNTHESIS: "openai/gpt-5.2",
+    MATCHBASE_MODEL_PREPARATION: "openai/gpt-5.2",
+    MATCHBASE_MODEL_GEMINI: "google/gemini-3.8-flash",
+    MATCHBASE_MODEL_OPENAI: "openai/gpt-5.2",
+  };
+  const prior = Object.fromEntries(
+    Object.keys(values).map((k) => [k, process.env[k]]),
+  );
+  Object.assign(process.env, values);
+  t.after(() => {
+    for (const [k, v] of Object.entries(prior)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+  const rates = {
+    "openai/gpt-5-nano": { prompt: "0.00000005", completion: "0.0000004" },
+    "openai/gpt-5.2": { prompt: "0.00000175", completion: "0.000014" },
+    "google/gemini-3.8-flash": {
+      prompt: "0.00000075",
+      completion: "0.00000375",
+    },
+  };
+  const supported = ["structured_outputs", "reasoning", "max_tokens"];
+  let unavailable = false;
+  t.mock.method(globalThis, "fetch", async (target) => {
+    const url = String(target);
+    assert.ok(
+      !url.includes("chat/completions"),
+      "Quoting must not execute research",
+    );
+    if (url.endsWith("/models/user"))
+      return Response.json({
+        data: Object.entries(rates).map(([id, pricing]) => ({
+          id,
+          pricing,
+          supported_parameters: supported,
+        })),
+      });
+    const id = decodeURIComponent(
+      new URL(url).pathname.split("/models/")[1].replace(/\/endpoints$/, ""),
+    );
+    if (unavailable && id === "openai/gpt-5.2")
+      return Response.json({}, { status: 503 });
+    return Response.json({
+      data: {
+        endpoints: [
+          {
+            tag: id.startsWith("google/") ? "google-ai-studio" : "openai",
+            model_id: id,
+            supported_parameters: supported,
+            pricing: { ...rates[id], request: "0", web_search: "0" },
+          },
+        ],
+      },
+    });
+  });
+  const input = {
+    round_number: 1,
+    depth: "simple",
+    parent_round_id: null,
+    request_hash: "immutable-approved-request",
+    focus_requirements: [
+      "Missing seller identity",
+      "",
+      'evidence_exhausted":true,',
+      "Missing seller identity",
+    ],
+    mode: "live",
+  };
+  const { plan } = await buildResearchRoundPlan(input);
+  assert.equal(plan.extraction_model, "openai/gpt-5.2");
+  assert.equal(plan.synthesis_model, "openai/gpt-5-nano");
+  assert.deepEqual(plan.focus_requirements, ["Missing seller identity"]);
+  const extractionRate = plan.rates.find(
+    (rate) => rate.model === plan.extraction_model,
+  );
+  assert.equal(extractionRate.input_usd_per_token, 0.00000175);
+  assert.equal(extractionRate.output_usd_per_token, 0.000014);
+  const extractionCalls = plan.max_calls - plan.research_models.length - 1;
+  assert.ok(
+    plan.estimated_high_usd >=
+      extractionCalls *
+        (240000 * extractionRate.input_usd_per_token +
+          12000 * extractionRate.output_usd_per_token),
+  );
+  assert.match(
+    plan.assumptions.join(" "),
+    /actual configured rates are included/,
+  );
+  const saved = structuredClone(plan);
+  const { plan: deep } = await buildResearchRoundPlan({
+    ...input,
+    round_number: 3,
+    depth: "deep",
+    selected_model: "google/gemini-3.8-flash",
+  });
+  assert.equal(deep.extraction_model, "google/gemini-3.8-flash");
+  assert.deepEqual(
+    plan,
+    saved,
+    "A new quote never mutates a prior approved plan",
+  );
+  unavailable = true;
+  await assert.rejects(buildResearchRoundPlan(input), {
+    code: "MB-503-MODEL-PRICING",
+  });
+});

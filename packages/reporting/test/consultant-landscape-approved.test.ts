@@ -212,7 +212,7 @@ test("MB-UX-LIVE-001 L13 non-English approved requirements cannot be silently om
   );
 });
 
-test("MB-UX-LIVE-001 L13 untranslated supplier or source observations fail explicitly instead of disappearing", () => {
+test("MB-UX-LIVE-001 L14 untranslated supplier facts, claims and risks fail explicitly instead of disappearing", () => {
   const output = englishReportFixture();
   const supplier = output.supplier_candidates[0]!;
   assert.throws(
@@ -225,13 +225,28 @@ test("MB-UX-LIVE-001 L13 untranslated supplier or source observations fail expli
       }),
     ConsultantReportLanguageError,
   );
-  const source = output.evidence_sources[0]!;
   assert.throws(
     () =>
       generateConsultantLandscapeHtml({
         ...output,
-        evidence_sources: [
-          { ...source, excerpt_summary: originalLanguageNarrative },
+        claims: [
+          { ...output.claims[0]!, claim_text: originalLanguageNarrative },
+        ],
+      }),
+    ConsultantReportLanguageError,
+  );
+  assert.throws(
+    () =>
+      generateConsultantLandscapeHtml({
+        ...output,
+        supplier_candidates: [
+          {
+            ...supplier,
+            assessment: {
+              ...supplier.assessment,
+              limiting_gaps: [originalLanguageNarrative],
+            },
+          },
         ],
       }),
     ConsultantReportLanguageError,
@@ -247,6 +262,78 @@ test("MB-UX-LIVE-001 L13 untranslated supplier or source observations fail expli
       }),
     ConsultantReportLanguageError,
   );
+});
+
+test("MB-UX-LIVE-001 L14 original-language sources disclose an English claim projection without changing evidence", () => {
+  const output = englishReportFixture();
+  const source = output.evidence_sources[0]!;
+  const negative = {
+    ...output.claims[0]!,
+    claim_id: "negative-source-claim",
+    claim_text:
+      "Published stock status is sold out; requested quantity is not confirmed.",
+    evidence_ids: [source.evidence_id],
+  };
+  const projected = {
+    ...output,
+    claims: [...output.claims, negative],
+    evidence_sources: [
+      {
+        ...source,
+        source_title: originalLanguageNarrative,
+        publisher: originalLanguageNarrative,
+        excerpt_summary: originalLanguageNarrative,
+        contradicts_claim_ids: [negative.claim_id],
+      },
+      {
+        ...source,
+        evidence_id: "unlinked-original-source",
+        source_id: "unlinked-source-id",
+        source_title: originalLanguageNarrative,
+        excerpt_summary: originalLanguageNarrative,
+        supports_claim_ids: [],
+        contradicts_claim_ids: [],
+      },
+    ],
+  };
+  const original = structuredClone(projected);
+  const baselineHtml = generateConsultantLandscapeHtml(output);
+  const html = generateConsultantLandscapeHtml(projected);
+  assert.ok(
+    html.includes("Original-language source - Original-language publisher"),
+  );
+  assert.ok(
+    html.includes(
+      "Original-language quotation remains in the saved evidence and at the source link",
+    ),
+  );
+  assert.ok(
+    html.includes("not a translation or evidence of a full source review"),
+  );
+  assert.ok(html.includes(negative.claim_text));
+  assert.ok(html.includes(negative.claim_id));
+  assert.ok(
+    html.includes(
+      "Source retained; no published claim is attributed to this source.",
+    ),
+  );
+  for (const s of projected.evidence_sources) {
+    assert.ok(html.includes(`id="evidence-${s.evidence_id}"`));
+    assert.ok(html.includes(s.source_id));
+    assert.ok(html.includes(s.source_url.replaceAll("&", "&amp;")));
+    assert.ok(html.includes(s.retrieved_at));
+  }
+  for (const claim of projected.claims) {
+    const rendered = claim.claim_text
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+    if (baselineHtml.includes(rendered)) assert.ok(html.includes(rendered));
+  }
+  assert.ok(!html.includes(originalLanguageNarrative));
+  assert.deepEqual(projected, original);
 });
 
 test("MB-UX-LIVE-001 L13 existing English reports retain exact findings and accented official names", () => {

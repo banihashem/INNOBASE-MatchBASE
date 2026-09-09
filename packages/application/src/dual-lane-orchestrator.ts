@@ -44,6 +44,12 @@ import {
   type NativeResearchPhase,
 } from "./research-execution-instructions.js";
 import { extractNativeDiscoveryPayload } from "./live-evidence-extraction.js";
+import {
+  researchCitationInventory,
+  selectResearchSourceExcerpt,
+} from "./research-source-context.js";
+import { normalizeResearchGaps } from "./research-gap-normalizer.js";
+import { repairSourceTranscription } from "./source-transcription-repair.js";
 import { createHash, randomUUID } from "node:crypto";
 
 export interface DualLaneExecutionInput {
@@ -62,6 +68,7 @@ export interface DualLaneExecutionOptions extends LiveCallOptions {
   readonly source_retriever?: typeof fetchPrimaryEvidenceText;
 }
 export interface ResearchContinuation {
+  native_citations?: import("./openrouter-model-policy.js").OpenRouterCitation[];
   coverage_gaps?: string[];
   entity_ids?: [string, string][];
   roster: [string, LiveCandidateRecord][];
@@ -105,34 +112,6 @@ Return up to40 candidates for review, at most20 published. Deduplicate corporate
 Facts field_path may use specifications.<name>, contacts.sales_email, contacts.export_email, contacts.general_email, contacts.phone, contacts.contact_page_url, headquarters_address, manufacturing_location, country_of_origin, commercial.moq, commercial.production_capacity, commercial.lead_time, commercial.payment_terms, commercial.incoterm, commercial.incoterm_location, commercial.price_validity, commercial.price_min, commercial.price_max, commercial.currency, commercial.unit. Seek actual public prices, currency, unit, Incoterm and validity when available; price_min/max must be plain numeric strings quoted verbatim in the source, never a market estimate substituted for supplier pricing. Keep unpublished values unknown/RFQ. Return every evidenced certification with issuer, number, scope, validity and status; issuer/regulator evidence is distinct from supplier marketing. Every fact needs its own quote and source. Do not substitute buyer requirements for observed supplier facts.
 Include a country_of_registration fact with an exact supporting source quotation when available; do not infer registration country from a domain or sales office. Keep every fact value a literal substring of its supporting quote, including translated country names only when the original source publishes that spelling.
 Return a detailed plain-English evidence briefing with native citations, exact source URLs and short verbatim quotations for every supported company identity, capability, constraint and commercial fact. Organize the notes by company and explicitly name remaining evidence gaps. Distinguish exhausted discovery from unresolved verification. Do not return JSON or another research plan: a separate non-web extraction step will structure these notes without adding evidence.`;
-
-// Keep useful contiguous source spans within the extraction citation allowance.
-function selectSourceExcerpt(text: string, relevance: string): string {
-  if (text.length <= 5100) return text;
-  const terms = [
-    ...new Set(relevance.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) ?? []),
-  ];
-  const windows: { start: number; text: string; score: number }[] = [];
-  for (let start = 0; start < text.length; start += 600) {
-    const span = text.slice(Math.max(0, start - 200), start + 800);
-    const lower = span.toLowerCase();
-    const score =
-      terms.filter((term) => lower.includes(term)).length +
-      (/\b(gmbh|limited|llc|inc\.|legal|imprint|impressum|registered|registration)\b/i.test(
-        span,
-      )
-        ? 6
-        : 0);
-    windows.push({ start: Math.max(0, start - 200), text: span, score });
-  }
-  const chosen = windows
-    .sort((a, b) => b.score - a.score || a.start - b.start)
-    .slice(0, 5)
-    .sort((a, b) => a.start - b.start);
-  return chosen
-    .map((window) => window.text)
-    .join("\n[Separate source excerpt]\n");
-}
 
 export async function executeDualLaneResearch(
   input: DualLaneExecutionInput,
@@ -224,7 +203,14 @@ export async function executeDualLaneResearch(
   );
   const entityIds = new Map<string, string>(options.continuation?.entity_ids);
   const roster = new Map<string, LiveCandidateRecord>(
-    options.continuation?.roster,
+    options.continuation?.roster.map(([key, candidate]) => [
+      key,
+      {
+        ...candidate,
+        unknowns: normalizeResearchGaps(candidate.unknowns, 40),
+        risks: normalizeResearchGaps(candidate.risks, 40),
+      },
+    ]),
   );
   const reviewedAt = new Map<string, number>();
   const callback: LiveCallOptions = {
@@ -356,7 +342,9 @@ export async function executeDualLaneResearch(
               ),
               publication_review_instruction:
                 "Resolve publication_blockers before commercial refinements. Existing roster status and model-written quotes are unverified assertions until supported by the actual cited primary source. Seek exact legal-name and relevant product or service passages; missing price or RFQ-specific terms alone do not exclude an otherwise evidenced conditional candidate.",
-              previous_gaps: previous?.remaining_gaps ?? [],
+              previous_gaps: normalizeResearchGaps(
+                previous?.remaining_gaps ?? [],
+              ),
               previously_cited_sources: [...evidence.values()].map(
                 (item) => item.source,
               ),
@@ -377,10 +365,15 @@ export async function executeDualLaneResearch(
     calls.push(result);
     await retrieveCitedSources(result, loop);
     // Retrieval enriches extraction only; the provider response/usage remains immutable.
-    const extractionCitations = (result.citations ?? []).flatMap((citation) => {
+    const authorityCitations = researchCitationInventory(
+      result.citations ?? [],
+      options.continuation?.native_citations ?? [],
+      retrieved,
+    );
+    const extractionCitations = authorityCitations.flatMap((citation) => {
       const actual = retrieved.get(citation.url);
       if (!actual) return [citation];
-      const content = selectSourceExcerpt(
+      const content = selectResearchSourceExcerpt(
         actual.text,
         `${citation.title} ${input.product_requirement} ${requirements.join(" ")}`,
       );
@@ -407,7 +400,7 @@ export async function executeDualLaneResearch(
       callback,
     );
     calls.push(...extracted.results);
-    return { result, parsed: extracted.parsed };
+    return { result, authorityCitations, parsed: extracted.parsed };
   };
   const discovery = await Promise.allSettled(
     options.round_plan && options.round_plan.round_number > 1
@@ -416,7 +409,7 @@ export async function executeDualLaneResearch(
             options.round_plan.research_models[0]!,
             "verification",
             options.round_plan.round_number,
-            `${options.round_plan.purpose} Focus on these unresolved differentiators: ${options.round_plan.focus_requirements.join("; ")}. Reuse existing evidence and return updated records only where new evidence changes or supplements findings. Review up to20 candidates. ${options.round_plan.round_number >= 4 ? "Review accessible public corporate social profiles and cite actual profiles/posts. Link profiles to the legal company using website reciprocity and corporate contacts. Distinguish reviewed, access_limited, no_profile_found after an actual search, and not_executed. Badges/followers are not qualification. Company websites and their social accounts are one controlled evidence origin. Do not bypass login, collect private employee data, contact anyone or invent profiles/dates. Record platform limits and latest activity actually seen; lack of a profile is not failure." : ""}`,
+            `${options.round_plan.purpose} Focus on these unresolved differentiators: ${normalizeResearchGaps(options.round_plan.focus_requirements).join("; ")}. Reuse existing evidence and return updated records only where new evidence changes or supplements findings. Review up to20 candidates. ${options.round_plan.round_number >= 4 ? "Review accessible public corporate social profiles and cite actual profiles/posts. Link profiles to the legal company using website reciprocity and corporate contacts. Distinguish reviewed, access_limited, no_profile_found after an actual search, and not_executed. Badges/followers are not qualification. Company websites and their social accounts are one controlled evidence origin. Do not bypass login, collect private employee data, contact anyone or invent profiles/dates. Record platform limits and latest activity actually seen; lack of a profile is not failure." : ""}`,
           ),
         ]
       : [
@@ -480,6 +473,16 @@ export async function executeDualLaneResearch(
     completion: OpenRouterCompletionResult,
     loop: number,
   ) => {
+    const transcription = repairSourceTranscription(
+      payload.candidates,
+      completion.citations ?? [],
+      retrieved,
+    );
+    payload = {
+      ...payload,
+      candidates: transcription.candidates,
+      evidence: [...payload.evidence, ...transcription.evidence],
+    };
     ingestLiveEvidence(
       payload,
       completion.citations ?? [],
@@ -512,7 +515,12 @@ export async function executeDualLaneResearch(
         reviewedAt.set(rosterKey, loop);
     }
   };
-  for (const entry of successful) await merge(entry.parsed, entry.result, 0);
+  for (const entry of successful)
+    await merge(
+      entry.parsed,
+      { ...entry.result, citations: entry.authorityCitations },
+      0,
+    );
   const rounds = [
     "Verification loop1: Re-open official legal/company/contact pages. Resolve groups, subsidiaries and duplicate domains; verify exact legal identity and actual product catalog evidence for every retained candidate.",
     "Verification loop2: Inspect original product datasheets/catalogs. Compare every technical criterion and operator with actual supplier capabilities. Record missing values as unknown; exclude evidence-backed mismatches.",
@@ -546,7 +554,11 @@ export async function executeDualLaneResearch(
       instruction,
       previous,
     );
-    await merge(verification.parsed, verification.result, loop);
+    await merge(
+      verification.parsed,
+      { ...verification.result, citations: verification.authorityCitations },
+      loop,
+    );
     previous = verification.parsed;
     loops++;
     staleRounds = evidence.size <= countBefore ? staleRounds + 1 : 0;
@@ -722,12 +734,17 @@ export async function executeDualLaneResearch(
     ...(options.round_plan
       ? {
           continuation: {
+            native_citations: researchCitationInventory(
+              successful.flatMap((entry) => entry.result.citations ?? []),
+              options.continuation?.native_citations ?? [],
+              retrieved,
+            ),
             coverage_gaps: coverageGaps,
             entity_ids: [...entityIds],
             roster: [...roster],
             evidence: [...evidence],
             retrieved: [...retrieved],
-            remaining_gaps: previous.remaining_gaps,
+            remaining_gaps: normalizeResearchGaps(previous.remaining_gaps, 40),
           },
         }
       : {}),

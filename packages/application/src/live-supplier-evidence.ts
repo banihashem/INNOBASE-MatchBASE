@@ -24,6 +24,30 @@ const supportedSourceTypes = [
   "press_release",
   "secondary_market",
 ] as const;
+export const LIVE_FACT_FIELD_PATHS = [
+  "country_of_registration",
+  "headquarters_address",
+  "manufacturing_location",
+  "country_of_origin",
+  "contacts.sales_email",
+  "contacts.export_email",
+  "contacts.general_email",
+  "contacts.phone",
+  "contacts.contact_page_url",
+  "commercial.moq",
+  "commercial.production_capacity",
+  "commercial.lead_time",
+  "commercial.payment_terms",
+  "commercial.incoterm",
+  "commercial.incoterm_location",
+  "commercial.price_validity",
+  "commercial.currency",
+  "commercial.unit",
+  "commercial.price_min",
+  "commercial.price_max",
+] as const;
+const liveFactFieldPattern = `^(?:${LIVE_FACT_FIELD_PATHS.map((path) => path.replaceAll(".", "\\.")).join("|")}|specifications\\.[a-z][a-z0-9_]{0,63})$`;
+export const LIVE_FACT_FIELD_INSTRUCTIONS = `Use only these facts[].field_path values: ${LIVE_FACT_FIELD_PATHS.join(", ")}, or specifications.<lowercase_snake_case_key> (1-64 letters/digits/underscores, starting with a letter). Product name/family belong in the required candidate product_name/product_family fields. Do not create presence, identity.country, product.name, facts.*, or offering.* paths. Extract every explicitly published useful business contact and commercial term using the canonical paths, not a combined prose fact. Keep each value a literal substring of its exact source quote. Numeric price values must be plain decimal numbers without currency symbols; record the source currency separately. Never infer stock or delivery availability from a model listing or a public price. Keep unpublished commercial terms unknown and require an RFQ.`;
 const proofSchema = objectSchema({
   status: { type: "string", enum: ["verified", "unmet", "unknown"] },
   source_urls: stringListSchema,
@@ -66,7 +90,12 @@ export const LIVE_DISCOVERY_SCHEMA = objectSchema({
       facts: {
         type: "array",
         items: objectSchema({
-          field_path: stringSchema,
+          field_path: {
+            type: "string",
+            pattern: liveFactFieldPattern,
+            minLength: 1,
+            maxLength: 96,
+          },
           value: stringSchema,
           claim_type: {
             type: "string",
@@ -659,11 +688,49 @@ export function evaluateLiveCandidate(
     )
   )
     problems.push("The company website has not been evidenced as official.");
-  if (
-    candidate.product.status !== "verified" ||
-    !proofSources(candidate.product, evidence).length
-  )
+  const productSources = proofSources(candidate.product, evidence);
+  if (candidate.product.status !== "verified" || !productSources.length)
     problems.push("Product capability lacks primary native-search evidence.");
+  const host = companyHost(candidate.website);
+  const ownSource = (source: EvidenceSourceV3) => {
+    const sourceHost = companyHost(source.source_url);
+    return Boolean(host && sourceHost && relatedCompanyHosts(host, sourceHost));
+  };
+  const namedRelationship = normalizeIdentity(candidate.product.quote).includes(
+    normalizeIdentity(candidate.legal_name),
+  );
+  const ownProductRelationship = candidate.facts.some((fact) => {
+    if (
+      ![
+        "specifications.model",
+        "specifications.model_number",
+        "specifications.part_number",
+        "specifications.product_name",
+      ].includes(fact.field_path)
+    )
+      return false;
+    const value = normalizedEvidence(fact.value);
+    if (value.length < 3 || !normalizedEvidence(fact.quote).includes(value))
+      return false;
+    const productName = normalizedEvidence(candidate.product_name);
+    const productQuote = normalizedEvidence(candidate.product.quote);
+    const productTokens = (text: string) => text.split(/[^\p{L}\p{N}_+-]+/u);
+    const exactProduct =
+      fact.field_path === "specifications.product_name"
+        ? productName === value && productQuote.includes(value)
+        : productTokens(productName).includes(value) &&
+          productTokens(productQuote).includes(value);
+    return exactProduct && proofSources(fact, evidence).some(ownSource);
+  });
+  if (
+    productSources.length &&
+    !productSources.some(ownSource) &&
+    !namedRelationship &&
+    !ownProductRelationship
+  )
+    problems.push(
+      "Product evidence has no grounded relationship to this supplier.",
+    );
   for (const requirement of requirements) {
     const matches = candidate.constraints.filter(
       (item) => item.constraint === requirement,

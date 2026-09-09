@@ -9,7 +9,11 @@ import {
   assembleLiveSuppliers,
   revalidateRetainedLiveEvidence,
   reconcileLiveCandidateRecords,
+  ingestLiveEvidence,
 } from "./live-supplier-evidence.js";
+import { repairSourceTranscription } from "./source-transcription-repair.js";
+import { researchCitationInventory } from "./research-source-context.js";
+import { normalizeResearchGaps } from "./research-gap-normalizer.js";
 
 export interface RetainedResearchRecoveryInput {
   readonly prior_output: ConsultantResearchOutputV3;
@@ -50,7 +54,29 @@ export function buildRetainedResearchRecovery(
   const continuation = structuredClone(input.continuation);
   const evidence = new Map(continuation.evidence);
   const entityIds = new Map(continuation.entity_ids);
-  const retainedRoster = continuation.roster.map(([, candidate]) => candidate);
+  const retrieved = new Map(continuation.retrieved);
+  const citations = researchCitationInventory(
+    [],
+    continuation.native_citations ??
+      [...evidence.values()].map((record) => record.native_citation),
+    retrieved,
+  );
+  const transcribed = repairSourceTranscription(
+    continuation.roster.map(([, candidate]) => candidate),
+    citations,
+    retrieved,
+  );
+  ingestLiveEvidence(transcribed, citations, evidence, retrieved);
+  continuation.native_citations = citations;
+  continuation.remaining_gaps = normalizeResearchGaps(
+    continuation.remaining_gaps,
+    40,
+  );
+  const retainedRoster = transcribed.candidates;
+  continuation.roster = continuation.roster.map(([key], index) => [
+    key,
+    retainedRoster[index]!,
+  ]);
   revalidateRetainedLiveEvidence(retainedRoster, evidence);
   const roster = reconcileLiveCandidateRecords(retainedRoster, evidence);
   const assembled = assembleLiveSuppliers(

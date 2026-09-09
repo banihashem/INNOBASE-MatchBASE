@@ -256,7 +256,10 @@ test("MB-UX-LIVE-001 L10 citation-heavy discovery fits the approved allowance wi
         maxInput,
     );
     assert.equal(body.max_tokens, 12000);
-    assert.equal(input(body).native_research_notes, original.text);
+    assert.equal(
+      input(body).native_research_notes,
+      schemaName(body) === INDEX ? original.text : undefined,
+    );
     assert.deepEqual(input(body).buyer_mandatory_criteria, criteria);
     if (schemaName(body) === INDEX) {
       assert.deepEqual(
@@ -324,7 +327,10 @@ test("MB-UX-LIVE-001 L05 twenty rich records use bounded batches and account for
   const calls = fixture(t, async (body) => {
     assert.equal(body.plugins, undefined);
     assert.deepEqual(input(body).buyer_mandatory_criteria, criteria);
-    assert.equal(input(body).native_research_notes, original.text);
+    assert.equal(
+      input(body).native_research_notes,
+      schemaName(body) === INDEX ? original.text : undefined,
+    );
     if (schemaName(body) === INDEX) return data.index;
     assert.equal(schemaName(body), BATCH);
     assert.equal(body.max_tokens, 24000);

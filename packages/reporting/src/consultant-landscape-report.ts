@@ -86,6 +86,14 @@ const price = (s: SupplierEntityV3): string => {
 export function generateConsultantLandscapeHtml(
   output: ConsultantResearchOutputV3,
 ): string {
+  if (
+    output.claims.some((claim) =>
+      hasUntranslatedScript(
+        JSON.stringify([claim.claim_text, claim.normalized_value, claim.unit]),
+      ),
+    )
+  )
+    throw new ConsultantReportLanguageError();
   const suppliers = output.supplier_candidates ?? [];
   const approved = output.approved_request_snapshot;
   const demo = output.research_mode === "fixture";
@@ -315,28 +323,56 @@ export function generateConsultantLandscapeHtml(
     `<h2>Evidence sources</h2>${
       output.evidence_sources.length
         ? output.evidence_sources
-            .map(
-              (source) =>
-                `<article id="evidence-${esc(source.evidence_id)}" class="source"><h3>[${esc(source.evidence_id)}] ${esc(source.source_title)}</h3><p>${link(source.source_url)}</p>${rows(
+            .map((source) => {
+              const host = (() => {
+                try {
+                  return new URL(source.source_url).hostname;
+                } catch {
+                  return "saved source";
+                }
+              })();
+              const publisher = hasUntranslatedScript(source.publisher)
+                ? `Original-language publisher (${host})`
+                : source.publisher;
+              const title = hasUntranslatedScript(source.source_title)
+                ? `Original-language source - ${publisher || host}`
+                : source.source_title;
+              const linkedClaims = output.claims.filter(
+                (claim) =>
+                  claim.evidence_ids.includes(source.evidence_id) ||
+                  source.supports_claim_ids.includes(claim.claim_id) ||
+                  source.contradicts_claim_ids.includes(claim.claim_id),
+              );
+              const summary = hasUntranslatedScript(source.excerpt_summary)
+                ? `Original-language quotation remains in the saved evidence and at the source link. The following are recorded English claim statements, not a translation or evidence of a full source review. ${
+                    linkedClaims.length
+                      ? linkedClaims
+                          .map(
+                            (claim) =>
+                              `[${claim.claim_id}] ${claim.claim_text}`,
+                          )
+                          .join(" ")
+                      : "Source retained; no published claim is attributed to this source."
+                  }`
+                : source.excerpt_summary;
+              return `<article id="evidence-${esc(source.evidence_id)}" class="source"><h3>[${esc(source.evidence_id)}] ${esc(title)}</h3><p>${link(source.source_url, hasUntranslatedScript(source.source_url) ? host : undefined)}</p>${rows(
+                [
+                  ["Source ID", source.source_id],
+                  ["Publisher / type", `${publisher} / ${source.source_type}`],
                   [
-                    [
-                      "Publisher / type",
-                      `${source.publisher} / ${source.source_type}`,
-                    ],
-                    [
-                      "Retrieved / published",
-                      `${source.retrieved_at} / ${source.published_at ?? "Unknown"}`,
-                    ],
-                    [
-                      "Verification / freshness",
-                      `${source.verification_status} / ${source.freshness_status}`,
-                    ],
-                    ["Summary", source.excerpt_summary],
-                    ["Supports claims", source.supports_claim_ids],
-                    ["Contradicts claims", source.contradicts_claim_ids],
+                    "Retrieved / published",
+                    `${source.retrieved_at} / ${source.published_at ?? "Unknown"}`,
                   ],
-                )}</article>`,
-            )
+                  [
+                    "Verification / freshness",
+                    `${source.verification_status} / ${source.freshness_status}`,
+                  ],
+                  ["Summary", summary],
+                  ["Supports claims", source.supports_claim_ids],
+                  ["Contradicts claims", source.contradicts_claim_ids],
+                ],
+              )}</article>`;
+            })
             .join("")
         : "<p>No source records are available for this run. This absence is not a verification result.</p>"
     }<h2>Limitations and disclosures</h2>${output.limitations_and_disclosures.map((item) => `<article><h3>${esc(item.title)} (${esc(item.severity)})</h3><p>${esc(item.description)}</p></article>`).join("")}`,

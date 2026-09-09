@@ -273,7 +273,7 @@ test("discards an in-flight Demo poll when updates are paused", async () => {
 });
 
 test("discloses a terminal Demo failure without moving existing focus", async () => {
-  vi.useFakeTimers({ shouldAdvanceTime: true });
+  let resolvePoll: ((response: Response) => void) | undefined;
   const failedRun = {
     ...run("running", 80),
     state: "failed",
@@ -296,7 +296,11 @@ test("discloses a terminal Demo failure without moving existing focus", async ()
       else if (url.endsWith("/confirmation")) body = {};
       else if (url === "/api/v1/runs" && method === "POST")
         body = run("queued", 0);
-      else if (url === "/api/v1/runs/run-1") body = failedRun;
+      else if (url === "/api/v1/runs/run-1") {
+        return new Promise<Response>((resolve) => {
+          resolvePoll = resolve;
+        });
+      }
       else throw new Error(`Unexpected request: ${method} ${url}`);
       return new Response(JSON.stringify(body), {
         status: 200,
@@ -308,9 +312,23 @@ test("discloses a terminal Demo failure without moving existing focus", async ()
 
   render(<ProductFlow initialSession={session} />);
   await startDemoRun();
+  await waitFor(() =>
+    expect(
+      screen.getByRole("heading", { name: "Research in progress" }),
+    ).toHaveFocus(),
+  );
+  await waitFor(() => expect(resolvePoll).toBeDefined());
   const brand = screen.getByRole("link", { name: "MatchBASE home" });
   brand.focus();
-  await act(async () => vi.advanceTimersByTimeAsync(300));
+  expect(brand).toHaveFocus();
+  await act(async () => {
+    resolvePoll!(
+      new Response(JSON.stringify(failedRun), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  });
 
   expect(
     await screen.findByRole("heading", { name: "Research failed" }),

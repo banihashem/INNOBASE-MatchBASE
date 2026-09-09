@@ -165,6 +165,14 @@ export function WorkflowActivity({
                     ? "Your saved request is being interpreted in English. Keep this page open until the interpretation is ready for review."
                     : "The server is processing your saved request. You can leave this page and return from Home; reopening it does not start another research execution."}
         </p>
+        {active && !connectionError && progress?.message && (
+          <p
+            className="activity-current-operation"
+            aria-label="Current operation"
+          >
+            {progress.message}
+          </p>
+        )}
         {failure && failed && (
           <p>
             <strong>
@@ -220,14 +228,23 @@ export function WorkflowActivity({
         {activity.length ? (
           <ul className="activity-log">
             {activity.map((step) => {
-              const status = step.failed
-                ? "Stopped"
-                : step.started > step.completed + step.failed
-                  ? failed || ready || awaiting || state === "invalidated"
-                    ? "Interrupted"
-                    : connectionError
-                      ? "Last recorded: in progress"
+              const pending = step.started > step.completed + step.failed;
+              const status = pending
+                ? failed || ready || awaiting || state === "invalidated"
+                  ? "Interrupted"
+                  : connectionError
+                    ? "Last recorded: in progress"
+                    : step.failed
+                      ? "Retry in progress"
                       : "In progress"
+                : step.failed
+                  ? failed
+                    ? "Stopped"
+                    : step.completed
+                      ? "Completed with recovered or incomplete attempts"
+                      : active
+                        ? "Recovery in progress"
+                        : "Incomplete"
                   : step.completed
                     ? "Completed"
                     : "Recorded";
@@ -272,7 +289,7 @@ export function WorkflowActivity({
             <li key={label}>{label}</li>
           ))}
         </ol>
-        {progress?.message && (
+        {progress?.message && (!active || connectionError) && (
           <details>
             <summary>Latest technical checkpoint</summary>
             <p>{progress.message}</p>

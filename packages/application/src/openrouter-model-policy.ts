@@ -81,6 +81,9 @@ export interface OpenRouterModelCapabilities {
   readonly served_model_ids?: readonly string[];
 }
 export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
+  readonly recovery_attempt?: number;
+  readonly max_recovery_attempts?: number;
+  readonly recovery_scheduled?: boolean;
   readonly dispatched?: boolean;
   readonly index_validation?: {
     readonly accepted_candidates: number;
@@ -134,6 +137,9 @@ export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
   }[];
 }
 export interface LiveCallOptions {
+  /** Total attempts, including the initial call; only approved plans enable retries. */
+  readonly automatic_recovery_attempts?: number;
+  readonly extraction_batch_size?: number;
   /** Conservative serialized-message byte budget used by the approved call guard. */
   readonly max_input_bytes?: number;
   readonly approved_rates?: readonly ResearchModelRate[];
@@ -586,12 +592,20 @@ export async function callOpenRouterCompletion(
       const webPermissionDenied =
         category ===
         "OpenAI organization permissions disable the hosted web_search_preview tool";
+      const terminalCategory = [
+        "provider credential is not accepted",
+        "provider credit limit prevents execution",
+        "account privacy policy has no compatible endpoint",
+        "requested parameters are unsupported by available endpoints",
+        "native web search is unavailable on the selected endpoint",
+      ].includes(category);
       throw new LiveResearchError(
         webPermissionDenied
           ? "MB-403-LIVE-WEB-PERMISSION"
           : "MB-502-LIVE-PROVIDER",
         `Provider returned HTTP ${response.status}: ${category}.`,
         !webPermissionDenied &&
+          !terminalCategory &&
           (response.status === 429 || response.status >= 500),
       );
     }
@@ -716,7 +730,8 @@ export async function callOpenRouterCompletion(
       throw new LiveResearchError(
         "MB-502-LIVE-RESPONSE",
         "Provider returned an empty, incomplete, or refused response.",
-        true,
+        !data.error &&
+          (!choice?.finish_reason || choice.finish_reason === "stop"),
         auditedResponse,
       );
     return auditedResponse;
@@ -758,15 +773,135 @@ export async function callOpenRouterCompletion(
     await dispatcher?.destroy();
   }
 }
+type LiveCompletionContext = {
+  phase: string;
+  loop: number;
+  max_loops?: number;
+  require_web?: boolean;
+  reasoning_effort?: "high" | "low";
+};
+
+export function liveRecoveryAttemptLimit(options: LiveCallOptions): number {
+  // A flag alone cannot grant spending authority; each attempt needs a guard.
+  return options.before_call &&
+    Number.isInteger(options.automatic_recovery_attempts)
+    ? Math.max(1, Math.min(3, options.automatic_recovery_attempts!))
+    : 1;
+}
+
+/** Shares one stage allowance across structural and transport recovery layers. */
+export function withLiveStageBudget(options: LiveCallOptions): {
+  options: LiveCallOptions;
+  remaining: () => number;
+} {
+  let remaining = liveRecoveryAttemptLimit(options);
+  return {
+    remaining: () => remaining,
+    options: {
+      ...options,
+      // Keep legacy calls without a guard ineligible for automatic retries.
+      ...(options.before_call
+        ? {
+            before_call: async (
+              request: OpenRouterCompletionParams,
+              web: boolean,
+            ) => {
+              if (remaining <= 0)
+                throw new LiveResearchError(
+                  "MB-409-STAGE-ALLOWANCE",
+                  "The approved recovery attempts for this stage are exhausted. Saved evidence is retained.",
+                );
+              // Reserve before awaiting the outer guard so parallel consumers
+              // cannot both observe the same final stage slot.
+              remaining--;
+              await options.before_call!(request, web);
+            },
+          }
+        : {}),
+    },
+  };
+}
+
+export async function waitForLiveRecovery(
+  options: Pick<LiveCallOptions, "signal">,
+  failedAttempt: number,
+): Promise<void> {
+  const signal = options.signal;
+  signal?.throwIfAborted();
+  await new Promise<void>((resolve, reject) => {
+    const finish = () => {
+      signal?.removeEventListener("abort", cancel);
+      resolve();
+    };
+    const timer = setTimeout(
+      finish,
+      Math.min(4000, 1000 * Math.max(1, failedAttempt)),
+    );
+    const cancel = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
+      reject(signal?.reason ?? new Error("Research cancelled."));
+    };
+    signal?.addEventListener("abort", cancel, { once: true });
+    if (signal?.aborted) cancel();
+  });
+}
+
+function transientCompletionFailure(error: unknown): boolean {
+  return (
+    error instanceof LiveResearchError &&
+    error.retryable &&
+    [
+      "MB-503-LIVE-TRANSPORT",
+      "MB-502-LIVE-PROVIDER",
+      "MB-502-LIVE-RESPONSE",
+    ].includes(error.code)
+  );
+}
+
 export async function runLiveCompletion(
   request: Omit<OpenRouterCompletionParams, "reasoning">,
-  context: {
-    phase: string;
-    loop: number;
-    max_loops?: number;
-    require_web?: boolean;
-    reasoning_effort?: "high" | "low";
-  },
+  context: LiveCompletionContext,
+  options: LiveCallOptions = {},
+): Promise<OpenRouterCompletionResult> {
+  const signals = [request.signal, options.signal].filter(
+    (s): s is AbortSignal => s !== undefined,
+  );
+  const signal = signals.length ? AbortSignal.any(signals) : undefined;
+  const attempts = liveRecoveryAttemptLimit(options);
+  for (let attempt = 1; ; attempt++) {
+    signal?.throwIfAborted();
+    try {
+      return await runLiveCompletionAttempt(request, context, {
+        ...options,
+        on_checkpoint: async (checkpoint) => {
+          await options.on_checkpoint?.({
+            ...checkpoint,
+            recovery_attempt: attempt,
+            max_recovery_attempts: attempts,
+            ...(checkpoint.recovery_scheduled && attempt < attempts
+              ? {
+                  message: `${context.phase} encountered a temporary provider failure. Retrying this stage (${attempt + 1} of ${attempts}) within the approved allowance.`,
+                }
+              : { recovery_scheduled: false }),
+          });
+        },
+      });
+    } catch (error) {
+      if (
+        attempt >= attempts ||
+        signal?.aborted ||
+        !transientCompletionFailure(error)
+      )
+        throw error;
+      await waitForLiveRecovery(signal ? { signal } : {}, attempt);
+    }
+  }
+}
+
+async function runLiveCompletionAttempt(
+  request: Omit<OpenRouterCompletionParams, "reasoning">,
+  context: LiveCompletionContext,
   options: LiveCallOptions = {},
 ): Promise<OpenRouterCompletionResult> {
   if (options.max_output_tokens)
@@ -984,6 +1119,7 @@ export async function runLiveCompletion(
     await options.on_checkpoint?.({
       ...checkpoint,
       state: "failed",
+      recovery_scheduled: transientCompletionFailure(safeError),
       message: `${context.phase} request failed.`,
       completed_at: new Date().toISOString(),
       error: safeError.message,

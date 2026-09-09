@@ -1209,6 +1209,66 @@ test("MB-UX-LIVE-001 L10 two exhausted discovery paths cannot publish or start s
   assert.equal(requests.length, 2);
 });
 
+test("MB-UX-LIVE-001 L15 partial publication accounts for the successful index of a failed extraction lane", async () => {
+  dispatch = (body) => {
+    const schema = body.response_format?.json_schema?.name;
+    const input = JSON.parse(body.messages[1].content);
+    if (
+      schema === "matchbase_native_evidence_extraction" &&
+      input.assigned_candidate_names.includes("Acme")
+    )
+      return exhaustedResponse();
+    const failedLane = body.plugins?.length
+      ? body.model.startsWith("openai/")
+      : schema === "matchbase_native_candidate_index" &&
+        JSON.parse(input.native_research_notes).candidates[0].legal_name ===
+          "Acme";
+    return respond(
+      discovery(
+        failedLane
+          ? {
+              candidates: [
+                { ...structuredClone(candidate), legal_name: "Acme" },
+              ],
+            }
+          : {},
+      ),
+    );
+  };
+  const result = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: partialRound,
+    automatic_recovery_attempts: 3,
+    before_call: async () => {},
+    max_output_tokens: 12000,
+  });
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].legal_name, "Acme Industrial");
+  assert.equal(requests.length, 9);
+  assert.ok(
+    result.checkpoints.some(
+      (checkpoint) =>
+        checkpoint.phase === "discovery_openai_extraction_index" &&
+        checkpoint.state === "completed",
+    ),
+  );
+  assert.equal(
+    result.checkpoints.filter(
+      (checkpoint) =>
+        checkpoint.phase === "discovery_openai_extraction_batch" &&
+        checkpoint.state === "failed" &&
+        checkpoint.dispatched,
+    ).length,
+    3,
+  );
+  assert.equal(result.total_input_tokens, 3 * 121442 + 6 * 10);
+  assert.equal(result.total_output_tokens, 3 * 12000 + 6 * 20);
+  assert.ok(Math.abs(result.total_cost_usd - 9 * 0.03) < 1e-9);
+  assert.equal(result.executed_models.length, 9);
+  assert.equal(result.usage_complete, true);
+  assert.match(result.synthesis_summary, /Partial research coverage/);
+});
+
 test("MB-UX-LIVE-001 L10 guard failures cannot be replaced by a successful sibling", async () => {
   await assert.rejects(
     executeDualLaneResearch(intake, {

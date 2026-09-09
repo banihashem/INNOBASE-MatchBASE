@@ -104,3 +104,30 @@ it("L10 disconnects pause the activity indicator without declaring server work s
   );
   expect(screen.getByText("Last recorded: in progress")).toBeVisible();
 });
+
+it("L15 an in-place retry remains active and exposes its exact server message", () => {
+  render(
+    <WorkflowActivity
+      state="lane_openai_running"
+      progress={{
+        phase: "discovery_openai_extraction_batch",
+        message: "Retrying supplier detail extraction. Attempt 2 of 3.",
+      }}
+      activity={[
+        {
+          ...started,
+          phase: "discovery_openai_extraction_batch",
+          started: 2,
+          failed: 1,
+          completed: 0,
+        },
+      ]}
+    />,
+  );
+  expect(screen.getByText("Retry in progress")).toBeVisible();
+  expect(screen.getByLabelText("Current operation")).toHaveTextContent(
+    "Attempt 2 of 3",
+  );
+  expect(screen.queryByText("Stopped")).not.toBeInTheDocument();
+  expect(screen.getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
+});

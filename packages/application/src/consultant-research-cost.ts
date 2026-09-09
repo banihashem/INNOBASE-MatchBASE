@@ -356,13 +356,27 @@ export async function buildResearchRoundPlan(input: {
   const actualRates = rates as ResearchModelRate[];
   const native = input.round_number === 1;
   const maxOutput = input.depth === "deep" ? 20000 : 12000;
-  const calls = input.round_number === 1 ? 9 : 7;
+  const baseCalls = input.round_number === 1 ? 15 : 13;
+  const recoveryReserve = 6;
+  const calls = baseCalls + recoveryReserve;
+  const conservativeRetryRate = actualRates.length
+    ? {
+        input_usd_per_token: Math.max(
+          ...actualRates.map((r) => r.input_usd_per_token),
+        ),
+        output_usd_per_token: Math.max(
+          ...actualRates.map((r) => r.output_usd_per_token),
+        ),
+        request_usd: Math.max(...actualRates.map((r) => r.request_usd)),
+      }
+    : undefined;
   const ratesForCalls = [
     ...research.map((model) => actualRates.find((r) => r.model === model)),
-    ...Array.from({ length: calls - research.length - 1 }, () =>
+    ...Array.from({ length: baseCalls - research.length - 1 }, () =>
       actualRates.find((r) => r.model === extraction),
     ),
     actualRates.find((r) => r.model === synthesis),
+    ...Array.from({ length: recoveryReserve }, () => conservativeRetryRate),
   ];
   const searchAllowance = native
     ? Math.max(0.1, ...actualRates.map((r) => r.web_search_usd * 10))
@@ -382,7 +396,9 @@ export async function buildResearchRoundPlan(input: {
             0,
           ) *
             1.05 +
-            research.length * searchAllowance * (high ? 1 : 0.25),
+            (research.length + recoveryReserve) *
+              searchAllowance *
+              (high ? 1 : 0.25),
         );
   const now = new Date();
   const titles = [
@@ -413,6 +429,9 @@ export async function buildResearchRoundPlan(input: {
       synthesis_model: synthesis,
       search_engine: native ? "native" : "exa",
       candidate_limit_per_search: input.round_number === 1 ? 10 : 20,
+      automatic_recovery_attempts: 3,
+      extraction_batch_size: 2,
+      recovery_call_reserve: recoveryReserve,
       max_calls: calls,
       max_input_tokens_per_call: 240000,
       max_output_tokens_per_call: maxOutput,
@@ -426,7 +445,8 @@ export async function buildResearchRoundPlan(input: {
         "Estimate in USD, not a guaranteed maximum or invoice.",
         "Range assumes 4,000 output tokens per call at the low end and the full approved output allowance at the high end; input volume varies.",
         "Native search can issue multiple billable queries. Search allowance is an estimate; platform BYOK fee allowance is conservatively 5%.",
-        "One approval authorizes this round only. No automatic paid retries or following round.",
+        "One approval authorizes this round only, including up to three attempts per recoverable stage and six shared recovery calls within the total call allowance. No following round starts automatically.",
+        "Two suppliers are extracted per dossier batch. The estimate includes the six-call recovery reserve at the highest approved token and search rates; actual usage may be lower. Saved successful stages are reused when possible.",
         "A model being listed does not prove provider-key health or sufficient balance; actual BYOK is checked on every response.",
       ],
       request_hash: input.request_hash,
@@ -459,9 +479,17 @@ export function createRoundCallGuard(plan: ResearchRoundPlan) {
       );
     const inputBytes =
       Buffer.byteLength(JSON.stringify(request.messages), "utf8") + 512;
+    const synthesis =
+      request.response_format?.type === "json_schema" &&
+      request.response_format.json_schema.name === "matchbase_live_synthesis";
+    const reserveSynthesis =
+      (plan.automatic_recovery_attempts ?? 1) > 1 && !synthesis;
+    const callLimit = plan.max_calls - Number(reserveSynthesis);
     const exhausted =
-      calls >= plan.max_calls
-        ? `The approved allowance of ${plan.max_calls} provider calls is exhausted.`
+      calls >= callLimit
+        ? reserveSynthesis
+          ? `The research call allowance is exhausted; the final approved call is reserved for result synthesis.`
+          : `The approved allowance of ${plan.max_calls} provider calls is exhausted.`
         : (request.max_tokens ?? 12000) > plan.max_output_tokens_per_call
           ? `The requested output exceeds the approved ${plan.max_output_tokens_per_call}-token allowance.`
           : inputBytes > plan.max_input_tokens_per_call

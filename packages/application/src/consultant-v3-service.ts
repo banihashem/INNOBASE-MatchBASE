@@ -934,6 +934,8 @@ export async function executeConsultantWorkflowResearch(
   );
   const roundOptions = {
     round_plan: round.plan,
+    automatic_recovery_attempts: round.plan.automatic_recovery_attempts ?? 1,
+    extraction_batch_size: round.plan.extraction_batch_size ?? 5,
     approved_rates: round.plan.rates,
     ...(parent?.continuation
       ? { continuation: parent.continuation as unknown as ResearchContinuation }

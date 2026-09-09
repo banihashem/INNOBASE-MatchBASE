@@ -45,6 +45,8 @@ export function phaseLabel(phase: string, loop = 0): string {
   const scope = phase.startsWith("verification")
     ? `Verification round ${loop}`
     : lane;
+  if (phase.endsWith("extraction_recovery"))
+    return `${scope} · Recovering supplier details`;
   if (phase.endsWith("extraction_index"))
     return `${scope} · Organizing discovered suppliers`;
   if (phase.endsWith("extraction_batch"))

@@ -24,6 +24,12 @@ export interface ResearchRoundPlan {
   synthesis_model: string;
   search_engine: "native" | "exa";
   candidate_limit_per_search: number;
+  /** Total attempts per recoverable stage; absent on legacy approvals. */
+  automatic_recovery_attempts?: number;
+  /** Bounded dossier batch size priced in this approval. */
+  extraction_batch_size?: number;
+  /** Shared additional provider calls already included in max_calls and estimate. */
+  recovery_call_reserve?: number;
   max_calls: number;
   max_input_tokens_per_call: number;
   max_output_tokens_per_call: number;

@@ -80,13 +80,45 @@ test("MB-UX-COST-001 each approval has a bounded allowance and no sixth round", 
   assert.equal(plan.estimated_high_usd, 0);
   assert.equal(plan.research_models.length, 1);
   assert.equal(plan.round_number, 3);
+  assert.equal(plan.automatic_recovery_attempts, 3);
+  assert.equal(plan.extraction_batch_size, 2);
+  assert.equal(plan.recovery_call_reserve, 6);
+  assert.equal(plan.max_calls, 19);
   const guard = createRoundCallGuard(plan);
-  for (let i = 0; i < plan.max_calls; i++)
+  for (let i = 0; i < plan.max_calls - 1; i++)
     await guard({ model: "demonstration", messages: [], max_tokens: 1 }, false);
   await assert.rejects(
     guard({ model: "demonstration", messages: [], max_tokens: 1 }, false),
     { code: "MB-409-ROUND-ALLOWANCE" },
   );
+  await guard(
+    {
+      model: "demonstration",
+      messages: [],
+      max_tokens: 1,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "matchbase_live_synthesis",
+          strict: true,
+          schema: {},
+        },
+      },
+    },
+    false,
+  );
+  await assert.rejects(
+    guard({ model: "demonstration", messages: [], max_tokens: 1 }, false),
+    { code: "MB-409-ROUND-ALLOWANCE" },
+  );
+  const legacy = { ...plan };
+  delete legacy.automatic_recovery_attempts;
+  const legacyGuard = createRoundCallGuard(legacy);
+  for (let i = 0; i < plan.max_calls; i++)
+    await legacyGuard(
+      { model: "demonstration", messages: [], max_tokens: 1 },
+      false,
+    );
   await assert.rejects(buildResearchRoundPlan({ ...plan, round_number: 6 }), {
     code: "MB-409-ROUND-LIMIT",
   });

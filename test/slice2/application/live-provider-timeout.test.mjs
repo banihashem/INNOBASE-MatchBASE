@@ -5,6 +5,8 @@ import { test } from "node:test";
 import {
   callOpenRouterCompletion,
   runLiveCompletion,
+  waitForLiveRecovery,
+  withLiveStageBudget,
 } from "../../../packages/application/dist/openrouter-model-policy.js";
 
 const request = {
@@ -119,6 +121,220 @@ function providerFixture(t, completion = (body) => completedResponse(body)) {
   });
   return { deadlines, calls };
 }
+
+test("MB-UX-LIVE-001 L15 transient stage recovery repeats only the failed call with separate audited IDs", async (t) => {
+  let count = 0;
+  const fixture = providerFixture(t, (body) =>
+    ++count < 3
+      ? new Response("Temporary service failure", {
+          status: count === 1 ? 503 : 429,
+        })
+      : completedResponse(body),
+  );
+  const events = [];
+  let guards = 0;
+  const result = await runLiveCompletion(
+    request,
+    { phase: "synthesis", loop: 1 },
+    {
+      automatic_recovery_attempts: 3,
+      before_call: async () => {
+        guards++;
+      },
+      on_checkpoint: (event) => events.push(event),
+    },
+  );
+  assert.ok(result.text);
+  assert.equal(fixture.calls.length, 3);
+  assert.equal(guards, 3);
+  assert.equal(new Set(events.map((e) => e.request_id)).size, 3);
+  assert.deepEqual(
+    events.filter((e) => e.state === "failed").map((e) => e.recovery_scheduled),
+    [true, true],
+  );
+  assert.equal(events.at(-1).recovery_attempt, 3);
+  assert.equal(events.at(-1).state, "completed");
+});
+
+test("MB-UX-LIVE-001 L15 legacy plans and retry flags without a spending guard never replay calls", async (t) => {
+  const fixture = providerFixture(
+    t,
+    () => new Response("Unavailable", { status: 503 }),
+  );
+  for (const options of [
+    { before_call: async () => {} },
+    { automatic_recovery_attempts: 3 },
+  ]) {
+    await assert.rejects(
+      runLiveCompletion(request, { phase: "synthesis", loop: 1 }, options),
+      { code: "MB-502-LIVE-PROVIDER" },
+    );
+  }
+  assert.equal(fixture.calls.length, 2);
+});
+
+test("MB-UX-LIVE-001 L15 transport and structural retry layers share a three-call stage budget", async (t) => {
+  let count = 0;
+  const fixture = providerFixture(t, (body) =>
+    ++count === 1 || count === 3
+      ? new Response("Unavailable", { status: 503 })
+      : completedResponse(body),
+  );
+  const budget = withLiveStageBudget({
+    automatic_recovery_attempts: 3,
+    before_call: async () => {},
+  });
+  await runLiveCompletion(
+    request,
+    { phase: "synthesis", loop: 1 },
+    budget.options,
+  );
+  assert.equal(budget.remaining(), 1);
+  // The outer schema validator requests another attempt after the first
+  // successful transport returned malformed JSON. Only one call remains.
+  await assert.rejects(
+    runLiveCompletion(request, { phase: "synthesis", loop: 1 }, budget.options),
+    { code: "MB-409-STAGE-ALLOWANCE" },
+  );
+  assert.equal(budget.remaining(), 0);
+  assert.equal(fixture.calls.length, 3);
+});
+
+test("MB-UX-LIVE-001 L15 stage budget fences concurrent dispatch and preserves legacy eligibility", async () => {
+  let release;
+  const pending = new Promise((resolve) => {
+    release = resolve;
+  });
+  const budget = withLiveStageBudget({ before_call: async () => pending });
+  const first = budget.options.before_call(request, false);
+  await assert.rejects(budget.options.before_call(request, false), {
+    code: "MB-409-STAGE-ALLOWANCE",
+  });
+  release();
+  await first;
+  assert.equal(budget.remaining(), 0);
+  assert.equal(
+    withLiveStageBudget({ automatic_recovery_attempts: 3 }).options.before_call,
+    undefined,
+  );
+});
+
+test("MB-UX-LIVE-001 L15 repeated temporary failure stops at three audited attempts", async (t) => {
+  const fixture = providerFixture(
+    t,
+    () => new Response("Unavailable", { status: 503 }),
+  );
+  const events = [];
+  await assert.rejects(
+    runLiveCompletion(
+      request,
+      { phase: "verification", loop: 2 },
+      {
+        automatic_recovery_attempts: 99,
+        before_call: async () => {},
+        on_checkpoint: (event) => events.push(event),
+      },
+    ),
+    { code: "MB-502-LIVE-PROVIDER" },
+  );
+  assert.equal(fixture.calls.length, 3);
+  assert.equal(events.at(-1).recovery_scheduled, false);
+  assert.equal(events.at(-1).state, "failed");
+  assert.deepEqual(
+    events
+      .filter((event) => event.state === "failed")
+      .map((event) => event.recovery_attempt),
+    [1, 2, 3],
+  );
+});
+
+test("MB-UX-LIVE-001 L15 retry allowance exhaustion cannot send another provider request", async (t) => {
+  const fixture = providerFixture(
+    t,
+    () => new Response("Unavailable", { status: 503 }),
+  );
+  let attempts = 0;
+  await assert.rejects(
+    runLiveCompletion(
+      request,
+      { phase: "synthesis", loop: 1 },
+      {
+        automatic_recovery_attempts: 3,
+        before_call: async () => {
+          if (++attempts > 1) throw new Error("Lease or allowance unavailable");
+        },
+      },
+    ),
+    { code: "MB-503-LIVE-CHECKPOINT" },
+  );
+  assert.equal(fixture.calls.length, 1);
+});
+
+test("MB-UX-LIVE-001 L15 terminal provider restrictions and refusal are never retried", async (t) => {
+  let kind = 0;
+  const fixture = providerFixture(t, (body) => {
+    if (kind === 0)
+      return new Response("Unauthorized API key", { status: 503 });
+    if (kind === 1) return new Response("Insufficient credit", { status: 429 });
+    if (kind === 2) return new Response("Forbidden", { status: 403 });
+    return Response.json({
+      id: "refused",
+      model: body.model,
+      openrouter_metadata: {
+        is_byok: true,
+        endpoints: {
+          available: [
+            { selected: true, model: body.model, provider: "OpenAI" },
+          ],
+        },
+      },
+      choices: [{ finish_reason: "content_filter", message: { content: "" } }],
+      usage: {
+        prompt_tokens: 1,
+        completion_tokens: 1,
+        cost: 0,
+        cost_details: { upstream_inference_cost: 0 },
+      },
+    });
+  });
+  for (kind = 0; kind < 4; kind++) {
+    await assert.rejects(
+      runLiveCompletion(
+        request,
+        { phase: "synthesis", loop: 1 },
+        { automatic_recovery_attempts: 3, before_call: async () => {} },
+      ),
+    );
+  }
+  assert.equal(fixture.calls.length, 4);
+});
+
+test("MB-UX-LIVE-001 L15 cancelling a scheduled retry prevents another paid call", async (t) => {
+  const fixture = providerFixture(
+    t,
+    () => new Response("Unavailable", { status: 503 }),
+  );
+  const controller = new AbortController();
+  await assert.rejects(
+    runLiveCompletion(
+      request,
+      { phase: "synthesis", loop: 1 },
+      {
+        automatic_recovery_attempts: 3,
+        before_call: async () => {},
+        signal: controller.signal,
+        on_checkpoint: (event) => {
+          if (event.state === "failed") controller.abort();
+        },
+      },
+    ),
+  );
+  assert.equal(fixture.calls.length, 1);
+  const waiting = new AbortController();
+  const promise = waitForLiveRecovery({ signal: waiting.signal }, 1);
+  waiting.abort();
+  await assert.rejects(promise);
+});
 
 test("MB-UX-LIVE-001 L04 research deadlines are bounded and phase-specific without changing the provider wire format", async (t) => {
   const fixture = providerFixture(t);

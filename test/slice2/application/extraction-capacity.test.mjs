@@ -197,7 +197,7 @@ function fixture(t, dispatch) {
       },
       choices: [
         {
-          finish_reason: "stop",
+          finish_reason: payload?.__finish_reason ?? "stop",
           message: {
             content:
               typeof payload === "string" ? payload : JSON.stringify(payload),
@@ -744,4 +744,152 @@ test("MB-UX-LIVE-001 L05 conflicting shared source types cannot promote earlier 
       }
     }
   }
+});
+
+test("MB-UX-LIVE-001 L15 splits only the truncated supplier group and retains completed siblings", async (t) => {
+  const data = dataset(6),
+    events = [],
+    assigned = [];
+  const calls = fixture(t, (body) => {
+    if (schemaName(body) === INDEX) return data.index;
+    const names = input(body).assigned_candidate_names;
+    assigned.push(names);
+    if (names.length === 5) return { __finish_reason: "length" };
+    return data.batch(names);
+  });
+  const result = await extractNativeDiscoveryPayload(
+    data.native,
+    "openai/gpt-5.2",
+    context,
+    {
+      automatic_recovery_attempts: 3,
+      before_call: async () => {},
+      max_output_tokens: 12000,
+      on_checkpoint: (event) => events.push(event),
+    },
+  );
+  assert.equal(result.parsed.candidates.length, 6);
+  assert.equal(
+    assigned.filter((names) => names.includes(data.records[5].name)).length,
+    1,
+  );
+  assert.deepEqual(assigned.map((names) => names.length).sort(), [1, 2, 3, 5]);
+  assert.equal(calls.filter((body) => schemaName(body) === INDEX).length, 1);
+  assert.ok(calls.every((body) => !body.plugins));
+  assert.ok(
+    events.some(
+      (event) =>
+        event.phase.endsWith("recovery") &&
+        /smaller groups/.test(event.message),
+    ),
+  );
+  assert.equal(
+    events.filter(
+      (event) => event.state === "failed" && event.finish_reason === "length",
+    ).length,
+    1,
+  );
+});
+
+test("MB-UX-LIVE-001 L15 schema repair stays within the assigned source scope", async (t) => {
+  const data = dataset(1),
+    requests = [];
+  let attempts = 0;
+  fixture(t, (body) => {
+    if (schemaName(body) === INDEX) return data.index;
+    requests.push(input(body));
+    return ++attempts === 1
+      ? { candidates: [] }
+      : data.batch(input(body).assigned_candidate_names);
+  });
+  const result = await extractNativeDiscoveryPayload(
+    data.native,
+    "openai/gpt-5.2",
+    context,
+    {
+      automatic_recovery_attempts: 3,
+      before_call: async () => {},
+    },
+  );
+  assert.equal(attempts, 2);
+  assert.equal(result.parsed.candidates.length, 1);
+  assert.deepEqual(
+    requests[0].assigned_candidate_sources,
+    requests[1].assigned_candidate_sources,
+  );
+  assert.deepEqual(
+    requests[0].buyer_mandatory_criteria,
+    requests[1].buyer_mandatory_criteria,
+  );
+});
+
+test("MB-UX-LIVE-001 L15 a repeatedly truncated singleton cannot erase a successful group", async (t) => {
+  const data = dataset(2);
+  let failures = 0;
+  fixture(t, (body) => {
+    if (schemaName(body) === INDEX) return data.index;
+    const names = input(body).assigned_candidate_names;
+    if (names[0] === data.records[0].name) {
+      failures++;
+      return { __finish_reason: "length" };
+    }
+    return data.batch(names);
+  });
+  const result = await extractNativeDiscoveryPayload(
+    data.native,
+    "openai/gpt-5.2",
+    context,
+    {
+      extraction_batch_size: 1,
+      automatic_recovery_attempts: 3,
+      before_call: async () => {},
+    },
+  );
+  assert.equal(failures, 3);
+  assert.equal(result.parsed.candidates.length, 1);
+  assert.equal(result.parsed.candidates[0].legal_name, data.records[1].name);
+  assert.equal(result.parsed.evidence_exhausted, false);
+  assert.ok(
+    result.parsed.remaining_gaps.some(
+      (gap) =>
+        gap.includes("Partial extraction coverage") &&
+        gap.includes(data.records[0].name),
+    ),
+  );
+});
+
+test("MB-UX-LIVE-001 L15 a legacy approval preserves good groups without silently authorizing another call", async (t) => {
+  const data = dataset(6);
+  let count = 0;
+  fixture(t, (body) => {
+    if (schemaName(body) === INDEX) return data.index;
+    count++;
+    const names = input(body).assigned_candidate_names;
+    return names.length === 5
+      ? { __finish_reason: "length" }
+      : data.batch(names);
+  });
+  const result = await extractNativeDiscoveryPayload(
+    data.native,
+    "openai/gpt-5.2",
+    context,
+  );
+  assert.equal(count, 2);
+  assert.equal(result.parsed.candidates.length, 1);
+  assert.ok(
+    result.parsed.remaining_gaps.some((gap) =>
+      gap.includes("Partial extraction coverage"),
+    ),
+  );
+});
+
+test("MB-UX-LIVE-001 L15 all failed groups never publish a fabricated empty success", async (t) => {
+  const data = dataset(1);
+  fixture(t, (body) =>
+    schemaName(body) === INDEX ? data.index : { __finish_reason: "length" },
+  );
+  await assert.rejects(
+    extractNativeDiscoveryPayload(data.native, "openai/gpt-5.2", context),
+    /MB-422-LIVE-OUTPUT-LIMIT/,
+  );
 });

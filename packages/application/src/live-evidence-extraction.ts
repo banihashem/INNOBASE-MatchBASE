@@ -1,6 +1,8 @@
 import {
   LiveResearchError,
   runLiveCompletion,
+  waitForLiveRecovery,
+  withLiveStageBudget,
   type LiveCallOptions,
   type LiveResearchCheckpoint,
   type OpenRouterCompletionResult,
@@ -24,8 +26,57 @@ import {
   type NativeIndexDiagnostics,
 } from "./native-candidate-index.js";
 import { candidateSourceCitations } from "./research-source-context.js";
+import { randomUUID } from "node:crypto";
 import { normalizeResearchGaps } from "./research-gap-normalizer.js";
 
+// Only recover output/transport defects. Authorization, BYOK, cancellation and
+// persistence failures must never be converted into a partial success.
+export function recoverableExtractionFailure(error: unknown): boolean {
+  return (
+    error instanceof LiveResearchError &&
+    ([
+      "MB-422-LIVE-OUTPUT-LIMIT",
+      "MB-422-LIVE-SCHEMA",
+      "MB-422-LIVE-JSON",
+      "MB-422-LIVE-EXTRACTION-SCOPE",
+      "MB-422-LIVE-INDEX",
+    ].includes(error.code) ||
+      (error.retryable &&
+        [
+          "MB-503-LIVE-TRANSPORT",
+          "MB-502-LIVE-PROVIDER",
+          "MB-502-LIVE-RESPONSE",
+        ].includes(error.code)))
+  );
+}
+async function recoveryProgress(
+  options: LiveCallOptions,
+  context: ExtractionContext,
+  message: string,
+) {
+  options.signal?.throwIfAborted();
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  await options.on_checkpoint?.({
+    checkpoint_id: id,
+    request_id: id,
+    phase: `${context.phase}_extraction_recovery`,
+    stage: "extraction_recovery",
+    loop: context.loop,
+    max_loops: context.max_loops,
+    state: "completed",
+    dispatched: false,
+    message,
+    requested_model: "local-recovery",
+    model: "local-recovery",
+    request_hash: "",
+    started_at: now,
+    completed_at: now,
+    native_web: false,
+    reasoning_effort: "unsupported",
+    evidence_urls: [],
+  });
+}
 const MAX_BATCH_CANDIDATES = 5;
 const EXTRACTION_TIMEOUT_MS = 600000;
 const indexSchema = objectSchema({
@@ -189,7 +240,7 @@ async function extractStructured<T>(
 }
 
 // The same bounded scope-index operation can be qualified against retained native evidence.
-export async function extractNativeCandidateScope(
+async function extractNativeCandidateScopeOnce(
   nativeCompletion: OpenRouterCompletionResult,
   model: string,
   context: ExtractionContext,
@@ -233,6 +284,44 @@ export async function extractNativeCandidateScope(
   );
 }
 
+export async function extractNativeCandidateScope(
+  nativeCompletion: OpenRouterCompletionResult,
+  model: string,
+  context: ExtractionContext,
+  options: LiveCallOptions = {},
+) {
+  const budget = withLiveStageBudget(options);
+  options = budget.options;
+  const attempts = options.before_call
+    ? Math.min(3, options.automatic_recovery_attempts ?? 1)
+    : 1;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await extractNativeCandidateScopeOnce(
+        nativeCompletion,
+        model,
+        context,
+        options,
+      );
+    } catch (error) {
+      if (
+        !recoverableExtractionFailure(error) ||
+        (error instanceof LiveResearchError && error.retryable) ||
+        attempt >= attempts ||
+        budget.remaining() <= 0 ||
+        options.signal?.aborted
+      )
+        throw error;
+      await recoveryProgress(
+        options,
+        context,
+        `Repairing the supplier index after an incomplete or invalid response. Attempt ${attempt + 1}; completed searches are retained.`,
+      );
+      await waitForLiveRecovery(options, attempt);
+    }
+  }
+}
+
 // MB-UX-LIVE-001 L05: scope rich extraction by candidate, preserving every completed call.
 export async function extractNativeDiscoveryPayload(
   nativeCompletion: OpenRouterCompletionResult,
@@ -266,12 +355,15 @@ export async function extractNativeDiscoveryPayload(
     0,
     context.candidate_limit ?? 40,
   );
-  for (
-    let offset = 0;
-    offset < scopedCandidates.length;
-    offset += MAX_BATCH_CANDIDATES
-  )
-    batches.push(scopedCandidates.slice(offset, offset + MAX_BATCH_CANDIDATES));
+  const batchSize = Math.max(
+    1,
+    Math.min(
+      MAX_BATCH_CANDIDATES,
+      options.extraction_batch_size ?? MAX_BATCH_CANDIDATES,
+    ),
+  );
+  for (let offset = 0; offset < scopedCandidates.length; offset += batchSize)
+    batches.push(scopedCandidates.slice(offset, offset + batchSize));
   if (!batches.length)
     return {
       results: [indexed.result],
@@ -288,107 +380,204 @@ export async function extractNativeDiscoveryPayload(
     ? AbortSignal.any([options.signal, cancellation.signal])
     : cancellation.signal;
   let firstFailure: unknown;
-  const settled = await Promise.allSettled(
-    batches.map(async (batch, batchIndex) => {
-      let release: (() => void) | undefined;
-      try {
-        release = await acquireBatchSlot(signal);
-        if (signal.aborted) throw cancelledBatch();
-        const names = batch.map((item) => item.legal_name);
-        const assignments = batch.map((candidate) => ({
-          legal_name: candidate.legal_name,
-          source_urls: candidateSourceCitations(
-            candidate,
-            nativeCompletion.citations ?? [],
-          ).map((source) => source.url),
-        }));
-        const batchUrls = new Set(
-          assignments.flatMap((item) => item.source_urls),
-        );
-        const selectedCitations = nativeCitations.filter((citation) =>
-          batchUrls.has(citation.url),
-        );
-        const properties = LIVE_DISCOVERY_SCHEMA.properties as Record<
-          string,
-          JsonSchema
-        >;
-        const batchSchema = {
-          ...LIVE_DISCOVERY_SCHEMA,
-          properties: {
-            ...properties,
-            candidates: {
-              ...properties.candidates,
-              minItems: batch.length,
-              maxItems: batch.length,
-              items: {
-                ...(properties.candidates!.items as JsonSchema),
-                properties: {
-                  ...((properties.candidates!.items as JsonSchema)
-                    .properties as Record<string, JsonSchema>),
-                  legal_name: { type: "string", enum: names },
-                },
+  const failedResults: OpenRouterCompletionResult[] = [];
+  const unfinished: string[] = [];
+  let firstIncompleteFailure: unknown;
+  const maxAttempts = options.before_call
+    ? Math.min(3, options.automatic_recovery_attempts ?? 1)
+    : 1;
+  type BatchOutput = {
+    result: OpenRouterCompletionResult;
+    parsed: LiveDiscoveryPayload;
+  };
+  const runBatch = async (
+    batch: CandidateIndex["candidates"],
+    batchIndex: number,
+    attempt = 1,
+  ): Promise<BatchOutput[]> => {
+    const budget = withLiveStageBudget({
+      ...options,
+      automatic_recovery_attempts: Math.max(1, maxAttempts - attempt + 1),
+    });
+    let release: (() => void) | undefined;
+    try {
+      release = await acquireBatchSlot(signal);
+      if (signal.aborted) throw cancelledBatch();
+      const names = batch.map((item) => item.legal_name);
+      const assignments = batch.map((candidate) => ({
+        legal_name: candidate.legal_name,
+        source_urls: candidateSourceCitations(
+          candidate,
+          nativeCompletion.citations ?? [],
+        ).map((source) => source.url),
+      }));
+      const batchUrls = new Set(
+        assignments.flatMap((item) => item.source_urls),
+      );
+      const selectedCitations = nativeCitations.filter((citation) =>
+        batchUrls.has(citation.url),
+      );
+      const properties = LIVE_DISCOVERY_SCHEMA.properties as Record<
+        string,
+        JsonSchema
+      >;
+      const batchSchema = {
+        ...LIVE_DISCOVERY_SCHEMA,
+        properties: {
+          ...properties,
+          candidates: {
+            ...properties.candidates,
+            minItems: batch.length,
+            maxItems: batch.length,
+            items: {
+              ...(properties.candidates!.items as JsonSchema),
+              properties: {
+                ...((properties.candidates!.items as JsonSchema)
+                  .properties as Record<string, JsonSchema>),
+                legal_name: { type: "string", enum: names },
               },
             },
           },
-        };
-        return await extractStructured<LiveDiscoveryPayload>(
-          model,
-          `${context.phase}_extraction_batch`,
-          context,
-          `${extractionPolicy}\n${LIVE_FACT_FIELD_INSTRUCTIONS}\nReturn exactly one full-schema candidate record for each assigned_candidate_names entry, using that exact legal_name; no additional or duplicate candidates. The names and anchors only delimit this batch, never prove identity or facts. Read supplied page content directly: source quotations override research paraphrases. For each company use only its assigned_candidate_sources; never transfer another seller's product, price or contact to it. A manufacturer's datasheet alone does not establish a reseller's offering. Extract every published email, telephone, product specification, price, currency and stock limitation before marking those fields unknown. Distinguish a published listing price from an RFQ or stock commitment. Preserve every supported detail and all mandatory criteria; keep unknown fields unknown with empty proofs. Include only evidence relevant to this batch.`,
-          {
-            buyer_mandatory_criteria: baseInput.buyer_mandatory_criteria,
-            native_citations: selectedCitations,
-            assigned_candidate_sources: assignments,
-            assigned_candidate_names: names,
-            batch_index: batchIndex + 1,
-            batch_count: batches.length,
-          },
-          "matchbase_native_evidence_extraction",
-          batchSchema,
-          24000,
-          {
-            ...options,
-            signal,
-            on_checkpoint: async (checkpoint) =>
-              options.on_checkpoint?.({
-                ...checkpoint,
-                message: `${checkpoint.message} Batch ${batchIndex + 1} of ${batches.length}.`,
-              }),
-          },
-          (payload) => {
-            const actualNames = payload.candidates.map(
-              (candidate) => candidate.legal_name,
+        },
+      };
+      const output = await extractStructured<LiveDiscoveryPayload>(
+        model,
+        `${context.phase}_extraction_batch`,
+        context,
+        `${extractionPolicy}\n${LIVE_FACT_FIELD_INSTRUCTIONS}\nReturn exactly one full-schema candidate record for each assigned_candidate_names entry, using that exact legal_name; no additional or duplicate candidates. The names and anchors only delimit this batch, never prove identity or facts. Read supplied page content directly: source quotations override research paraphrases. For each company use only its assigned_candidate_sources; never transfer another seller's product, price or contact to it. A manufacturer's datasheet alone does not establish a reseller's offering. Extract every published email, telephone, product specification, price, currency and stock limitation before marking those fields unknown. Distinguish a published listing price from an RFQ or stock commitment. Preserve every supported detail and all mandatory criteria; keep unknown fields unknown with empty proofs. Include only evidence relevant to this batch.`,
+        {
+          buyer_mandatory_criteria: baseInput.buyer_mandatory_criteria,
+          native_citations: selectedCitations,
+          assigned_candidate_sources: assignments,
+          assigned_candidate_names: names,
+          batch_index: batchIndex + 1,
+          batch_count: batches.length,
+        },
+        "matchbase_native_evidence_extraction",
+        batchSchema,
+        24000,
+        {
+          ...budget.options,
+          signal,
+          on_checkpoint: async (checkpoint) =>
+            options.on_checkpoint?.({
+              ...checkpoint,
+              message: `${checkpoint.message} Batch ${batchIndex + 1} of ${batches.length}; ${batch.length} supplier(s), attempt ${attempt}.`,
+            }),
+        },
+        (payload) => {
+          const actualNames = payload.candidates.map(
+            (candidate) => candidate.legal_name,
+          );
+          if (
+            actualNames.length !== names.length ||
+            new Set(actualNames).size !== actualNames.length ||
+            names.some((name) => !actualNames.includes(name))
+          )
+            throw new LiveResearchError(
+              "MB-422-LIVE-EXTRACTION-SCOPE",
+              "Candidate extraction did not preserve its exact assigned roster.",
             );
-            if (
-              actualNames.length !== names.length ||
-              new Set(actualNames).size !== actualNames.length ||
-              names.some((name) => !actualNames.includes(name))
-            )
-              throw new LiveResearchError(
-                "MB-422-LIVE-EXTRACTION-SCOPE",
-                "Candidate extraction did not preserve its exact assigned roster.",
-              );
-            return payload;
-          },
+          return payload;
+        },
+      );
+      return [output];
+    } catch (error) {
+      release?.();
+      release = undefined;
+      if (signal.aborted) throw error;
+      if (error instanceof LiveResearchError && error.audited_response)
+        failedResults.push(error.audited_response);
+      if (
+        recoverableExtractionFailure(error) &&
+        !(error instanceof LiveResearchError && error.retryable) &&
+        attempt < maxAttempts &&
+        budget.remaining() > 0
+      ) {
+        const split = batch.length > 1;
+        await recoveryProgress(
+          options,
+          context,
+          split
+            ? `A supplier-details response was incomplete. Retrying this group as smaller groups; completed groups and searches are retained. Attempt ${attempt + 1}.`
+            : `Repairing the remaining supplier-details response. Attempt ${attempt + 1}; completed groups are retained.`,
         );
-      } catch (error) {
-        if (firstFailure === undefined) {
-          firstFailure = error;
-          cancellation.abort();
-        }
-        throw error;
-      } finally {
-        release?.();
+        await waitForLiveRecovery({ ...options, signal }, attempt);
+        const groups = split
+          ? [
+              batch.slice(0, Math.ceil(batch.length / 2)),
+              batch.slice(Math.ceil(batch.length / 2)),
+            ]
+          : [batch];
+        const recovered: BatchOutput[] = [];
+        for (const group of groups)
+          recovered.push(
+            ...(await runBatch(
+              group,
+              batchIndex,
+              maxAttempts - budget.remaining() + 1,
+            )),
+          );
+        return recovered;
       }
-    }),
+      const allowanceEnded =
+        error instanceof LiveResearchError &&
+        ["MB-409-ROUND-ALLOWANCE", "MB-409-STAGE-ALLOWANCE"].includes(
+          error.code,
+        );
+      if (
+        (recoverableExtractionFailure(error) &&
+          (maxAttempts > 1 ||
+            (error instanceof LiveResearchError &&
+              error.code === "MB-422-LIVE-OUTPUT-LIMIT"))) ||
+        (allowanceEnded && maxAttempts > 1)
+      ) {
+        firstIncompleteFailure ??= error;
+        unfinished.push(...batch.map((item) => item.legal_name));
+        await recoveryProgress(
+          options,
+          context,
+          `The recovery allowance for ${batch.length} supplier detail record(s) is exhausted. Preserving completed groups and recording the missing coverage.`,
+        );
+        return [];
+      }
+      if (firstFailure === undefined) {
+        firstFailure = error;
+        cancellation.abort();
+      }
+      throw error;
+    } finally {
+      release?.();
+    }
+  };
+  const settled = await Promise.allSettled(
+    batches.map((batch, index) => runBatch(batch, index)),
   );
   if (firstFailure !== undefined) throw firstFailure;
+  if (options.signal?.aborted) throw cancelledBatch();
+  const rejected = settled.find((entry) => entry.status === "rejected");
+  if (rejected?.status === "rejected") throw rejected.reason;
   const outputs = settled.flatMap((entry) =>
-    entry.status === "fulfilled" ? [entry.value] : [],
+    entry.status === "fulfilled" ? entry.value : [],
   );
+  if (
+    !outputs.length &&
+    unfinished.length &&
+    maxAttempts <= 1 &&
+    firstIncompleteFailure
+  )
+    throw firstIncompleteFailure;
+  if (!outputs.length && unfinished.length)
+    throw new LiveResearchError(
+      "MB-422-LIVE-EXTRACTION-INCOMPLETE",
+      "No supplier detail group completed within the approved recovery allowance. Retained searches and successful operations remain saved.",
+    );
   return {
-    results: [indexed.result, ...outputs.map((output) => output.result)],
+    results: [
+      indexed.result,
+      ...failedResults,
+      ...outputs.map((output) => output.result),
+    ],
     parsed: {
       candidates: outputs.flatMap((output) => output.parsed.candidates),
       evidence: outputs.flatMap((output) => output.parsed.evidence),
@@ -396,6 +585,11 @@ export async function extractNativeDiscoveryPayload(
         [
           ...new Set([
             ...indexed.parsed.remaining_gaps,
+            ...(unfinished.length
+              ? [
+                  `Partial extraction coverage: supplier details remain incomplete for ${[...new Set(unfinished)].join("; ")}. Completed groups are retained; these missing records are not verified suppliers.`,
+                ]
+              : []),
             ...(scopedCandidates.length < indexed.parsed.candidates.length
               ? [
                   "Additional named leads were not extracted within this approved round allowance.",
@@ -407,6 +601,7 @@ export async function extractNativeDiscoveryPayload(
         40,
       ),
       evidence_exhausted:
+        unfinished.length === 0 &&
         indexed.parsed.evidence_exhausted &&
         outputs.every((output) => output.parsed.evidence_exhausted),
       summary: [

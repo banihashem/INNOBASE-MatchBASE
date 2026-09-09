@@ -183,6 +183,63 @@ export function generateConsultantLandscapeHtml(
     "methodology",
   );
 
+  if (output.price_research) {
+    const pricing = output.price_research;
+    const englishPriceText = (value: string | null | undefined): string =>
+      value && hasUntranslatedScript(value)
+        ? "Original-language detail retained at source"
+        : value || "Unknown / not evidenced";
+    for (
+      let offset = 0;
+      offset < Math.max(1, pricing.observations.length);
+      offset += 5
+    ) {
+      const group = pricing.observations.slice(offset, offset + 5);
+      section(
+        "Recent Public Price Research",
+        `<p>Search recorded at ${esc(pricing.searched_at)}. Search windows: ${esc(pricing.searched_windows_days.join(" then "))} days. ${pricing.status === "incomplete" ? "Price research is incomplete." : pricing.status === "no_recent_prices" ? "No usable recent public price was established." : "Source-dated price observations were found."}</p><p>Prices under seven days are preferred; the search broadens to under thirty days only if no usable seven-day price is established. Freshness is measured at the saved search time, not the time this PDF is opened. A public supplier listing is not a binding quotation; a market benchmark is not attributed to a supplier. Different products, grades, quantity scopes, currencies, units, routes or Incoterms must not be combined.</p>${list(pricing.limitations)}${group
+          .map(
+            (price) =>
+              `<h2>${price.provenance === "supplier_listing" ? "Public supplier listing" : "Market benchmark"}</h2>${rows(
+                [
+                  [
+                    "Supplier",
+                    price.provenance === "supplier_listing"
+                      ? englishPriceText(price.supplier_name)
+                      : "Not attributed to a supplier",
+                  ],
+                  [
+                    "Product / service",
+                    englishPriceText(price.product_or_service),
+                  ],
+                  [
+                    "Observed price",
+                    `${price.price_min}${price.price_max !== price.price_min ? ` - ${price.price_max}` : ""} ${englishPriceText(price.currency)} / ${englishPriceText(price.unit)}`,
+                  ],
+                  ["Quantity basis", englishPriceText(price.quantity_basis)],
+                  ["Route / market", englishPriceText(price.route_or_market)],
+                  ["Incoterm", englishPriceText(price.incoterm)],
+                  [
+                    price.date_basis === "published"
+                      ? "Source publication date"
+                      : "Price effective date",
+                    price.source_published_at,
+                  ],
+                  ["Validity end", price.valid_until],
+                  ["Age at search", `${price.age_days.toFixed(1)} days`],
+                  [
+                    "Relevance / limitations",
+                    englishPriceText(price.relevance_note),
+                  ],
+                ],
+              )}<p>${link(price.source_url, englishPriceText(price.source_title))}</p><p>${esc(englishPriceText(price.quote))}</p><p>${esc(englishPriceText(price.date_quote))}</p>`,
+          )
+          .join("")}`,
+        `recent-prices-${offset}`,
+      );
+    }
+  }
+
   for (let offset = 0; offset < Math.max(suppliers.length, 1); offset += 5) {
     const group = suppliers.slice(offset, offset + 5);
     section(

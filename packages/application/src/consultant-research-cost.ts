@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type {
   ResearchCostSummary,
   ResearchDepth,
+  ResearchTier,
   ResearchModelRate,
   ResearchRoundPlan,
 } from "@matchbase/contracts";
@@ -10,6 +11,7 @@ import { getConfiguredProviderRoute } from "./openrouter-byok-policy.js";
 import { normalizeResearchGaps } from "./research-gap-normalizer.js";
 import {
   getConfiguredLiveModels,
+  researchSearchEngineForModel,
   getOpenRouterApiKey,
   getOpenRouterModelCapabilities,
   type OpenRouterCompletionParams,
@@ -201,12 +203,6 @@ export async function currentResearchModelRate(
     );
   const provider = getConfiguredProviderRoute(model);
   const capabilities = await getOpenRouterModelCapabilities(model);
-  if (!capabilities.structured_outputs)
-    throw new ResearchRoundFault(
-      422,
-      "MB-422-MODEL-CAPABILITY",
-      "Select a model route with structured output support.",
-    );
   const response = await fetch(
     `https://openrouter.ai/api/v1/models/${model.split("/").map(encodeURIComponent).join("/")}/endpoints`,
     { signal: AbortSignal.timeout(15000), redirect: "error" },
@@ -250,6 +246,7 @@ export async function currentResearchModelRate(
     request_usd: maximum("request"),
     web_search_usd: maximum("web_search"),
     reasoning: capabilities.reasoning,
+    structured_outputs: capabilities.structured_outputs,
     source_url: `https://openrouter.ai/api/v1/models/${model}/endpoints`,
   };
 }
@@ -260,7 +257,8 @@ export async function researchModelChoices() {
       try {
         getConfiguredProviderRoute(m.id);
         return (
-          m.supported_parameters?.includes("structured_outputs") &&
+          (m.supported_parameters?.includes("max_tokens") ||
+            m.supported_parameters?.includes("max_completion_tokens")) &&
           !/:|image|audio/.test(m.id) &&
           (!m.architecture?.output_modalities ||
             m.architecture.output_modalities.every((x) => x === "text"))
@@ -278,16 +276,63 @@ export async function researchModelChoices() {
   const ids = [
     ...new Set([
       ...Object.values(configured),
+      ...["anthropic", "deepseek", "x-ai"].flatMap((family) =>
+        models
+          .filter((m) => m.id.startsWith(`${family}/`))
+          .slice(0, 4)
+          .map((m) => m.id),
+      ),
       ...models.slice(0, 10).map((m) => m.id),
     ]),
   ];
   const results = await Promise.allSettled(ids.map(currentResearchModelRate));
   return results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
 }
+/** Configuration visibility only; a configured route does not establish key health or pricing. */
+export function configuredResearchTierAvailability(): Record<
+  ResearchTier,
+  { configured: boolean; missing_families: string[] }
+> {
+  const models = getConfiguredLiveModels();
+  const configured = (model: string) => {
+    try {
+      getConfiguredProviderRoute(model);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const base = [
+    ["Google", models.lane_gemini],
+    ["OpenAI", models.lane_openai],
+  ]
+    .filter(([, model]) => !configured(model!))
+    .map(([name]) => name!);
+  const extras = [
+    ["Anthropic", "anthropic/claude"],
+    ["DeepSeek", "deepseek/model"],
+    ["Grok", "x-ai/grok"],
+  ]
+    .filter(([, model]) => !configured(model!))
+    .map(([name]) => name!);
+  const advanced = [
+    ...base,
+    ...(extras.length === 3 ? ["Anthropic, DeepSeek or Grok"] : []),
+  ];
+  return {
+    default: { configured: base.length === 0, missing_families: base },
+    advanced: { configured: advanced.length === 0, missing_families: advanced },
+    ultra: {
+      configured: base.length === 0 && extras.length === 0,
+      missing_families: [...base, ...extras],
+    },
+  };
+}
 export async function buildResearchRoundPlan(input: {
   round_number: number;
   depth: ResearchDepth;
   selected_model?: string;
+  research_tier?: ResearchTier;
   parent_round_id: string | null;
   request_hash: string;
   focus_requirements: string[];
@@ -299,15 +344,24 @@ export async function buildResearchRoundPlan(input: {
       "MB-409-ROUND-LIMIT",
       "Five research rounds are complete. No additional round is scheduled.",
     );
+  const tier = input.research_tier ?? "default";
+  if (!["default", "advanced", "ultra"].includes(tier))
+    throw new ResearchRoundFault(
+      422,
+      "MB-422-RESEARCH-TIER",
+      "Select a supported research tier.",
+    );
   const choices =
     input.mode === "demonstration" ? [] : await researchModelChoices();
   const configured = getConfiguredLiveModels();
-  const ordered = [...choices].sort(
-    (a, b) =>
-      a.input_usd_per_token +
-      a.output_usd_per_token -
-      (b.input_usd_per_token + b.output_usd_per_token),
-  );
+  const ordered = choices
+    .filter((c) => c.structured_outputs !== false)
+    .sort(
+      (a, b) =>
+        a.input_usd_per_token +
+        a.output_usd_per_token -
+        (b.input_usd_per_token + b.output_usd_per_token),
+    );
   const cheapest = ordered[0];
   const selected = input.selected_model
     ? choices.find((c) => c.model === input.selected_model)
@@ -327,11 +381,75 @@ export async function buildResearchRoundPlan(input: {
       "MB-422-REASONING-MODEL",
       "Thoughtful research requires an eligible reasoning model.",
     );
+  const requiredExtraFamilies =
+    tier === "ultra" ? ["anthropic", "deepseek", "x-ai"] : [];
   const research =
     input.round_number === 1
       ? [configured.lane_gemini, configured.lane_openai]
       : [selected?.model ?? "demonstration"];
-  const synthesis = selected?.model ?? "demonstration";
+  const qualityOrder = (a: ResearchModelRate, b: ResearchModelRate) =>
+    Number(b.reasoning) - Number(a.reasoning) ||
+    Number(b.structured_outputs !== false) -
+      Number(a.structured_outputs !== false) ||
+    Number(b.model === configured.synthesis) -
+      Number(a.model === configured.synthesis) ||
+    a.input_usd_per_token +
+      a.output_usd_per_token -
+      (b.input_usd_per_token + b.output_usd_per_token) ||
+    a.model.localeCompare(b.model);
+  const ranked = [...choices].sort(qualityOrder);
+  if (input.round_number === 1 && tier !== "default") {
+    if (input.mode === "demonstration") {
+      research.push(
+        ...(tier === "ultra"
+          ? [
+              "anthropic/demonstration",
+              "deepseek/demonstration",
+              "x-ai/demonstration",
+            ]
+          : ["anthropic/demonstration"]),
+      );
+    } else if (tier === "advanced") {
+      const extra = ranked.find((r) =>
+        /^(anthropic|deepseek|x-ai)\//.test(r.model),
+      );
+      if (!extra)
+        throw new ResearchRoundFault(
+          422,
+          "MB-422-RESEARCH-TIER-UNAVAILABLE",
+          "Advanced research needs a priced, explicitly configured Anthropic, DeepSeek or Grok BYOK route. No research has started.",
+        );
+      research.push(extra.model);
+    } else {
+      for (const family of requiredExtraFamilies) {
+        const extra = ranked.find((r) => r.model.startsWith(`${family}/`));
+        if (!extra)
+          throw new ResearchRoundFault(
+            422,
+            "MB-422-RESEARCH-TIER-UNAVAILABLE",
+            `Ultra research requires all five families. The ${family} family has no eligible priced, explicitly configured BYOK route. No reduced tier or research was started.`,
+          );
+        research.push(extra.model);
+      }
+    }
+  }
+  // Explicit application rubric, never presented as an OpenRouter recommendation.
+  const synthesisRate =
+    input.round_number === 1
+      ? ranked.find(
+          (r) =>
+            r.structured_outputs !== false &&
+            r.reasoning &&
+            (research.includes(r.model) || r.model === configured.synthesis),
+        )
+      : selected;
+  if (input.mode === "live" && input.round_number === 1 && !synthesisRate)
+    throw new ResearchRoundFault(
+      422,
+      "MB-422-REASONING-MODEL",
+      "This tier needs an eligible reasoning model with structured output for synthesis.",
+    );
+  const synthesis = synthesisRate?.model ?? "demonstration";
   // Evidence dossiers require source attribution and uncertainty reasoning.
   // Use the configured synthesis model for simple-round extraction instead of
   // selecting it solely by price; deep rounds retain the explicit model choice.
@@ -355,8 +473,22 @@ export async function buildResearchRoundPlan(input: {
     );
   const actualRates = rates as ResearchModelRate[];
   const native = input.round_number === 1;
+  const searchEngines = Object.fromEntries(
+    research.map((model) => [
+      model,
+      native ? researchSearchEngineForModel(model) : "exa",
+    ]),
+  ) as Record<string, "native" | "exa">;
+  const priceModel = research[0]!;
+  const priceCalls = 4;
+  const priceEngine = searchEngines[priceModel]!;
   const maxOutput = input.depth === "deep" ? 20000 : 12000;
-  const baseCalls = input.round_number === 1 ? 15 : 13;
+  const candidateLimit =
+    input.round_number === 1 ? Math.ceil(20 / research.length) : 20;
+  const baseCalls =
+    (input.round_number === 1
+      ? research.length * (2 + Math.ceil(candidateLimit / 2)) + 1
+      : 13) + priceCalls;
   const recoveryReserve = 6;
   const calls = baseCalls + recoveryReserve;
   const conservativeRetryRate = actualRates.length
@@ -372,15 +504,34 @@ export async function buildResearchRoundPlan(input: {
     : undefined;
   const ratesForCalls = [
     ...research.map((model) => actualRates.find((r) => r.model === model)),
-    ...Array.from({ length: baseCalls - research.length - 1 }, () =>
+    ...Array.from({ length: baseCalls - research.length - 3 }, () =>
       actualRates.find((r) => r.model === extraction),
+    ),
+    ...Array.from({ length: 2 }, () =>
+      actualRates.find((r) => r.model === priceModel),
     ),
     actualRates.find((r) => r.model === synthesis),
     ...Array.from({ length: recoveryReserve }, () => conservativeRetryRate),
   ];
-  const searchAllowance = native
-    ? Math.max(0.1, ...actualRates.map((r) => r.web_search_usd * 10))
-    : 0.04;
+  const webAllowance = (model: string, engine: "native" | "exa") =>
+    engine === "exa"
+      ? 0.007
+      : Math.max(
+          0.1,
+          (actualRates.find((r) => r.model === model)?.web_search_usd ?? 0) *
+            10,
+        );
+  const searchAllowance =
+    research.reduce(
+      (sum, model) => sum + webAllowance(model, searchEngines[model]!),
+      0,
+    ) +
+    2 * webAllowance(priceModel, priceEngine) +
+    recoveryReserve *
+      Math.max(
+        0.007,
+        ...research.map((model) => webAllowance(model, searchEngines[model]!)),
+      );
   const estimate = (high: boolean) =>
     input.mode === "demonstration"
       ? 0
@@ -396,9 +547,7 @@ export async function buildResearchRoundPlan(input: {
             0,
           ) *
             1.05 +
-            (research.length + recoveryReserve) *
-              searchAllowance *
-              (high ? 1 : 0.25),
+            searchAllowance * (high ? 1 : 0.25),
         );
   const now = new Date();
   const titles = [
@@ -421,14 +570,28 @@ export async function buildResearchRoundPlan(input: {
       version: "research-round.v1",
       round_number: input.round_number,
       depth: input.depth,
+      research_tier: tier,
       title: titles[input.round_number - 1]!,
-      purpose: purposes[input.round_number - 1]!,
+      purpose:
+        input.round_number === 1
+          ? `Discover up to 20 companies through ${research.length} approved search paths. Establish identity, relevant offerings and published contacts; disclose missing quotation requirements.`
+          : purposes[input.round_number - 1]!,
       focus_requirements: normalizeResearchGaps(input.focus_requirements),
       research_models: research,
       extraction_model: extraction,
       synthesis_model: synthesis,
       search_engine: native ? "native" : "exa",
-      candidate_limit_per_search: input.round_number === 1 ? 10 : 20,
+      search_engines: searchEngines,
+      synthesis_selection_reason:
+        "Application selection: structured output and reasoning capability, configured synthesis preference, then lower token price. This is not a provider recommendation or a benchmark claim.",
+      price_research: {
+        model: priceModel,
+        search_engine: priceEngine,
+        max_calls: priceCalls,
+        preferred_window_days: 7,
+        window_days: 30,
+      },
+      candidate_limit_per_search: candidateLimit,
       automatic_recovery_attempts: 3,
       extraction_batch_size: 2,
       recovery_call_reserve: recoveryReserve,
@@ -441,6 +604,8 @@ export async function buildResearchRoundPlan(input: {
       expires_at: new Date(now.getTime() + 15 * 60000).toISOString(),
       rates: actualRates,
       assumptions: [
+        "Dedicated price research includes a seven-day web pass and structured extraction; a thirty-day fallback and extraction are included only when the first pass has no usable sourced recent price. Four calls are reserved, with at most two web searches.",
+        "DeepSeek and later-round Exa search incurs an additional OpenRouter platform search charge (Exa Auto at USD0.007 per request including up to ten results; this plan limits results to eight), independent of BYOK model inference (OpenRouter web-search documentation checked 2026-09-09). Native search follows the explicitly selected model family; unsupported endpoints fail rather than silently switching engines.",
         "Evidence extraction uses the model named in this estimate; its actual configured rates are included. A more economical research choice does not silently downgrade source attribution to the cheapest model.",
         "Estimate in USD, not a guaranteed maximum or invoice.",
         "Range assumes 4,000 output tokens per call at the low end and the full approved output allowance at the high end; input volume varies.",
@@ -477,6 +642,18 @@ export function createRoundCallGuard(plan: ResearchRoundPlan) {
         "MB-409-ROUND-MODEL",
         "The model differs from the approved round.",
       );
+    if (web && plan.search_engines) {
+      const plugin = request.plugins?.find((entry) => entry.id === "web");
+      if (
+        plugin?.engine !== plan.search_engines[request.model] ||
+        (plugin?.engine === "exa" && (plugin.max_results ?? 5) > 8)
+      )
+        throw new ResearchRoundFault(
+          409,
+          "MB-409-ROUND-SEARCH-ENGINE",
+          "Search routing differs from the approved engine or result allowance. Review a new estimate.",
+        );
+    }
     const inputBytes =
       Buffer.byteLength(JSON.stringify(request.messages), "utf8") + 512;
     const synthesis =

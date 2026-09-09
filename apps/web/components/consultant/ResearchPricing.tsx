@@ -3,6 +3,7 @@ import type {
   EvidenceSourceV3,
   SupplierEntityV3,
   ClaimV3,
+  ResearchPriceSearchV3,
 } from "@matchbase/contracts";
 import {
   additionalPriceEvidence,
@@ -10,6 +11,10 @@ import {
   researchPriceGroups,
   supplierPrice,
 } from "./research-pricing";
+import {
+  RecentResearchPrices,
+  recentPriceObservations,
+} from "./RecentResearchPrices";
 
 function SourceLinks({ sources }: { sources: readonly EvidenceSourceV3[] }) {
   return (
@@ -43,19 +48,59 @@ export function SupplierPriceSummary({
   evidence,
   claims = [],
   detailed = false,
+  recentPrices,
 }: {
   supplier: SupplierEntityV3;
   evidence: readonly EvidenceSourceV3[];
   claims?: readonly ClaimV3[];
   detailed?: boolean;
+  recentPrices?: ResearchPriceSearchV3 | undefined;
 }) {
   const price = supplierPrice(supplier, evidence, claims);
   const c = supplier.commercial;
+  const recent = recentPriceObservations(recentPrices).filter(
+    (p) =>
+      p.provenance === "supplier_listing" &&
+      p.supplier_name?.trim().toLowerCase() ===
+        supplier.legal_name.trim().toLowerCase(),
+  );
   return (
     <div
       className="text-xs space-y-1 py-2"
       aria-label={`Price for ${supplier.legal_name}`}
     >
+      {recent.length > 0 && (
+        <div className="space-y-1">
+          <strong>Recent supplier listing</strong>
+          {recent.map((p) => (
+            <p key={p.observation_id}>
+              {formatPrice(
+                p.price_min,
+                p.price_max,
+                p.currency,
+                p.unit ?? undefined,
+              )}{" "}
+              · Price date: {p.source_published_at.slice(0, 10)} ·{" "}
+              <a
+                className="underline"
+                href={
+                  /^https?:\/\//i.test(p.source_url) ? p.source_url : undefined
+                }
+                target="_blank"
+                rel="noreferrer"
+              >
+                Source
+              </a>
+            </p>
+          ))}
+        </div>
+      )}
+      {recentPrices && !recent.length && (
+        <p>
+          No recent price is attributed to this supplier. Request-level market
+          evidence, when available, is shown separately.
+        </p>
+      )}
       <p>
         <strong>Price: </strong>
         {price
@@ -105,6 +150,14 @@ export function ResearchPricing({
       <h3 id="research-pricing-heading" className="font-semibold text-white">
         Research price range
       </h3>
+      {output.price_research && (
+        <RecentResearchPrices search={output.price_research} />
+      )}
+      {output.price_research && (
+        <h4 className="font-semibold pt-3 border-t border-slate-600">
+          Other retained supplier price indications
+        </h4>
+      )}
       <p className="text-sm">
         {count} of {output.supplier_candidates.length} supplier profiles have
         sourced prices. These are observed indications, not a current market

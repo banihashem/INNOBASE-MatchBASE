@@ -24,6 +24,7 @@ export interface OpenRouterCompletionParams {
     readonly id: string;
     readonly engine?: "native" | "exa";
     readonly max_results?: number;
+    readonly mode?: "auto";
   }[];
   readonly response_format?:
     | { readonly type: "json_object" }
@@ -201,6 +202,14 @@ export function getConfiguredLiveModels() {
       process.env.MATCHBASE_MODEL_SYNTHESIS?.trim() ||
       CANONICAL_MODELS.synthesis,
   };
+}
+/** Explicit plugin routing; DeepSeek uses the separately priced Exa service. */
+export function researchSearchEngineForModel(model: string): "native" | "exa" {
+  return /^(google\/gemini-|openai\/|anthropic\/claude-|x-ai\/grok-)/.test(
+    model,
+  )
+    ? "native"
+    : "exa";
 }
 let catalogCache:
   | {
@@ -964,11 +973,11 @@ async function runLiveCompletionAttempt(
     if (
       context.require_web &&
       options.web_engine !== "exa" &&
-      !/^(google\/gemini-|openai\/)/.test(request.model)
+      researchSearchEngineForModel(request.model) !== "native"
     )
       throw new LiveResearchError(
         "MB-422-MODEL-CAPABILITY",
-        "Discovery requires configured Gemini or OpenAI native web models.",
+        "The selected model family requires the explicitly approved Exa search engine.",
       );
     checkpoint = {
       ...checkpoint,
@@ -980,7 +989,23 @@ async function runLiveCompletionAttempt(
       byok_verification_source: "unverified",
       generation_metadata_attempts: 0,
     };
-    await options.before_call?.(request, Boolean(context.require_web));
+    await options.before_call?.(
+      context.require_web
+        ? {
+            ...request,
+            plugins: [
+              {
+                id: "web",
+                engine: options.web_engine ?? "native",
+                ...(options.web_engine === "exa"
+                  ? { max_results: 8, mode: "auto" as const }
+                  : {}),
+              },
+            ],
+          }
+        : request,
+      Boolean(context.require_web),
+    );
     checkpoint = { ...checkpoint, dispatched: true };
     await options.on_checkpoint?.(checkpoint);
     const callerSignals = [request.signal, options.signal].filter(
@@ -1011,7 +1036,9 @@ async function runLiveCompletionAttempt(
               {
                 id: "web",
                 engine: options.web_engine ?? "native",
-                ...(options.web_engine === "exa" ? { max_results: 8 } : {}),
+                ...(options.web_engine === "exa"
+                  ? { max_results: 8, mode: "auto" as const }
+                  : {}),
               },
             ],
           }

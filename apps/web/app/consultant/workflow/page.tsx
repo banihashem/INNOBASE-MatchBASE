@@ -2362,6 +2362,7 @@ export default function ConsultantWorkflowPage() {
           approvedRequest={output?.approved_request_snapshot}
           evidenceSources={output?.evidence_sources ?? []}
           claims={output?.claims ?? []}
+          recentPrices={output?.price_research}
           isOpen={isModalOpen}
           onClose={() => {
             setIsModalOpen(false);

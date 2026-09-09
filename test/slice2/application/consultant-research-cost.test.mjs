@@ -83,7 +83,7 @@ test("MB-UX-COST-001 each approval has a bounded allowance and no sixth round", 
   assert.equal(plan.automatic_recovery_attempts, 3);
   assert.equal(plan.extraction_batch_size, 2);
   assert.equal(plan.recovery_call_reserve, 6);
-  assert.equal(plan.max_calls, 19);
+  assert.equal(plan.max_calls, 23); // Includes four dedicated price-stage calls.
   const guard = createRoundCallGuard(plan);
   for (let i = 0; i < plan.max_calls - 1; i++)
     await guard({ model: "demonstration", messages: [], max_tokens: 1 }, false);
@@ -278,14 +278,14 @@ test("MB-UX-LIVE-001 L14 simple extraction uses the configured source-attributio
   };
   const { plan } = await buildResearchRoundPlan(input);
   assert.equal(plan.extraction_model, "openai/gpt-5.2");
-  assert.equal(plan.synthesis_model, "openai/gpt-5-nano");
+  assert.equal(plan.synthesis_model, "openai/gpt-5.2");
   assert.deepEqual(plan.focus_requirements, ["Missing seller identity"]);
   const extractionRate = plan.rates.find(
     (rate) => rate.model === plan.extraction_model,
   );
   assert.equal(extractionRate.input_usd_per_token, 0.00000175);
   assert.equal(extractionRate.output_usd_per_token, 0.000014);
-  const extractionCalls = plan.max_calls - plan.research_models.length - 1;
+  const extractionCalls = plan.max_calls - plan.research_models.length - 3;
   assert.ok(
     plan.estimated_high_usd >=
       extractionCalls *
@@ -313,4 +313,156 @@ test("MB-UX-LIVE-001 L14 simple extraction uses the configured source-attributio
   await assert.rejects(buildResearchRoundPlan(input), {
     code: "MB-503-MODEL-PRICING",
   });
+});
+
+test("MB-UX-DEV-004 L02 tiers preserve all required families, price engines and recent-price stages", async (t) => {
+  const values = {
+    MATCHBASE_OPENROUTER_API_KEY: randomUUID(),
+    MATCHBASE_PROVIDER_GOOGLE: "google-ai-studio",
+    MATCHBASE_PROVIDER_OPENAI: "openai",
+    MATCHBASE_MODEL_GEMINI: "google/gemini-3.8-flash",
+    MATCHBASE_MODEL_OPENAI: "openai/gpt-5.2",
+    MATCHBASE_MODEL_SYNTHESIS: "openai/gpt-5.2",
+    MATCHBASE_MODEL_PREPARATION: "openai/gpt-5.2",
+    MATCHBASE_PROVIDER_ROUTES: JSON.stringify({
+      anthropic: "anthropic",
+      deepseek: "novita",
+      "x-ai": "xai",
+    }),
+  };
+  const previous = Object.fromEntries(
+    Object.keys(values).map((key) => [key, process.env[key]]),
+  );
+  Object.assign(process.env, values);
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  const providers = {
+    google: "google-ai-studio",
+    openai: "openai",
+    anthropic: "anthropic",
+    deepseek: "novita",
+    "x-ai": "xai",
+  };
+  const ids = [
+    "google/gemini-3.8-flash",
+    "openai/gpt-5.2",
+    "anthropic/claude-sonnet-5",
+    "deepseek/deepseek-v4-flash",
+    "x-ai/grok-4.6",
+  ];
+  const parameters = (id) => [
+    "reasoning",
+    "max_tokens",
+    ...(id.startsWith("deepseek/") ? [] : ["structured_outputs"]),
+  ];
+  t.mock.method(globalThis, "fetch", async (target) => {
+    const url = String(target);
+    assert.ok(
+      !url.includes("chat/completions"),
+      "Quotes must never start a paid completion",
+    );
+    if (url.endsWith("/models/user"))
+      return Response.json({
+        data: ids.map((id) => ({
+          id,
+          supported_parameters: parameters(id),
+          pricing: { prompt: "0.000001", completion: "0.000002" },
+        })),
+      });
+    const id = decodeURIComponent(
+      new URL(url).pathname.split("/models/")[1].replace(/\/endpoints$/, ""),
+    );
+    return Response.json({
+      data: {
+        endpoints: [
+          {
+            tag: providers[id.split("/")[0]],
+            model_id: id,
+            supported_parameters: parameters(id),
+            pricing: {
+              prompt: "0.000001",
+              completion: "0.000002",
+              request: "0",
+              web_search: "0.01",
+            },
+          },
+        ],
+      },
+    });
+  });
+  const input = {
+    round_number: 1,
+    depth: "simple",
+    parent_round_id: null,
+    request_hash: "request",
+    focus_requirements: [],
+    mode: "live",
+  };
+  const { plan: standard } = await buildResearchRoundPlan(input);
+  const { plan: advanced } = await buildResearchRoundPlan({
+    ...input,
+    research_tier: "advanced",
+  });
+  const { plan: ultra } = await buildResearchRoundPlan({
+    ...input,
+    research_tier: "ultra",
+  });
+  assert.equal(standard.research_tier, "default");
+  assert.equal(standard.research_models.length, 2);
+  assert.equal(advanced.research_models.length, 3);
+  assert.deepEqual(
+    ultra.research_models.map((id) => id.split("/")[0]),
+    ["google", "openai", "anthropic", "deepseek", "x-ai"],
+  );
+  assert.equal(ultra.search_engines["deepseek/deepseek-v4-flash"], "exa");
+  assert.equal(ultra.search_engines["x-ai/grok-4.6"], "native");
+  assert.equal(
+    ultra.rates.find((r) => r.model.startsWith("deepseek/")).provider,
+    "novita",
+  );
+  assert.equal(ultra.synthesis_model, "openai/gpt-5.2");
+  assert.equal(ultra.price_research.max_calls, 4);
+  assert.equal(ultra.price_research.preferred_window_days, 7);
+  assert.equal(ultra.price_research.window_days, 30);
+  assert.deepEqual(
+    [standard.max_calls, advanced.max_calls, ultra.max_calls],
+    [25, 29, 31],
+  );
+  assert.ok(
+    ultra.estimated_high_usd > advanced.estimated_high_usd &&
+      advanced.estimated_high_usd > standard.estimated_high_usd,
+  );
+  const guard = createRoundCallGuard(ultra);
+  await assert.rejects(
+    guard(
+      {
+        model: "deepseek/deepseek-v4-flash",
+        messages: [],
+        plugins: [{ id: "web", engine: "native" }],
+      },
+      true,
+    ),
+    { code: "MB-409-ROUND-SEARCH-ENGINE" },
+  );
+  await guard(
+    {
+      model: "deepseek/deepseek-v4-flash",
+      messages: [],
+      plugins: [{ id: "web", engine: "exa", max_results: 8 }],
+    },
+    true,
+  );
+  process.env.MATCHBASE_PROVIDER_ROUTES = "{}";
+  await assert.rejects(
+    buildResearchRoundPlan({ ...input, research_tier: "advanced" }),
+    { code: "MB-422-RESEARCH-TIER-UNAVAILABLE" },
+  );
+  await assert.rejects(
+    buildResearchRoundPlan({ ...input, research_tier: "ultra" }),
+    { code: "MB-422-RESEARCH-TIER-UNAVAILABLE" },
+  );
 });

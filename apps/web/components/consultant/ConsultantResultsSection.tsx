@@ -243,6 +243,7 @@ export function ConsultantResultsSection({
                   supplier={supp}
                   evidence={output.evidence_sources}
                   claims={output.claims}
+                  recentPrices={output.price_research}
                 />
                 <p className="text-sm text-slate-300 mb-4">
                   {supp.assessment.positive_drivers.join("; ")}

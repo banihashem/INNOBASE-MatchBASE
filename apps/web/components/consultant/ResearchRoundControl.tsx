@@ -4,6 +4,7 @@ import type {
   ConsultantResearchOutputV3,
   ResearchCostSummary,
   ResearchDepth,
+  ResearchTier,
   ResearchModelRate,
   ResearchRoundPlan,
   ResearchRoundView,
@@ -20,6 +21,10 @@ type Overview = {
   costs: ResearchCostSummary;
   rounds: ResearchRoundView[];
   next_round: number;
+  research_tiers?: Record<
+    ResearchTier,
+    { configured: boolean; missing_families: string[] }
+  >;
 };
 type Quote = {
   quote_id: string;
@@ -43,6 +48,7 @@ export function ResearchRoundControl({
   const [quote, setQuote] = useState<Quote | null>(null);
   const [choices, setChoices] = useState<ResearchModelRate[]>([]);
   const [depth, setDepth] = useState<ResearchDepth>("simple");
+  const [researchTier, setResearchTier] = useState<ResearchTier>("default");
   const [model, setModel] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -141,6 +147,7 @@ export function ResearchRoundControl({
           action,
           run_id: runId,
           depth,
+          research_tier: researchTier,
           model,
           quote_id: quote?.quote_id,
         }),
@@ -348,6 +355,85 @@ export function ResearchRoundControl({
                       : "The previous attempt did not produce a report. Review the new estimate before starting another attempt."
                     : "The approved plan is saved. No new research round has started."}
               </p>
+              {next === 1 && (
+                <fieldset disabled={busy} className="space-y-3">
+                  <legend className="font-semibold">
+                    First-round research coverage
+                  </legend>
+                  <p className="text-sm text-slate-300">
+                    Choose how many independent AI models search the web. Review
+                    the selected models and total estimate before approving.
+                    More models add perspectives and cost; they do not guarantee
+                    more matches.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {(
+                      [
+                        ["default", "Default", "2 models", "Gemini + GPT"],
+                        [
+                          "advanced",
+                          "Advanced",
+                          "3 models",
+                          "Gemini + GPT + one of Claude, DeepSeek or Grok",
+                        ],
+                        [
+                          "ultra",
+                          "Ultra",
+                          "5 models",
+                          "Gemini + GPT + Claude + DeepSeek + Grok",
+                        ],
+                      ] as const
+                    ).map(([value, title, count, description]) => (
+                      <label
+                        key={value}
+                        className={`block cursor-pointer rounded-lg border p-4 ${researchTier === value ? "border-teal-300 bg-teal-950" : "border-slate-600 bg-slate-800"}`}
+                      >
+                        <span className="flex items-center gap-2 font-semibold">
+                          <input
+                            type="radio"
+                            name="research-coverage"
+                            value={value}
+                            disabled={
+                              overview.research_tiers?.[value]?.configured ===
+                              false
+                            }
+                            checked={researchTier === value}
+                            onChange={() => {
+                              setResearchTier(value);
+                              setQuote(null);
+                              setError("");
+                            }}
+                          />
+                          {title}
+                        </span>
+                        <span className="block mt-2 text-sm font-semibold">
+                          {count}
+                        </span>
+                        <span className="block mt-1 text-sm text-slate-300">
+                          {description}
+                        </span>
+                        {overview.research_tiers?.[value]?.configured ===
+                          false && (
+                          <span className="block mt-2 text-sm text-amber-200">
+                            Setup required:{" "}
+                            {overview.research_tiers[
+                              value
+                            ].missing_families.join(", ")}
+                            . No research will start for this option until its
+                            provider access is configured.
+                          </span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-sm text-slate-300">
+                    Every option includes recent-price research: first the last
+                    7 days, then the last 30 days if needed. Market benchmarks
+                    are labeled separately from supplier quotes. Missing current
+                    evidence is reported.
+                  </p>
+                </fieldset>
+              )}
               {next >= 2 && (
                 <div className="flex flex-wrap gap-4">
                   <label className="text-sm">
@@ -404,6 +490,17 @@ export function ResearchRoundControl({
                     Round {quote.plan.round_number} · {quote.plan.title}
                   </h4>
                   <p>{quote.plan.purpose}</p>
+                  {quote.plan.round_number === 1 && (
+                    <p className="text-sm font-semibold">
+                      {quote.plan.research_tier === "ultra"
+                        ? "Ultra"
+                        : quote.plan.research_tier === "advanced"
+                          ? "Advanced"
+                          : "Default"}
+                      {" · "}
+                      {quote.plan.research_models.length} web research models
+                    </p>
+                  )}
                   <p className="text-xl font-bold text-sky-200">
                     Estimated additional cost:{" "}
                     {money(quote.plan.estimated_low_usd)}–
@@ -423,8 +520,13 @@ export function ResearchRoundControl({
                         Selected models and search method
                       </summary>
                       <p className="mt-2">
-                        Search: {quote.plan.research_models.join(" + ")} ·{" "}
-                        {quote.plan.search_engine} web
+                        Search:{" "}
+                        {quote.plan.research_models
+                          .map(
+                            (m) =>
+                              `${m} (${quote.plan.search_engines?.[m] ?? quote.plan.search_engine})`,
+                          )
+                          .join(" + ")}
                         <br />
                         Analysis: {quote.plan.synthesis_model}
                         <br />

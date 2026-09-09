@@ -38,13 +38,25 @@ export function workflowLabel(state: string, stoppedByUser = false): string {
 }
 export function phaseLabel(phase: string, loop = 0): string {
   if (phase === "user_cancelled") return "Stopped by you";
+  if (phase.startsWith("price_research")) {
+    const window = phase.includes("30") ? "last 30 days" : "last 7 days";
+    return phase.includes("extraction")
+      ? `Checking price amounts, dates and sources · ${window}`
+      : `Searching supplier and market prices · ${window}`;
+  }
   const lane = phase.includes("gemini")
     ? "Gemini"
     : phase.includes("openai")
       ? "OpenAI"
-      : phase.includes("selected")
-        ? "Selected model"
-        : "";
+      : /anthropic|claude/.test(phase)
+        ? "Claude"
+        : phase.includes("deepseek")
+          ? "DeepSeek"
+          : /xai|grok/.test(phase)
+            ? "Grok"
+            : phase.includes("selected")
+              ? "Selected model"
+              : "";
   const scope = phase.startsWith("verification")
     ? `Verification round ${loop}`
     : lane;

@@ -6,6 +6,7 @@ import {
   researchRequestHash,
   summarizeResearchCosts,
   buildResearchRoundPlan,
+  configuredResearchTierAvailability,
   runNextConsultantWorkflowJob,
 } from "@matchbase/application";
 import {
@@ -95,6 +96,9 @@ export async function GET(req: Request) {
         }) => view,
       ),
       next_round: Math.max(0, ...completed.map((r) => r.round_number)) + 1,
+      ...(session.mode === "demonstration"
+        ? {}
+        : { research_tiers: configuredResearchTierAvailability() }),
       ...(output ? { output } : {}),
     });
   } catch (error) {
@@ -135,6 +139,17 @@ export async function POST(req: Request) {
         "MB-400-DEPTH",
         "Choose simple or deep research.",
       );
+    if (
+      body.research_tier !== undefined &&
+      body.research_tier !== "default" &&
+      body.research_tier !== "advanced" &&
+      body.research_tier !== "ultra"
+    )
+      throw new ResearchRoundFault(
+        400,
+        "MB-400-RESEARCH-TIER",
+        "Choose Default, Advanced or Ultra research.",
+      );
     const rounds = await listResearchRounds(pool, context.accountId, runId);
     const parent = rounds
       .filter((r) => r.status === "completed")
@@ -149,6 +164,7 @@ export async function POST(req: Request) {
     const { plan, choices } = await buildResearchRoundPlan({
       round_number: (parent?.round_number ?? 0) + 1,
       depth: body.depth,
+      research_tier: body.research_tier ?? "default",
       ...(typeof body.model === "string" && body.model
         ? { selected_model: body.model }
         : {}),

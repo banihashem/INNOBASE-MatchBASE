@@ -355,3 +355,58 @@ test("MB-UX-LIVE-001 L13 existing English reports retain exact findings and acce
   assert.ok(html.includes("S\u00e3o Paulo Equipment"));
   assert.ok(!html.includes("English presentation reconstructed"));
 });
+
+test("L02 recent prices remain source-dated and distinguish benchmarks in the English report", () => {
+  const output = {
+    ...GOLDEN_SCENARIO_V3_01,
+    price_research: {
+      searched_at: "2026-09-09T12:00:00.000Z",
+      status: "prices_found" as const,
+      searched_windows_days: [7],
+      limitations: [],
+      observations: [
+        {
+          observation_id: "price-1",
+          provenance: "market_benchmark" as const,
+          supplier_name: null,
+          source_url: "https://prices.example.com/rice",
+          source_title: "Public market report",
+          quote: "Grade A rice benchmark 500 USD / MT.",
+          date_quote: "Published 2026-09-08.",
+          price_min: 500,
+          price_max: 500,
+          currency: "USD",
+          unit: "MT",
+          product_or_service: "Grade A rice",
+          quantity_basis: null,
+          route_or_market: "India",
+          incoterm: "FOB",
+          source_published_at: "2026-09-08T00:00:00.000Z",
+          source_date_text: "2026-09-08",
+          valid_until: null,
+          date_basis: "published" as const,
+          age_days: 1.5,
+          recency: "under_7_days" as const,
+          relevance_note: "Confirm grade and shipping scope.",
+        },
+      ],
+    },
+  };
+  const html = generateConsultantLandscapeHtml(output);
+  assert.match(html, /Recent Public Price Research/);
+  assert.match(html, /Market benchmark/);
+  assert.match(html, /Not attributed to a supplier/);
+  assert.match(html, /2026-09-08T00:00:00.000Z/);
+  assert.match(html, /500 USD \/ MT/);
+  assert.match(html, /not the time this PDF is opened/);
+  const absent = generateConsultantLandscapeHtml({
+    ...output,
+    price_research: {
+      ...output.price_research,
+      status: "no_recent_prices",
+      observations: [],
+    },
+  });
+  assert.match(absent, /No usable recent public price was established/);
+  assert.ok(absent.includes(output.supplier_candidates[0]!.legal_name));
+});

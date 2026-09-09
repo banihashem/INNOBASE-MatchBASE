@@ -35,6 +35,7 @@ export * from "./v3/requirement-fidelity.js";
 export * from "./v3/approved-request.js";
 export type {
   ResearchDepth,
+  ResearchTier,
   ResearchModelRate,
   ResearchRoundPlan,
   ResearchRoundView,

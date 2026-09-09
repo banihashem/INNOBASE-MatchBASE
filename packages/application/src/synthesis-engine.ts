@@ -263,6 +263,7 @@ export function synthesizeConsultantOutputV3(
     supplier_candidates: candidates,
     claims,
     evidence_sources: evidence,
+    ...(result.price_research ? { price_research: result.price_research } : {}),
     telemetry: {
       lanes_executed: isLive
         ? [...new Set(result.executed_models ?? ["lane_gemini", "lane_openai"])]

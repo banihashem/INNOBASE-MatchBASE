@@ -82,7 +82,7 @@ export function WorkflowActivity({
       : awaiting
         ? workflowLabel(state)
         : ready
-          ? "Your supplier results are ready"
+          ? "Your research results are ready"
           : runningSteps.length > 1
             ? "Research steps are running in parallel"
             : phaseLabel(
@@ -234,7 +234,7 @@ export function WorkflowActivity({
                   ? "Your research plan is approved. Review the recorded spend and get a cost estimate below. Research starts only after you approve that estimate."
                   : "Review the editable text below to continue. Research waits for your approval."
                 : ready
-                  ? "Open any supplier for the full evidence and contact details. Download the report from the results section."
+                  ? "Review the available supplier and price findings, including any gaps. Download the report from the results section."
                   : initialInterpretation
                     ? "Your saved request is being interpreted in English. Keep this page open until the interpretation is ready for review."
                     : "The server is processing your saved request. You can leave this page and return from Dashboard; reopening it does not start another research execution."}

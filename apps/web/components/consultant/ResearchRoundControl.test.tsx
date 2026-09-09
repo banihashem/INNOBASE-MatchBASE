@@ -267,3 +267,94 @@ it("DEV-004 keeps the spend visible and optional further research secondary afte
     screen.getByRole("button", { name: /Get cost estimate/ }),
   ).toBeVisible();
 });
+
+it("DEV004 L02 binds coverage to its estimate and invalidates approval when coverage changes", async () => {
+  const requests: Record<string, unknown>[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url: string, options?: RequestInit) => {
+      if (!options?.body)
+        return Response.json({ costs, rounds: [], next_round: 1 });
+      const body = JSON.parse(String(options.body));
+      requests.push(body);
+      return Response.json({
+        quote_id: "tier-quote",
+        plan: {
+          ...plan,
+          research_tier: body.research_tier,
+          research_models:
+            body.research_tier === "ultra"
+              ? [
+                  "google/gemini",
+                  "openai/gpt",
+                  "anthropic/claude",
+                  "deepseek/model",
+                  "x-ai/grok",
+                ]
+              : plan.research_models,
+        },
+        choices: [],
+      });
+    }),
+  );
+  render(
+    <ResearchRoundControl
+      runId="run"
+      workflowState="prep_step3_prompt_approved"
+      onStarted={vi.fn()}
+      onPreview={vi.fn()}
+    />,
+  );
+  expect(await screen.findByRole("radio", { name: /^Default/ })).toBeChecked();
+  fireEvent.click(screen.getByRole("radio", { name: /^Ultra/ }));
+  expect(requests).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: /Get cost estimate/ }));
+  await screen.findByRole("button", {
+    name: "Approve cost estimate & start round 1",
+  });
+  expect(requests[0]?.research_tier).toBe("ultra");
+  expect(screen.getByText(/Ultra · 5 web research models/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("radio", { name: /^Advanced/ }));
+  expect(
+    screen.queryByRole("button", {
+      name: "Approve cost estimate & start round 1",
+    }),
+  ).not.toBeInTheDocument();
+  expect(requests).toHaveLength(1);
+});
+
+it("DEV004 L02 exposes missing provider setup before selecting unavailable coverage", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        costs,
+        rounds: [],
+        next_round: 1,
+        research_tiers: {
+          default: { configured: true, missing_families: [] },
+          advanced: {
+            configured: false,
+            missing_families: ["Anthropic, DeepSeek or Grok"],
+          },
+          ultra: {
+            configured: false,
+            missing_families: ["Anthropic", "DeepSeek", "Grok"],
+          },
+        },
+      }),
+    ),
+  );
+  render(
+    <ResearchRoundControl
+      runId="run"
+      workflowState="prep_step3_prompt_approved"
+      onStarted={vi.fn()}
+      onPreview={vi.fn()}
+    />,
+  );
+  expect(await screen.findByRole("radio", { name: /^Default/ })).toBeEnabled();
+  expect(screen.getByRole("radio", { name: /^Ultra/ })).toBeDisabled();
+  expect(screen.getByRole("radio", { name: /^Advanced/ })).toBeDisabled();
+  expect(screen.getAllByText(/Setup required:/)).toHaveLength(2);
+});

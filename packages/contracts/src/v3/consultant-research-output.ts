@@ -284,7 +284,40 @@ export interface PublicSocialCheckV3 {
   readonly checked_at: string;
   readonly limitation: string;
 }
+/** Public price observations remain separate from supplier-specific quotations. */
+export interface ResearchPriceObservationV3 {
+  readonly observation_id: string;
+  readonly provenance: "supplier_listing" | "market_benchmark";
+  readonly supplier_name: string | null;
+  readonly source_url: string;
+  readonly source_title: string;
+  readonly quote: string;
+  readonly date_quote: string;
+  readonly price_min: number;
+  readonly price_max: number;
+  readonly currency: string;
+  readonly unit: string | null;
+  readonly product_or_service: string;
+  readonly route_or_market: string | null;
+  readonly quantity_basis: string | null;
+  readonly incoterm: string | null;
+  readonly source_published_at: string;
+  readonly source_date_text: string;
+  readonly valid_until: string | null;
+  readonly date_basis: "published" | "price_effective";
+  readonly age_days: number;
+  readonly recency: "under_7_days" | "under_30_days";
+  readonly relevance_note: string;
+}
+export interface ResearchPriceSearchV3 {
+  readonly searched_at: string;
+  readonly status: "prices_found" | "no_recent_prices" | "incomplete";
+  readonly searched_windows_days: readonly number[];
+  readonly observations: readonly ResearchPriceObservationV3[];
+  readonly limitations: readonly string[];
+}
 export interface ConsultantResearchOutputV3 extends FourIdTrace {
+  readonly price_research?: ResearchPriceSearchV3;
   readonly public_social_checks?: readonly PublicSocialCheckV3[];
   readonly approved_request_snapshot?: ApprovedRequestSnapshotV3;
   readonly schema_version: typeof CONSULTANT_RESEARCH_OUTPUT_V3_SCHEMA_VERSION;
@@ -398,6 +431,128 @@ export function parseConsultantResearchOutputV3(
     if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 100)
       throw new Error(`${path} must be a finite score between 0 and 100.`);
   };
+  if (root.price_research !== undefined) {
+    const pricing = object(root.price_research, "price_research");
+    string(pricing.searched_at, "price_research.searched_at");
+    const asOf = Date.parse(String(pricing.searched_at));
+    if (!Number.isFinite(asOf)) throw new Error("Invalid price search date.");
+    if (
+      !["prices_found", "no_recent_prices", "incomplete"].includes(
+        String(pricing.status),
+      )
+    )
+      throw new Error("Invalid price search status.");
+    const windows = array(
+      pricing.searched_windows_days,
+      "price_research.searched_windows_days",
+    );
+    if (
+      windows.length > 2 ||
+      windows.some((value, index) => value !== (index === 0 ? 7 : 30))
+    )
+      throw new Error("Invalid price search window sequence.");
+    strings(pricing.limitations, "price_research.limitations");
+    const observations = array(
+      pricing.observations,
+      "price_research.observations",
+    );
+    if (
+      observations.length > 20 ||
+      (pricing.status === "prices_found" && observations.length === 0) ||
+      (pricing.status === "no_recent_prices" && observations.length > 0)
+    )
+      throw new Error("Price search status conflicts with its observations.");
+    const ids = new Set<string>();
+    for (const value of observations) {
+      const price = object(value, "price observation");
+      for (const key of [
+        "observation_id",
+        "source_url",
+        "source_title",
+        "quote",
+        "date_quote",
+        "currency",
+        "product_or_service",
+        "source_published_at",
+        "source_date_text",
+        "relevance_note",
+      ])
+        string(price[key], `price.${key}`);
+      if (ids.has(String(price.observation_id)))
+        throw new Error("Duplicate price observation.");
+      ids.add(String(price.observation_id));
+      if (!/^https?:\/\//i.test(String(price.source_url)))
+        throw new Error("Price source requires HTTP(S).");
+      for (const key of [
+        "supplier_name",
+        "quantity_basis",
+        "unit",
+        "route_or_market",
+        "incoterm",
+        "valid_until",
+      ])
+        if (price[key] !== null) string(price[key], `price.${key}`);
+      if (
+        !["supplier_listing", "market_benchmark"].includes(
+          String(price.provenance),
+        ) ||
+        (price.provenance === "supplier_listing" && !price.supplier_name) ||
+        (price.provenance === "market_benchmark" &&
+          price.supplier_name !== null)
+      )
+        throw new Error("Invalid price attribution.");
+      if (!["published", "price_effective"].includes(String(price.date_basis)))
+        throw new Error("Invalid price date basis.");
+      for (const key of ["price_min", "price_max", "age_days"])
+        if (
+          typeof price[key] !== "number" ||
+          !Number.isFinite(price[key]) ||
+          Number(price[key]) < 0
+        )
+          throw new Error(`Invalid price.${key}.`);
+      if (Number(price.price_min) > Number(price.price_max))
+        throw new Error("Reversed price bounds.");
+      const published = Date.parse(String(price.source_published_at));
+      const literalDate = String(price.source_date_text);
+      const sourceDate = /^\d{4}-\d{2}-\d{2}$/.test(literalDate)
+        ? Date.parse(`${literalDate}T00:00:00.000Z`)
+        : /^(?:\d{1,2}\s+[A-Za-z]+\s+\d{4}|[A-Za-z]+\s+\d{1,2},?\s+\d{4})$/.test(
+              literalDate,
+            )
+          ? Date.parse(`${literalDate} UTC`)
+          : NaN;
+      if (!Number.isFinite(sourceDate) || sourceDate !== published)
+        throw new Error(
+          "Price source date differs from its literal date evidence.",
+        );
+      const age = (asOf - published) / 86400000;
+      if (
+        !Number.isFinite(age) ||
+        age < 0 ||
+        age >= 30 ||
+        Math.abs(age - Number(price.age_days)) > 0.000001 ||
+        price.recency !== (age < 7 ? "under_7_days" : "under_30_days")
+      )
+        throw new Error("Invalid price freshness.");
+      if (
+        price.valid_until !== null &&
+        (!Number.isFinite(Date.parse(String(price.valid_until))) ||
+          Date.parse(String(price.valid_until)) < asOf)
+      )
+        throw new Error("Price validity has expired or is invalid.");
+      if (
+        !String(price.date_quote)
+          .normalize("NFKC")
+          .replace(/\s+/g, " ")
+          .includes(
+            String(price.source_date_text)
+              .normalize("NFKC")
+              .replace(/\s+/g, " "),
+          )
+      )
+        throw new Error("Price date is not supported by its date quotation.");
+    }
+  }
   for (const key of ["title", "generated_at", "as_of_date", "research_status"])
     string(root[key], key);
   if (!["live", "hybrid", "fixture"].includes(String(root.research_mode)))

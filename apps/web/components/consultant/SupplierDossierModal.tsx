@@ -6,6 +6,7 @@ import type {
   EvidenceSourceV3,
   ClaimV3,
   ApprovedRequestSnapshotV3,
+  ResearchPriceSearchV3,
 } from "@matchbase/contracts";
 
 import { ApprovedRequestSummary } from "./ApprovedRequestSummary";
@@ -16,6 +17,7 @@ export interface SupplierDossierModalProps {
   readonly approvedRequest?: ApprovedRequestSnapshotV3 | undefined;
   readonly evidenceSources?: readonly EvidenceSourceV3[];
   readonly claims?: readonly ClaimV3[];
+  readonly recentPrices?: ResearchPriceSearchV3 | undefined;
   readonly isOpen: boolean;
   readonly onClose: () => void;
 }
@@ -27,6 +29,7 @@ export function SupplierDossierModal({
   approvedRequest,
   evidenceSources = [],
   claims = [],
+  recentPrices,
 }: SupplierDossierModalProps) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -399,6 +402,7 @@ export function SupplierDossierModal({
                 supplier={supplier}
                 evidence={evidenceSources}
                 claims={claims}
+                recentPrices={recentPrices}
                 detailed
               />
               <div className="text-sm space-y-1.5">

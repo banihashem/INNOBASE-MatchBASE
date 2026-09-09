@@ -181,7 +181,7 @@ it("DEV-004 completed research history is secondary while active work remains vi
     />,
   );
   expect(
-    screen.getByRole("heading", { name: "Your supplier results are ready" }),
+    screen.getByRole("heading", { name: "Your research results are ready" }),
   ).toBeVisible();
   expect(screen.getByRole("progressbar")).toHaveAttribute(
     "aria-valuenow",

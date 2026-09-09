@@ -1,5 +1,6 @@
 /** MB-UX-COST-001 L01: one consent authorizes one bounded research round. */
 export type ResearchDepth = "simple" | "deep";
+export type ResearchTier = "default" | "advanced" | "ultra";
 export interface ResearchModelRate {
   model: string;
   provider: string;
@@ -8,6 +9,7 @@ export interface ResearchModelRate {
   request_usd: number;
   web_search_usd: number;
   reasoning: boolean;
+  structured_outputs?: boolean;
   source_url: string;
 }
 export interface ResearchRoundPlan {
@@ -16,6 +18,7 @@ export interface ResearchRoundPlan {
   version: "research-round.v1";
   round_number: number;
   depth: ResearchDepth;
+  research_tier?: ResearchTier;
   title: string;
   purpose: string;
   focus_requirements: string[];
@@ -23,6 +26,16 @@ export interface ResearchRoundPlan {
   extraction_model: string;
   synthesis_model: string;
   search_engine: "native" | "exa";
+  /** Explicit engine for each approved search model; legacy plans use search_engine. */
+  search_engines?: Record<string, "native" | "exa">;
+  synthesis_selection_reason?: string;
+  price_research?: {
+    model: string;
+    search_engine: "native" | "exa";
+    max_calls: number;
+    preferred_window_days: number;
+    window_days: number;
+  };
   candidate_limit_per_search: number;
   /** Total attempts per recoverable stage; absent on legacy approvals. */
   automatic_recovery_attempts?: number;

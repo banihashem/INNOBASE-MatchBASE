@@ -28,6 +28,10 @@ const PROVIDER_NAMES: Readonly<Record<string, readonly string[]>> = {
   azure: ["Azure"],
   "google-ai-studio": ["Google AI Studio"],
   "google-vertex": ["Google", "Google Vertex"],
+  anthropic: ["Anthropic"],
+  deepseek: ["DeepSeek"],
+  "x-ai": ["xAI", "xAI (Grok)", "SpaceXAI"],
+  xai: ["xAI", "xAI (Grok)", "SpaceXAI"],
 };
 
 export function getConfiguredProviderRoute(model: string): string {
@@ -53,7 +57,13 @@ export function getConfiguredProviderRoute(model: string): string {
     ? "GOOGLE"
     : model.startsWith("openai/")
       ? "OPENAI"
-      : null;
+      : model.startsWith("anthropic/")
+        ? "ANTHROPIC"
+        : model.startsWith("deepseek/")
+          ? "DEEPSEEK"
+          : model.startsWith("x-ai/")
+            ? "XAI"
+            : null;
   const provider = family
     ? process.env[`MATCHBASE_PROVIDER_${family}`]?.trim()
     : undefined;
@@ -61,7 +71,10 @@ export function getConfiguredProviderRoute(model: string): string {
     !provider ||
     !PROVIDER_NAMES[provider] ||
     (family === "GOOGLE" && !provider.startsWith("google-")) ||
-    (family === "OPENAI" && !["openai", "azure"].includes(provider))
+    (family === "OPENAI" && !["openai", "azure"].includes(provider)) ||
+    (family === "ANTHROPIC" && provider !== "anthropic") ||
+    (family === "DEEPSEEK" && provider !== "deepseek") ||
+    (family === "XAI" && !["xai", "x-ai"].includes(provider))
   )
     throw new OpenRouterByokError(
       "MB-503-LIVE-PROVIDER-CONFIG",

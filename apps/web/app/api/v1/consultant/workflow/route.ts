@@ -25,6 +25,7 @@ import {
   listConsultantResearchSummaries,
   stopConsultantResearch,
 } from "@matchbase/data";
+import { suggestInterpretationCorrection } from "@matchbase/application";
 import { validateStep1RequirementFidelity } from "@matchbase/contracts";
 import { getAppDatabasePool } from "../../../../../src/db-client";
 import { resolveRequestSession } from "../../../../../src/fetch-runtime";
@@ -291,6 +292,48 @@ export async function POST(req: Request): Promise<NextResponse> {
       });
 
       return NextResponse.json({ success: true, fidelity });
+    }
+
+    if (action === "suggest_step1_correction") {
+      if (
+        typeof body.run_id !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          body.run_id,
+        ) ||
+        typeof body.translation !== "string" ||
+        !body.translation.trim() ||
+        body.translation.length > 24000
+      )
+        return NextResponse.json(
+          {
+            error:
+              "A saved run and an interpretation of 1–24000 characters are required.",
+            code: "MB-400-CORRECTION-INPUT",
+          },
+          { status: 400 },
+        );
+      const admitted = await resolveRequestSession(req, undefined, true);
+      if (
+        admitted.tier !== "consultant" &&
+        !(
+          admitted.tier === "admin" &&
+          admitted.adminSubRoles?.includes("super_admin")
+        )
+      )
+        throw new ApplicationFault(
+          403,
+          "correction-denied",
+          "MB-403-FORBIDDEN",
+          "Consultant access is required.",
+        );
+      const correction = await suggestInterpretationCorrection(
+        pool,
+        admitted.accountId,
+        admitted.userId,
+        body.run_id,
+        body.translation,
+      );
+      return NextResponse.json({ success: true, correction });
     }
 
     if (action === "approve_step1") {

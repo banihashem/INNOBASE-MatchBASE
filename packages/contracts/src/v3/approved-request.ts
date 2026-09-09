@@ -215,11 +215,17 @@ export function parseApprovedRequestFactsV3(
       label,
       value,
       operator: options.operator ?? "requires",
-      modality: /\bprefer(?:red|ably)?\b|ترجیح/i.test(source)
-        ? "preferred"
-        : /\boptional(?:ly)?\b|اختیاری/i.test(source)
-          ? "optional"
-          : "mandatory",
+      modality:
+        /\bprefer(?:red|ably)?\b|ترجیح/i.test(source) ||
+        (concept === "supplier_profile" &&
+          value === "distributor" &&
+          /\bpriority\s+is\s+given\s+to\s+(?:(?:an?|the|official|authori[sz]ed|local|UAE)[ -]+){0,5}(?:representatives?|distributors?)\b|اولویت\s+با\s+(?:نماینده|توزیع[‌ ]*کننده)/i.test(
+            source,
+          ))
+          ? "preferred"
+          : /\boptional(?:ly)?\b|اختیاری/i.test(source)
+            ? "optional"
+            : "mandatory",
       qualifiers: options.qualifiers ?? {},
       source_clause: source,
       source_box: sourceBox,
@@ -352,7 +358,7 @@ export function parseApprovedRequestFactsV3(
         });
     }
     const quantity = clause.match(
-      /(\d+(?:\.\d+)?)(?:\s*(?:-|to)\s*(\d+(?:\.\d+)?))?\s*(units?\b|pieces?\b|دستگاه|عدد|calorifiers?\b)/i,
+      /(\d+(?:\.\d+)?)(?:\s*(?:-|to)\s*(\d+(?:\.\d+)?))?\s*(units?\b|pieces?\b|machines?\b|دستگاه|عدد|calorifiers?\b)/i,
     );
     if (quantity)
       add("order_quantity", "Order Quantity", Number(quantity[1]), source, {
@@ -391,9 +397,15 @@ export function parseApprovedRequestFactsV3(
     );
     if (
       /distributor|توزیع\s*کننده/i.test(clause) ||
-      (!hasOperatingPresence && /نماینده/i.test(clause))
+      (!hasOperatingPresence &&
+        /نماینده|\b(?:official|authori[sz]ed)\s+representatives?\b/i.test(
+          clause,
+        ))
     ) {
-      const authorized = /\bauthori[sz]ed\b|مجاز/i.test(clause);
+      const authorized =
+        /\bauthori[sz]ed\b|\bofficial\s+representatives?\b|مجاز|نماینده\s+رسمی/i.test(
+          clause,
+        );
       const jurisdiction =
         /(?:authori[sz]ed\s+UAE\s+distributor|distributor\s+(?:in|for)\s+(?:the\s+)?UAE|مجاز.*UAE)/i.test(
           clause,
@@ -407,7 +419,9 @@ export function parseApprovedRequestFactsV3(
           ...(jurisdiction ? { jurisdiction } : {}),
           ...(/manufacturer\s+or|سازنده.*یا/i.test(clause)
             ? { alternative: "manufacturer" }
-            : {}),
+            : /\bor\s+(?:an?\s+)?seller\b|یا\s+فروشنده/i.test(clause)
+              ? { alternative: "seller" }
+              : {}),
         },
       });
     } else if (

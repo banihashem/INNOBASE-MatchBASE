@@ -2001,6 +2001,7 @@ export default function ConsultantWorkflowPage() {
             {!researchAvailable && workflowFeedback}
             {step1Translation && (
               <InterpretationApprovalStep
+                runId={runId}
                 workflowState={workflowState}
                 isLoading={isLoading}
                 step1Translation={step1Translation}

@@ -1,4 +1,7 @@
+import { InterpretationCorrectionPanel } from "./InterpretationCorrectionPanel";
+
 interface InterpretationApprovalStepProps {
+  runId?: string | null;
   workflowState: string;
   isLoading: boolean;
   step1Translation: string;
@@ -27,6 +30,7 @@ function evaluatedStatus(requirement: any, result: any): string {
 }
 
 export function InterpretationApprovalStep({
+  runId,
   workflowState,
   isLoading,
   step1Translation,
@@ -109,10 +113,11 @@ export function InterpretationApprovalStep({
                 </span>
               </div>
               <p className="text-slate-300 text-[11px]">
-                The English interpretation contains semantic mutations or
-                omissions against the original explicit requirements. Approval
-                is disabled until all mandatory requirements are preserved. Edit
-                the English interpretation above to correct them.
+                The automated check could not match every detected requirement
+                to the English wording. Review the flagged items below, request
+                a suggested correction, or edit the text yourself. Final
+                approval becomes available after the current text passes the
+                check.
               </p>
 
               {/* Mutated Items Details */}
@@ -373,6 +378,17 @@ export function InterpretationApprovalStep({
               )}
           </div>
         </div>
+      )}
+
+      {runId && workflowState === "prep_step1_awaiting_approval" && (
+        <InterpretationCorrectionPanel
+          key={runId}
+          runId={runId}
+          translation={step1Translation}
+          hasFidelityIssue={step1Fidelity?.valid === false}
+          disabled={isLoading || isFidelityValidating}
+          onApply={onTranslationChange}
+        />
       )}
 
       <div className="flex justify-between items-center">

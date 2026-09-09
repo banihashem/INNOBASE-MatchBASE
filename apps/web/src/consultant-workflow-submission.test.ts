@@ -9,12 +9,15 @@ const mocks = vi.hoisted(() => ({
   after: vi.fn(),
   stop: vi.fn(),
   restore: vi.fn(),
+  correction: vi.fn(),
+  unsafeGate: vi.fn(),
 }));
 vi.mock("@matchbase/application", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   submitConsultantIntake: mocks.submit,
   retryConsultantIntakeInterpretation: mocks.retry,
   getOrRestoreWorkflowSession: mocks.restore,
+  suggestInterpretationCorrection: mocks.correction,
 }));
 vi.mock("@matchbase/data", async (original) => ({
   ...(await original<Record<string, unknown>>()),
@@ -22,11 +25,18 @@ vi.mock("@matchbase/data", async (original) => ({
 }));
 vi.mock("./db-client", () => ({ getAppDatabasePool: () => mocks.pool }));
 vi.mock("./fetch-runtime", () => ({
-  resolveRequestSession: async () => ({
-    accountId: "owner-account",
-    userId: "owner-user",
-    tier: "consultant",
-  }),
+  resolveRequestSession: async (
+    request: Request,
+    _path?: string,
+    unsafe?: boolean,
+  ) => {
+    if (unsafe) await mocks.unsafeGate(request);
+    return {
+      accountId: "owner-account",
+      userId: "owner-user",
+      tier: "consultant",
+    };
+  },
 }));
 vi.mock("next/server", () => ({
   after: mocks.after,
@@ -46,6 +56,71 @@ const post = (body: Record<string, unknown>) =>
       headers: { "Content-Type": "application/json" },
     }),
   );
+
+describe("L12 correction preview admission", () => {
+  it("refuses a correction when unsafe Origin/CSRF admission rejects it", async () => {
+    mocks.unsafeGate.mockRejectedValueOnce(
+      new ApplicationFault(
+        403,
+        "resource-not-visible",
+        "MB-403-REQUEST",
+        "Request refused.",
+      ),
+    );
+    const response = await post({
+      action: "suggest_step1_correction",
+      run_id: runId,
+      translation: "Current wording",
+    });
+    expect(response.status).toBe(403);
+    expect(mocks.unsafeGate).toHaveBeenCalledTimes(1);
+    expect(mocks.correction).not.toHaveBeenCalled();
+  });
+  it("rejects missing run and oversized text before requesting a correction", async () => {
+    mocks.correction.mockClear();
+    expect(
+      (await post({ action: "suggest_step1_correction", translation: "Text" }))
+        .status,
+    ).toBe(400);
+    expect(
+      (
+        await post({
+          action: "suggest_step1_correction",
+          run_id: runId,
+          translation: "x".repeat(24001),
+        })
+      ).status,
+    ).toBe(400);
+    expect(mocks.correction).not.toHaveBeenCalled();
+  });
+  it("uses authenticated identity and only returns a proposal", async () => {
+    mocks.correction.mockResolvedValue({
+      suggested_translation: "Retained wording",
+      cost_usd: 0,
+    });
+    mocks.after.mockClear();
+    const result = await post({
+      action: "suggest_step1_correction",
+      run_id: runId,
+      translation: "Current wording",
+      account_id: "attacker",
+      intake: { product_requirement: "Different request" },
+    });
+    expect(result.status).toBe(200);
+    expect(mocks.correction).toHaveBeenCalledWith(
+      mocks.pool,
+      "owner-account",
+      "owner-user",
+      runId,
+      "Current wording",
+    );
+    expect((await result.json()).correction.suggested_translation).toBe(
+      "Retained wording",
+    );
+    expect(mocks.after).not.toHaveBeenCalled();
+    expect(mocks.unsafeGate).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("L09 stop research admission", () => {
   it("requires an exact valid execution identity", async () => {

@@ -232,3 +232,32 @@ test("L04 omitted websites recover only from unambiguous verified official ident
     null,
   );
 });
+
+test("L04 masked email text cannot become a verified contact even with literal source proof", () => {
+  const { candidate, citations, retrieved } = fixture();
+  const hidden = "[email protected]";
+  retrieved.get(citations[0].url).text += ` Email: ${hidden}`;
+  candidate.facts.push({
+    field_path: "contacts.general_email",
+    value: hidden,
+    claim_type: "identity",
+    source_urls: [citations[0].url],
+    quote: `Email: ${hidden}`,
+  });
+  const result = repairSourceTranscription([candidate], citations, retrieved);
+  const evidence = new Map();
+  ingestLiveEvidence(result, citations, evidence, retrieved);
+  const assembled = assembleLiveSuppliers(result.candidates, [], evidence, 20);
+  assert.equal(assembled.candidates.length, 1);
+  assert.equal(assembled.candidates[0].contacts.general_email, undefined);
+  assert.equal(
+    assembled.candidates[0].contacts.sales_email,
+    "sales@aster.example.com",
+  );
+  assert.equal(
+    assembled.claims.some(
+      (claim) => claim.field_path === "contacts.general_email",
+    ),
+    false,
+  );
+});

@@ -4,6 +4,39 @@ import { inTransaction, type ConnectionPool } from "./database.js";
 import type { ResearchRoundRecord } from "./consultant-research-rounds.js";
 import { saveConsultantOutputV3 } from "./v3-repository.js";
 
+/** A same-size revalidation is useful when it removes a masked contact, not for a no-op. */
+export function removesInvalidRetainedContact(
+  prior: ConsultantResearchOutputV3,
+  next: ConsultantResearchOutputV3,
+): boolean {
+  if (
+    !prior.supplier_candidates.length ||
+    prior.supplier_candidates.length !== next.supplier_candidates.length
+  )
+    return false;
+  const current = new Map(
+    next.supplier_candidates.map((c) => [c.supplier_entity_id, c]),
+  );
+  if (
+    current.size !== prior.supplier_candidates.length ||
+    prior.supplier_candidates.some((c) => !current.has(c.supplier_entity_id))
+  )
+    return false;
+  const fields = ["general_email", "sales_email", "export_email"] as const;
+  return prior.supplier_candidates.some((candidate) =>
+    fields.some((field) => {
+      const old = candidate.contacts?.[field];
+      return (
+        typeof old === "string" &&
+        old.length > 0 &&
+        !/^[^\s<>()[\]@]+@[^\s<>()[\]@]+\.[^\s<>()[\]@]+$/u.test(old) &&
+        current.get(candidate.supplier_entity_id)!.contacts?.[field] ===
+          undefined
+      );
+    }),
+  );
+}
+
 /** MB-UX-LIVE-001 L11: local evidence reprocessing never dispatches a provider. */
 export async function recoverCompletedResearchRound(
   pool: ConnectionPool,
@@ -73,8 +106,12 @@ export async function recoverCompletedResearchRound(
       output.telemetry.total_cost_usd !== 0 ||
       output.telemetry.total_input_tokens !== 0 ||
       output.telemetry.total_output_tokens !== 0 ||
-      output.supplier_candidates.length <=
-        ((source.output.supplier_candidates as unknown[])?.length ?? 0)
+      (output.supplier_candidates.length <=
+        ((source.output.supplier_candidates as unknown[])?.length ?? 0) &&
+        !removesInvalidRetainedContact(
+          source.output as unknown as ConsultantResearchOutputV3,
+          output,
+        ))
     )
       fail();
     const now = new Date().toISOString();

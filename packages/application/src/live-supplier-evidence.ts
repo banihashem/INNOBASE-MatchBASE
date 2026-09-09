@@ -851,6 +851,12 @@ export function assembleLiveSuppliers(
     );
     const facts = new Map<string, { value: string; evidence_ids: string[] }>();
     for (const fact of candidate.facts) {
+      // A literal masking notice is evidence of an unavailable address, not a contact.
+      if (
+        /^contacts\.(sales|export|general)_email$/.test(fact.field_path) &&
+        !/^[^\s<>()[\]@]+@[^\s<>()[\]@]+\.[^\s<>()[\]@]+$/u.test(fact.value)
+      )
+        continue;
       if (
         !fact.value.trim() ||
         !fact.quote.toLowerCase().includes(fact.value.toLowerCase())

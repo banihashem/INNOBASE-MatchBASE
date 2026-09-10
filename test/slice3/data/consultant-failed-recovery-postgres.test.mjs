@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
+import { dropDrainedRecoveryDatabase } from "../support/recovery-database-cleanup.mjs";
 import {
   createPool,
   migrateUp,
@@ -334,10 +335,12 @@ const database = process.env.MATCHBASE_CONSULTANT_TEST_DATABASE_URL;
         1,
       );
     } finally {
-      await pool?.end();
-      if (created)
-        await admin.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
-      await admin.end();
+      try {
+        await pool?.end();
+        if (created) await dropDrainedRecoveryDatabase(admin, databaseName);
+      } finally {
+        await admin.end();
+      }
     }
   },
 );

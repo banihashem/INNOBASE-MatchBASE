@@ -176,25 +176,29 @@ describe("production identity configuration", () => {
           "synthetic-origin-admission-key-material-32-bytes",
       }),
     ).toThrow(/Gemini canonicalization configuration is incomplete/iu);
-    expect(() =>
-      loadWebConfig({
-        ...base,
-        MATCHBASE_ENVIRONMENT: "production",
-        MATCHBASE_DEPLOYMENT_ENVIRONMENT: "staging",
-        MATCHBASE_DEPLOYMENT_ID: `sha256:${"a".repeat(64)}`,
-        MATCHBASE_IMAGE_DIGEST: `sha256:${"a".repeat(64)}`,
-        MATCHBASE_ORIGIN: "https://matchbase-staging.innobase.app",
-        GOOGLE_CLIENT_ID: "client-id-fixture",
-        GOOGLE_CLIENT_SECRET: "client-secret-fixture",
-        GOOGLE_REDIRECT_URI:
-          "https://matchbase-staging.innobase.app/auth/google/callback",
-        MATCHBASE_ARTIFACT_GCS_BUCKET: "innobase-matchbase-stg-artifacts",
-        MATCHBASE_ORIGIN_ADMISSION_KEY:
-          "synthetic-origin-admission-key-material-32-bytes",
-        MATCHBASE_GEMINI_API_KEY: "gemini-canonicalization-test-key",
-        MATCHBASE_OPENROUTER_API_KEY: "prohibited-provider-key",
-      }),
-    ).toThrow(/OpenRouter API keys are prohibited in the web runtime/iu);
+    for (const credentialName of [
+      "MATCHBASE_OPENROUTER_API_KEY",
+      "OPENROUTER_API_KEY",
+    ])
+      expect(() =>
+        loadWebConfig({
+          ...base,
+          MATCHBASE_ENVIRONMENT: "production",
+          MATCHBASE_DEPLOYMENT_ENVIRONMENT: "staging",
+          MATCHBASE_DEPLOYMENT_ID: `sha256:${"a".repeat(64)}`,
+          MATCHBASE_IMAGE_DIGEST: `sha256:${"a".repeat(64)}`,
+          MATCHBASE_ORIGIN: "https://matchbase-staging.innobase.app",
+          GOOGLE_CLIENT_ID: "client-id-fixture",
+          GOOGLE_CLIENT_SECRET: "client-secret-fixture",
+          GOOGLE_REDIRECT_URI:
+            "https://matchbase-staging.innobase.app/auth/google/callback",
+          MATCHBASE_ARTIFACT_GCS_BUCKET: "innobase-matchbase-stg-artifacts",
+          MATCHBASE_ORIGIN_ADMISSION_KEY:
+            "synthetic-origin-admission-key-material-32-bytes",
+          MATCHBASE_GEMINI_API_KEY: "gemini-canonicalization-test-key",
+          [credentialName]: "prohibited-provider-key",
+        }),
+      ).toThrow(/OpenRouter API keys are prohibited in the web runtime/iu);
   });
 
   it("binds production identity to the exact HTTPS origin and Google endpoints", () => {

@@ -62,6 +62,12 @@ function deployPlan(overrides = {}) {
     `-PdfAllowedAttestationSha256 ${quote("4".repeat(64))}`,
     "-WebMaxInstances 2",
     "-WorkerInstances 1",
+    ...(overrides.omitProviders
+      ? []
+      : [
+          "-ConsultantGoogleProvider google-ai-studio",
+          "-ConsultantOpenAIProvider openai",
+        ]),
   ].join(" ");
   return spawnSync("pwsh", ["-NoProfile", "-Command", command], {
     encoding: "utf8",
@@ -114,6 +120,30 @@ test("EU Staging deploy plan binds region, database, bucket, identity, and secre
   );
   assert.match(result.stdout, /MATCHBASE_DEPLOYMENT_TARGET=staging-eu/u);
   assert.match(result.stdout, /matchbase-db-runtime-url-ew2:1/u);
+  assert.match(result.stdout, /MATCHBASE_PROVIDER_GOOGLE=google-ai-studio/u);
+  assert.match(result.stdout, /MATCHBASE_PROVIDER_OPENAI=openai/u);
+});
+
+test("deployment refuses missing Consultant provider choices without a cloud call", () => {
+  const result = deployPlan({ omitProviders: true });
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /Explicit ConsultantGoogleProvider and ConsultantOpenAIProvider are required/u,
+  );
+  assert.doesNotMatch(result.stdout, /^gcloud /mu);
+});
+
+test("deployment refuses the OpenRouter credential alias in the web runtime", () => {
+  const result = deployPlan({
+    webSecrets: [
+      ...webSecrets,
+      "OPENROUTER_API_KEY=matchbase-openrouter-api-key-ew2:1",
+    ],
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /OpenRouter credentials are worker-only/u);
+  assert.doesNotMatch(result.stdout, /^gcloud /mu);
 });
 
 test("EU Staging deploy rejects a non-EU secret name before any cloud call", () => {

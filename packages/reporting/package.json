@@ -17,7 +17,8 @@
     "test": "npm run build && node --test dist/test/*.test.js"
   },
   "dependencies": {
-    "@matchbase/contracts": "workspace:*"
+    "@matchbase/contracts": "workspace:*",
+    "@playwright/test": "1.62.1"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

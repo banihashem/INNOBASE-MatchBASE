@@ -32,6 +32,8 @@ Weekly CI and Dependabot check drift and vulnerabilities. Review dependency chan
 
 Production operationalization remains a separate authorized stage: managed identity, deployment secrets, restore rehearsal, retention policy, monitoring, budgets and live acceptance must be verified there. For local recovery use the Docker runbook; never reseed or delete the persistent volume. A rollback reuses a known compatible image after checking queue idleness and schema compatibility. Database restoration is a separate data operation requiring a verified backup and explicit target.
 
+The active Consultant production boundary and outstanding durable command/result work are recorded in [Consultant production readiness](https://github.com/banihashem/INNOBASE-MatchBASE/blob/main/docs/CONSULTANT_PRODUCTION_READINESS.md). Worker/image source corrections alone do not qualify that journey for production.
+
 ## Security references
 
 The Sharp 0.35.4 security patch brings `@img/sharp-libvips-linux-x64@1.3.3` under `LGPL-3.0-or-later`. The installed package metadata and bundled README notices were inspected; it remains an unmodified prebuilt library used in CI and the local container. The exact package/version is admitted alongside the historical 1.3.2 baseline; unknown packages and versions remain rejected. Preserve the package README notices when packaging. This source-only release does not publish that binary or a container image; binary redistribution and its notice/source obligations must be qualified before any such production delivery. [Upstream third-party notices](https://github.com/lovell/sharp-libvips/blob/main/THIRD-PARTY-NOTICES.md) distinguish library terms from the Apache-licensed packaging scripts.

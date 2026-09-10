@@ -1,4 +1,5 @@
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { scheduleConsultantWorkflowAcceleration } from "../../../../../src/consultant-job-dispatch";
 import {
   ApplicationFault,
   authorizeConsultantRunResourceRead,
@@ -39,7 +40,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   // 1. Authenticate session & resolve request context
   let context;
   try {
-    context = await resolveRequestSession(req);
+    context = await resolveRequestSession(req, undefined, true);
   } catch (authError) {
     const fault =
       authError instanceof ApplicationFault
@@ -78,6 +79,36 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     const body = (await req.json()) as Record<string, unknown>;
     const action = body.action as string;
+
+    // MB-UX-PILOT-001 L01: authorize profile ownership before any run mutation.
+    if (
+      [
+        "approve_step1",
+        "approve_step3",
+        "stop_research",
+        "execute_research",
+        "retry_workflow",
+        "reveal_more",
+      ].includes(action)
+    ) {
+      if (
+        typeof body.run_id !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          body.run_id,
+        )
+      ) {
+        return NextResponse.json(
+          { error: "A valid run_id is required.", code: "MB-400-RUN-REQUIRED" },
+          { status: 400 },
+        );
+      }
+      await authorizeConsultantRunResourceRead({
+        context,
+        runId: body.run_id,
+        pool,
+        resourceKind: "run_detail",
+      });
+    }
 
     // Action: Create New Independent Server Draft
     if (action === "create_draft") {
@@ -312,24 +343,10 @@ export async function POST(req: Request): Promise<NextResponse> {
           },
           { status: 400 },
         );
-      const admitted = await resolveRequestSession(req, undefined, true);
-      if (
-        admitted.tier !== "consultant" &&
-        !(
-          admitted.tier === "admin" &&
-          admitted.adminSubRoles?.includes("super_admin")
-        )
-      )
-        throw new ApplicationFault(
-          403,
-          "correction-denied",
-          "MB-403-FORBIDDEN",
-          "Consultant access is required.",
-        );
       const correction = await suggestInterpretationCorrection(
         pool,
-        admitted.accountId,
-        admitted.userId,
+        context.accountId,
+        context.userId,
         body.run_id,
         body.translation,
       );
@@ -366,7 +383,9 @@ export async function POST(req: Request): Promise<NextResponse> {
         );
         const job = await queueConsultantWorkflowStep(pool, run_id, "prepare");
         if (job.status === "queued")
-          after(() => runNextConsultantWorkflowJob(pool, job.job_id));
+          scheduleConsultantWorkflowAcceleration(() =>
+            runNextConsultantWorkflowJob(pool, job.job_id),
+          );
         return NextResponse.json(
           {
             success: true,
@@ -416,7 +435,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     }
 
     if (action === "stop_research") {
-      const runId = String(body.run_id ?? "");
+      const runId = body.run_id as string;
       const executionId = String(body.execution_id ?? "");
       const uuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -474,7 +493,9 @@ export async function POST(req: Request): Promise<NextResponse> {
 
       const job = await queueConsultantWorkflowStep(pool, run_id, "research");
       if (job.status === "queued")
-        after(() => runNextConsultantWorkflowJob(pool, job.job_id));
+        scheduleConsultantWorkflowAcceleration(() =>
+          runNextConsultantWorkflowJob(pool, job.job_id),
+        );
       const session = getWorkflowSession(run_id);
       return NextResponse.json(
         {
@@ -487,7 +508,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     }
 
     if (action === "retry_workflow") {
-      const run_id = String(body.run_id ?? "");
+      const run_id = body.run_id as string;
       const session = await getOrRestoreWorkflowSession(
         pool,
         context.accountId,
@@ -512,7 +533,9 @@ export async function POST(req: Request): Promise<NextResponse> {
         session.retry_action,
         true,
       );
-      after(() => runNextConsultantWorkflowJob(pool, job.job_id));
+      scheduleConsultantWorkflowAcceleration(() =>
+        runNextConsultantWorkflowJob(pool, job.job_id),
+      );
       return NextResponse.json(
         { success: true, processing: true, session },
         { status: 202 },

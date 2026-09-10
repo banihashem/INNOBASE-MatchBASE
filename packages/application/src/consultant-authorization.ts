@@ -129,6 +129,11 @@ export async function authorizeConsultantRunResourceRead(options: {
   session?: ConsultantWorkflowSessionRecord;
 }> {
   const { context, runId, pool, resourceKind = "report_pdf" } = options;
+  // Shared synthetic fixtures are available only in an explicitly enabled local/test runtime.
+  const fixtureAccess =
+    ["local", "test"].includes(process.env.MATCHBASE_ENVIRONMENT ?? "local") &&
+    process.env.NODE_ENV !== "production" &&
+    ["true", "1"].includes(process.env.MATCHBASE_SYNTHETIC_FIXTURE ?? "");
 
   if (!context || !context.userId || !context.accountId) {
     throw new ApplicationFault(
@@ -184,6 +189,7 @@ export async function authorizeConsultantRunResourceRead(options: {
   const res = await pool.query<{
     output_id: string | null;
     output_account_id: string | null;
+    output_user_profile_id: string | null;
     output_run_id: string | null;
     document_payload: unknown;
     research_status: string | null;
@@ -212,6 +218,7 @@ export async function authorizeConsultantRunResourceRead(options: {
     `SELECT
        o.output_id,
        o.account_id AS output_account_id,
+       o.user_profile_id AS output_user_profile_id,
        o.run_id AS output_run_id,
        o.document_payload,
        o.research_status,
@@ -252,7 +259,9 @@ export async function authorizeConsultantRunResourceRead(options: {
     // Check in-memory workflow session
     const memorySession = getWorkflowSession(effectiveRunId);
     if (memorySession) {
-      const isOwner = memorySession.account_id === context.accountId;
+      const isOwner =
+        memorySession.account_id === context.accountId &&
+        memorySession.user_profile_id === context.userId;
       if (!isOwner && !isSuperAdmin) {
         throw new ApplicationFault(
           404,
@@ -290,7 +299,7 @@ export async function authorizeConsultantRunResourceRead(options: {
 
     // Check golden scenarios fallback
     const goldenFallback = GOLDEN_SCENARIO_MAP[effectiveRunId];
-    if (goldenFallback) {
+    if (fixtureAccess && goldenFallback) {
       return {
         status: 200,
         runId: effectiveRunId,
@@ -307,9 +316,15 @@ export async function authorizeConsultantRunResourceRead(options: {
   }
 
   // Determine owner
-  const ownerAccountId = row.output_account_id ?? row.session_account_id;
-  const isGolden = GOLDEN_RUN_IDS.has(effectiveRunId);
-  const isOwner = isGolden || ownerAccountId === context.accountId;
+  const isGolden = fixtureAccess && GOLDEN_RUN_IDS.has(effectiveRunId);
+  const isOwner =
+    isGolden ||
+    ((!row.output_id ||
+      (row.output_account_id === context.accountId &&
+        row.output_user_profile_id === context.userId)) &&
+      (!row.session_id ||
+        (row.session_account_id === context.accountId &&
+          row.user_profile_id === context.userId)));
 
   // If not owner and not super admin -> 404 (privacy-preserving)
   if (!isOwner && !isSuperAdmin) {
@@ -350,11 +365,17 @@ export async function authorizeConsultantRunResourceRead(options: {
   let output: ConsultantResearchOutputV3 | undefined;
   if (row.document_payload) {
     output = parseConsultantResearchOutputV3(row.document_payload);
-  } else if (GOLDEN_SCENARIO_MAP[effectiveRunId]) {
+  } else if (isGolden && GOLDEN_SCENARIO_MAP[effectiveRunId]) {
     output = GOLDEN_SCENARIO_MAP[effectiveRunId];
   } else {
     const mem = getWorkflowSession(effectiveRunId);
-    if (mem?.output) output = mem.output;
+    if (
+      mem?.output &&
+      (isSuperAdmin ||
+        (mem.account_id === context.accountId &&
+          mem.user_profile_id === context.userId))
+    )
+      output = mem.output;
   }
 
   const session: ConsultantWorkflowSessionRecord | undefined = row.session_id

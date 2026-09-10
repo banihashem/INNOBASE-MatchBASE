@@ -83,8 +83,10 @@ COPY config/slice3 config/slice3
 COPY deployment/gcp/Assert-ProductionWorkerPolicy.mjs deployment/gcp/Assert-ProductionWorkerPolicy.mjs
 COPY deployment/gcp/Assert-ProductionImageEnvironment.mjs deployment/gcp/Assert-ProductionImageEnvironment.mjs
 COPY scripts/package-next-standalone.mjs scripts/package-next-standalone.mjs
+COPY scripts/package-playwright-runtime.mjs scripts/package-playwright-runtime.mjs
 RUN test -f packages/auth/src/risc.ts \
-    && pnpm --filter @matchbase/web... build
+    && pnpm --filter @matchbase/web... build \
+    && node scripts/package-playwright-runtime.mjs /playwright-runtime
 
 FROM builder AS worker-packager
 ARG DEPLOYMENT_ENVIRONMENT
@@ -95,7 +97,18 @@ RUN node deployment/gcp/Assert-ProductionWorkerPolicy.mjs "$DEPLOYMENT_ENVIRONME
     && cp "$ROUTE_POLICY_PATH" /worker-config/research-route-policy.v1.json \
     && pnpm --config.inject-workspace-packages=true --filter @matchbase/application --prod deploy /worker
 
-FROM ${NODE_IMAGE} AS web-runtime
+# MB-UX-PILOT-001 L01: the active V3 PDF route uses Chromium in the web image.
+FROM ${NODE_IMAGE} AS web-pdf-runtime
+ARG DEBIAN_SNAPSHOT
+COPY --from=verapdf-toolchain /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN printf 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/%s bookworm main\ndeb [check-valid-until=no] https://snapshot.debian.org/archive/debian/%s bookworm-updates main\ndeb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/%s bookworm-security main\n' "$DEBIAN_SNAPSHOT" "$DEBIAN_SNAPSHOT" "$DEBIAN_SNAPSHOT" > /etc/apt/sources.list \
+    && rm -f /etc/apt/sources.list.d/debian.sources
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+COPY --from=builder /playwright-runtime/ /opt/playwright-runtime/
+RUN node /opt/playwright-runtime/node_modules/playwright/cli.js install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM web-pdf-runtime AS web-runtime
 ARG DEPLOYMENT_ENVIRONMENT
 COPY --from=builder /workspace/deployment/gcp/Assert-ProductionImageEnvironment.mjs /tmp/Assert-ProductionImageEnvironment.mjs
 RUN node /tmp/Assert-ProductionImageEnvironment.mjs "$DEPLOYMENT_ENVIRONMENT" \
@@ -110,10 +123,13 @@ RUN groupadd --gid 10001 matchbase \
     && chown 10001:10001 /work \
     && chmod 0700 /work
 COPY --from=builder --chown=10001:10001 /workspace/apps/web/.next/standalone/apps/web/ ./
+# Preserve the complete dynamic browser dependency closure in the standalone image.
+COPY --from=builder --chown=10001:10001 /playwright-runtime/node_modules/ ./node_modules/
 COPY --from=worker-packager --chown=10001:10001 /worker-config/research-route-policy.v1.json ./config/slice3/research-route-policy.v1.json
 COPY --chmod=0555 deployment/gcp/runtime-entrypoint.sh /app/runtime-entrypoint.sh
 ENV MATCHBASE_RUNTIME_KIND=web
 USER 10001:10001
+RUN node --input-type=module -e "const {chromium}=await import('@playwright/test'); const browser=await chromium.launch({headless:true,args:['--no-sandbox','--disable-dev-shm-usage']}); try { const page=await browser.newPage(); await page.setContent('<html><body>MatchBASE Consultant PDF</body></html>'); const pdf=await page.pdf(); if(pdf.subarray(0,5).toString()!=='%PDF-') throw new Error('Invalid PDF'); } finally { await browser.close(); }"
 EXPOSE 8080
 ENTRYPOINT ["/app/runtime-entrypoint.sh"]
 CMD ["node", "server.js"]
@@ -126,7 +142,7 @@ RUN groupadd --gid 10001 matchbase \
 COPY --from=worker-packager --chown=10001:10001 /worker/ ./
 COPY --from=worker-packager --chown=10001:10001 /worker-config/research-route-policy.v1.json ./config/slice3/research-route-policy.v1.json
 COPY --chmod=0555 deployment/gcp/runtime-entrypoint.sh /app/runtime-entrypoint.sh
-RUN node --input-type=module -e "await Promise.all([import('./dist/index.js'),import('@matchbase/ai-evidence'),import('@matchbase/contracts'),import('@matchbase/data'),import('@matchbase/security')])"
+RUN node --input-type=module -e "await Promise.all([import('./dist/index.js'),import('./dist/consultant-workflow-worker.js'),import('./dist/consultant-worker-runtime.js'),import('@matchbase/ai-evidence'),import('@matchbase/contracts'),import('@matchbase/data'),import('@matchbase/security')])"
 ENV MATCHBASE_RUNTIME_KIND=worker
 ENV MATCHBASE_WEASYPRINT=/opt/matchbase/pdf-venv/bin/weasyprint
 ENV MATCHBASE_VERAPDF=/opt/verapdf/verapdf

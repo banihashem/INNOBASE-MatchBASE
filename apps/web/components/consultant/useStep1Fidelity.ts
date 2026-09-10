@@ -1,3 +1,4 @@
+import { workflowMutationHeaders } from "./workflow-request";
 import { useEffect, useRef, useState } from "react";
 
 interface Step1FidelityOptions {
@@ -41,7 +42,7 @@ export function useStep1Fidelity({
         const res = await fetch("/api/v1/consultant/workflow", {
           method: "POST",
           signal: controller.signal,
-          headers: { "Content-Type": "application/json" },
+          headers: workflowMutationHeaders(),
           body: JSON.stringify({
             action: "validate_step1_fidelity",
             intake: {

@@ -1,4 +1,5 @@
 "use client";
+import { workflowMutationHeaders } from "./workflow-request";
 import { useRef, useState } from "react";
 
 /** MB-UX-LIVE-001 L09: stop the exact server execution, never just polling. */
@@ -22,7 +23,7 @@ export function StopResearchButton({
     try {
       const response = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: workflowMutationHeaders(),
         body: JSON.stringify({
           action: "stop_research",
           run_id: runId,

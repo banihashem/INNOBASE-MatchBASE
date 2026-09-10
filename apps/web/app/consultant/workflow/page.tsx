@@ -1,4 +1,5 @@
 "use client";
+import { workflowMutationHeaders } from "../../../components/consultant/workflow-request";
 import { ConsultantShell } from "../../../components/consultant/ConsultantShell";
 import "../../../components/consultant/workflow-experience.css";
 
@@ -407,7 +408,7 @@ export default function ConsultantWorkflowPage() {
         const version = draftVersionRef.current;
         const res = await fetch("/api/v1/consultant/workflow", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: workflowMutationHeaders(),
           body: JSON.stringify({
             action: "save_draft",
             draft_id: id,
@@ -648,7 +649,7 @@ export default function ConsultantWorkflowPage() {
     try {
       const res = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: workflowMutationHeaders(),
         body: JSON.stringify({ action: "create_draft" }),
       });
       if (res.ok) {
@@ -739,7 +740,7 @@ export default function ConsultantWorkflowPage() {
     try {
       await fetch("/api/v1/consultant/workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: workflowMutationHeaders(),
         body: JSON.stringify({
           action: "abandon_draft",
           draft_id: idToAbandon,
@@ -856,7 +857,7 @@ export default function ConsultantWorkflowPage() {
         );
       const res = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: workflowMutationHeaders(),
         body: JSON.stringify({ action: "create_draft" }),
       });
       const data = await res.json();
@@ -966,7 +967,7 @@ export default function ConsultantWorkflowPage() {
       await saveDraftSnapshot({ ...intakeRef.current });
       const res = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: workflowMutationHeaders(),
         body: JSON.stringify({
           action: "submit_intake",
           mode: researchMode,
@@ -1074,7 +1075,7 @@ export default function ConsultantWorkflowPage() {
     try {
       const res = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: workflowMutationHeaders(),
         body: JSON.stringify({
           action: "approve_step1",
           run_id: runId,
@@ -1108,7 +1109,7 @@ export default function ConsultantWorkflowPage() {
     try {
       const approval = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: workflowMutationHeaders(),
         body: JSON.stringify({
           action: "approve_step3",
           run_id: runId,
@@ -1144,7 +1145,7 @@ export default function ConsultantWorkflowPage() {
     try {
       const res = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: workflowMutationHeaders(),
         body: JSON.stringify({
           action:
             retryAction === "interpretation"
@@ -1185,7 +1186,7 @@ export default function ConsultantWorkflowPage() {
     try {
       const res = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: workflowMutationHeaders(),
         body: JSON.stringify({
           action: "reveal_more",
           run_id: runId,
@@ -2711,7 +2712,7 @@ export default function ConsultantWorkflowPage() {
                     try {
                       const res = await fetch("/api/v1/consultant/workflow", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: workflowMutationHeaders(),
                         body: JSON.stringify({
                           action: "clone_draft",
                           draft_data: {

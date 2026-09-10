@@ -132,6 +132,17 @@ export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
     readonly url: string;
     readonly content_sha256: string;
   }[];
+  readonly price_validation?: {
+    readonly searched_at: string;
+    readonly window_days: number;
+    readonly submitted: number;
+    readonly accepted: number;
+    readonly rejections: readonly {
+      readonly index: number;
+      readonly source_url: string;
+      readonly reason: string;
+    }[];
+  };
   readonly response_content?: string;
   readonly response_truncated?: boolean;
   readonly response_citations?: readonly {

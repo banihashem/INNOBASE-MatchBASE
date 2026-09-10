@@ -18,6 +18,8 @@ param(
   [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{64}$')][string]$PdfAllowedAttestationSha256,
   [Parameter(Mandatory)][ValidateRange(1, 100)][int]$WebMaxInstances,
   [Parameter(Mandatory)][ValidateRange(1, 100)][int]$WorkerInstances,
+  [ValidateSet("google-ai-studio", "google-vertex")][string]$ConsultantGoogleProvider,
+  [ValidateSet("openai", "azure")][string]$ConsultantOpenAIProvider,
   [ValidateSet("staging", "staging-eu", "staging-eu-canary", "production")][string]$DeploymentTarget = "",
   [switch]$StagingEuropeWest2,
   [switch]$Apply,
@@ -80,7 +82,7 @@ foreach ($parts in @($webSecretParts, $workerSecretParts)) {
   $duplicate = $parts | Group-Object EnvironmentName | Where-Object Count -gt 1
   if ($duplicate) { throw "Each secret environment name must appear exactly once per runtime." }
 }
-if ($webSecretParts | Where-Object EnvironmentName -CEQ "MATCHBASE_OPENROUTER_API_KEY") {
+if ($webSecretParts | Where-Object { $_.EnvironmentName -cin @("MATCHBASE_OPENROUTER_API_KEY", "OPENROUTER_API_KEY") }) {
   throw "Web MATCHBASE_OPENROUTER_API_KEY is prohibited; OpenRouter credentials are worker-only."
 }
 $webRequiredSecrets = @("DATABASE_URL", "MATCHBASE_DIGEST_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "MATCHBASE_ORIGIN_ADMISSION_KEY", "MATCHBASE_GEMINI_API_KEY")
@@ -105,6 +107,9 @@ if ($webGeminiSecretParts.Count -ne 1 -or $webGeminiSecretParts[0].SecretName -c
 }
 
 $webEmail = "$WebServiceAccountName@$ProjectId.iam.gserviceaccount.com"
+if ([string]::IsNullOrWhiteSpace($ConsultantGoogleProvider) -or [string]::IsNullOrWhiteSpace($ConsultantOpenAIProvider)) {
+  throw "Explicit ConsultantGoogleProvider and ConsultantOpenAIProvider are required; no provider route is inferred."
+}
 $workerEmail = "$WorkerServiceAccountName@$ProjectId.iam.gserviceaccount.com"
 $origin = "https://$Hostname"
 $webEnv = @(
@@ -146,6 +151,8 @@ $workerEnv = @(
   "MATCHBASE_OIDC_SIMULATOR=false",
   "MATCHBASE_SYNTHETIC_FIXTURE=false",
   "MATCHBASE_LIVE_RESEARCH_RUNTIME=environment",
+  "MATCHBASE_PROVIDER_GOOGLE=$ConsultantGoogleProvider",
+  "MATCHBASE_PROVIDER_OPENAI=$ConsultantOpenAIProvider",
   "MATCHBASE_LIVE_RESEARCH_ENABLED=true",
   "MATCHBASE_LIVE_PRICING_VERSION=$pricingVersion",
   "MATCHBASE_GEMINI_CONSERVATIVE_SEARCH_USD=1",

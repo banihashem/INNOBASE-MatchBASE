@@ -672,6 +672,16 @@ export async function resolveRequestSession(
   unsafe = false,
 ): Promise<RequestContext> {
   const current = services();
+  try {
+    assertProductionOriginAdmission(current.config, request.headers);
+  } catch {
+    throw new ApplicationFault(
+      403,
+      "origin-admission-refused",
+      "MB-403-ORIGIN",
+      "Request refused.",
+    );
+  }
   const suppliedCorrelationId = request.headers.get("mb-correlation-id");
   const correlationId =
     suppliedCorrelationId &&

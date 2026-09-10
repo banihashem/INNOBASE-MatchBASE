@@ -23,6 +23,11 @@ import { MatchBaseApplication } from "./service.js";
 import { StandardWorkspaceApplication } from "./standard-workspace.js";
 import type { PersistedTier, RequestContext } from "./types.js";
 import { probeDatabaseReadiness, WorkerReadiness } from "./worker-readiness.js";
+import { runNextConsultantWorkflowJob } from "./consultant-workflow-worker.js";
+import {
+  assertConsultantWorkerConfiguration,
+  consultantWorkflowQueueIsReady,
+} from "./consultant-worker-runtime.js";
 import {
   workerCycleFailureEvent,
   workerDatabaseRuntimePolicy,
@@ -37,6 +42,9 @@ const syntheticEnabled =
   ["local", "test"].includes(environment ?? "");
 if (!databaseUrl || !digestKeyText || Buffer.byteLength(digestKeyText) < 32)
   throw new Error("Combined worker database or digest-key handle is invalid.");
+// MB-UX-PILOT-001 L01: production consumes the current Consultant durable queue.
+const consultantWorkflowEnabled = environment === "production";
+if (consultantWorkflowEnabled) assertConsultantWorkerConfiguration();
 const databaseRuntimePolicy = workerDatabaseRuntimePolicy(process.env);
 const pool = createPool({
   connectionString: databaseUrl,
@@ -187,12 +195,20 @@ async function work(): Promise<void> {
       readiness.markUnready("live_research_admission_failed");
       return;
     }
+    if (
+      consultantWorkflowEnabled &&
+      !(await consultantWorkflowQueueIsReady(pool))
+    ) {
+      readiness.markUnready("schema_not_ready");
+      return;
+    }
     readiness.markReady();
     await recoverExpiredExecutionLeases(
       pool,
       randomUUID(),
       "combined-worker-v1",
     );
+    if (consultantWorkflowEnabled) await runNextConsultantWorkflowJob(pool);
     if (liveDispatcher)
       await liveDispatcher.dispatchNext(shutdownController.signal, 3);
     if (consultantPdfPipeline && consultantPdfWriter)

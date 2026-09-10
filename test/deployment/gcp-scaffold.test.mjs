@@ -6,6 +6,29 @@ import { fileURLToPath } from "node:url";
 const read = async (path) =>
   await readFile(new URL(path, import.meta.url), "utf8");
 
+test("MB-UX-PILOT-001 L01 production web packages and qualifies the current Chromium PDF renderer", async () => {
+  const dockerfile = await read("../../Dockerfile");
+  const reporting = JSON.parse(
+    await read("../../packages/reporting/package.json"),
+  );
+  const root = JSON.parse(await read("../../package.json"));
+  assert.equal(
+    reporting.dependencies["@playwright/test"],
+    root.devDependencies["@playwright/test"],
+  );
+  assert.match(dockerfile, /FROM web-pdf-runtime AS web-runtime/);
+  assert.match(dockerfile, /PLAYWRIGHT_BROWSERS_PATH=\/opt\/playwright/);
+  assert.match(dockerfile, /playwright\/cli\.js install --with-deps chromium/);
+  assert.match(
+    dockerfile,
+    /\/playwright-runtime\/node_modules\/ \.\/node_modules\//,
+  );
+  assert.match(
+    dockerfile,
+    /USER 10001:10001\s+RUN node[^\n]*await page\.pdf\(\)[^\n]*await browser\.close\(\)/,
+  );
+});
+
 test("Dockerfile is digest-pinned, frozen, standalone, and non-root", async () => {
   const dockerfile = await read("../../Dockerfile");
   const readme = await read("../../deployment/gcp/README.md");

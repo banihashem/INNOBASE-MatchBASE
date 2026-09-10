@@ -11,9 +11,13 @@ const mocks = vi.hoisted(() => ({
   restore: vi.fn(),
   correction: vi.fn(),
   unsafeGate: vi.fn(),
+  authorize: vi.fn(),
+  queue: vi.fn(),
 }));
 vi.mock("@matchbase/application", async (original) => ({
   ...(await original<Record<string, unknown>>()),
+  authorizeConsultantRunResourceRead: mocks.authorize,
+  queueConsultantWorkflowStep: mocks.queue,
   submitConsultantIntake: mocks.submit,
   retryConsultantIntakeInterpretation: mocks.retry,
   getOrRestoreWorkflowSession: mocks.restore,
@@ -308,4 +312,120 @@ describe("L03 workflow submission admission", () => {
     expect(mocks.retry).toHaveBeenCalledTimes(1);
     expect(mocks.after).not.toHaveBeenCalled();
   });
+});
+
+describe("MB-UX-PILOT-001 L01 workflow security admission", () => {
+  it.each([
+    "create_draft",
+    "clone_draft",
+    "save_draft",
+    "abandon_draft",
+    "submit_intake",
+    "retry_interpretation",
+    "approve_step1",
+    "approve_step3",
+    "stop_research",
+    "execute_research",
+    "retry_workflow",
+    "reveal_more",
+    "validate_step1_fidelity",
+  ])(
+    "rejects %s before execution when unsafe request proof fails",
+    async (action) => {
+      mocks.unsafeGate.mockRejectedValueOnce(
+        new ApplicationFault(
+          403,
+          "resource-not-visible",
+          "MB-403-REQUEST",
+          "Request refused.",
+        ),
+      );
+      const response = await post({ action, run_id: runId });
+      expect(response.status).toBe(403);
+      expect(mocks.unsafeGate).toHaveBeenCalledTimes(1);
+      expect(mocks.authorize).not.toHaveBeenCalled();
+      expect(mocks.after).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    "approve_step1",
+    "approve_step3",
+    "stop_research",
+    "execute_research",
+    "retry_workflow",
+    "reveal_more",
+  ])(
+    "rejects another profile's %s before restoring or changing a run",
+    async (action) => {
+      mocks.authorize.mockRejectedValueOnce(
+        new ApplicationFault(
+          404,
+          "run-not-found",
+          "MB-404-RUN",
+          "The requested run was not found.",
+        ),
+      );
+      const response = await post({
+        action,
+        run_id: runId,
+        execution_id: draftId,
+      });
+      expect(response.status).toBe(404);
+      expect(mocks.authorize).toHaveBeenCalledWith({
+        context: {
+          accountId: "owner-account",
+          userId: "owner-user",
+          tier: "consultant",
+        },
+        runId,
+        pool: mocks.pool,
+        resourceKind: "run_detail",
+      });
+      expect(mocks.restore).not.toHaveBeenCalled();
+      expect(mocks.stop).not.toHaveBeenCalled();
+      expect(mocks.after).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe("MB-UX-PILOT-001 L01 malformed run identity correction", () => {
+  it.each([
+    "approve_step1",
+    "approve_step3",
+    "stop_research",
+    "execute_research",
+    "retry_workflow",
+    "reveal_more",
+  ])(
+    "rejects non-string or invalid run IDs for %s before ownership lookup or dispatch",
+    async (action) => {
+      // Arrays containing another profile's UUID must never be coerced into an admitted run ID.
+      for (const suppliedRunId of [
+        [runId],
+        [[runId]],
+        [],
+        null,
+        42,
+        {},
+        "invalid",
+        undefined,
+      ]) {
+        const response = await post({
+          action,
+          run_id: suppliedRunId,
+          execution_id: draftId,
+        });
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({
+          code: "MB-400-RUN-REQUIRED",
+        });
+        expect(mocks.authorize).not.toHaveBeenCalled();
+        expect(mocks.restore).not.toHaveBeenCalled();
+        expect(mocks.stop).not.toHaveBeenCalled();
+        expect(mocks.queue).not.toHaveBeenCalled();
+        expect(mocks.after).not.toHaveBeenCalled();
+      }
+    },
+  );
 });

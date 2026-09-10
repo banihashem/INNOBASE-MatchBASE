@@ -98,9 +98,31 @@ beforeEach(() => {
     choices: [],
   }));
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 describe("research tier HTTP approval boundary", () => {
+  it.each([
+    { runtime: "production", node: "test", scheduled: 0 },
+    { runtime: "local", node: "production", scheduled: 0 },
+    { runtime: "local", node: "test", scheduled: 1 },
+  ])(
+    "MB-UX-PILOT-001 L01 keeps production queued research in the worker: $runtime/$node",
+    async ({ runtime, node, scheduled }) => {
+      vi.stubEnv("MATCHBASE_ENVIRONMENT", runtime);
+      vi.stubEnv("NODE_ENV", node);
+      mocks.approve.mockResolvedValue({
+        job: { job_id: "queued-job", status: "queued" },
+      });
+      const response = await post({ action: "approve", quote_id: quoteId });
+      expect(response.status).toBe(202);
+      expect(mocks.after).toHaveBeenCalledTimes(scheduled);
+      expect(mocks.worker).not.toHaveBeenCalled();
+      expect(mocks.approve).toHaveBeenCalledOnce();
+    },
+  );
   it.each(["premium", "ULTRA", "", null, 3, {}, ["advanced"]])(
     "rejects invalid tier %j before creating a quote",
     async (tier) => {

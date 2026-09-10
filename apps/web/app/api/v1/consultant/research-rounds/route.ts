@@ -1,4 +1,5 @@
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { scheduleConsultantWorkflowAcceleration } from "../../../../../src/consultant-job-dispatch";
 import {
   ApplicationFault,
   authorizeConsultantRunResourceRead,
@@ -128,7 +129,9 @@ export async function POST(req: Request) {
       );
       const job = result.job;
       if (job?.status === "queued")
-        after(() => runNextConsultantWorkflowJob(pool, job.job_id));
+        scheduleConsultantWorkflowAcceleration(() =>
+          runNextConsultantWorkflowJob(pool, job.job_id),
+        );
       return NextResponse.json({ success: true, ...result }, { status: 202 });
     }
     if (body.action !== "quote")

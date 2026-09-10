@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import {
   groundRecentPriceObservations,
+  assessRecentPriceObservations,
   selectPriceSourceExcerpt,
   parsePublicPriceDate,
   executeRecentPriceResearch,
@@ -356,7 +357,26 @@ for (const age of [2, 12])
     assert.equal(result.search.observations.length, 1);
     assert.equal(result.search.status, "prices_found");
     assert.equal(
-      events.filter((e) => e.state === "completed").length,
+      events.filter((e) => e.state === "completed" && !e.price_validation)
+        .length,
+      requests.length,
+    );
+    const validation = events.filter((e) => e.price_validation);
+    assert.equal(validation.length, age === 2 ? 1 : 2);
+    assert.equal(validation.at(-1).price_validation.accepted, 1);
+    assert.equal(
+      validation.at(-1).response_citations[0].content_excerpt,
+      citations(row)[0].content,
+    );
+    assert.ok(
+      validation
+        .at(-1)
+        .source_content_hashes[0].content_sha256.match(/^[a-f0-9]{64}$/),
+    );
+    assert.equal(
+      new Set(
+        events.filter((e) => e.state === "completed").map((e) => e.request_id),
+      ).size,
       requests.length,
     );
   });
@@ -661,4 +681,45 @@ test("L02 overlapping price/date windows retain both complete literal observatio
   assert.ok(excerpt.includes(row.quote));
   assert.ok(excerpt.includes(row.date_quote));
   assert.ok(excerpt.length <= 3000);
+});
+
+test("PILOT001 L01 price rejection reasons preserve strict amounts, scope and exact dates", () => {
+  const valid = observation();
+  const symbol = { ...valid, amount_min: "$500" };
+  const heading = { ...valid, quote: "Public rice prices" };
+  const month = {
+    ...valid,
+    source_date_text: "September 2026",
+    date_quote: "Published September 2026.",
+  };
+  const assessed = assessRecentPriceObservations(
+    [symbol, heading, month, valid],
+    [
+      {
+        url: source,
+        title: "Public rice prices",
+        content: `Public rice prices ${valid.quote} ${valid.date_quote} Published September 2026.`,
+      },
+    ],
+    asOf,
+    30,
+  );
+  assert.deepEqual(
+    assessed.rejections.map((item) => item.reason),
+    [
+      "amount_not_in_quote",
+      "amount_not_in_quote",
+      "invalid_amount_or_exact_date",
+    ],
+  );
+  assert.equal(assessed.observations.length, 1);
+  assert.deepEqual(
+    assessed.observations,
+    groundRecentPriceObservations([valid], citations(valid), asOf, 30),
+  );
+  assert.equal(parsePublicPriceDate("SeptemberGarbage 8, 2026"), null);
+  assert.equal(
+    parsePublicPriceDate("Sept 8, 2026"),
+    "2026-09-08T00:00:00.000Z",
+  );
 });

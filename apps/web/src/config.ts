@@ -164,7 +164,10 @@ export function loadWebConfig(
       "Production Gemini canonicalization configuration is incomplete.",
     );
   }
-  if (runtime === "production" && environment.MATCHBASE_OPENROUTER_API_KEY) {
+  if (
+    runtime === "production" &&
+    (environment.MATCHBASE_OPENROUTER_API_KEY || environment.OPENROUTER_API_KEY)
+  ) {
     throw new Error("OpenRouter API keys are prohibited in the web runtime.");
   }
   const originAdmissionKeyText = environment.MATCHBASE_ORIGIN_ADMISSION_KEY;

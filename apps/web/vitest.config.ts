@@ -19,6 +19,7 @@ export default defineConfig({
       "src/canonicalization-runtime.test.ts",
       "src/config.test.ts",
       "src/fetch-runtime.simulator.test.ts",
+      "src/fetch-runtime-admission.test.ts",
       "src/gcs-artifact-object-reader.test.ts",
       "src/google-risc-route-core.test.ts",
       "src/bounded-request-body.test.ts",

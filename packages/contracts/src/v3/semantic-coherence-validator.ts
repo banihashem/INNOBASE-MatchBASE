@@ -129,16 +129,112 @@ const PROHIBITED_DEMONSTRATION_BRANDS = [
   "bradford white",
 ];
 
+// Applications, certifications and operating parameters are not product identities.
+// This bounded vocabulary is a contamination guard, not a general classifier:
+// unsupported or ambiguous products must reach interpretation instead of being
+// assigned to an unrelated catalog family merely because they share a use case.
+const CONTEXT_ONLY_KEYWORDS = new Set([
+  "halal",
+  "sif",
+  "sfda",
+  "electric water",
+  "vitreous enamel",
+  "ped 2014/68/eu",
+  "10 bar",
+  "water treatment",
+  "desalination",
+  "permeate",
+  "brackish water",
+  "تصفیه آب",
+  "غشا",
+  "تحلية المياه",
+  "بن",
+]);
+
+const PLURAL_PRODUCT_KEYWORDS = new Set([
+  "chicken",
+  "broiler",
+  "slaughterhouse",
+  "water heater",
+  "waterheater",
+  "calorifier",
+  "electric water heater",
+  "storage water heater",
+  "commercial water heater",
+  "industrial water heater",
+  "immersion heater",
+  "three-phase heater",
+  "3-phase heater",
+  "ro membrane",
+  "filtration system",
+  "pump",
+  "impeller",
+  "centrifugal pump",
+  "hydraulic pump",
+  "submersible pump",
+]);
+
+const ARABIC_PRODUCT_KEYWORDS = new Set([
+  "دواجن",
+  "دجاج",
+  "مسلخ",
+  "سخان",
+  "سخانات",
+  "سخان مياه",
+  "مضخة",
+  "مضخات",
+  "قهوة",
+]);
+
+const PERSIAN_PLURAL_KEYWORDS = new Set([
+  "مرغ",
+  "کشتارگاه",
+  "جوجه",
+  "آبگرمکن",
+  "ابگرمکن",
+  "آب‌گرم‌کن",
+  "کالریفر",
+  "مخزن آبگرم",
+  "منبع دوجداره",
+  "المنت برقی",
+  "ممبران",
+  "آب شیرین کن",
+  "پمپ",
+  "الکتروپمپ",
+  "قهوه",
+  "دانه قهوه",
+]);
+
+const PRODUCT_PATTERNS = Object.entries(DOMAIN_KEYWORDS).map(
+  ([domain, config]) => ({
+    domain,
+    patterns: config.keywords
+      .filter((keyword) => !CONTEXT_ONLY_KEYWORDS.has(keyword))
+      .map((keyword) => {
+        const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const prefix = ARABIC_PRODUCT_KEYWORDS.has(keyword) ? "(?:ال)?" : "";
+        const plural = PLURAL_PRODUCT_KEYWORDS.has(keyword)
+          ? "s?"
+          : PERSIAN_PLURAL_KEYWORDS.has(keyword)
+            ? "(?:‌?های?)?"
+            : "";
+        // Unicode boundaries protect short Arabic/Persian words as well as Latin
+        // abbreviations. ASCII \b would not correctly delimit those scripts.
+        return new RegExp(
+          `(?<![\\p{L}\\p{N}_])${prefix}${escaped}${plural}(?![\\p{L}\\p{N}_])`,
+          "iu",
+        );
+      }),
+  }),
+);
+
 export function detectAllDomains(text?: string | null): string[] {
   if (!text) return [];
-  const lower = text.toLowerCase();
+  const normalized = text.normalize("NFKC");
   const matched = new Set<string>();
-  for (const [domain, config] of Object.entries(DOMAIN_KEYWORDS)) {
-    for (const kw of config.keywords) {
-      if (lower.includes(kw)) {
-        matched.add(domain);
-        break;
-      }
+  for (const { domain, patterns } of PRODUCT_PATTERNS) {
+    if (patterns.some((pattern) => pattern.test(normalized))) {
+      matched.add(domain);
     }
   }
   return Array.from(matched);

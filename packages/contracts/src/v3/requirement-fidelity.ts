@@ -193,7 +193,8 @@ export function validateStep1RequirementFidelity(
     // removing one is. Other concept-specific qualifier behavior is unchanged.
     const qualifierKeys =
       a.concept === "supplier_profile" ||
-      a.concept === "supplier_operational_presence"
+      a.concept === "supplier_operational_presence" ||
+      a.concept === "certification"
         ? new Set([...Object.keys(a.qualifiers), ...Object.keys(b.qualifiers)])
         : new Set(Object.keys(a.qualifiers));
     const valueMatches =
@@ -202,6 +203,7 @@ export function validateStep1RequirementFidelity(
         : normalizeRequirementText(String(a.value)).toLowerCase() ===
           normalizeRequirementText(String(b.value)).toLowerCase();
     return (
+      a.concept === b.concept &&
       valueMatches &&
       a.unit === b.unit &&
       a.operator === b.operator &&
@@ -217,7 +219,12 @@ export function validateStep1RequirementFidelity(
   for (const fact of expected) {
     const item = requirementFor(fact);
     const candidates = observed.filter(
-      (candidate) => candidate.concept === fact.concept,
+      (candidate) =>
+        candidate.concept === fact.concept ||
+        (["delivery_terms", "delivery_terms_options"].includes(fact.concept) &&
+          ["delivery_terms", "delivery_terms_options"].includes(
+            candidate.concept,
+          )),
     );
     if (!candidates.length) {
       const evaluated = { ...item, fidelity_status: "omitted" as const };

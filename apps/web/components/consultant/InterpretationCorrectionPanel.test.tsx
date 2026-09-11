@@ -184,7 +184,7 @@ describe("L12 reviewable interpretation correction", () => {
       screen.getByRole("button", { name: "Suggest a correction" }),
     );
     await screen.findByRole("status");
-    fireEvent.click(screen.getByRole("button", { name: "Cancel suggestion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop waiting" }));
     await act(async () => pending.resolve(response()));
     await waitFor(() =>
       expect(
@@ -193,6 +193,131 @@ describe("L12 reviewable interpretation correction", () => {
     );
     expect(
       screen.queryByLabelText("Proposed English interpretation"),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("MB-UX-QUALITY-001 L03 bounded correction recovery", () => {
+  it("discloses the billable recovery limit and preserves text while waiting without client retries", async () => {
+    const pending = deferred();
+    const fetch = vi.fn().mockReturnValue(pending.promise);
+    vi.stubGlobal("fetch", fetch);
+    render(<Harness />);
+    expect(
+      screen.getByText(/up to 3 AI attempts may be charged/),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Suggest a correction" }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "within a total of 3 AI attempts",
+    );
+    expect(
+      screen.getByRole("region", {
+        name: "Suggested interpretation correction",
+      }),
+    ).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByLabelText("Current interpretation")).toHaveValue(
+      original,
+    );
+    expect(
+      screen.getByText(
+        /Stopping the wait does not cancel this correction operation/,
+      ),
+    ).toBeInTheDocument();
+    await act(async () => pending.resolve(response()));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("region", {
+        name: "Suggested interpretation correction",
+      }),
+    ).toHaveAttribute("aria-busy", "false");
+  });
+
+  it("shows server-reported recovery attempts and total cost without applying or approving the proposal", async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      response({
+        source: "ai_correction",
+        cost_usd: 0.024,
+        attempts_used: 3,
+        recovered: true,
+      }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    render(<Harness />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Suggest a correction" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "ready after 3 AI attempts",
+      ),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "An earlier response was repaired automatically",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Nothing has been applied or approved",
+    );
+    expect(screen.getByText(/Recorded cost: USD 0.024000/)).toHaveTextContent(
+      "Total across all attempts",
+    );
+    expect(screen.getByLabelText("Current interpretation")).toHaveValue(
+      original,
+    );
+    expect(
+      screen.getByRole("button", { name: "Apply suggested correction" }),
+    ).toBeEnabled();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a failed validated response reviewable without repeating the request or hiding diagnostic details", async () => {
+    const message =
+      "MB-422-CORRECTION-FIDELITY: Correction changed a required specification.";
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: message }), { status: 422 }),
+      );
+    vi.stubGlobal("fetch", fetch);
+    render(<Harness />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Suggest a correction" }),
+    );
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("could not pass the requirement checks");
+    expect(alert).toHaveTextContent("Your text and approval are unchanged");
+    expect(alert).not.toHaveTextContent("MB-422");
+    expect(screen.getByText(message).closest("details")).not.toHaveAttribute(
+      "open",
+    );
+    expect(screen.getByLabelText("Current interpretation")).toHaveValue(
+      original,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Apply suggested correction" }),
+    ).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { source: "ai_correction", attempts_used: 4, recovered: true },
+    { source: "ai_correction", attempts_used: 1, recovered: true },
+    { source: "saved_interpretation", attempts_used: 2, recovered: false },
+  ])("refuses inconsistent recovery metadata %j", async (metadata) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(metadata)));
+    render(<Harness />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Suggest a correction" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No validated correction",
+    );
+    expect(screen.getByLabelText("Current interpretation")).toHaveValue(
+      original,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Apply suggested correction" }),
     ).not.toBeInTheDocument();
   });
 });

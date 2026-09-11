@@ -108,8 +108,13 @@ function fixture(t, saved = bad) {
     );
     state.posts.push(JSON.parse(options.body));
     await state.onPost?.();
+    if (state.responseStatus && state.responseStatus !== 200)
+      return Response.json(
+        { error: { message: "Synthetic provider failure" } },
+        { status: state.responseStatus },
+      );
     return Response.json({
-      id: "gen-correction-test",
+      id: `gen-correction-test-${state.posts.length}`,
       model,
       choices: [
         {
@@ -289,14 +294,14 @@ test("AI correction makes one low-reasoning BYOK call and records complete prepa
   assert.equal(costs.calls, 1);
 });
 
-test("an invalid generated suggestion fails the real fidelity gate and retains billed accounting", async (t) => {
+test("L03 repeated invalid suggestions exhaust three shared attempts and retain every billed call", async (t) => {
   const s = fixture(t);
   s.payload = { text: bad, changes: ["No actual repair."] };
   await assert.rejects(
     s.invoke(),
     (error) => error.code === "MB-422-CORRECTION-FIDELITY",
   );
-  assert.equal(s.posts.length, 1);
+  assert.equal(s.posts.length, 3);
   assert.equal(s.row.approved_request_revision, null);
   assert.equal(
     s.row.workflow_metadata.step1_interpretation.english_translation,
@@ -304,8 +309,100 @@ test("an invalid generated suggestion fails the real fidelity gate and retains b
   );
   assert.equal(
     summarizeResearchCosts(s.costEvents()).recorded_total_usd,
-    0.045,
+    0.135,
   );
+  const feedback = JSON.parse(
+    s.posts[1].messages[1].content,
+  ).previous_attempt_feedback;
+  assert.equal(feedback.code, "MB-422-CORRECTION-FIDELITY");
+  assert.ok(feedback.mutated.length > 0);
+  assert.match(feedback.rejected_response, /200 liters/);
+  const validationEvents = s.writes
+    .filter(
+      (w) =>
+        w.sql.startsWith("INSERT INTO consultant_workflow_event") &&
+        w.params[5] === "step1_correction_validation",
+    )
+    .map((w) => JSON.parse(w.params[6]));
+  assert.ok(validationEvents.every((e) => e.loop === 1));
+  assert.deepEqual(
+    validationEvents.map((e) => e.state),
+    ["started", "retrying", "retrying", "failed"],
+  );
+});
+
+test("L03 a rejected correction is automatically repaired without changing user edits or approvals", async (t) => {
+  const s = fixture(t);
+  const original = structuredClone(s.row);
+  s.onPost = () => {
+    s.payload = {
+      text: s.posts.length === 1 ? bad : good,
+      changes: ["Restore requested capacity."],
+    };
+  };
+  const result = await s.invoke();
+  assert.equal(result.suggested_translation, good);
+  assert.equal(result.recovered, true);
+  assert.equal(result.attempts_used, 2);
+  assert.equal(result.cost_usd, 0.09);
+  assert.deepEqual(s.row, original);
+  const validations = s.writes
+    .filter((w) => w.sql.startsWith("INSERT INTO consultant_workflow_event"))
+    .map((w) => JSON.parse(w.params.at(-1)))
+    .filter((e) => e.operation === "correction_validation");
+  assert.deepEqual(
+    validations.map((e) => e.state),
+    ["started", "retrying", "completed"],
+  );
+  assert.ok(validations.every((e) => e.loop === 1));
+});
+
+test("L03 schema failures are repaired with feedback within the same three-call allowance", async (t) => {
+  const s = fixture(t);
+  s.onPost = () => {
+    s.payload =
+      s.posts.length < 3
+        ? { wrong: "shape" }
+        : { text: good, changes: ["Restored capacity."] };
+  };
+  const result = await s.invoke();
+  assert.equal(result.attempts_used, 3);
+  assert.equal(result.cost_usd, 0.135);
+  assert.equal(
+    JSON.parse(s.posts[1].messages[1].content).previous_attempt_feedback.code,
+    "MB-422-LIVE-SCHEMA",
+  );
+});
+
+test("L03 transport and fidelity recovery share a maximum of three provider calls", async (t) => {
+  const s = fixture(t);
+  s.onPost = () => {
+    s.responseStatus = s.posts.length === 2 ? 503 : 200;
+    s.payload = { text: bad, changes: ["Still wrong."] };
+  };
+  await assert.rejects(
+    s.invoke(),
+    (e) => e.code === "MB-422-CORRECTION-FIDELITY",
+  );
+  assert.equal(s.posts.length, 3);
+  assert.equal(s.row.approved_request_revision, null);
+});
+
+test("L03 provider permission denials are not retried as response repair", async (t) => {
+  const s = fixture(t);
+  s.responseStatus = 403;
+  await assert.rejects(s.invoke(), /403/);
+  assert.equal(s.posts.length, 1);
+});
+
+test("L03 a state change after rejection prevents the next correction attempt", async (t) => {
+  const s = fixture(t);
+  s.payload = { text: bad, changes: ["Still wrong."] };
+  s.onRead = () => {
+    if (s.posts.length === 1) s.row.current_state = "prep_step1_approved";
+  };
+  await assert.rejects(s.invoke(), (e) => e.code === "MB-409-CORRECTION-STATE");
+  assert.equal(s.posts.length, 1);
 });
 
 test("stale or approved sessions discard completed suggestions but preserve the provider charge", async (t) => {

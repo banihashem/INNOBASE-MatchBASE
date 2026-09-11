@@ -99,11 +99,15 @@ async function mockExperience(page, options = {}) {
   const progress = () => ({
     phase:
       state === "workflow_failed"
-        ? "user_cancelled"
+        ? options.preparationRecovery
+          ? "step2_advisory"
+          : "user_cancelled"
         : state === "progressive_reveal_ready"
           ? "completed"
           : state === "prep_step2_advisory_generating"
-            ? "advisory"
+            ? options.preparationRecovery
+              ? "step2_advisory_validation"
+              : "advisory"
             : "discovery_openai",
     loop: 1,
     max_loops: state === "prep_step2_advisory_generating" ? 3 : 1,
@@ -112,6 +116,10 @@ async function mockExperience(page, options = {}) {
         ? "Preparing the advisory brief from saved requirements."
         : "Reviewing cited supplier evidence.",
     updated_at: "2026-09-09T10:05:00Z",
+    ...(options.preparationRecovery &&
+    state === "prep_step2_advisory_generating"
+      ? { recovery_attempt: 2, max_recovery_attempts: 3 }
+      : {}),
   });
   const current = () => ({
     run_id: runId,
@@ -123,7 +131,8 @@ async function mockExperience(page, options = {}) {
     intake: savedIntake,
     revealed_count: revealed,
     retry_action:
-      state === "prep_step2_advisory_generating"
+      state === "prep_step2_advisory_generating" ||
+      (options.preparationRecovery && state === "workflow_failed")
         ? "prepare"
         : /running|dispatching|failed/.test(state)
           ? "research"
@@ -134,7 +143,11 @@ async function mockExperience(page, options = {}) {
       product_name: "Frozen poultry",
       product_category: "Food",
     },
-    ...(state !== "prep_step1_awaiting_approval"
+    ...(state !== "prep_step1_awaiting_approval" &&
+    !(
+      options.preparationRecovery &&
+      ["workflow_failed", "prep_step2_advisory_generating"].includes(state)
+    )
       ? {
           step2_advisory: {
             loop1_trade_lane: "Trade source findings for the approved request.",
@@ -146,7 +159,8 @@ async function mockExperience(page, options = {}) {
           },
         }
       : {}),
-    ...(![
+    ...(!(options.preparationRecovery && state === "workflow_failed") &&
+    ![
       "prep_step1_awaiting_approval",
       "prep_step2_advisory_generating",
     ].includes(state)
@@ -160,7 +174,34 @@ async function mockExperience(page, options = {}) {
       : {}),
     ...(state === "progressive_reveal_ready" ? { output: sourceOutput } : {}),
     ...(state === "workflow_failed"
-      ? { error: "Research stopped by your request." }
+      ? {
+          error: options.preparationRecovery
+            ? "MB-502-LIVE-PROVIDER: Provider returned HTTP 400: provider credential is not accepted."
+            : "Research stopped by your request.",
+        }
+      : {}),
+    ...(options.preparationRecovery &&
+    state === "prep_step2_advisory_generating"
+      ? {
+          activity: [
+            {
+              phase: "step2_advisory",
+              loop: 1,
+              started: 2,
+              failed: 1,
+              completed: 0,
+              updated_at: "2026-09-09T10:05:00Z",
+            },
+            {
+              phase: "step2_advisory_validation",
+              loop: 1,
+              started: 1,
+              failed: 0,
+              completed: 0,
+              updated_at: "2026-09-09T10:05:00Z",
+            },
+          ],
+        }
       : {}),
     progress: progress(),
   });
@@ -272,6 +313,7 @@ async function mockExperience(page, options = {}) {
           });
         if (
           state === "prep_step2_advisory_generating" &&
+          !options.preparationRecovery &&
           ++preparationReads > 1
         )
           state = "prep_step3_prompt_awaiting_approval";
@@ -314,6 +356,13 @@ async function mockExperience(page, options = {}) {
       }
       if (body.action === "approve_step1") {
         translation = body.edited_translation;
+        state = "prep_step2_advisory_generating";
+        return reply(
+          { success: true, processing: true, session: current() },
+          202,
+        );
+      }
+      if (body.action === "retry_workflow" && options.preparationRecovery) {
         state = "prep_step2_advisory_generating";
         return reply(
           { success: true, processing: true, session: current() },
@@ -586,6 +635,66 @@ for (const viewport of [
   });
 }
 
+test("MB-UX-QUALITY-001 L04 preparation recovers automatically after one explicit retry and still waits for plan approval", async ({
+  page,
+}) => {
+  const mock = await mockExperience(page, {
+    state: "workflow_failed",
+    preparationRecovery: true,
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/consultant/workflow?run_id=${runId}`);
+  await expect(
+    page.getByText(
+      /The advisory service could not use an accepted provider credential/,
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Your request does not need to be rewritten/),
+  ).toBeVisible();
+  await expect(page.getByLabel("Preparation usage")).toContainText(
+    "up to 3 attempts",
+  );
+  await expect(page.getByLabel("Preparation usage")).toContainText(
+    "will not switch to OpenRouter credits",
+  );
+  expect(mock.actions).toEqual([]);
+  await page
+    .getByRole("button", { name: "Retry failed preparation stage" })
+    .click();
+  await expect(
+    page.getByText(/Automatic recovery · Attempt 2 of 3/),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Preparation in progress", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Editable English Interpretation")).toHaveValue(
+    "We require frozen poultry for wholesale buyers in Saudi Arabia.",
+  );
+  await expect(
+    page.getByLabel("Editable English Interpretation"),
+  ).toBeDisabled();
+  await expect(page.getByLabel("Editable research plan")).toHaveCount(0);
+  await checkView(page, "L04 bounded preparation recovery");
+  mock.setState("prep_step3_prompt_awaiting_approval");
+  await expect(
+    page.getByRole("heading", { name: "Review research plan" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Editable research plan")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Approve plan & review cost/ }),
+  ).toBeEnabled();
+  await expect(page.getByText(/Automatic recovery/)).toHaveCount(0);
+  await expect(page.getByRole("progressbar")).toHaveCount(0);
+  expect(
+    mock.actions.filter((item) => item.action === "retry_workflow"),
+  ).toHaveLength(1);
+  expect(
+    mock.actions.filter((item) => /approve|execute|quote/.test(item.action)),
+  ).toEqual([]);
+  expect(mock.unexpected).toEqual([]);
+});
+
 test("DEV-004 L01 three-box request through explicit approvals, progress, 20 suppliers and PDF", async ({
   page,
 }) => {
@@ -626,7 +735,7 @@ test("DEV-004 L01 three-box request through explicit approvals, progress, 20 sup
     .click();
   await expect(
     page.getByRole("heading", {
-      name: "Advisory research · Round 1 of 3",
+      name: "Advisory research · Topic 1 of 3",
       exact: true,
     }),
   ).toBeVisible();

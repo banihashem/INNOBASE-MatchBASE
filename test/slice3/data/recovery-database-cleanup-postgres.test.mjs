@@ -17,103 +17,104 @@ async function waitForObservedDrain(draining, cleanup) {
   ]);
 }
 
-(database ? test : test.skip)(
-  "MB-UX-PILOT-001 L01 cleanup waits for delayed socket shutdown without terminating the backend",
-  async () => {
-    const databaseName = `matchbase_recovery_${randomUUID().replaceAll("-", "")}`;
-    const admin = createPool({ connectionString: database, max: 1 });
-    let pool;
-    let created = false;
-    let finishSocket;
-    let cleanup;
-    try {
-      await admin.query(`CREATE DATABASE "${databaseName}"`);
-      created = true;
-      const isolated = new URL(database);
-      isolated.pathname = `/${databaseName}`;
-      pool = createPool({ connectionString: isolated.href, max: 1 });
-      const errors = [];
-      pool.on("error", (error) => errors.push(error));
-      const client = await pool.connect();
-      await client.query("SELECT 1");
-      const originalEnd = client.connection.end.bind(client.connection);
-      let shutdownRequested = false;
-      // Hold only this owned test connection's protocol shutdown to expose the pool race.
-      client.connection.end = () => {
-        shutdownRequested = true;
-      };
-      finishSocket = originalEnd;
-      client.release();
-      await pool.end();
-      assert.equal(shutdownRequested, true);
-      const backend = await admin.query(
-        "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=$1",
-        [databaseName],
-      );
-      assert.equal(
-        backend.rows[0].n,
-        1,
-        "pool.end resolves while the server connection remains",
-      );
-
-      let observedDrain;
-      const draining = new Promise((resolve) => {
-        observedDrain = resolve;
-      });
-      const tracedAdmin = {
-        async query(sql, values) {
-          const result = await admin.query(sql, values);
-          if (
-            sql.includes("pg_stat_activity") &&
-            result.rows[0].connections > 0
-          )
-            observedDrain();
-          return result;
-        },
-      };
-      let cleanupFinished = false;
-      cleanup = dropDrainedRecoveryDatabase(tracedAdmin, databaseName).then(
-        () => {
-          cleanupFinished = true;
-        },
-      );
-      await waitForObservedDrain(draining, cleanup);
-      assert.equal(
-        cleanupFinished,
-        false,
-        "cleanup must await server-side drain",
-      );
-      finishSocket();
-      finishSocket = undefined;
-      await cleanup;
-      created = false;
-      assert.equal(
-        errors.length,
-        0,
-        "cleanup must not generate a PostgreSQL administrator-shutdown error",
-      );
-      assert.equal(
-        (
-          await admin.query(
-            "SELECT count(*)::int AS n FROM pg_database WHERE datname=$1",
-            [databaseName],
-          )
-        ).rows[0].n,
-        0,
-      );
-    } finally {
+for (const prefix of ["matchbase_recovery", "matchbase_task074"])
+  (database ? test : test.skip)(
+    `MB-UX-QUALITY-001 L04 ${prefix} cleanup waits for delayed socket shutdown without terminating the backend`,
+    async () => {
+      const databaseName = `${prefix}_${randomUUID().replaceAll("-", "")}`;
+      const admin = createPool({ connectionString: database, max: 1 });
+      let pool;
+      let created = false;
+      let finishSocket;
+      let cleanup;
       try {
-        finishSocket?.();
-        if (pool && !pool.ending) await pool.end();
-        if (cleanup) await cleanup;
-        else if (created)
-          await dropDrainedRecoveryDatabase(admin, databaseName);
+        await admin.query(`CREATE DATABASE "${databaseName}"`);
+        created = true;
+        const isolated = new URL(database);
+        isolated.pathname = `/${databaseName}`;
+        pool = createPool({ connectionString: isolated.href, max: 1 });
+        const errors = [];
+        pool.on("error", (error) => errors.push(error));
+        const client = await pool.connect();
+        await client.query("SELECT 1");
+        const originalEnd = client.connection.end.bind(client.connection);
+        let shutdownRequested = false;
+        // Hold only this owned test connection's protocol shutdown to expose the pool race.
+        client.connection.end = () => {
+          shutdownRequested = true;
+        };
+        finishSocket = originalEnd;
+        client.release();
+        await pool.end();
+        assert.equal(shutdownRequested, true);
+        const backend = await admin.query(
+          "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=$1",
+          [databaseName],
+        );
+        assert.equal(
+          backend.rows[0].n,
+          1,
+          "pool.end resolves while the server connection remains",
+        );
+
+        let observedDrain;
+        const draining = new Promise((resolve) => {
+          observedDrain = resolve;
+        });
+        const tracedAdmin = {
+          async query(sql, values) {
+            const result = await admin.query(sql, values);
+            if (
+              sql.includes("pg_stat_activity") &&
+              result.rows[0].connections > 0
+            )
+              observedDrain();
+            return result;
+          },
+        };
+        let cleanupFinished = false;
+        cleanup = dropDrainedRecoveryDatabase(tracedAdmin, databaseName).then(
+          () => {
+            cleanupFinished = true;
+          },
+        );
+        await waitForObservedDrain(draining, cleanup);
+        assert.equal(
+          cleanupFinished,
+          false,
+          "cleanup must await server-side drain",
+        );
+        finishSocket();
+        finishSocket = undefined;
+        await cleanup;
+        created = false;
+        assert.equal(
+          errors.length,
+          0,
+          "cleanup must not generate a PostgreSQL administrator-shutdown error",
+        );
+        assert.equal(
+          (
+            await admin.query(
+              "SELECT count(*)::int AS n FROM pg_database WHERE datname=$1",
+              [databaseName],
+            )
+          ).rows[0].n,
+          0,
+        );
       } finally {
-        await admin.end();
+        try {
+          finishSocket?.();
+          if (pool && !pool.ending) await pool.end();
+          if (cleanup) await cleanup;
+          else if (created)
+            await dropDrainedRecoveryDatabase(admin, databaseName);
+        } finally {
+          await admin.end();
+        }
       }
-    }
-  },
-);
+    },
+  );
 
 test("MB-UX-PILOT-001 L01 cleanup rejects unrelated database names before querying", async () => {
   const admin = {
@@ -125,6 +126,8 @@ test("MB-UX-PILOT-001 L01 cleanup rejects unrelated database names before queryi
     "postgres",
     "matchbase_slice1",
     "matchbase_recovery_invalid",
+    "matchbase_task074_invalid",
+    "matchbase_task074_preserved_data",
     'matchbase_recovery_";DROP DATABASE postgres;--',
   ]) {
     await assert.rejects(dropDrainedRecoveryDatabase(admin, name), {

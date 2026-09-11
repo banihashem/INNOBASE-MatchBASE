@@ -7,7 +7,9 @@ import {
   getOrRestoreWorkflowSession,
   getWorkflowSession,
   queueConsultantWorkflowStep,
+  generateApprovedConsultantPreparation,
 } from "../../../packages/application/dist/consultant-v3-service.js";
+import { PreparationModelGateway } from "../../../packages/application/dist/preparation-gateway.js";
 
 // Exercise production service functions with an in-memory Queryable. These tests
 // never connect to PostgreSQL or call a provider.
@@ -79,6 +81,8 @@ function workflowFixture(state = "prep_step3_prompt_awaiting_approval") {
         sessionWrites.push(params);
         return { rows: [] };
       }
+      if (sql.includes("INSERT INTO consultant_workflow_event"))
+        return { rows: [] };
       throw new Error(
         `Unexpected query in isolated service fixture: ${sql.slice(0, 80)}`,
       );
@@ -111,6 +115,93 @@ test("MB-UX-LIVE-001 L01 replayed preparation cannot reset a queued research sta
     0,
     "another stage's job must never rewrite the session",
   );
+});
+
+test("MB-UX-QUALITY-001 L04 a saved advisory bound to unchanged approved input is reused after prompt failure and restore", async (t) => {
+  const fixture = workflowFixture("prep_step1_approved");
+  await getOrRestoreWorkflowSession(
+    fixture.db,
+    fixture.identity.account_id,
+    fixture.identity.run_id,
+  );
+  const generatePrompt =
+    PreparationModelGateway.prototype.generateDeepResearchPrompt;
+  PreparationModelGateway.prototype.generateDeepResearchPrompt = async () => {
+    throw new Error("Interrupted prompt generation");
+  };
+  t.after(() => {
+    PreparationModelGateway.prototype.generateDeepResearchPrompt =
+      generatePrompt;
+  });
+  await assert.rejects(
+    generateApprovedConsultantPreparation(fixture.identity.run_id, fixture.db),
+    /Interrupted prompt generation/,
+  );
+  const saved = fixture.sessionWrites.at(-1);
+  const metadata = JSON.parse(saved[17]);
+  assert.match(metadata.advisory_source_hash, /^[a-f0-9]{64}$/);
+  fixture.row.current_state = "workflow_failed";
+  fixture.row.advisory_output = JSON.parse(saved[8]);
+  fixture.row.workflow_metadata = metadata;
+  // PostgreSQL jsonb can reorder keys; ordering must not invalidate unchanged content.
+  fixture.row.approved_request_revision = Object.fromEntries(
+    Object.entries(fixture.row.approved_request_revision).reverse(),
+  );
+  const restored = await getOrRestoreWorkflowSession(
+    fixture.db,
+    fixture.identity.account_id,
+    fixture.identity.run_id,
+  );
+  const advisory = structuredClone(restored.step2_advisory);
+  const version = restored.advisory_version_id;
+  const generateAdvisory =
+    PreparationModelGateway.prototype.generateAdvisoryLoops;
+  PreparationModelGateway.prototype.generateAdvisoryLoops = async () => {
+    throw new Error("Completed advisory must not rerun");
+  };
+  PreparationModelGateway.prototype.generateDeepResearchPrompt = generatePrompt;
+  t.after(() => {
+    PreparationModelGateway.prototype.generateAdvisoryLoops = generateAdvisory;
+  });
+  const result = await generateApprovedConsultantPreparation(
+    fixture.identity.run_id,
+  );
+  assert.deepEqual(result.step2_advisory, advisory);
+  assert.equal(result.advisory_version_id, version);
+  assert.equal(result.state, "prep_step3_prompt_awaiting_approval");
+  assert.equal(result.step3_deep_prompt.is_approved, false);
+});
+
+test("MB-UX-QUALITY-001 L04 changed approved content and legacy unbound advisories cannot be reused", async (t) => {
+  const generateAdvisory =
+    PreparationModelGateway.prototype.generateAdvisoryLoops;
+  let calls = 0;
+  PreparationModelGateway.prototype.generateAdvisoryLoops = async function (
+    ...args
+  ) {
+    calls++;
+    return generateAdvisory.apply(this, args);
+  };
+  t.after(() => {
+    PreparationModelGateway.prototype.generateAdvisoryLoops = generateAdvisory;
+  });
+  const fixture = workflowFixture("prep_step1_approved");
+  await getOrRestoreWorkflowSession(
+    fixture.db,
+    fixture.identity.account_id,
+    fixture.identity.run_id,
+  );
+  const session = await generateApprovedConsultantPreparation(
+    fixture.identity.run_id,
+  );
+  const firstVersion = session.advisory_version_id;
+  session.approved_request_revision.english_translation +=
+    " Required destination is Germany.";
+  await generateApprovedConsultantPreparation(fixture.identity.run_id);
+  assert.notEqual(session.advisory_version_id, firstVersion);
+  delete session.advisory_source_hash;
+  await generateApprovedConsultantPreparation(fixture.identity.run_id);
+  assert.equal(calls, 3);
 });
 
 test("MB-UX-LIVE-001 L01 explicit blank prompts are rejected without approving earlier text", async () => {

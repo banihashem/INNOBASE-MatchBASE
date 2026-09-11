@@ -10,6 +10,7 @@ import { createPool, migrateUp, type ConnectionPool } from "@matchbase/data";
 import type { WebConfig } from "./config";
 import { closeFetchRuntime, handleRoute } from "./fetch-runtime";
 import { createWebRuntime } from "./runtime";
+import { dropDrainedRecoveryDatabase } from "../../../test/slice3/support/recovery-database-cleanup.mjs";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres = databaseUrl ? describe.sequential : describe.skip;
@@ -31,6 +32,7 @@ describePostgres("Admin governance runs HTTP read boundary", () => {
   let controlPool: ConnectionPool;
   let isolatedDatabaseUrl: string;
   const isolatedDatabaseName = `matchbase_task074_${randomUUID().replaceAll("-", "")}`;
+  let isolatedDatabaseCreated = false;
   let server: Server;
   let baseUrl: string;
   let allowed: Actor[];
@@ -164,6 +166,7 @@ describePostgres("Admin governance runs HTTP read boundary", () => {
       max: 1,
     });
     await controlPool.query(`CREATE DATABASE ${isolatedDatabaseName}`);
+    isolatedDatabaseCreated = true;
     const isolatedUrl = new URL(databaseUrl!);
     isolatedUrl.pathname = `/${isolatedDatabaseName}`;
     isolatedDatabaseUrl = isolatedUrl.toString();
@@ -426,19 +429,24 @@ describePostgres("Admin governance runs HTTP read boundary", () => {
   }, 30_000);
 
   afterAll(async () => {
-    await closeFetchRuntime();
-    if (server)
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    if (pool) await pool.end();
-    if (controlPool) {
-      await controlPool.query(
-        `DROP DATABASE IF EXISTS ${isolatedDatabaseName} WITH (FORCE)`,
-      );
-      await controlPool.end();
-    }
-    for (const [key, value] of originalEnvironment) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
+    try {
+      await closeFetchRuntime();
+      if (server)
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      if (pool) await pool.end();
+      if (controlPool && isolatedDatabaseCreated) {
+        await dropDrainedRecoveryDatabase(controlPool, isolatedDatabaseName);
+        isolatedDatabaseCreated = false;
+      }
+    } finally {
+      try {
+        if (controlPool) await controlPool.end();
+      } finally {
+        for (const [key, value] of originalEnvironment) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
     }
   });
 

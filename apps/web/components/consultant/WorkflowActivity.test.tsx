@@ -11,6 +11,90 @@ const started = {
   failed: 0,
   updated_at: "2026-09-09T10:00:00Z",
 };
+it("MB-UX-QUALITY-001 L04 shows recorded preparation recovery without claiming supplier research or completion", () => {
+  const { rerender } = render(
+    <WorkflowActivity
+      state="prep_step2_advisory_generating"
+      progress={{
+        phase: "step2_advisory_validation",
+        loop: 1,
+        max_loops: 3,
+        recovery_attempt: 2,
+        max_recovery_attempts: 3,
+        message: "MB-502 provider detail belongs in support only",
+      }}
+      activity={[
+        { ...started, phase: "step2_advisory", started: 2, failed: 1 },
+        { ...started, phase: "step2_advisory_validation" },
+      ]}
+    />,
+  );
+  expect(
+    screen.getByRole("heading", {
+      name: "Preparing and checking your request",
+    }),
+  ).toBeVisible();
+  expect(screen.getByText(/Automatic recovery · Attempt 2 of 3/)).toBeVisible();
+  expect(screen.getByText(/Completed topics are retained/)).toHaveTextContent(
+    "may be charged",
+  );
+  expect(screen.getByText("Preparation in progress")).toBeVisible();
+  expect(
+    screen.queryByText("Research steps are running in parallel"),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
+  expect(screen.getByLabelText("Current operation")).not.toHaveTextContent(
+    "MB-502",
+  );
+  rerender(
+    <WorkflowActivity
+      state="prep_step3_prompt_awaiting_approval"
+      progress={{
+        phase: "step3_prompt_validation",
+        recovery_attempt: 2,
+        max_recovery_attempts: 3,
+      }}
+      activity={[
+        {
+          ...started,
+          phase: "step2_advisory",
+          started: 2,
+          failed: 1,
+          completed: 1,
+        },
+        { ...started, phase: "step3_prompt_validation", completed: 1 },
+      ]}
+    />,
+  );
+  expect(
+    screen.getByRole("heading", { name: "Review research plan" }),
+  ).toBeVisible();
+  expect(screen.queryByText(/Automatic recovery/)).not.toBeInTheDocument();
+  expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  expect(screen.getByText(/Research waits for your approval/)).toBeVisible();
+});
+
+it("MB-UX-QUALITY-001 L04 never invents an attempt counter when recovery metadata is absent or invalid", () => {
+  const { rerender } = render(
+    <WorkflowActivity
+      state="prep_step2_advisory_generating"
+      progress={{ phase: "step2_advisory", loop: 1 }}
+    />,
+  );
+  expect(screen.queryByText(/Automatic recovery/)).not.toBeInTheDocument();
+  rerender(
+    <WorkflowActivity
+      state="prep_step2_advisory_generating"
+      progress={{
+        phase: "step2_advisory",
+        loop: 1,
+        recovery_attempt: 7,
+        max_recovery_attempts: 3,
+      }}
+    />,
+  );
+  expect(screen.queryByText(/Automatic recovery/)).not.toBeInTheDocument();
+});
 it("MB-UX-QUALITY-001 L03 retains the approval gate after recorded correction recovery", () => {
   render(
     <WorkflowActivity

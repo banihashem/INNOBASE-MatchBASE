@@ -56,7 +56,12 @@ export async function runNextConsultantWorkflowJob(
       throw new Error("The queued execution is no longer current.");
     await assertLease();
     if (job.stage === "prepare")
-      await generateApprovedConsultantPreparation(job.run_id, db, assertLease);
+      await generateApprovedConsultantPreparation(
+        job.run_id,
+        db,
+        assertLease,
+        cancellation.signal,
+      );
     else
       await executeConsultantWorkflowResearch(db, job.run_id, {
         mode: job.mode,

@@ -137,6 +137,75 @@ async function tick(ms = 0) {
 }
 
 describe("MB-UX-LIVE-001 L03 stage gates", () => {
+  it("MB-UX-QUALITY-001 L04 distinguishes preparation credential failure and discloses paid recovery without resubmitting", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/consultant/workflow?run_id=prepare-credential",
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, options?: RequestInit) => {
+        if (url === "/api/v1/me")
+          return response({
+            tier: "consultant",
+            user_id: "user",
+            account_id: "account",
+          });
+        if (String(url).startsWith("/api/v1/consultant/research-rounds"))
+          return response(roundOverview);
+        if (!options?.method)
+          return response({
+            session: {
+              run_id: "prepare-credential",
+              execution_id: "preparation-execution",
+              state: "workflow_failed",
+              mode: "live",
+              intake: {},
+              retry_action: "prepare",
+              error:
+                "MB-502-LIVE-PROVIDER: Provider returned HTTP 400: provider credential is not accepted.",
+              step1_interpretation: {
+                english_translation:
+                  "Approved potassium hydroxide requirements",
+              },
+              progress: { phase: "step2_advisory", loop: 1, max_loops: 3 },
+            },
+          });
+        requests.push(JSON.parse(String(options.body)));
+        throw new Error("No mutation is expected before user action");
+      }),
+    );
+    render(<ConsultantWorkflowPage />);
+    expect(
+      await screen.findByText(
+        /The advisory service could not use an accepted provider credential/,
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByText(/Your request does not need to be rewritten/),
+    ).toBeVisible();
+    expect(
+      screen.getByLabelText("Editable English Interpretation"),
+    ).toHaveValue("Approved potassium hydroxide requirements");
+    expect(screen.getByLabelText("Preparation usage")).toHaveTextContent(
+      "up to 3 attempts",
+    );
+    expect(screen.getByLabelText("Preparation usage")).toHaveTextContent(
+      "will not switch to OpenRouter credits",
+    );
+    expect(
+      screen.getByRole("button", { name: "Retry failed preparation stage" }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("tab", { name: "Review & prepare" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.getByText(/MB-502-LIVE-PROVIDER/).closest("details"),
+    ).not.toHaveAttribute("open");
+    expect(requests).toHaveLength(0);
+  });
+
   it("L09 exposes Stop only in Section 3 and preserves stopped state against a late poll", async () => {
     window.history.replaceState({}, "", "/consultant/workflow?run_id=run-stop");
     const stalePoll = deferred();
@@ -996,7 +1065,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     );
     render(<ConsultantWorkflowPage />);
     await screen.findByText("Server checkpoint");
-    expect(screen.getByText("Research step 1 of up to 3")).toBeVisible();
+    expect(screen.getByText("Preparation topic 1 of up to 3")).toBeVisible();
     await screen.findByText(
       "Evidence from trade sources",
       {},

@@ -1,4 +1,5 @@
 import { InterpretationCorrectionPanel } from "./InterpretationCorrectionPanel";
+import { PreparationRecoveryNotice } from "./PreparationRecoveryNotice";
 
 interface InterpretationApprovalStepProps {
   runId?: string | null;
@@ -338,6 +339,9 @@ export function InterpretationApprovalStep({
         />
       )}
 
+      {workflowState === "prep_step1_awaiting_approval" && (
+        <PreparationRecoveryNotice />
+      )}
       <div className="flex flex-wrap gap-4 justify-between items-center">
         <p className="text-xs text-slate-300">
           {workflowState === "prep_step1_awaiting_approval"

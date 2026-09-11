@@ -11,6 +11,69 @@ const started = {
   failed: 0,
   updated_at: "2026-09-09T10:00:00Z",
 };
+it("MB-UX-QUALITY-001 L03 retains the approval gate after recorded correction recovery", () => {
+  render(
+    <WorkflowActivity
+      state="prep_step1_awaiting_approval"
+      progress={{ phase: "step1_correction", updated_at: started.updated_at }}
+      activity={[
+        {
+          ...started,
+          phase: "step1_correction",
+          started: 2,
+          failed: 1,
+          completed: 1,
+        },
+      ]}
+    />,
+  );
+  expect(
+    screen.getByRole("heading", { name: "Review English interpretation" }),
+  ).toBeVisible();
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "Review English interpretation",
+  );
+  expect(
+    screen.getByText("Drafting the English correction"),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  expect(screen.queryByText("Research stopped")).not.toBeInTheDocument();
+});
+it("MB-UX-QUALITY-001 L03 distinguishes completed model attempts from an exhausted correction check", () => {
+  const { rerender } = render(
+    <WorkflowActivity
+      state="prep_step1_awaiting_approval"
+      progress={null}
+      activity={[
+        { ...started, phase: "step1_correction", started: 3, completed: 3 },
+        { ...started, phase: "step1_correction_validation", failed: 1 },
+      ]}
+    />,
+  );
+  const review = screen
+    .getByText("Checking correction requirements")
+    .closest("li")!;
+  expect(within(review).getByText("Incomplete")).toBeVisible();
+  expect(within(review).queryByText("Completed")).not.toBeInTheDocument();
+  expect(screen.queryByText(/1 completed · 0 started/)).not.toBeInTheDocument();
+  rerender(
+    <WorkflowActivity
+      state="prep_step1_awaiting_approval"
+      progress={null}
+      activity={[
+        { ...started, phase: "step1_correction", started: 2, completed: 2 },
+        { ...started, phase: "step1_correction_validation", completed: 1 },
+      ]}
+    />,
+  );
+  expect(
+    within(
+      screen.getByText("Checking correction requirements").closest("li")!,
+    ).getByText("Completed"),
+  ).toBeVisible();
+  expect(screen.getByText("1 completed · 1 started")).toBeVisible();
+});
+
 it("L10 progresses only on server events and exposes parallel and completed work without expanding a panel", () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(started.updated_at));

@@ -64,16 +64,38 @@ async function mockExperience(page, options = {}) {
   let version = 1;
   let preparationReads = 0;
   let translation =
+    options.correction?.original_translation ??
     "We require frozen poultry for wholesale buyers in Saudi Arabia.";
   let prompt =
     "Research poultry suppliers and cite their public business evidence.";
   let savedIntake = {
     product_requirement: "Frozen poultry",
     technical_compliance: "Export documentation and frozen transport",
-    order_profile: "Wholesale buyers in Saudi Arabia",
+    order_profile: options.correction
+      ? "Order 3 tonnes of frozen poultry for wholesale buyers in Saudi Arabia"
+      : "Wholesale buyers in Saudi Arabia",
   };
   const actions = [];
   const unexpected = [];
+  const fidelity = (text) => {
+    const valid =
+      !options.correction || text === options.correction.suggested_translation;
+    return {
+      valid,
+      preserved_count: options.correction && valid ? 1 : 0,
+      omitted_count: valid ? 0 : 1,
+      mutated_count: 0,
+      omitted_items: valid
+        ? []
+        : [
+            {
+              requirement_id: "synthetic-order-quantity",
+              concept: "Order quantity",
+              source_span_or_reference: "Order 3 tonnes of frozen poultry",
+            },
+          ],
+    };
+  };
   const progress = () => ({
     phase:
       state === "workflow_failed"
@@ -108,12 +130,7 @@ async function mockExperience(page, options = {}) {
           : null,
     step1_interpretation: {
       english_translation: translation,
-      fidelity_validation: {
-        valid: true,
-        preserved_count: 0,
-        omitted_count: 0,
-        mutated_count: 0,
-      },
+      fidelity_validation: fidelity(translation),
       product_name: "Frozen poultry",
       product_category: "Food",
     },
@@ -282,13 +299,19 @@ async function mockExperience(page, options = {}) {
       if (body.action === "validate_step1_fidelity")
         return reply({
           success: true,
-          fidelity: {
-            valid: true,
-            preserved_count: 0,
-            omitted_count: 0,
-            mutated_count: 0,
+          fidelity: fidelity(body.translation),
+        });
+      if (body.action === "suggest_step1_correction" && options.correction) {
+        expect(body.translation).toBe(options.correction.original_translation);
+        await options.correctionGate;
+        return reply({
+          success: true,
+          correction: {
+            ...options.correction,
+            fidelity: fidelity(options.correction.suggested_translation),
           },
         });
+      }
       if (body.action === "approve_step1") {
         translation = body.edited_translation;
         state = "prep_step2_advisory_generating";
@@ -478,6 +501,90 @@ test("DEV-004 L01 signed-out entry, Consultant dashboard, profile and saved-requ
   );
   expect(mock.unexpected).toEqual([]);
 });
+
+for (const viewport of [
+  { name: "desktop", width: 1440, height: 1000 },
+  { name: "mobile", width: 390, height: 844 },
+]) {
+  test(`MB-UX-QUALITY-001 L03 ${viewport.name} correction recovery stays a costed preview until explicit apply`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({
+      width: viewport.width,
+      height: viewport.height,
+    });
+    const correction = {
+      original_translation:
+        "We require 5 tonnes of frozen poultry for wholesale buyers in Saudi Arabia.",
+      suggested_translation:
+        "We require 3 tonnes of frozen poultry for wholesale buyers in Saudi Arabia.",
+      changes: ["Restore the requested order quantity of 3 tonnes."],
+      source: "ai_correction",
+      cost_usd: 0.024,
+      attempts_used: 2,
+      recovered: true,
+    };
+    let releaseCorrection;
+    const correctionGate = new Promise((resolve) => {
+      releaseCorrection = resolve;
+    });
+    const mock = await mockExperience(page, { correction, correctionGate });
+    await page.goto(`/consultant/workflow?run_id=${runId}`);
+    const interpretation = page.getByLabel("Editable English Interpretation");
+    const panel = page.getByRole("region", {
+      name: "Suggested interpretation correction",
+    });
+    await expect(interpretation).toHaveValue(correction.original_translation);
+    await expect(
+      panel.getByText(/up to 3 AI attempts may be charged/),
+    ).toBeVisible();
+    await panel.getByRole("button", { name: "Suggest a correction" }).click();
+    await expect(panel.getByRole("status")).toContainText(
+      "within a total of 3 AI attempts",
+    );
+    await expect(interpretation).toHaveValue(correction.original_translation);
+    await expect(
+      page.getByRole("button", { name: "Review flagged requirements" }),
+    ).toBeDisabled();
+    releaseCorrection();
+    await expect(panel.getByRole("status")).toContainText(
+      "ready after 2 AI attempts",
+    );
+    await expect(panel.getByRole("status")).toContainText(
+      "Nothing has been applied or approved",
+    );
+    await expect(panel.getByText(/Recorded cost: USD 0.024000/)).toContainText(
+      "Total across all attempts",
+    );
+    await expect(
+      panel.getByLabel("Proposed English interpretation"),
+    ).toHaveValue(correction.suggested_translation);
+    await expect(interpretation).toHaveValue(correction.original_translation);
+    expect(
+      mock.actions.filter((action) => /approve|execute/.test(action.action)),
+    ).toEqual([]);
+    expect(
+      mock.actions.filter(
+        (action) => action.action === "suggest_step1_correction",
+      ),
+    ).toHaveLength(1);
+    await checkView(page, `L03 ${viewport.name} recovered correction preview`);
+    await panel
+      .getByRole("button", { name: "Apply suggested correction" })
+      .click();
+    await expect(interpretation).toHaveValue(correction.suggested_translation);
+    await expect(
+      page.getByRole("button", {
+        name: "Approve interpretation & continue",
+        exact: true,
+      }),
+    ).toBeEnabled();
+    expect(
+      mock.actions.filter((action) => /approve|execute/.test(action.action)),
+    ).toEqual([]);
+    expect(mock.unexpected).toEqual([]);
+  });
+}
 
 test("DEV-004 L01 three-box request through explicit approvals, progress, 20 suppliers and PDF", async ({
   page,

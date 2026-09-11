@@ -199,6 +199,7 @@ export function parseApprovedRequestFactsV3(
       operator?: ApprovedFactOperator;
       upper_bound?: number;
       qualifiers?: Record<string, string>;
+      modality?: ApprovedRequestFactV3["modality"];
     } = {},
   ) => {
     const key = JSON.stringify([
@@ -216,7 +217,8 @@ export function parseApprovedRequestFactsV3(
       value,
       operator: options.operator ?? "requires",
       modality:
-        /\bprefer(?:red|ably)?\b|ترجیح/i.test(source) ||
+        options.modality ??
+        (/\bprefer(?:red|ably)?\b|ترجیح/i.test(source) ||
         (concept === "supplier_profile" &&
           value === "distributor" &&
           /\bpriority\s+is\s+given\s+to\s+(?:(?:an?|the|official|authori[sz]ed|local|UAE)[ -]+){0,5}(?:representatives?|distributors?)\b|اولویت\s+با\s+(?:نماینده|توزیع[‌ ]*کننده)/i.test(
@@ -225,7 +227,7 @@ export function parseApprovedRequestFactsV3(
           ? "preferred"
           : /\boptional(?:ly)?\b|اختیاری/i.test(source)
             ? "optional"
-            : "mandatory",
+            : "mandatory"),
       qualifiers: options.qualifiers ?? {},
       source_clause: source,
       source_box: sourceBox,
@@ -368,10 +370,42 @@ export function parseApprovedRequestFactsV3(
           : operator(unitContext(clause, quantity.index!, quantity[0].length)),
         ...(quantity[2] ? { upper_bound: Number(quantity[2]) } : {}),
       });
+    const deliveryOptions = clause.match(
+      /\b(?:EXW|FCA|FAS|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)\b(?:\s*(?:\/|\bor\b)\s*\b(?:EXW|FCA|FAS|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)\b)*/i,
+    );
+    const unselectedDelivery =
+      deliveryOptions &&
+      (/^\s*[:( -]?\s*(?:(?:are|is|were|listed|remain|available|options)\s+)*(?:without\s+(?:a\s+)?(?:final\s+)?selection|(?:selection\s+)?not\s+(?:yet\s+)?(?:selected|finali[sz]ed|confirmed)|unselected|undecided)\b/i.test(
+        clause.slice(deliveryOptions.index! + deliveryOptions[0].length),
+      ) ||
+        /\b(?:trade\s+terms|incoterms|delivery\s+terms)\s+(?:(?:are|is|remain)\s+)?(?:not\s+(?:yet\s+)?(?:selected|finali[sz]ed|confirmed)|unselected|undecided)\s*[: -]?\s*$/i.test(
+          clause.slice(0, deliveryOptions.index),
+        ));
     const delivery = clause.match(
       /\b(EXW|FCA|FAS|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)\b(?:\s+([^.;,]+))?/i,
     );
-    if (delivery) {
+    if (unselectedDelivery) {
+      // An unresolved list is retained for review; it is not a selected Incoterm
+      // or a supplier constraint. Never turn its trailing prose into a port.
+      const options = [
+        ...new Set(
+          deliveryOptions[0]
+            .toUpperCase()
+            .match(/\b(?:EXW|FCA|FAS|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)\b/g)!,
+        ),
+      ].sort();
+      add(
+        "delivery_terms_options",
+        "Unselected Delivery Terms",
+        options.join("|"),
+        source,
+        {
+          operator: "eq",
+          modality: "optional",
+          qualifiers: { selection: "unconfirmed" },
+        },
+      );
+    } else if (delivery) {
       const destination = (delivery[2] ?? "")
         .split(
           /\b(?:delivery|terms|including|with|for|incoterms?|payment|exactly|quantity)\b/i,
@@ -500,6 +534,12 @@ export function parseApprovedRequestFactsV3(
       if (new RegExp(`\\b${certification}\\b`, "i").test(clause))
         add("certification", "Required Certification", certification, source, {
           operator: polarity(clause),
+          ...(new RegExp(
+            `\\b${certification}\\s+or\\s+(?:an?\\s+)?applicable\\s+(?:industrial|food|pharmaceutical|quality|industry|standard)\\b`,
+            "i",
+          ).test(clause)
+            ? { qualifiers: { alternative: "applicable_standard" } }
+            : {}),
         });
     }
     if (facts.length === startCount) unparsed.push(source);
@@ -542,6 +582,13 @@ export function formatApprovedFactV3(fact: ApprovedRequestFactV3): string {
         : fact.operator === "prohibits"
           ? "Excluded: "
           : "";
+  if (fact.concept === "delivery_terms_options")
+    return `${String(fact.value).split("|").join(" / ")} (selection not finalized)`;
+  if (
+    fact.concept === "certification" &&
+    fact.qualifiers.alternative === "applicable_standard"
+  )
+    return `${prefix}${fact.value} or an applicable standard`;
   if (fact.concept === "supplier_operational_presence") {
     const modes = formatSupplierAlternatives(fact, "presence");
     return `${prefix}${fact.qualifiers.scope === "operational" ? "Operational " : ""}${modes}${fact.qualifiers.jurisdiction ? ` in ${fact.qualifiers.jurisdiction}` : ""}`;

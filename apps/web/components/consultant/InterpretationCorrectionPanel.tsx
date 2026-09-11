@@ -6,6 +6,18 @@ interface Correction {
   changes: string[];
   source: "saved_interpretation" | "ai_correction" | "current_interpretation";
   cost_usd: number | null;
+  attempts_used?: number;
+  recovered?: boolean;
+}
+
+function correctionFailure(message: string) {
+  if (
+    /MB-422-(?:CORRECTION-(?:FIDELITY|SCHEMA|JSON|OUTPUT)|LIVE-(?:SCHEMA|OUTPUT-LIMIT))/i.test(
+      message,
+    )
+  )
+    return "The proposed wording could not pass the requirement checks. Your text and approval are unchanged. Review the flagged requirements and edit the interpretation, or request another suggestion.";
+  return message;
 }
 
 export function InterpretationCorrectionPanel({
@@ -107,7 +119,17 @@ export function InterpretationCorrectionPanel({
           "saved_interpretation",
           "ai_correction",
           "current_interpretation",
-        ].includes(value.source)
+        ].includes(value.source) ||
+        (value.attempts_used !== undefined &&
+          (!Number.isInteger(value.attempts_used) ||
+            value.attempts_used < 0 ||
+            value.attempts_used > 3 ||
+            (value.source === "ai_correction"
+              ? value.attempts_used === 0
+              : value.attempts_used !== 0))) ||
+        (value.recovered !== undefined &&
+          typeof value.recovered !== "boolean") ||
+        (value.recovered === true && !(value.attempts_used > 1))
       )
         throw new Error(
           "No validated correction is available. Your text is unchanged.",
@@ -135,6 +157,7 @@ export function InterpretationCorrectionPanel({
   return (
     <section
       aria-label="Suggested interpretation correction"
+      aria-busy={busy}
       className="my-4 rounded-lg border border-sky-700 bg-sky-950/30 p-4 space-y-3 text-sm"
     >
       <h4 className="font-semibold text-sky-200">Correct the interpretation</h4>
@@ -162,8 +185,10 @@ export function InterpretationCorrectionPanel({
           <p className="text-slate-300 text-xs">
             Review a proposed correction before applying it. The system first
             checks the saved wording at no cost. If that cannot resolve the
-            issue, one AI call may be charged; its recorded cost is shown with
-            the proposal. Your original request and approval remain unchanged.
+            issue, up to 3 AI attempts may be charged. Responses that cannot
+            pass the format or requirement checks can be repaired automatically
+            within this limit. The total recorded cost is shown with the
+            proposal. Your text and approval change only when you choose.
           </p>
           <button
             type="button"
@@ -179,7 +204,9 @@ export function InterpretationCorrectionPanel({
         <>
           <p role="status" className="text-sky-200">
             Checking saved wording and preparing a correction against your
-            original request...
+            original request. The system checks each response and can recover
+            automatically within a total of 3 AI attempts. This may take longer
+            if a response needs repair. Your text and approval are unchanged.
           </p>
           <button
             type="button"
@@ -190,20 +217,39 @@ export function InterpretationCorrectionPanel({
               setBusy(false);
             }}
           >
-            Cancel suggestion
+            Stop waiting
           </button>
           <p className="text-xs text-slate-400">
-            An AI call already sent may still finish and be charged.
+            Stopping the wait does not cancel this correction operation.
+            Remaining attempts within the three-attempt limit may still run and
+            be charged.
           </p>
         </>
       )}
       {error && (
-        <p role="alert" className="text-rose-200">
-          {error}
-        </p>
+        <div className="space-y-2">
+          <p role="alert" className="text-rose-200">
+            {correctionFailure(error)}
+          </p>
+          {correctionFailure(error) !== error && (
+            <details className="text-xs text-slate-400">
+              <summary className="cursor-pointer">Technical details</summary>
+              <p className="mt-2 break-words">{error}</p>
+            </details>
+          )}
+        </div>
       )}
       {proposal && (
         <>
+          {proposal.source === "ai_correction" &&
+            proposal.attempts_used !== undefined && (
+              <p role="status" className="text-sky-200">
+                {`A checked proposal is ready after ${proposal.attempts_used} AI ${proposal.attempts_used === 1 ? "attempt" : "attempts"}.`}{" "}
+                {proposal.recovered &&
+                  "An earlier response was repaired automatically. "}
+                Review it below. Nothing has been applied or approved.
+              </p>
+            )}
           <p className="text-xs text-slate-300">
             {proposal.source === "ai_correction"
               ? "AI-proposed wording"
@@ -212,6 +258,10 @@ export function InterpretationCorrectionPanel({
             {proposal.cost_usd === null
               ? "Cost record pending; not counted as free"
               : `Recorded cost: USD ${proposal.cost_usd.toFixed(6)}`}
+            {proposal.source === "ai_correction" &&
+              proposal.attempts_used !== undefined &&
+              proposal.attempts_used > 1 &&
+              " · Total across all attempts"}
           </p>
           {proposal.changes.length > 0 && (
             <ul className="list-disc pl-5 text-slate-200">

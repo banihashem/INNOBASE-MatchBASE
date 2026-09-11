@@ -761,8 +761,20 @@ export async function buildResearchRoundPlan(input: {
     },
   };
 }
-export function createRoundCallGuard(plan: ResearchRoundPlan) {
-  let calls = 0;
+export function createRoundCallGuard(
+  plan: ResearchRoundPlan,
+  previouslyConsumedCalls = 0,
+) {
+  if (
+    !Number.isSafeInteger(previouslyConsumedCalls) ||
+    previouslyConsumedCalls < 0
+  )
+    throw new ResearchRoundFault(
+      409,
+      "MB-409-ROUND-ALLOWANCE",
+      "Saved provider-call accounting is invalid. No provider request was sent.",
+    );
+  let calls = previouslyConsumedCalls;
   return async (request: OpenRouterCompletionParams, web: boolean) => {
     const allowed = web
       ? plan.research_models

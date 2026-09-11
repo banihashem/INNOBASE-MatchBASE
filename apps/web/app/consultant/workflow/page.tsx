@@ -1236,16 +1236,18 @@ export default function ConsultantWorkflowPage() {
           <p>
             {workflowProgress?.phase === "user_cancelled"
               ? "Research stopped. Your saved request and completed results are retained."
-              : preparationCredentialFailure
-                ? "The advisory service could not use an accepted provider credential. Your approved interpretation is saved."
-                : workflowError.includes("HTTP 403")
-                  ? "The research service could not authorize this request."
-                  : workflowError.includes("HTTP 429")
-                    ? "The research service is temporarily busy. Your request is saved."
-                    : workflowError.includes("Network") ||
-                        workflowError.includes("fetch")
-                      ? "The connection was interrupted. Your last saved request is retained."
-                      : "This step could not finish. Your last saved request and completed results are retained."}
+              : workflowError.includes("MB-422-LIVE-OUTPUT-LIMIT")
+                ? "The model response reached its size limit before this step finished. Earlier results and this attempt's usage are saved. Your request does not need to be rewritten."
+                : preparationCredentialFailure
+                  ? "The advisory service could not use an accepted provider credential. Your approved interpretation is saved."
+                  : workflowError.includes("HTTP 403")
+                    ? "The research service could not authorize this request."
+                    : workflowError.includes("HTTP 429")
+                      ? "The research service is temporarily busy. Your request is saved."
+                      : workflowError.includes("Network") ||
+                          workflowError.includes("fetch")
+                        ? "The connection was interrupted. Your last saved request is retained."
+                        : "This step could not finish. Your last saved request and completed results are retained."}
           </p>
           <details className="workflow-support mt-3">
             <summary>Support details</summary>

@@ -137,6 +137,52 @@ async function tick(ms = 0) {
 }
 
 describe("MB-UX-LIVE-001 L03 stage gates", () => {
+  it("MB-UX-QUALITY-001 L05 explains truncated research without mutating or restarting it", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/consultant/workflow?run_id=focus-limit",
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, options?: RequestInit) => {
+        if (url === "/api/v1/me")
+          return response({
+            tier: "consultant",
+            user_id: "user",
+            account_id: "account",
+          });
+        if (String(url).startsWith("/api/v1/consultant/research-rounds"))
+          return response(roundOverview);
+        if (!options?.method)
+          return response({
+            session: {
+              run_id: "focus-limit",
+              execution_id: "focus-execution",
+              state: "workflow_failed",
+              mode: "live",
+              intake: {},
+              retry_action: "research",
+              error:
+                "MB-422-LIVE-OUTPUT-LIMIT: Provider exhausted the output allowance.",
+              step1_interpretation: { english_translation: "Approved request" },
+              progress: { phase: "failed", loop: 2, max_loops: 2 },
+            },
+          });
+        requests.push(JSON.parse(String(options.body)));
+        throw new Error("No mutation expected");
+      }),
+    );
+    render(<ConsultantWorkflowPage />);
+    expect(
+      await screen.findByText(/The model response reached its size limit/),
+    ).toHaveTextContent("Your request does not need to be rewritten");
+    expect(
+      screen.getByText(/MB-422-LIVE-OUTPUT-LIMIT/).closest("details"),
+    ).not.toHaveAttribute("open");
+    expect(requests).toHaveLength(0);
+  });
+
   it("MB-UX-QUALITY-001 L04 distinguishes preparation credential failure and discloses paid recovery without resubmitting", async () => {
     window.history.replaceState(
       {},

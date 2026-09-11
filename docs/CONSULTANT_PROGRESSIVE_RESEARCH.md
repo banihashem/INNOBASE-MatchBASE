@@ -1,12 +1,18 @@
 # Progressive Consultant research
 
-Activity: MB-UX-QUALITY-001 L01. Canonical implementation root: `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE`. Product authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`.
+Activity: MB-UX-QUALITY-001 L01/L05. Canonical implementation root: `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE`. Product authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`.
 
 ## Round lifecycle
 
 The first research round keeps its existing preparation, estimate and approval flow. Every later round, up to round five, accepts an optional buyer question and selected discovery leads. Editing either invalidates the displayed estimate. A fresh estimate prices one AI focus-analysis call together with the research allowance. Saving or editing a question does not invoke a model. Research starts only after cost approval.
 
 The focus planner receives the immutable approved request, all retained lead names and source references, bounded dossier/evidence excerpts, remaining gaps and the buyer follow-up. It creates an English objective, priority lead IDs, source-validation tasks, evidence gaps and scope notes. The raw question is not forwarded to web-search models. The analysis does not establish new supplier facts and cannot change the approved requirements. Unknown lead IDs and oversized immutable context stop before web dispatch; unavoidable oversized context is checked before the planning call. Search requests have their own bounded representation. Complete snapshots are never truncated to fit model context.
+
+## Focus reliability
+
+Focus analysis uses a concise schema and groups common evidence questions instead of repeating each supplier dossier. Its combined reasoning/output limit is at most 12,000 tokens, bounded further by the approved per-call allowance. Every selected lead is retained even when more than twenty are selected; the model's additional priority list is independently limited. Truncated, invalid or transient responses share at most three actual calls, including previous attempts in the same execution. Every dispatched attempt remains in usage accounting. Unknown facts cannot be filled from a truncated response.
+
+The operator-only focus-recovery CLI supports a narrow failure before downstream research. Dry-run is the default; execution requires the reviewed snapshot hash. It checks original ownership, request/plan approval, unchanged completed parent, failed idle job, no later round or downstream work, and remaining original allowances. Requeue preserves the same execution and quote; retained dispatches seed the total-call and focus-attempt guards. It does not create a new cost approval or resume cancelled work. Other failed stages continue to require their existing recovery or fresh-estimate flow.
 
 ## Storage and publication
 

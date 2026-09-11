@@ -81,6 +81,8 @@ export interface DualLaneExecutionInput {
 }
 export interface DualLaneExecutionOptions extends LiveCallOptions {
   readonly round_plan?: ResearchRoundPlan;
+  /** Retained dispatch count for focus planning in this same approved execution. */
+  readonly previously_consumed_focus_attempts?: number;
   readonly continuation?: ResearchContinuation;
   readonly mode?: "live" | "demonstration" | "hybrid";
   readonly source_retriever?: typeof fetchPrimaryEvidenceText;
@@ -270,6 +272,7 @@ export async function executeDualLaneResearch(
       options.continuation,
       callback,
       buildFocusedResearchInstructions(options.round_plan),
+      options.previously_consumed_focus_attempts,
     );
     focusAnalysis = planned.analysis;
     calls.push(planned.result);

@@ -61,9 +61,10 @@ export function WorkflowActivity({
   const preparing = state.startsWith("prep_");
   const recoveryAttempt = progress?.recovery_attempt;
   const recoveryLimit = progress?.max_recovery_attempts;
-  const recoveringPreparation =
+  const focusPlanning = progress?.phase === "research_focus_analysis";
+  const recoveringStage =
     active &&
-    preparing &&
+    (preparing || focusPlanning) &&
     Number.isInteger(recoveryAttempt) &&
     Number.isInteger(recoveryLimit) &&
     recoveryAttempt! > 1 &&
@@ -262,11 +263,13 @@ export function WorkflowActivity({
             {phaseLabel(progress.phase || "queued", progress.loop)}
           </p>
         )}
-        {recoveringPreparation && !connectionError && (
+        {recoveringStage && !connectionError && (
           <p className="activity-current-operation" role="status">
-            Automatic recovery · Attempt {recoveryAttempt} of {recoveryLimit}.
-            Completed topics are retained. Each model call may be charged and is
-            recorded in your costs.
+            {preparing ? "Automatic recovery" : "Focus analysis recovery"} ·
+            Attempt {recoveryAttempt} of {recoveryLimit}.{" "}
+            {preparing
+              ? "Completed topics are retained. Each model call may be charged and is recorded in your costs."
+              : "Previous round results and selected leads are retained. This attempt counts toward the approved round allowance and recorded costs."}
           </p>
         )}
         {failure && failed && (

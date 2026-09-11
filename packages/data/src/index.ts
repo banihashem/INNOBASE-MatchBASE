@@ -21,3 +21,4 @@ export * from "./consultant-research-rounds.js";
 export * from "./consultant-retained-recovery.js";
 
 export * from "./consultant-failed-recovery.js";
+export * from "./consultant-focus-recovery.js";

@@ -81,6 +81,9 @@ function fixture(t) {
     requests: [],
     heartbeat: null,
     heartbeatCleared: false,
+    costEvents: [],
+    costReads: 0,
+    releaseImmediately: false,
   };
   const timer = { unref() {} };
   t.mock.method(globalThis, "setInterval", (callback, delay) => {
@@ -97,6 +100,15 @@ function fixture(t) {
   // controlled SQL and HTTP boundaries. No database or provider connection is opened.
   const db = {
     async query(sql, params = []) {
+      if (
+        sql.includes(
+          "SELECT execution_id,phase,detail FROM consultant_provider_call",
+        )
+      ) {
+        assert.deepEqual(params, [identity.account_id, identity.run_id]);
+        state.costReads++;
+        return { rows: structuredClone(state.costEvents) };
+      }
       if (
         sql.includes("FROM consultant_output_v3") ||
         sql.startsWith("UPDATE consultant_research_round") ||
@@ -229,10 +241,11 @@ function fixture(t) {
       state.requests.push({ signal, release });
       signal.addEventListener("abort", abort, { once: true });
       if (signal.aborted) abort();
+      if (state.releaseImmediately) queueMicrotask(release);
     });
   });
   t.after(() => state.requests.forEach(({ release }) => release()));
-  return { db, state };
+  return { db, state, identity };
 }
 
 async function waitForBothLanes(state) {
@@ -307,5 +320,62 @@ test("MB-UX-LIVE-001 L04 checkpoint renewal failure aborts sibling I/O before st
   assert.equal(state.requests.length, 2);
   assert.equal(state.writes.length, writesBeforeLoss);
   assert.equal(state.finished.length, 0);
+  assert.ok(state.heartbeatCleared);
+});
+
+test("L05 actual worker service deducts historical dispatches before either provider can start", async (t) => {
+  const { db, state, identity } = fixture(t);
+  state.releaseImmediately = true;
+  state.costEvents = Array.from({ length: 9 }, (_, index) => ({
+    execution_id: identity.execution_id,
+    phase: "research_focus_analysis",
+    detail: {
+      request_id: randomUUID(),
+      model: "openai/gpt-5.2",
+      state: index === 8 ? "started" : "failed",
+      dispatched: true,
+    },
+  }));
+  // Started and final events for one request must consume one call, not two.
+  state.costEvents.push({
+    ...state.costEvents[0],
+    detail: { ...state.costEvents[0].detail, state: "started" },
+  });
+  assert.equal(await runNextConsultantWorkflowJob(db), true);
+  assert.equal(state.costReads, 1);
+  assert.equal(
+    state.requests.length,
+    0,
+    "Historical use exhausts the approved nine-call plan before HTTP completion dispatch.",
+  );
+  assert.equal(state.finished.length, 1);
+  assert.equal(state.finished[0][2], "failed");
+  const terminal = state.writes.findLast(
+    (write) => write.state === "workflow_failed",
+  );
+  assert.match(terminal.metadata.error, /MB-409-ROUND-ALLOWANCE/);
+  assert.ok(state.heartbeatCleared);
+});
+
+test("L05 worker allowance excludes earlier executions of the same saved request", async (t) => {
+  const { db, state, identity } = fixture(t);
+  const earlierExecution = randomUUID();
+  assert.notEqual(earlierExecution, identity.execution_id);
+  state.costEvents = Array.from({ length: 9 }, () => ({
+    execution_id: earlierExecution,
+    phase: "research_focus_analysis",
+    detail: {
+      request_id: randomUUID(),
+      model: "openai/gpt-5.2",
+      state: "failed",
+      dispatched: true,
+    },
+  }));
+  const running = runNextConsultantWorkflowJob(db);
+  await waitForBothLanes(state);
+  assert.equal(state.costReads, 1);
+  for (const request of state.requests) request.release();
+  assert.equal(await running, true);
+  assert.equal(state.requests.length, 2);
   assert.ok(state.heartbeatCleared);
 });

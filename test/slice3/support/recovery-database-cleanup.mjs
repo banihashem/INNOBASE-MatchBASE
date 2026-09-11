@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 
-/** MB-UX-PILOT-001 L01: pg-pool end may precede server-side socket shutdown. */
+/** pg-pool end may precede server-side socket shutdown in recovery and Admin fixtures. */
 export async function dropDrainedRecoveryDatabase(
   admin,
   databaseName,
   { timeoutMs = 5_000, pollIntervalMs = 25 } = {},
 ) {
-  // Callers must pass only their successfully created, per-test recovery database.
-  assert.match(databaseName, /^matchbase_recovery_[a-f0-9]{32}$/);
+  // Callers must pass only their successfully created, per-test owned database.
+  assert.match(databaseName, /^matchbase_(?:recovery|task074)_[a-f0-9]{32}$/);
   assert.ok(Number.isSafeInteger(timeoutMs) && timeoutMs > 0);
   assert.ok(Number.isSafeInteger(pollIntervalMs) && pollIntervalMs > 0);
   const control = await admin.query(
@@ -24,7 +24,7 @@ export async function dropDrainedRecoveryDatabase(
     if (remaining.rows[0].connections === 0) break;
     if (performance.now() >= deadline) {
       throw new Error(
-        "Owned recovery database connections did not drain before the cleanup deadline.",
+        "Owned test database connections did not drain before the cleanup deadline.",
       );
     }
     await delay(pollIntervalMs);

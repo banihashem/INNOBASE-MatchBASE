@@ -204,6 +204,60 @@ const interpretation = {
   classification: {},
 };
 
+test("MB-UX-QUALITY-001 L02 chemical intake reaches interpretation after its saved draft is admitted", async (t) => {
+  const f = fixture();
+  Object.assign(f.intake, {
+    product_requirement:
+      "Industrial potassium hydroxide flakes for fertilizer production and neutralization in water treatment.",
+    technical_compliance:
+      "Purity at least 90%. CoA and SDS/MSDS required. Transport classification: Class 8. Moisture-resistant packaging.",
+    order_profile: "Direct manufacturer preferred. Order volume unconfirmed.",
+  });
+  const model = t.mock.method(
+    LivePreparationModelGateway.prototype,
+    "extractAndInterpret",
+    async (input) => {
+      assert.equal(f.queries.at(-1), "COMMIT");
+      assert.equal(f.state.draft.status, "submitted");
+      assert.equal(input.technical_compliance, f.intake.technical_compliance);
+      return {
+        ...interpretation,
+        english_translation: f.intake.product_requirement,
+        product_name: "Potassium hydroxide",
+        product_category: "Industrial chemicals",
+      };
+    },
+  );
+  const session = await submitConsultantIntake(f.intake, f.pool, f.options);
+  assert.equal(model.mock.callCount(), 1);
+  assert.equal(session.state, "prep_step1_awaiting_approval");
+  assert.equal(session.step2_advisory, null);
+  assert.equal(session.step3_deep_prompt, null);
+  assert.equal(f.state.sessions.size, 1);
+  assert.deepEqual(
+    f.state.sessions.get(session.run_id).original_intake,
+    f.intake,
+  );
+});
+
+test("MB-UX-QUALITY-001 L02 genuine intake contamination does not consume or submit the draft", async (t) => {
+  const f = fixture();
+  f.intake.product_requirement = "Commercial water heaters";
+  f.intake.technical_compliance = "Halal poultry slaughterhouse certification";
+  const model = t.mock.method(
+    LivePreparationModelGateway.prototype,
+    "extractAndInterpret",
+    async () => interpretation,
+  );
+  await assert.rejects(submitConsultantIntake(f.intake, f.pool, f.options), {
+    code: "MB-422-COHERENCE",
+  });
+  assert.equal(model.mock.callCount(), 0);
+  assert.equal(f.state.draft.status, "active");
+  assert.equal(f.state.sessions.size, 0);
+  assert.equal(f.state.snapshots.size, 0);
+});
+
 test("L03 submission rejects unknown owner and stale versions before interpretation", async (t) => {
   const model = t.mock.method(
     LivePreparationModelGateway.prototype,

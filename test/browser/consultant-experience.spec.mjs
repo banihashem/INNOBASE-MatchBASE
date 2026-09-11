@@ -321,12 +321,14 @@ async function mockExperience(page, options = {}) {
       }
       const body = request.postDataJSON();
       actions.push(body);
-      if (body.action === "create_draft")
+      if (body.action === "create_draft") {
+        await options.draftCreationGate;
         return reply({
           success: true,
           draft_id: draftId,
           draft_version: version,
         });
+      }
       if (body.action === "save_draft")
         return reply({ success: true, draft_version: ++version });
       if (body.action === "submit_intake") {
@@ -695,11 +697,97 @@ test("MB-UX-QUALITY-001 L04 preparation recovers automatically after one explici
   expect(mock.unexpected).toEqual([]);
 });
 
+test("MB-UX-QUALITY-001 L05 intake stays disabled through held JavaScript and draft acknowledgement", async ({
+  page,
+}) => {
+  let releaseScripts;
+  let releaseDraft;
+  const scriptsGate = new Promise((resolve) => {
+    releaseScripts = resolve;
+  });
+  const draftCreationGate = new Promise((resolve) => {
+    releaseDraft = resolve;
+  });
+  const mock = await mockExperience(page, { draftCreationGate });
+  const scriptPattern = /\/_next\/.*\.js(?:\?.*)?$/;
+  let heldScripts = 0;
+  await page.route(scriptPattern, async (route) => {
+    heldScripts++;
+    await scriptsGate;
+    await route.fallback();
+  });
+  const controls = () => [
+    page.getByLabel("Product Requirement", { exact: true }),
+    page.getByLabel("Technical, Quality & Trade Requirements", { exact: true }),
+    page.getByLabel("Order & Supplier Profile", { exact: true }),
+    page.getByRole("combobox", { name: "Research mode" }),
+    page.getByRole("button", { name: /Continue to review/ }),
+    page.getByRole("button", { name: "A: Brazilian Poultry" }),
+    page.getByRole("button", { name: "B: UAE Water Heaters" }),
+    ...[1, 2, 3].map((number) => page.locator(`#help-btn-${number}`)),
+    page.getByRole("button", { name: "New research", exact: true }),
+    page.getByRole("button", { name: "Resume Research", exact: true }),
+  ];
+  try {
+    await page.goto("/consultant/workflow?mode=new", { waitUntil: "commit" });
+    await expect.poll(() => heldScripts).toBeGreaterThan(0);
+    for (const control of controls()) await expect(control).toBeDisabled();
+    await expect(page.getByText("Preparing your request form…")).toBeVisible();
+    expect(mock.actions).toEqual([]);
+    releaseScripts();
+    await expect
+      .poll(
+        () =>
+          mock.actions.filter((action) => action.action === "create_draft")
+            .length,
+      )
+      .toBe(1);
+    for (const control of controls()) await expect(control).toBeDisabled();
+    await expect(page).toHaveURL(/mode=new/);
+    releaseDraft();
+    await expect(page).toHaveURL(new RegExp(`draft_id=${draftId}$`));
+    for (const control of controls()) await expect(control).toBeEnabled();
+    await expect(page.getByText("Preparing your request form…")).toHaveCount(0);
+    const values = [
+      "Hydrated product requirement",
+      "Hydrated technical requirements",
+      "Hydrated order profile",
+    ];
+    const fields = controls().slice(0, 3);
+    for (let index = 0; index < fields.length; index++)
+      await fields[index].fill(values[index]);
+    for (let index = 0; index < fields.length; index++)
+      await expect(fields[index]).toHaveValue(values[index]);
+    await page.getByRole("button", { name: /Continue to review/ }).click();
+    await expect(
+      page.getByLabel("Editable English Interpretation"),
+    ).toBeVisible();
+    const submissions = mock.actions.filter(
+      (action) => action.action === "submit_intake",
+    );
+    expect(submissions).toHaveLength(1);
+    expect(submissions[0]).toMatchObject({
+      draft_id: draftId,
+      product_requirement: values[0],
+      technical_compliance: values[1],
+      order_profile: values[2],
+    });
+    expect(
+      mock.actions.some((action) => /approve|execute/.test(action.action)),
+    ).toBe(false);
+    expect(mock.unexpected).toEqual([]);
+  } finally {
+    releaseScripts();
+    releaseDraft();
+  }
+});
+
 test("DEV-004 L01 three-box request through explicit approvals, progress, 20 suppliers and PDF", async ({
   page,
 }) => {
   const mock = await mockExperience(page);
   await page.goto("/consultant/workflow?mode=new");
+  await expect(page).toHaveURL(new RegExp(`draft_id=${draftId}$`));
   await page
     .getByLabel("Product Requirement", { exact: true })
     .fill("Frozen poultry for wholesale buyers");
@@ -711,9 +799,28 @@ test("DEV-004 L01 three-box request through explicit approvals, progress, 20 sup
     .fill("Wholesale buyers in Saudi Arabia");
   await checkIntakeHelp(page);
   await checkView(page, "three-box request");
+  await expect(
+    page.getByLabel("Product Requirement", { exact: true }),
+  ).toHaveValue("Frozen poultry for wholesale buyers");
+  await expect(
+    page.getByLabel("Technical, Quality & Trade Requirements", { exact: true }),
+  ).toHaveValue("Export documentation and frozen transport");
+  await expect(
+    page.getByLabel("Order & Supplier Profile", { exact: true }),
+  ).toHaveValue("Wholesale buyers in Saudi Arabia");
   await page.getByRole("button", { name: /Continue to review/ }).click();
   const interpretation = page.getByLabel("Editable English Interpretation");
   await expect(interpretation).toBeVisible();
+  const submissions = mock.actions.filter(
+    (item) => item.action === "submit_intake",
+  );
+  expect(submissions).toHaveLength(1);
+  expect(submissions[0]).toMatchObject({
+    draft_id: draftId,
+    product_requirement: "Frozen poultry for wholesale buyers",
+    technical_compliance: "Export documentation and frozen transport",
+    order_profile: "Wholesale buyers in Saudi Arabia",
+  });
   await interpretation.fill(
     "Approved English poultry requirements, edited by the buyer.",
   );

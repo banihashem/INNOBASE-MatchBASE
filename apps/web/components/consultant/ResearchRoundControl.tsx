@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { ResearchReviewPanel } from "./ResearchReviewPanel";
 import type {
   ConsultantResearchOutputV3,
   ResearchCostSummary,
@@ -8,6 +9,7 @@ import type {
   ResearchModelRate,
   ResearchRoundPlan,
   ResearchRoundView,
+  ResearchReview,
 } from "@matchbase/contracts";
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", {
@@ -21,6 +23,7 @@ type Overview = {
   costs: ResearchCostSummary;
   rounds: ResearchRoundView[];
   next_round: number;
+  research_review?: ResearchReview | null;
   research_tiers?: Record<
     ResearchTier,
     { configured: boolean; missing_families: string[] }
@@ -50,11 +53,23 @@ export function ResearchRoundControl({
   const [depth, setDepth] = useState<ResearchDepth>("simple");
   const [researchTier, setResearchTier] = useState<ResearchTier>("default");
   const [model, setModel] = useState("");
+  const [question, setQuestion] = useState("");
+  const [leadIds, setLeadIds] = useState<string[]>([]);
+  const [historicalReview, setHistoricalReview] = useState<{
+    roundId: string;
+    review: ResearchReview | null;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
   const visibleError = error || loadError;
   const [notice, setNotice] = useState("");
+  useEffect(() => {
+    setQuestion("");
+    setLeadIds([]);
+    setQuote(null);
+    setHistoricalReview(null);
+  }, [runId]);
   const refresh = useCallback(
     async (signal?: AbortSignal) => {
       const response = await fetch(
@@ -150,6 +165,9 @@ export function ResearchRoundControl({
           research_tier: researchTier,
           model,
           quote_id: quote?.quote_id,
+          ...(action === "quote" && (overview?.next_round ?? 1) >= 2
+            ? { follow_up: { question, lead_ids: leadIds } }
+            : {}),
         }),
       });
       const data = await response.json();
@@ -160,6 +178,8 @@ export function ResearchRoundControl({
         setChoices(data.choices);
       } else {
         setQuote(null);
+        setQuestion("");
+        setLeadIds([]);
         setNotice(
           "Your approved round is queued. No following round will start automatically.",
         );
@@ -184,6 +204,10 @@ export function ResearchRoundControl({
       if (!response.ok)
         throw new Error(data.error ?? "Saved result unavailable.");
       onPreview(data.output, roundId);
+      setHistoricalReview({
+        roundId,
+        review: data.output.research_review ?? null,
+      });
       setNotice(
         "Showing the selected saved round below. Later work does not replace this saved result.",
       );
@@ -213,6 +237,15 @@ export function ResearchRoundControl({
     ? new Date(quote.plan.expires_at).getTime() <= Date.now()
     : false;
   const costs = overview?.costs;
+  const review = historicalReview
+    ? historicalReview.review
+    : overview?.research_review;
+  const selectLead = (id: string, selected: boolean) => {
+    setLeadIds((ids) =>
+      selected ? [...new Set([...ids, id])] : ids.filter((item) => item !== id),
+    );
+    setQuote(null);
+  };
   const button =
     "rounded-md border border-sky-400 bg-sky-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
   return (
@@ -280,6 +313,40 @@ export function ResearchRoundControl({
             : "Loading recorded costs…"}
         </p>
       )}
+      {(review || historicalReview || (hasResults && overview)) && (
+        <div className="space-y-3">
+          {historicalReview && (
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <p>Showing the research review saved with the selected result.</p>
+              <button
+                type="button"
+                className={button}
+                onClick={() => setHistoricalReview(null)}
+              >
+                Show latest review for follow-up
+              </button>
+            </div>
+          )}
+          {review ? (
+            <ResearchReviewPanel
+              review={review}
+              selectedIds={leadIds}
+              disabled={busy}
+              onSelect={
+                !historicalReview && next >= 2 && next <= 5 && !active
+                  ? selectLead
+                  : undefined
+              }
+            />
+          ) : (
+            <p className="text-sm text-slate-300">
+              This saved result predates research-lead records. Its documented
+              suppliers and PDF remain available; missing lead records do not
+              mean no other companies were researched.
+            </p>
+          )}
+        </div>
+      )}
       <details open={!hasResults || active} className="research-round-options">
         <summary className="cursor-pointer font-semibold">
           {hasResults
@@ -316,6 +383,24 @@ export function ResearchRoundControl({
                                 ? `${money(costs.by_execution[r.execution_id]!.recorded_usd)} recorded${costs.by_execution[r.execution_id]!.unpriced_calls ? " · incomplete" : ""}`
                                 : "Cost records pending"}
                         </small>
+                        {r.plan.follow_up && (
+                          <span className="mt-2 block text-slate-300">
+                            <span className="font-semibold">
+                              Approved follow-up focus:{" "}
+                            </span>
+                            <span
+                              dir="auto"
+                              className="whitespace-pre-wrap break-words"
+                            >
+                              {r.plan.follow_up.question ||
+                                "Resolve selected evidence gaps"}
+                            </span>
+                            <span className="block">
+                              {r.plan.follow_up.lead_ids.length} selected
+                              lead(s)
+                            </span>
+                          </span>
+                        )}
                       </span>
                       {r.output_available && (
                         <button
@@ -443,42 +528,80 @@ export function ResearchRoundControl({
                 </fieldset>
               )}
               {next >= 2 && (
-                <div className="flex flex-wrap gap-4">
-                  <label className="text-sm">
-                    Research depth
-                    <select
-                      aria-label="Research depth"
-                      className="block rounded bg-slate-800 border border-slate-500 p-2 mt-1"
-                      value={depth}
-                      onChange={(e) => {
-                        setDepth(e.target.value as ResearchDepth);
-                        setQuote(null);
-                      }}
-                    >
-                      <option value="simple">Simple · lower cost</option>
-                      <option value="deep">Thoughtful · deeper analysis</option>
-                    </select>
+                <fieldset disabled={busy} className="space-y-4">
+                  <legend className="font-semibold">
+                    Focus for round {next}
+                  </legend>
+                  <label className="block text-sm" htmlFor="research-follow-up">
+                    Follow-up focus or question · any language
                   </label>
-                  <label className="text-sm">
-                    Model selection
-                    <select
-                      aria-label="Research model"
-                      className="block rounded bg-slate-800 border border-slate-500 p-2 mt-1 max-w-full"
-                      value={model}
-                      onChange={(e) => {
-                        setModel(e.target.value);
-                        setQuote(null);
-                      }}
-                    >
-                      <option value="">System recommendation</option>
-                      {choices.map((m) => (
-                        <option value={m.model} key={m.model}>
-                          {m.model}
+                  <textarea
+                    id="research-follow-up"
+                    dir="auto"
+                    maxLength={4000}
+                    rows={4}
+                    value={question}
+                    aria-describedby="research-follow-up-help"
+                    className="w-full rounded border border-slate-500 bg-slate-800 p-3 text-sm"
+                    onChange={(event) => {
+                      setQuestion(event.target.value);
+                      setQuote(null);
+                    }}
+                  />
+                  <p
+                    id="research-follow-up-help"
+                    className="text-sm text-slate-300"
+                  >
+                    {question.length}/4,000 characters · {leadIds.length}{" "}
+                    selected lead(s) from the latest completed round. Select
+                    relevant leads in the latest review above. Leaving this
+                    blank uses unresolved evidence from your saved research.
+                  </p>
+                  <p className="text-sm text-slate-300">
+                    Editing and selecting leads makes no paid AI or research
+                    calls. Your approved estimate includes AI planning to turn
+                    this focus into a research plan, followed by focused web
+                    research within this round’s quoted allowance.
+                  </p>
+                  <div className="flex flex-wrap gap-4">
+                    <label className="text-sm">
+                      Research depth
+                      <select
+                        aria-label="Research depth"
+                        className="block rounded bg-slate-800 border border-slate-500 p-2 mt-1"
+                        value={depth}
+                        onChange={(e) => {
+                          setDepth(e.target.value as ResearchDepth);
+                          setQuote(null);
+                        }}
+                      >
+                        <option value="simple">Simple · lower cost</option>
+                        <option value="deep">
+                          Thoughtful · deeper analysis
                         </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
+                      </select>
+                    </label>
+                    <label className="text-sm">
+                      Model selection
+                      <select
+                        aria-label="Research model"
+                        className="block rounded bg-slate-800 border border-slate-500 p-2 mt-1 max-w-full"
+                        value={model}
+                        onChange={(e) => {
+                          setModel(e.target.value);
+                          setQuote(null);
+                        }}
+                      >
+                        <option value="">System recommendation</option>
+                        {choices.map((m) => (
+                          <option value={m.model} key={m.model}>
+                            {m.model}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </fieldset>
               )}
               <button
                 type="button"
@@ -498,6 +621,24 @@ export function ResearchRoundControl({
                     Round {quote.plan.round_number} · {quote.plan.title}
                   </h4>
                   <p>{quote.plan.purpose}</p>
+                  {quote.plan.follow_up && (
+                    <div className="rounded bg-slate-800 p-3 text-sm space-y-2">
+                      <p className="font-semibold">
+                        Focus saved with this estimate
+                      </p>
+                      <p dir="auto" className="whitespace-pre-wrap break-words">
+                        {quote.plan.follow_up.question ||
+                          "Resolve selected evidence gaps"}
+                      </p>
+                      <p>
+                        {quote.plan.follow_up.lead_ids.length} selected lead(s)
+                      </p>
+                      <p>
+                        Approval includes AI planning, then focused research.
+                        Editing the focus requires a new estimate.
+                      </p>
+                    </div>
+                  )}
                   {quote.plan.round_number === 1 && (
                     <p className="text-sm font-semibold">
                       {quote.plan.research_tier === "ultra"

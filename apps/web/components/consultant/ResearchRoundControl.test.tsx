@@ -40,6 +40,103 @@ const plan = {
   max_output_tokens_per_call: 12000,
   assumptions: ["No automatic next round"],
 };
+const researchReview = {
+  version: "research-review.v1",
+  round_number: 1,
+  leads: [
+    {
+      lead_id: "lead-a",
+      name: "Unfinished logistics",
+      source_urls: ["https://example.com/services"],
+      status: "needs_review",
+      reason: "Route not confirmed",
+      missing_evidence: ["Aqaba service evidence"],
+      first_seen_round: 1,
+      last_seen_round: 1,
+    },
+  ],
+  coverage_gaps: ["Destination coverage"],
+  summary: { discovered: 4, documented: 3, needs_review: 1, excluded: 0 },
+  changes: { new_leads: 1, promoted: 0 },
+};
+it("MB-UX-QUALITY-001 L01 saves focus with the quote and invalidates approval on edits without paid calls", async () => {
+  const requests: Record<string, unknown>[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url: string, options?: RequestInit) => {
+      if (!options?.body)
+        return Response.json({
+          costs,
+          rounds: [],
+          next_round: 2,
+          research_review: researchReview,
+        });
+      const body = JSON.parse(String(options.body));
+      requests.push(body);
+      return Response.json({
+        quote_id: "focus-quote",
+        choices: [],
+        plan: { ...plan, round_number: 2, follow_up: body.follow_up },
+      });
+    }),
+  );
+  render(
+    <ResearchRoundControl
+      runId="run"
+      workflowState="workflow_complete"
+      onStarted={vi.fn()}
+      onPreview={vi.fn()}
+    />,
+  );
+  const question = await screen.findByRole("textbox", {
+    name: /Follow-up focus/,
+  });
+  expect(question).toHaveAttribute("dir", "auto");
+  expect(question).toHaveAttribute("maxlength", "4000");
+  fireEvent.click(screen.getByText(/Incomplete research leads/));
+  fireEvent.change(question, { target: { value: "بررسی مسیر به عقبه" } });
+  fireEvent.click(screen.getByRole("checkbox", { name: /Include Unfinished/ }));
+  expect(requests).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: /Get cost estimate/ }));
+  await screen.findByRole("button", { name: /Approve cost estimate/ });
+  expect(requests[0]?.follow_up).toEqual({
+    question: "بررسی مسیر به عقبه",
+    lead_ids: ["lead-a"],
+  });
+  expect(screen.getByText(/Approval includes AI planning/)).toBeVisible();
+  fireEvent.change(question, { target: { value: "Confirm source dates" } });
+  expect(
+    screen.queryByRole("button", { name: /Approve cost estimate/ }),
+  ).not.toBeInTheDocument();
+  expect(requests).toHaveLength(1);
+});
+it("MB-UX-QUALITY-001 L01 retains review after round five and disables further quotes and selection", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        costs,
+        rounds: [],
+        next_round: 6,
+        research_review: { ...researchReview, round_number: 5 },
+      }),
+    ),
+  );
+  render(
+    <ResearchRoundControl
+      runId="run"
+      workflowState="workflow_complete"
+      onStarted={vi.fn()}
+      onPreview={vi.fn()}
+    />,
+  );
+  expect(await screen.findByText("Research review · round 5")).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: /Get cost estimate/ }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+});
 it("L03 discloses credit-funded Ultra models before separate cost approval", async () => {
   const actions: string[] = [];
   const started = vi.fn();

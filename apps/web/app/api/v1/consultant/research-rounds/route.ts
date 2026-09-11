@@ -4,6 +4,7 @@ import {
   ApplicationFault,
   authorizeConsultantRunResourceRead,
   getOrRestoreWorkflowSession,
+  getResearchRoundReview,
   researchRequestHash,
   summarizeResearchCosts,
   buildResearchRoundPlan,
@@ -75,9 +76,10 @@ export async function GET(req: Request) {
       readConsultantCostEvents(pool, context.accountId, runId),
     ]);
     const selected = url.searchParams.get("round_id");
-    const output = selected
-      ? rounds.find((r) => r.round_id === selected)?.output
+    const selectedRound = selected
+      ? rounds.find((r) => r.round_id === selected)
       : undefined;
+    const output = selectedRound?.output;
     if (selected && !output)
       throw new ResearchRoundFault(
         404,
@@ -85,6 +87,18 @@ export async function GET(req: Request) {
         "Saved round result not found.",
       );
     const completed = rounds.filter((r) => r.status === "completed");
+    const latest = [...completed].sort(
+      (a, b) => b.round_number - a.round_number,
+    )[0];
+    const latestReview = latest
+      ? await getResearchRoundReview(pool, latest)
+      : null;
+    const selectedReview =
+      selectedRound && output
+        ? selectedRound.round_id === latest?.round_id
+          ? latestReview
+          : await getResearchRoundReview(pool, selectedRound)
+        : null;
     return NextResponse.json({
       costs: summarizeResearchCosts(events, session.mode === "demonstration"),
       rounds: rounds.map(
@@ -97,10 +111,18 @@ export async function GET(req: Request) {
         }) => view,
       ),
       next_round: Math.max(0, ...completed.map((r) => r.round_number)) + 1,
+      research_review: latestReview,
       ...(session.mode === "demonstration"
         ? {}
         : { research_tiers: configuredResearchTierAvailability() }),
-      ...(output ? { output } : {}),
+      ...(output
+        ? {
+            output: {
+              ...output,
+              ...(selectedReview ? { research_review: selectedReview } : {}),
+            },
+          }
+        : {}),
     });
   } catch (error) {
     return failure(error);
@@ -109,10 +131,10 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Record<string, unknown>;
-    const runId = String(body.run_id ?? "");
+    const runId = typeof body.run_id === "string" ? body.run_id : "";
     const { context, pool, session } = await access(req, runId, true);
     if (body.action === "approve") {
-      const quoteId = String(body.quote_id ?? "");
+      const quoteId = typeof body.quote_id === "string" ? body.quote_id : "";
       if (!uuid.test(quoteId))
         throw new ResearchRoundFault(
           400,
@@ -157,6 +179,12 @@ export async function POST(req: Request) {
     const parent = rounds
       .filter((r) => r.status === "completed")
       .sort((a, b) => b.round_number - a.round_number)[0];
+    if ((parent?.round_number ?? 0) >= 5)
+      throw new ResearchRoundFault(
+        409,
+        "MB-409-ROUND-LIMIT",
+        "Five research rounds are complete. No further round is available.",
+      );
     if (rounds.some((r) => r.status === "approved"))
       throw new ResearchRoundFault(
         409,
@@ -164,6 +192,47 @@ export async function POST(req: Request) {
         "A round is already active.",
       );
     const gaps = parent?.continuation?.remaining_gaps;
+    let followUp: { question: string; lead_ids: string[] } | undefined;
+    if (body.follow_up !== undefined) {
+      const value = body.follow_up;
+      if (
+        !parent ||
+        !value ||
+        typeof value !== "object" ||
+        Array.isArray(value)
+      )
+        throw new ResearchRoundFault(
+          400,
+          "MB-400-FOLLOW-UP",
+          "Follow-up focus is available after a completed round.",
+        );
+      const focus = value as Record<string, unknown>;
+      if (
+        typeof focus.question !== "string" ||
+        focus.question.length > 4000 ||
+        !Array.isArray(focus.lead_ids) ||
+        focus.lead_ids.some((id) => typeof id !== "string")
+      )
+        throw new ResearchRoundFault(
+          400,
+          "MB-400-FOLLOW-UP",
+          "Enter a focus of up to 4,000 characters and select saved research leads.",
+        );
+      const parentReview = await getResearchRoundReview(pool, parent);
+      const allowedIds = new Set(
+        parentReview.leads.map((lead) => lead.lead_id),
+      );
+      if (focus.lead_ids.some((id) => !allowedIds.has(id)))
+        throw new ResearchRoundFault(
+          400,
+          "MB-400-FOLLOW-UP",
+          "Select leads from the latest completed round.",
+        );
+      followUp = {
+        question: focus.question,
+        lead_ids: [...new Set(focus.lead_ids as string[])],
+      };
+    }
     const { plan, choices } = await buildResearchRoundPlan({
       round_number: (parent?.round_number ?? 0) + 1,
       depth: body.depth,
@@ -172,6 +241,7 @@ export async function POST(req: Request) {
         ? { selected_model: body.model }
         : {}),
       parent_round_id: parent?.round_id ?? null,
+      ...(followUp ? { follow_up: followUp } : {}),
       request_hash: researchRequestHash(session),
       focus_requirements: Array.isArray(gaps)
         ? gaps.filter((g): g is string => typeof g === "string")

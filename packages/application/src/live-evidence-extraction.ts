@@ -97,6 +97,8 @@ const indexSchema = objectSchema({
   summary: stringSchema,
 });
 interface ExtractionContext {
+  on_index?: (index: CandidateIndex) => void;
+  priority_names?: readonly string[];
   candidate_limit?: number | undefined;
   phase: string;
   loop: number;
@@ -258,6 +260,13 @@ async function extractNativeCandidateScopeOnce(
   );
   const baseInput = {
     buyer_mandatory_criteria: context.mandatory_criteria,
+    ...(context.priority_names?.length
+      ? {
+          priority_candidate_names: context.priority_names,
+          priority_instruction:
+            "Prioritize these buyer-selected or analysed names within the index limit only if independently present in supplied notes or citation content. This priority list is not evidence and cannot ground a name or quotation.",
+        }
+      : {}),
     native_research_notes: nativeCompletion.text,
     native_citations: nativeCitations,
   };
@@ -354,10 +363,20 @@ export async function extractNativeDiscoveryPayload(
     options,
   );
   const batches: CandidateIndex["candidates"][] = [];
+  context.on_index?.(indexed.parsed);
+  const priorities = new Set(
+    context.priority_names?.map((name) => name.normalize("NFKC").toLowerCase()),
+  );
   const scopedCandidates = prioritizeSourceBackedCandidates(
     indexed.parsed.candidates,
     nativeCompletion.citations ?? [],
-  ).slice(0, context.candidate_limit ?? 40);
+  )
+    .sort(
+      (a, b) =>
+        Number(priorities.has(b.legal_name.normalize("NFKC").toLowerCase())) -
+        Number(priorities.has(a.legal_name.normalize("NFKC").toLowerCase())),
+    )
+    .slice(0, context.candidate_limit ?? 40);
   const batchSize = Math.max(
     1,
     Math.min(

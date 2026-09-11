@@ -10,12 +10,15 @@ import {
 } from "./database.js";
 import {
   enqueueConsultantWorkflowJob,
+  lockActiveConsultantExecution,
   type ConsultantWorkflowIdentity,
 } from "./consultant-workflow-jobs.js";
 
 export interface ResearchRoundRecord extends ResearchRoundView {
   account_id: string;
+  user_profile_id: string;
   run_id: string;
+  classification_id: string;
   output: Record<string, unknown> | null;
   continuation: Record<string, unknown> | null;
 }
@@ -28,9 +31,18 @@ export class ResearchRoundFault extends Error {
     super(message);
   }
 }
-const conflict = (message: string): never => {
+function conflict(message: string): never {
   throw new ResearchRoundFault(409, "MB-409-ROUND-APPROVAL", message);
-};
+}
+
+function assertRoundNumber(roundNumber: number): void {
+  if (!Number.isInteger(roundNumber) || roundNumber < 1 || roundNumber > 5)
+    throw new ResearchRoundFault(
+      409,
+      "MB-409-ROUND-LIMIT",
+      "A research request permits at most five completed rounds.",
+    );
+}
 
 export async function settleResearchRounds(
   db: Queryable,
@@ -76,10 +88,15 @@ export async function saveResearchQuote(
   identity: ConsultantWorkflowIdentity,
   plan: ResearchRoundPlan,
 ) {
+  // MB-UX-QUALITY-001 L01: reject invalid ownership before retaining a quote.
+  assertRoundNumber(plan.round_number);
   const id = randomUUID();
-  await db.query(
+  const result = await db.query(
     `INSERT INTO consultant_research_round(round_id,account_id,user_profile_id,run_id,classification_id,round_number,plan)
-    VALUES($1,$2,$3,$4,$5,$6,$7)`,
+    SELECT $1,$2,$3,$4,$5,$6,$7 FROM consultant_workflow_session s
+    WHERE s.account_id=$2 AND s.user_profile_id=$3 AND s.run_id=$4 AND NOT s.is_invalidated
+      AND COALESCE(s.classification->>'classification_id',s.workflow_metadata->>'classification_id')=$5::uuid::text
+    RETURNING round_id`,
     [
       id,
       identity.account_id,
@@ -90,6 +107,8 @@ export async function saveResearchQuote(
       JSON.stringify(plan),
     ],
   );
+  if (result.rows.length !== 1)
+    throw new ResearchRoundFault(404, "MB-404-ROUND", "Research not found.");
   return id;
 }
 
@@ -125,6 +144,17 @@ export async function approveResearchQuote(
         "MB-404-ROUND",
         "Research quote not found.",
       );
+    if (
+      quote.user_profile_id !== userId ||
+      quote.classification_id !==
+        (session.classification?.classification_id ??
+          session.workflow_metadata?.classification_id)
+    )
+      throw new ResearchRoundFault(
+        404,
+        "MB-404-ROUND",
+        "Research quote not found.",
+      );
     if (quote.status === "approved" || quote.status === "completed") {
       const jobs = await db.query(
         `SELECT job_id,status FROM consultant_workflow_job WHERE account_id=$1 AND execution_id=$2 AND stage='research'`,
@@ -139,7 +169,12 @@ export async function approveResearchQuote(
     }
     if (quote.status !== "proposed")
       conflict("This attempt ended. Review a fresh quote before trying again.");
-    if (new Date(quote.plan.expires_at).getTime() <= Date.now())
+    assertRoundNumber(quote.round_number);
+    assertRoundNumber(quote.plan.round_number);
+    if (quote.round_number !== quote.plan.round_number)
+      conflict("The round identity changed. Refresh the estimate.");
+    const expiresAt = new Date(quote.plan.expires_at).getTime();
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now())
       conflict("This estimate expired. Refresh the estimate before approving.");
     const lockedHash = createHash("sha256")
       .update(
@@ -169,6 +204,7 @@ export async function approveResearchQuote(
       [accountId, runId],
     );
     const parent = completed.rows[0];
+    assertRoundNumber((parent?.round_number ?? 0) + 1);
     if (
       (parent?.round_id ?? null) !== quote.plan.parent_round_id ||
       quote.round_number !== (parent?.round_number ?? 0) + 1
@@ -232,18 +268,70 @@ export async function completeResearchRound(
   output: unknown,
   continuation: unknown,
 ) {
-  const result = await db.query(
-    `UPDATE consultant_research_round SET status='completed',output=$3,continuation=$4,completed_at=clock_timestamp()
-    WHERE account_id=$1 AND execution_id=$2 AND status='approved' RETURNING round_id`,
-    [
+  // Join an existing publication transaction, or establish one for a pool caller.
+  const persist = async (client: Queryable) => {
+    const round = await getResearchRoundForExecution(
+      client,
       accountId,
       executionId,
-      JSON.stringify(output),
-      JSON.stringify(continuation ?? null),
-    ],
-  );
-  if (result.rows.length !== 1)
-    conflict("This research round no longer permits publication.");
+    );
+    if (!round || round.status !== "approved")
+      conflict("This research round no longer permits publication.");
+    // Match approval/cancellation lock order: session first, then round.
+    await lockActiveConsultantExecution(
+      client,
+      accountId,
+      round.run_id,
+      executionId,
+    );
+    const ownership = await client.query(
+      `SELECT r.round_id FROM consultant_research_round r
+       JOIN consultant_workflow_session s ON s.account_id=r.account_id AND s.run_id=r.run_id
+       WHERE r.account_id=$1 AND r.execution_id=$2 AND r.status='approved'
+         AND s.user_profile_id=r.user_profile_id
+         AND COALESCE(s.classification->>'classification_id',s.workflow_metadata->>'classification_id')=r.classification_id::text
+       FOR UPDATE OF r`,
+      [accountId, executionId],
+    );
+    if (ownership.rows.length !== 1)
+      conflict("This research round no longer permits publication.");
+    const record =
+      output && typeof output === "object" && !Array.isArray(output)
+        ? (output as Record<string, unknown>)
+        : null;
+    if (
+      !record ||
+      record.user_profile_id !== round.user_profile_id ||
+      record.research_run_id !== round.run_id ||
+      record.execution_id !== executionId ||
+      record.classification_id !== round.classification_id ||
+      (record.account_id !== undefined && record.account_id !== accountId)
+    )
+      conflict(
+        "The round output does not match its retained ownership and execution.",
+      );
+    if (
+      continuation != null &&
+      (typeof continuation !== "object" || Array.isArray(continuation))
+    )
+      conflict("The round continuation must be a complete checkpoint object.");
+    // Keep every field, including future checkpoint extensions and incomplete leads.
+    const result = await client.query(
+      `UPDATE consultant_research_round SET status='completed',output=$3,continuation=$4,completed_at=clock_timestamp()
+       WHERE round_id=$1 AND execution_id=$2 AND status='approved' RETURNING round_id`,
+      [
+        round.round_id,
+        executionId,
+        JSON.stringify(output),
+        JSON.stringify(continuation ?? null),
+      ],
+    );
+    if (result.rows.length !== 1)
+      conflict("This research round no longer permits publication.");
+  };
+  if ("connect" in db && !("release" in db))
+    await inTransaction(db as ConnectionPool, persist);
+  else await persist(db);
 }
 
 /** Accounting persists independently of execution leases, including late/cancelled responses. */

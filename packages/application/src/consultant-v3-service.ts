@@ -48,11 +48,13 @@ import {
   createRoundCallGuard,
   summarizeResearchCosts,
 } from "./consultant-research-cost.js";
-import {
-  type ResearchContinuation,
-  executeDualLaneResearch,
-} from "./dual-lane-orchestrator.js";
+import { executeDualLaneResearch } from "./dual-lane-orchestrator.js";
 import { synthesizeConsultantOutputV3 } from "./synthesis-engine.js";
+import {
+  buildResearchReview,
+  hydrateResearchContinuation,
+  getResearchRoundReview,
+} from "./research-review.js";
 import { LivePreparationModelGateway } from "./live-preparation.js";
 import { LiveResearchError } from "./openrouter-model-policy.js";
 
@@ -893,8 +895,10 @@ export async function executeConsultantWorkflowResearch(
   },
 ): Promise<ConsultantResearchOutputV3> {
   options?.signal?.throwIfAborted();
-  const session = activeSessions.get(runId);
-  if (!session) throw new Error(`Workflow session ${runId} not found.`);
+  const cachedSession = activeSessions.get(runId);
+  if (!cachedSession) throw new Error(`Workflow session ${runId} not found.`);
+  // Do not expose completion in process memory before the durable transaction commits.
+  const session = { ...cachedSession };
   if (
     !session.approved_request_revision ||
     !session.step3_deep_prompt?.is_approved
@@ -938,7 +942,7 @@ export async function executeConsultantWorkflowResearch(
     extraction_batch_size: round.plan.extraction_batch_size ?? 5,
     approved_rates: round.plan.rates,
     ...(parent?.continuation
-      ? { continuation: parent.continuation as unknown as ResearchContinuation }
+      ? { continuation: await hydrateResearchContinuation(db, parent) }
       : {}),
     before_call: createRoundCallGuard(round.plan),
     max_output_tokens: round.plan.max_output_tokens_per_call,
@@ -1067,6 +1071,13 @@ export async function executeConsultantWorkflowResearch(
   }
   output = {
     ...output,
+    research_review: buildResearchReview(
+      dualResult.continuation,
+      output.supplier_candidates,
+      session.step3_deep_prompt.discovery_criteria,
+      round.round_number,
+      parent ? await getResearchRoundReview(db, parent) : undefined,
+    ),
     ...(round.round_number >= 4 ? { public_social_checks: socialChecks } : {}),
     limitations_and_disclosures: [
       ...output.limitations_and_disclosures,
@@ -1149,6 +1160,8 @@ export async function executeConsultantWorkflowResearch(
   };
   if ("connect" in db) await inTransaction(db as ConnectionPool, persist);
   else await persist(db);
+
+  activeSessions.set(runId, session);
 
   return output;
 }

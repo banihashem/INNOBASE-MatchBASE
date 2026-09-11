@@ -139,6 +139,12 @@ async function fixture(t) {
       },
     },
     continuation: {
+      collected_responses: [
+        JSON.stringify({
+          model: "fixture",
+          text: "Raw response with NUL \0 and unpaired surrogate \ud800",
+        }),
+      ],
       roster: Array.from({ length: round }, (_, index) => [
         `entity-${index}`,
         {

@@ -88,8 +88,8 @@ export interface DualLaneExecutionOptions extends LiveCallOptions {
 export interface ResearchContinuation {
   indexed_leads?: CollectedResearchLead[];
   focus_analysis?: ResearchFocusAnalysis;
-  /** Complete responses stay private and are not themselves verified facts. */
-  collected_responses?: OpenRouterCompletionResult[];
+  /** JSON-encoded raw responses remain lossless even for characters jsonb cannot represent. */
+  collected_responses?: string[];
   native_citations?: import("./openrouter-model-policy.js").OpenRouterCitation[];
   coverage_gaps?: string[];
   entity_ids?: [string, string][];
@@ -1069,7 +1069,7 @@ export async function executeDualLaneResearch(
             indexed_leads: indexedLeads,
             collected_responses: [
               ...(options.continuation?.collected_responses ?? []),
-              ...calls,
+              ...calls.map((response) => JSON.stringify(response)),
             ],
             ...(focusAnalysis ? { focus_analysis: focusAnalysis } : {}),
             native_citations: researchCitationInventory(

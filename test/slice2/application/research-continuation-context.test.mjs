@@ -267,6 +267,7 @@ for (const scenario of [
         assert.equal(input.current_roster[0].legal_name, name);
         result =
           "Only the manufacturer's LMX24 technical page was cited in this round. It contains no seller contact or sales entity evidence.";
+        if (scenario === "focused") result += "\0";
         annotations = [
           {
             type: "url_citation",
@@ -496,6 +497,17 @@ for (const scenario of [
       assert.equal(
         result.continuation.collected_responses.length,
         requests.length,
+      );
+      assert.ok(
+        result.continuation.collected_responses.every(
+          (value) => typeof value === "string" && !value.includes("\0"),
+        ),
+      );
+      assert.ok(
+        result.continuation.collected_responses.some((value) =>
+          JSON.parse(value).text.includes("\0"),
+        ),
+        "Raw response text must round-trip without losing unsupported jsonb characters",
       );
       assert.equal(result.continuation.indexed_leads[0].first_seen_round, 1);
       assert.equal(result.continuation.indexed_leads[0].last_seen_round, 2);

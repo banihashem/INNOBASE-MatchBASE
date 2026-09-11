@@ -228,6 +228,18 @@ export default function ConsultantWorkflowPage() {
     | "invalidated"
     | "error"
   >("unresolved");
+  const intakeReady =
+    !sessionLoading &&
+    Boolean(
+      userSession && ["consultant", "admin"].includes(userSession.tier),
+    ) &&
+    hydrationState === "hydrated" &&
+    Boolean(draftId || runId);
+  const intakeControlsDisabled =
+    !intakeReady || isLoading || isSavingNewDraft || Boolean(runId);
+  const initializingRequest = sessionLoading || hydrationState === "unresolved";
+  const draftInitializationFailed =
+    !runId && !draftId && hydrationState === "error";
   const [invalidationDetail, setInvalidationDetail] = useState<{
     runId: string;
     reason: string;
@@ -634,6 +646,7 @@ export default function ConsultantWorkflowPage() {
       setOrderProfile(draft.draft_data.orderProfile ?? "");
       updateDraftId(draft.draft_id);
       updateDraftVersion(draft.draft_version ?? 1);
+      setHydrationState("hydrated");
       if (typeof window !== "undefined") {
         sessionStorage.setItem("matchbase_active_draft_id", draft.draft_id);
         window.history.replaceState(
@@ -648,6 +661,8 @@ export default function ConsultantWorkflowPage() {
   }
 
   async function handleCreateNewDraft() {
+    setHydrationState("unresolved");
+    setWorkflowError(null);
     try {
       const res = await fetch("/api/v1/consultant/workflow", {
         method: "POST",
@@ -669,24 +684,14 @@ export default function ConsultantWorkflowPage() {
           return;
         }
       }
+      throw new Error("The server did not acknowledge a saved draft.");
     } catch (e) {
       console.error("Failed to create server draft:", e);
-    }
-    const fallbackId =
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : "draft-" + Date.now();
-    updateDraftId(fallbackId);
-    updateDraftVersion(1);
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("matchbase_active_draft_id", fallbackId);
-      window.history.replaceState(
-        {},
-        "",
-        `/consultant/workflow?draft_id=${fallbackId}`,
+      setWorkflowError(
+        "Your request form could not be prepared. Retry to create a saved draft.",
       );
+      setHydrationState("error");
     }
-    setHydrationState("hydrated");
   }
 
   async function loadExistingDraft(targetDraftId: string) {
@@ -735,7 +740,6 @@ export default function ConsultantWorkflowPage() {
       console.error("Failed to load draft:", err);
     }
     await handleCreateNewDraft();
-    setHydrationState("hydrated");
   }
 
   async function handleAbandonDraft(idToAbandon: string) {
@@ -947,7 +951,7 @@ export default function ConsultantWorkflowPage() {
 
   // Load demonstration examples (F12)
   function handleLoadExample(type: "poultry" | "water_heaters") {
-    if (runId || isLoading || isSavingNewDraft) return;
+    if (intakeControlsDisabled) return;
     const example = DEMONSTRATION_EXAMPLES[type];
     setProductRequirement(example.product_requirement);
     setTechnicalCompliance(example.technical_compliance);
@@ -959,7 +963,7 @@ export default function ConsultantWorkflowPage() {
   // Action 1: Submit Intake
   async function handleSubmitIntake(e: React.FormEvent) {
     e.preventDefault();
-    if (runId || isLoading || isSavingNewDraft) return;
+    if (intakeControlsDisabled) return;
     setIsLoading(true);
     setCoherenceError(null);
     setWorkflowError(null);
@@ -1234,23 +1238,29 @@ export default function ConsultantWorkflowPage() {
           className="rounded-lg border border-amber-700 bg-amber-950/50 p-4 text-sm text-amber-100"
         >
           <p>
-            {workflowProgress?.phase === "user_cancelled"
-              ? "Research stopped. Your saved request and completed results are retained."
-              : preparationCredentialFailure
-                ? "The advisory service could not use an accepted provider credential. Your approved interpretation is saved."
-                : workflowError.includes("HTTP 403")
-                  ? "The research service could not authorize this request."
-                  : workflowError.includes("HTTP 429")
-                    ? "The research service is temporarily busy. Your request is saved."
-                    : workflowError.includes("Network") ||
-                        workflowError.includes("fetch")
-                      ? "The connection was interrupted. Your last saved request is retained."
-                      : "This step could not finish. Your last saved request and completed results are retained."}
+            {draftInitializationFailed
+              ? "Your request form could not be prepared. Retry to create a saved draft."
+              : workflowProgress?.phase === "user_cancelled"
+                ? "Research stopped. Your saved request and completed results are retained."
+                : workflowError.includes("MB-422-LIVE-OUTPUT-LIMIT")
+                  ? "The model response reached its size limit before this step finished. Earlier results and this attempt's usage are saved. Your request does not need to be rewritten."
+                  : preparationCredentialFailure
+                    ? "The advisory service could not use an accepted provider credential. Your approved interpretation is saved."
+                    : workflowError.includes("HTTP 403")
+                      ? "The research service could not authorize this request."
+                      : workflowError.includes("HTTP 429")
+                        ? "The research service is temporarily busy. Your request is saved."
+                        : workflowError.includes("Network") ||
+                            workflowError.includes("fetch")
+                          ? "The connection was interrupted. Your last saved request is retained."
+                          : "This step could not finish. Your last saved request and completed results are retained."}
           </p>
-          <details className="workflow-support mt-3">
-            <summary>Support details</summary>
-            <p>{workflowError}</p>
-          </details>
+          {!draftInitializationFailed && (
+            <details className="workflow-support mt-3">
+              <summary>Support details</summary>
+              <p>{workflowError}</p>
+            </details>
+          )}
           {preparationCredentialFailure ? (
             <p className="mt-2">
               Preparation could not recover using the available configured
@@ -1463,7 +1473,12 @@ export default function ConsultantWorkflowPage() {
               <button
                 type="button"
                 onClick={handleOpenResumeModal}
-                disabled={isLoading || isSavingNewDraft || activeRunLocked}
+                disabled={
+                  initializingRequest ||
+                  isLoading ||
+                  isSavingNewDraft ||
+                  activeRunLocked
+                }
                 className="cx-button-secondary"
               >
                 Resume Research
@@ -1471,7 +1486,12 @@ export default function ConsultantWorkflowPage() {
               <button
                 type="button"
                 onClick={handleStartNew}
-                disabled={isSavingNewDraft || isLoading || activeRunLocked}
+                disabled={
+                  initializingRequest ||
+                  isSavingNewDraft ||
+                  isLoading ||
+                  activeRunLocked
+                }
                 className="cx-button-secondary"
               >
                 New research
@@ -1587,7 +1607,7 @@ export default function ConsultantWorkflowPage() {
                 <button
                   type="button"
                   onClick={() => handleLoadExample("poultry")}
-                  disabled={isLoading || isSavingNewDraft || Boolean(runId)}
+                  disabled={intakeControlsDisabled}
                   className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded border border-slate-600 transition-colors"
                 >
                   A: Brazilian Poultry
@@ -1595,7 +1615,7 @@ export default function ConsultantWorkflowPage() {
                 <button
                   type="button"
                   onClick={() => handleLoadExample("water_heaters")}
-                  disabled={isLoading || isSavingNewDraft || Boolean(runId)}
+                  disabled={intakeControlsDisabled}
                   className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded border border-slate-600 transition-colors"
                 >
                   B: UAE Water Heaters
@@ -1604,6 +1624,20 @@ export default function ConsultantWorkflowPage() {
             </div>
 
             {!runId && workflowFeedback}
+            {!runId && initializingRequest && (
+              <p role="status" className="mb-4 text-sm text-slate-300">
+                Preparing your request form…
+              </p>
+            )}
+            {draftInitializationFailed && (
+              <button
+                type="button"
+                onClick={() => void handleCreateNewDraft()}
+                className="cx-button-secondary mb-4"
+              >
+                Retry preparing request form
+              </button>
+            )}
             {runId && (
               <p className="mb-4 text-sm text-amber-200">
                 Your original request is saved and locked. Open Review & prepare
@@ -1632,7 +1666,7 @@ export default function ConsultantWorkflowPage() {
                     <select
                       aria-label="Research mode"
                       value={researchMode}
-                      disabled={Boolean(runId) || isLoading || isSavingNewDraft}
+                      disabled={intakeControlsDisabled}
                       onChange={(event) =>
                         setResearchMode(
                           event.target.value as "live" | "demonstration",
@@ -1758,6 +1792,7 @@ export default function ConsultantWorkflowPage() {
                         ref={popoverBtnRef1}
                         type="button"
                         id="help-btn-1"
+                        disabled={!intakeReady}
                         aria-controls="help-popover-1"
                         aria-expanded={showPopover1}
                         onClick={() => setShowPopover1(!showPopover1)}
@@ -1798,7 +1833,7 @@ export default function ConsultantWorkflowPage() {
 
                     <textarea
                       id="input-box-1"
-                      disabled={isSavingNewDraft || isLoading || Boolean(runId)}
+                      disabled={intakeControlsDisabled}
                       dir="auto"
                       rows={3}
                       value={productRequirement}
@@ -1825,6 +1860,7 @@ export default function ConsultantWorkflowPage() {
                         ref={popoverBtnRef2}
                         type="button"
                         id="help-btn-2"
+                        disabled={!intakeReady}
                         aria-controls="help-popover-2"
                         aria-expanded={showPopover2}
                         onClick={() => setShowPopover2(!showPopover2)}
@@ -1866,7 +1902,7 @@ export default function ConsultantWorkflowPage() {
 
                     <textarea
                       id="input-box-2"
-                      disabled={isSavingNewDraft || isLoading || Boolean(runId)}
+                      disabled={intakeControlsDisabled}
                       dir="auto"
                       rows={3}
                       value={technicalCompliance}
@@ -1893,6 +1929,7 @@ export default function ConsultantWorkflowPage() {
                         ref={popoverBtnRef3}
                         type="button"
                         id="help-btn-3"
+                        disabled={!intakeReady}
                         aria-controls="help-popover-3"
                         aria-expanded={showPopover3}
                         onClick={() => setShowPopover3(!showPopover3)}
@@ -1934,7 +1971,7 @@ export default function ConsultantWorkflowPage() {
 
                     <textarea
                       id="input-box-3"
-                      disabled={isSavingNewDraft || isLoading || Boolean(runId)}
+                      disabled={intakeControlsDisabled}
                       dir="auto"
                       rows={3}
                       value={orderProfile}
@@ -1951,7 +1988,7 @@ export default function ConsultantWorkflowPage() {
                   <div className="flex justify-end">
                     <button
                       type="submit"
-                      disabled={isLoading || isSavingNewDraft || Boolean(runId)}
+                      disabled={intakeControlsDisabled}
                       className="px-6 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-sm transition-all shadow-md hover:shadow-sky-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {isLoading ? (

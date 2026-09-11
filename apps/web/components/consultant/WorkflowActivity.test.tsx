@@ -11,6 +11,41 @@ const started = {
   failed: 0,
   updated_at: "2026-09-09T10:00:00Z",
 };
+it("MB-UX-QUALITY-001 L05 shows bounded focus recovery with retained prior results", () => {
+  const { rerender } = render(
+    <WorkflowActivity
+      state="lane_gemini_running"
+      progress={{
+        phase: "research_focus_analysis",
+        loop: 2,
+        max_loops: 2,
+        recovery_attempt: 2,
+        max_recovery_attempts: 3,
+      }}
+    />,
+  );
+  expect(screen.getByText(/Focus analysis recovery/)).toHaveTextContent(
+    "Attempt 2 of 3",
+  );
+  expect(
+    screen.getByText(/Previous round results and selected leads/),
+  ).toHaveTextContent("approved round allowance");
+  expect(
+    screen.queryByText(/Completed topics are retained/),
+  ).not.toBeInTheDocument();
+  rerender(
+    <WorkflowActivity
+      state="progressive_reveal_ready"
+      progress={{
+        phase: "completed",
+        recovery_attempt: 2,
+        max_recovery_attempts: 3,
+      }}
+    />,
+  );
+  expect(screen.queryByText(/Focus analysis recovery/)).not.toBeInTheDocument();
+});
+
 it("MB-UX-QUALITY-001 L04 shows recorded preparation recovery without claiming supplier research or completion", () => {
   const { rerender } = render(
     <WorkflowActivity

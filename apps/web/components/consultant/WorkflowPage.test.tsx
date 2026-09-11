@@ -136,7 +136,259 @@ async function tick(ms = 0) {
   });
 }
 
+describe("MB-UX-QUALITY-001 L05 intake readiness", () => {
+  for (const first of ["session", "draft"]) {
+    it(`keeps every intake control disabled until both acknowledgements arrive, ${first} first`, async () => {
+      const session = deferred();
+      const draft = deferred();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, options?: RequestInit) => {
+          if (url === "/api/v1/me") return session.promise;
+          const body = JSON.parse(String(options?.body));
+          requests.push(body);
+          if (body.action === "create_draft") return draft.promise;
+          throw new Error("No save or submit is allowed during initialization");
+        }),
+      );
+      render(<ConsultantWorkflowPage />);
+      const controls = () => [
+        screen.getByLabelText("Product Requirement"),
+        screen.getByLabelText("Technical, Quality & Trade Requirements"),
+        screen.getByLabelText("Order & Supplier Profile"),
+        screen.getByRole("combobox", { name: "Research mode" }),
+        screen.getByRole("button", { name: /Continue to review/ }),
+        screen.getByRole("button", { name: "A: Brazilian Poultry" }),
+        screen.getByRole("button", { name: "B: UAE Water Heaters" }),
+        ...screen.getAllByRole("button", { name: "Help & Guidance" }),
+      ];
+      for (const control of controls()) expect(control).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "Resume Research" }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "New research" }),
+      ).toBeDisabled();
+      expect(screen.getByText("Preparing your request form…")).toBeVisible();
+      const acknowledgeSession = () =>
+        session.resolve(
+          response({
+            tier: "consultant",
+            user_id: "user",
+            account_id: "account",
+          }),
+        );
+      const acknowledgeDraft = () =>
+        draft.resolve(
+          response({
+            success: true,
+            draft_id: "draft-ready",
+            draft_version: 1,
+          }),
+        );
+      await act(async () => {
+        (first === "session" ? acknowledgeSession : acknowledgeDraft)();
+      });
+      for (const control of controls()) expect(control).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "Resume Research" }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "New research" }),
+      ).toBeDisabled();
+      await act(async () => {
+        (first === "session" ? acknowledgeDraft : acknowledgeSession)();
+      });
+      await waitFor(() =>
+        expect(screen.getByLabelText("Product Requirement")).toBeEnabled(),
+      );
+      for (const control of controls()) expect(control).toBeEnabled();
+      expect(
+        screen.getByRole("button", { name: "Resume Research" }),
+      ).toBeEnabled();
+      expect(
+        screen.getByRole("button", { name: "New research" }),
+      ).toBeEnabled();
+      expect(
+        screen.queryByText("Preparing your request form…"),
+      ).not.toBeInTheDocument();
+      expect(window.location.search).toBe("?draft_id=draft-ready");
+      expect(requests.map((body) => body.action)).toEqual(["create_draft"]);
+    });
+  }
+
+  it("keeps failed draft creation disabled and retries without inventing a saved identity", async () => {
+    let attempts = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, options?: RequestInit) => {
+        if (url === "/api/v1/me")
+          return response({
+            tier: "consultant",
+            user_id: "user",
+            account_id: "account",
+          });
+        const body = JSON.parse(String(options?.body));
+        requests.push(body);
+        if (body.action === "create_draft")
+          return ++attempts === 1
+            ? response({ error: "Unavailable" }, 503)
+            : response({
+                success: true,
+                draft_id: "draft-recovered",
+                draft_version: 1,
+              });
+        throw new Error(
+          "No save, submit or research is allowed before editing",
+        );
+      }),
+    );
+    render(<ConsultantWorkflowPage />);
+    const retry = await screen.findByRole("button", {
+      name: "Retry preparing request form",
+    });
+    expect(
+      screen.getByText(/Your request form could not be prepared/),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Product Requirement")).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /Continue to review/ }),
+    ).toBeDisabled();
+    expect(window.location.search).toBe("?mode=new");
+    expect(sessionStorage.getItem("matchbase_active_draft_id")).toBeNull();
+    fireEvent.click(retry);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Product Requirement")).toBeEnabled(),
+    );
+    expect(window.location.search).toBe("?draft_id=draft-recovered");
+    expect(
+      screen.queryByRole("button", { name: "Retry preparing request form" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Your request form could not be prepared/),
+    ).not.toBeInTheDocument();
+    expect(requests.map((body) => body.action)).toEqual([
+      "create_draft",
+      "create_draft",
+    ]);
+  });
+
+  it("opens an acknowledged saved draft after initial creation fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, options?: RequestInit) => {
+        if (url === "/api/v1/me")
+          return response({
+            tier: "consultant",
+            user_id: "user",
+            account_id: "account",
+          });
+        if (url.includes("incomplete=true")) return response({ items: [] });
+        if (url.includes("active_draft=true"))
+          return response({
+            drafts: [
+              {
+                draft_id: "saved-existing",
+                draft_version: 4,
+                draft_data: {
+                  productRequirement: "Saved product",
+                  technicalCompliance: "Saved quality",
+                  orderProfile: "Saved order",
+                },
+              },
+            ],
+          });
+        const body = JSON.parse(String(options?.body));
+        requests.push(body);
+        if (body.action === "create_draft")
+          return response({ error: "Unavailable" }, 503);
+        if (body.action === "save_draft")
+          return response({ success: true, draft_version: 5 });
+        throw new Error("Unexpected request");
+      }),
+    );
+    render(<ConsultantWorkflowPage />);
+    await screen.findByRole("button", { name: "Retry preparing request form" });
+    const resume = screen.getByRole("button", {
+      name: "Resume Research",
+    });
+    expect(resume).toBeEnabled();
+    fireEvent.click(resume);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Resume Draft" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("Product Requirement")).toBeEnabled(),
+    );
+    expect(screen.getByLabelText("Product Requirement")).toHaveValue(
+      "Saved product",
+    );
+    expect(
+      screen.getByLabelText("Technical, Quality & Trade Requirements"),
+    ).toHaveValue("Saved quality");
+    expect(screen.getByLabelText("Order & Supplier Profile")).toHaveValue(
+      "Saved order",
+    );
+    expect(window.location.search).toBe("?draft_id=saved-existing");
+    expect(
+      screen.queryByText(/Your request form could not be prepared/),
+    ).not.toBeInTheDocument();
+    expect(
+      requests.filter((body) => body.action === "create_draft"),
+    ).toHaveLength(1);
+    expect(
+      requests.some((body) => /submit|approve|execute/.test(body.action)),
+    ).toBe(false);
+  });
+});
+
 describe("MB-UX-LIVE-001 L03 stage gates", () => {
+  it("MB-UX-QUALITY-001 L05 explains truncated research without mutating or restarting it", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/consultant/workflow?run_id=focus-limit",
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, options?: RequestInit) => {
+        if (url === "/api/v1/me")
+          return response({
+            tier: "consultant",
+            user_id: "user",
+            account_id: "account",
+          });
+        if (String(url).startsWith("/api/v1/consultant/research-rounds"))
+          return response(roundOverview);
+        if (!options?.method)
+          return response({
+            session: {
+              run_id: "focus-limit",
+              execution_id: "focus-execution",
+              state: "workflow_failed",
+              mode: "live",
+              intake: {},
+              retry_action: "research",
+              error:
+                "MB-422-LIVE-OUTPUT-LIMIT: Provider exhausted the output allowance.",
+              step1_interpretation: { english_translation: "Approved request" },
+              progress: { phase: "failed", loop: 2, max_loops: 2 },
+            },
+          });
+        requests.push(JSON.parse(String(options.body)));
+        throw new Error("No mutation expected");
+      }),
+    );
+    render(<ConsultantWorkflowPage />);
+    expect(
+      await screen.findByText(/The model response reached its size limit/),
+    ).toHaveTextContent("Your request does not need to be rewritten");
+    expect(
+      screen.getByText(/MB-422-LIVE-OUTPUT-LIMIT/).closest("details"),
+    ).not.toHaveAttribute("open");
+    expect(requests).toHaveLength(0);
+  });
+
   it("MB-UX-QUALITY-001 L04 distinguishes preparation credential failure and discloses paid recovery without resubmitting", async () => {
     window.history.replaceState(
       {},

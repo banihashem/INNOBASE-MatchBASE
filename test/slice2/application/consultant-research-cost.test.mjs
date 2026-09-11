@@ -128,6 +128,48 @@ test("MB-UX-COST-001 each approval has a bounded allowance and no sixth round", 
     code: "MB-409-ROUND-LIMIT",
   });
 });
+test("L05 resumed round guard deducts earlier dispatches and retains the final synthesis reserve", async () => {
+  const { plan } = await buildResearchRoundPlan({
+    round_number: 2,
+    depth: "deep",
+    parent_round_id: "parent",
+    request_hash: "hash",
+    focus_requirements: [],
+    mode: "demonstration",
+  });
+  const request = { model: "demonstration", messages: [], max_tokens: 1 };
+  const guard = createRoundCallGuard(plan, plan.max_calls - 2);
+  await guard(request, false);
+  await assert.rejects(guard(request, false), {
+    code: "MB-409-ROUND-ALLOWANCE",
+  });
+  await guard(
+    {
+      ...request,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "matchbase_live_synthesis",
+          strict: true,
+          schema: {},
+        },
+      },
+    },
+    false,
+  );
+  await assert.rejects(guard(request, false), {
+    code: "MB-409-ROUND-ALLOWANCE",
+  });
+  await assert.rejects(
+    createRoundCallGuard(plan, plan.max_calls)(request, false),
+    { code: "MB-409-ROUND-ALLOWANCE" },
+  );
+  for (const invalid of [-1, 1.5, NaN, Infinity])
+    assert.throws(() => createRoundCallGuard(plan, invalid), {
+      code: "MB-409-ROUND-ALLOWANCE",
+    });
+});
+
 test("MB-UX-COST-001 model choices exclude batch variants before economical selection", async (t) => {
   const keys = [
     "MATCHBASE_OPENROUTER_API_KEY",

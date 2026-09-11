@@ -6,6 +6,7 @@ import {
   completeResearchRound,
   recordConsultantProviderCall,
   readConsultantCostEvents,
+  summarizeResearchExecutionAllowance,
   saveConsultantOutputV3,
   saveConsultantWorkflowSession,
   getConsultantWorkflowSessionByRunId,
@@ -1014,15 +1015,26 @@ export async function executeConsultantWorkflowResearch(
   const parent = rounds.find(
     (item) => item.round_id === round.plan.parent_round_id,
   );
+  // A resumed approved execution retains every earlier dispatch in its allowance.
+  const previousAllowance = summarizeResearchExecutionAllowance(
+    (
+      await readConsultantCostEvents(db, session.account_id, session.run_id)
+    ).filter((event) => event.execution_id === session.execution_id),
+  );
   const roundOptions = {
     round_plan: round.plan,
     automatic_recovery_attempts: round.plan.automatic_recovery_attempts ?? 1,
+    previously_consumed_focus_attempts:
+      previousAllowance.consumed_focus_attempts,
     extraction_batch_size: round.plan.extraction_batch_size ?? 5,
     approved_rates: round.plan.rates,
     ...(parent?.continuation
       ? { continuation: await hydrateResearchContinuation(db, parent) }
       : {}),
-    before_call: createRoundCallGuard(round.plan),
+    before_call: createRoundCallGuard(
+      round.plan,
+      previousAllowance.consumed_provider_calls,
+    ),
     max_output_tokens: round.plan.max_output_tokens_per_call,
     max_input_bytes: round.plan.max_input_tokens_per_call,
     reasoning_effort:

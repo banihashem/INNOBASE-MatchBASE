@@ -8,6 +8,7 @@ import {
   type ClaimV3,
   type ResearchRoundPlan,
   type ResearchPriceSearchV3,
+  type ResearchFocusAnalysis,
 } from "@matchbase/contracts";
 import {
   getConfiguredLiveModels,
@@ -60,6 +61,14 @@ import { normalizeResearchGaps } from "./research-gap-normalizer.js";
 import { repairSourceTranscription } from "./source-transcription-repair.js";
 import { executeRecentPriceResearch } from "./recent-price-research.js";
 import { createHash, randomUUID } from "node:crypto";
+import {
+  collectResearchLeads,
+  type CollectedResearchLead,
+} from "./research-review.js";
+import {
+  buildFocusedWebContext,
+  planResearchFocus,
+} from "./research-focus-planner.js";
 
 export interface DualLaneExecutionInput {
   readonly product_requirement: string;
@@ -77,6 +86,10 @@ export interface DualLaneExecutionOptions extends LiveCallOptions {
   readonly source_retriever?: typeof fetchPrimaryEvidenceText;
 }
 export interface ResearchContinuation {
+  indexed_leads?: CollectedResearchLead[];
+  focus_analysis?: ResearchFocusAnalysis;
+  /** Complete responses stay private and are not themselves verified facts. */
+  collected_responses?: OpenRouterCompletionResult[];
   native_citations?: import("./openrouter-model-policy.js").OpenRouterCitation[];
   coverage_gaps?: string[];
   entity_ids?: [string, string][];
@@ -122,6 +135,14 @@ Return up to40 candidates for review, at most20 published. Deduplicate corporate
 Facts field_path may use specifications.<name>, contacts.sales_email, contacts.export_email, contacts.general_email, contacts.phone, contacts.contact_page_url, headquarters_address, manufacturing_location, country_of_origin, commercial.moq, commercial.production_capacity, commercial.lead_time, commercial.payment_terms, commercial.incoterm, commercial.incoterm_location, commercial.price_validity, commercial.price_min, commercial.price_max, commercial.currency, commercial.unit. Seek actual public prices, currency, unit, Incoterm and validity when available; price_min/max must be plain numeric strings quoted verbatim in the source, never a market estimate substituted for supplier pricing. Keep unpublished values unknown/RFQ. Return every evidenced certification with issuer, number, scope, validity and status; issuer/regulator evidence is distinct from supplier marketing. Every fact needs its own quote and source. Do not substitute buyer requirements for observed supplier facts.
 Include a country_of_registration fact with an exact supporting source quotation when available; do not infer registration country from a domain or sales office. Keep every fact value a literal substring of its supporting quote, including translated country names only when the original source publishes that spelling.
 Return a detailed plain-English evidence briefing with native citations, exact source URLs and short verbatim quotations for every supported company identity, capability, constraint and commercial fact. Organize the notes by company and explicitly name remaining evidence gaps. Distinguish exhausted discovery from unresolved verification. Do not return JSON or another research plan: a separate non-web extraction step will structure these notes without adding evidence.`;
+
+export function buildFocusedResearchInstructions(plan: ResearchRoundPlan) {
+  const instruction = `${plan.purpose} Focus on these unresolved differentiators: ${normalizeResearchGaps(plan.focus_requirements).join("; ")}. Reuse existing evidence and return updated records only where new evidence changes or supplements findings. Review up to20 candidates. ${plan.round_number >= 4 ? "Review accessible public corporate social profiles and cite actual profiles/posts. Link profiles to the legal company using website reciprocity and corporate contacts. Distinguish reviewed, access_limited, no_profile_found after an actual search, and not_executed. Badges/followers are not qualification. Company websites and their social accounts are one controlled evidence origin. Do not bypass login, collect private employee data, contact anyone or invent profiles/dates. Record platform limits and latest activity actually seen; lack of a profile is not failure." : ""}`;
+  return {
+    instruction,
+    system_instruction: `${RESEARCH_EXECUTION_INSTRUCTIONS}\n${buildNativeResearchRoundInstructions("verification", plan.round_number, instruction)}\n${EVIDENCE_POLICY}`,
+  };
+}
 
 export async function executeDualLaneResearch(
   input: DualLaneExecutionInput,
@@ -205,6 +226,8 @@ export async function executeDualLaneResearch(
   const checkpoints: LiveResearchCheckpoint[] = [];
   const calls: OpenRouterCompletionResult[] = [];
   const nativeResults = new Map<string, OpenRouterCompletionResult>();
+  let indexedLeads = structuredClone(options.continuation?.indexed_leads ?? []);
+  let focusAnalysis: ResearchFocusAnalysis | undefined;
   const evidence = new Map<string, LiveEvidenceRecord>(
     options.continuation?.evidence,
   );
@@ -235,6 +258,22 @@ export async function executeDualLaneResearch(
     string,
     Promise<RetrievedPrimaryEvidence | null>
   >();
+  if (options.round_plan?.focus_analysis_required) {
+    if (options.round_plan.round_number < 2 || !options.continuation)
+      throw new LiveResearchError(
+        "MB-409-FOCUS-PARENT",
+        "A saved previous round is required before focused research.",
+      );
+    const planned = await planResearchFocus(
+      input,
+      options.round_plan,
+      options.continuation,
+      callback,
+      buildFocusedResearchInstructions(options.round_plan),
+    );
+    focusAnalysis = planned.analysis;
+    calls.push(planned.result);
+  }
   const refreshedSources = new Set<string>();
   const retrieveCitedSources = async (
     completion: OpenRouterCompletionResult,
@@ -323,6 +362,7 @@ export async function executeDualLaneResearch(
     instruction: string,
     previous?: LiveDiscoveryPayload,
   ) => {
+    const systemInstruction = `${RESEARCH_EXECUTION_INSTRUCTIONS}\n${buildNativeResearchRoundInstructions(phase, loop, instruction)}\n${EVIDENCE_POLICY}`;
     const nativeBudget = withLiveStageBudget({
       ...callback,
       web_engine:
@@ -340,37 +380,81 @@ export async function executeDualLaneResearch(
             messages: [
               {
                 role: "system",
-                content: `${RESEARCH_EXECUTION_INSTRUCTIONS}\n${buildNativeResearchRoundInstructions(phase, loop, instruction)}\n${EVIDENCE_POLICY}`,
+                content: systemInstruction,
               },
               {
                 role: "user",
-                content: JSON.stringify({
-                  approved_request: input,
-                  mandatory_criteria: requirements,
-                  instruction,
-                  current_roster: [...roster.values()],
-                  publication_blockers: [...roster.values()].flatMap(
-                    (candidate) => {
-                      const blockers = evaluateLiveCandidate(
-                        candidate,
-                        requirements,
-                        evidence,
-                      );
-                      return blockers.length
-                        ? [{ legal_name: candidate.legal_name, blockers }]
-                        : [];
-                    },
-                  ),
-                  publication_review_instruction:
-                    "Resolve publication_blockers before commercial refinements. Existing roster status and model-written quotes are unverified assertions until supported by the actual cited primary source. Seek exact legal-name and relevant product or service passages; missing price or RFQ-specific terms alone do not exclude an otherwise evidenced conditional candidate.",
-                  previous_gaps: normalizeResearchGaps(
-                    previous?.remaining_gaps ?? [],
-                  ),
-                  previously_cited_sources: [...evidence.values()].map(
-                    (item) => item.source,
-                  ),
-                  current_date: new Date().toISOString().slice(0, 10),
-                }),
+                content:
+                  focusAnalysis && options.round_plan
+                    ? buildFocusedWebContext(
+                        input,
+                        options.round_plan,
+                        {
+                          ...options.continuation,
+                          indexed_leads: indexedLeads,
+                          roster: [...roster.entries()],
+                          evidence: [...evidence.entries()],
+                          retrieved: [...retrieved.entries()],
+                          remaining_gaps:
+                            options.continuation?.remaining_gaps ?? [],
+                        },
+                        focusAnalysis,
+                        {
+                          system_instruction: systemInstruction,
+                          instruction,
+                          publication_blockers: [...roster.values()].flatMap(
+                            (candidate) => {
+                              const blockers = evaluateLiveCandidate(
+                                candidate,
+                                requirements,
+                                evidence,
+                              );
+                              return blockers.length
+                                ? [
+                                    {
+                                      legal_name: candidate.legal_name,
+                                      blockers,
+                                    },
+                                  ]
+                                : [];
+                            },
+                          ),
+                          previous_gaps: normalizeResearchGaps(
+                            previous?.remaining_gaps ?? [],
+                          ),
+                        },
+                      )
+                    : JSON.stringify({
+                        approved_request: input,
+                        mandatory_criteria: requirements,
+                        instruction,
+                        ...(focusAnalysis
+                          ? { focused_research_plan: focusAnalysis }
+                          : {}),
+                        retained_discovery_leads: indexedLeads,
+                        current_roster: [...roster.values()],
+                        publication_blockers: [...roster.values()].flatMap(
+                          (candidate) => {
+                            const blockers = evaluateLiveCandidate(
+                              candidate,
+                              requirements,
+                              evidence,
+                            );
+                            return blockers.length
+                              ? [{ legal_name: candidate.legal_name, blockers }]
+                              : [];
+                          },
+                        ),
+                        publication_review_instruction:
+                          "Resolve publication_blockers before commercial refinements. Existing roster status and model-written quotes are unverified assertions until supported by the actual cited primary source. Seek exact legal-name and relevant product or service passages; missing price or RFQ-specific terms alone do not exclude an otherwise evidenced conditional candidate.",
+                        previous_gaps: normalizeResearchGaps(
+                          previous?.remaining_gaps ?? [],
+                        ),
+                        previously_cited_sources: [...evidence.values()].map(
+                          (item) => item.source,
+                        ),
+                        current_date: new Date().toISOString().slice(0, 10),
+                      }),
               },
             ],
             max_tokens: 24000,
@@ -435,6 +519,22 @@ export async function executeDualLaneResearch(
         max_loops: phase === "verification" ? 15 : 1,
         mandatory_criteria: requirements,
         candidate_limit: options.round_plan?.candidate_limit_per_search,
+        on_index: (index) => {
+          indexedLeads = collectResearchLeads(
+            indexedLeads,
+            index.candidates,
+            options.round_plan?.round_number ?? loop,
+          );
+        },
+        ...(focusAnalysis
+          ? {
+              priority_names: indexedLeads
+                .filter((lead) =>
+                  focusAnalysis!.priority_lead_ids.includes(lead.lead_id),
+                )
+                .map((lead) => lead.name),
+            }
+          : {}),
       },
       callback,
     );
@@ -474,7 +574,7 @@ export async function executeDualLaneResearch(
             options.round_plan.research_models[0]!,
             "verification",
             options.round_plan.round_number,
-            `${options.round_plan.purpose} Focus on these unresolved differentiators: ${normalizeResearchGaps(options.round_plan.focus_requirements).join("; ")}. Reuse existing evidence and return updated records only where new evidence changes or supplements findings. Review up to20 candidates. ${options.round_plan.round_number >= 4 ? "Review accessible public corporate social profiles and cite actual profiles/posts. Link profiles to the legal company using website reciprocity and corporate contacts. Distinguish reviewed, access_limited, no_profile_found after an actual search, and not_executed. Badges/followers are not qualification. Company websites and their social accounts are one controlled evidence origin. Do not bypass login, collect private employee data, contact anyone or invent profiles/dates. Record platform limits and latest activity actually seen; lack of a profile is not failure." : ""}`,
+            buildFocusedResearchInstructions(options.round_plan).instruction,
           ),
         ]
       : discoveryModels.map((model, index) =>
@@ -966,6 +1066,12 @@ export async function executeDualLaneResearch(
     ...(options.round_plan
       ? {
           continuation: {
+            indexed_leads: indexedLeads,
+            collected_responses: [
+              ...(options.continuation?.collected_responses ?? []),
+              ...calls,
+            ],
+            ...(focusAnalysis ? { focus_analysis: focusAnalysis } : {}),
             native_citations: researchCitationInventory(
               successful.flatMap((entry) => entry.result.citations ?? []),
               options.continuation?.native_citations ?? [],

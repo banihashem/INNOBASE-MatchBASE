@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import test from "node:test";
 import { executeDualLaneResearch } from "../../../packages/application/dist/dual-lane-orchestrator.js";
 import { createRoundCallGuard } from "../../../packages/application/dist/consultant-research-cost.js";
+import { researchLeadKey } from "../../../packages/application/dist/research-review.js";
 
 for (const scenario of [
   "legacy",
@@ -11,6 +12,7 @@ for (const scenario of [
   "synthesis-json",
   "synthesis-exhausted",
   "mixed-native",
+  "focused",
 ])
   test(`MB-UX-LIVE-001 L15 retained-source publication with ${scenario}`, async (t) => {
     const model = "openai/gpt-5.2";
@@ -72,6 +74,20 @@ for (const scenario of [
     // This is the historical failure shape: retrieval succeeded but no extraction
     // evidence was accepted, and native_citations did not yet exist in the schema.
     const continuation = {
+      ...(scenario === "focused"
+        ? {
+            indexed_leads: [
+              {
+                lead_id: researchLeadKey(name),
+                name,
+                anchor_quote: identityQuote,
+                source_urls: [contactUrl],
+                first_seen_round: 1,
+                last_seen_round: 1,
+              },
+            ],
+          }
+        : {}),
       roster: [["aster-network.example.com", legacyCandidate]],
       evidence: [],
       retrieved: [
@@ -87,6 +103,16 @@ for (const scenario of [
       mode: "live",
       version: "research-round.v1",
       round_number: 2,
+      ...(scenario === "focused"
+        ? {
+            focus_analysis_required: true,
+            follow_up: {
+              question:
+                "RAW_FOLLOW_UP_DO_NOT_FORWARD: verify this seller's current offer",
+              lead_ids: [researchLeadKey(name)],
+            },
+          }
+        : {}),
       depth: "deep",
       title: "Review saved seller sources",
       purpose:
@@ -221,6 +247,19 @@ for (const scenario of [
       let result,
         annotations = [];
       if (!schema) {
+        if (scenario === "focused") {
+          assert.equal(
+            requests[0].response_format.json_schema.name,
+            "research_focus_plan",
+          );
+          assert.ok(
+            !JSON.stringify(body).includes("RAW_FOLLOW_UP_DO_NOT_FORWARD"),
+          );
+          assert.equal(
+            input.focused_research_plan.objective,
+            "Verify the saved seller and current offer",
+          );
+        }
         nativeAttempts++;
         if (scenario === "mixed-native" && nativeAttempts === 1)
           return new Response("temporary", { status: 503 });
@@ -238,7 +277,31 @@ for (const scenario of [
             },
           },
         ];
+      } else if (schema === "research_focus_plan") {
+        assert.equal(
+          body.plugins,
+          undefined,
+          "Planning must not perform a web search",
+        );
+        assert.ok(
+          input.buyer_follow_up.question.includes(
+            "RAW_FOLLOW_UP_DO_NOT_FORWARD",
+          ),
+        );
+        assert.equal(input.prior_leads[0].name, name);
+        assert.ok(input.prior_dossiers[0].findings_excerpt.includes(name));
+        assert.equal(input.source_inventory.length, 2);
+        result = {
+          objective: "Verify the saved seller and current offer",
+          question_summary: "Investigate seller evidence",
+          priority_lead_ids: [researchLeadKey(name)],
+          search_tasks: ["Inspect official identity and dated offers"],
+          evidence_gaps: ["Current quotation"],
+          scope_notes: ["Keep the approved product requirement"],
+        };
       } else if (schema === "matchbase_native_candidate_index") {
+        if (scenario === "focused")
+          assert.deepEqual(input.priority_candidate_names, [name]);
         indexSeen = true;
         const citations = new Map(
           input.native_citations.map((citation) => [
@@ -425,6 +488,18 @@ for (const scenario of [
       );
     assert.deepEqual(retrievals, [manufacturerUrl]);
     assert.equal(result.stop_reason, "user_review");
+    if (scenario === "focused") {
+      assert.equal(
+        result.continuation.focus_analysis.objective,
+        "Verify the saved seller and current offer",
+      );
+      assert.equal(
+        result.continuation.collected_responses.length,
+        requests.length,
+      );
+      assert.equal(result.continuation.indexed_leads[0].first_seen_round, 1);
+      assert.equal(result.continuation.indexed_leads[0].last_seen_round, 2);
+    }
     assert.equal(result.candidates.length, 1);
     assert.equal(result.candidates[0].legal_name, name);
     assert.equal(result.candidates[0].contacts.sales_email, email);

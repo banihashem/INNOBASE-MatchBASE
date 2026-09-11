@@ -435,6 +435,7 @@ export function configuredResearchTierAvailability(): Record<
   };
 }
 export async function buildResearchRoundPlan(input: {
+  follow_up?: ResearchRoundPlan["follow_up"];
   round_number: number;
   depth: ResearchDepth;
   selected_model?: string;
@@ -616,7 +617,7 @@ export async function buildResearchRoundPlan(input: {
   const baseCalls =
     (input.round_number === 1
       ? research.length * (2 + Math.ceil(candidateLimit / 2)) + 1
-      : 13) + priceCalls;
+      : 14) + priceCalls;
   const recoveryReserve = 6;
   const calls = baseCalls + recoveryReserve;
   const conservativeRetryRate = actualRates.length
@@ -681,14 +682,14 @@ export async function buildResearchRoundPlan(input: {
   const titles = [
     "Initial supplier research",
     "Resolve the most important gaps",
-    "Final optional analysis",
+    "Focused evidence refinement",
     "Public social evidence review",
     "Independent social and evidence audit",
   ];
   const purposes = [
     "Discover up to 20 companies through two search paths. Establish seller identity, relevant product or service evidence and published contacts first; publish conditional findings with unresolved quotation requirements.",
     "Reuse the saved roster and resolve missing seller identity and product or service evidence before refining quotation, warranty and order-specific details. Preserve unknown requirements as explicit gaps.",
-    "Choose a simpler or more thoughtful analysis of the existing result. This is the normal final round.",
+    "Analyse the buyer follow-up against saved findings, then deepen research into useful evidence gaps. Preserve prior round history and unresolved requirements.",
     "Check relevant accessible public corporate profiles, identity linkage and dated business claims. Missing profiles are not a qualification failure.",
     "Challenge source independence, contradictions and unresolved claims; seek better primary evidence. No private accounts or supplier contact.",
   ];
@@ -696,6 +697,12 @@ export async function buildResearchRoundPlan(input: {
     choices,
     plan: {
       version: "research-round.v1",
+      ...(input.round_number > 1
+        ? {
+            focus_analysis_required: true,
+            follow_up: input.follow_up ?? { question: "", lead_ids: [] },
+          }
+        : {}),
       round_number: input.round_number,
       depth: input.depth,
       research_tier: tier,
@@ -732,6 +739,11 @@ export async function buildResearchRoundPlan(input: {
       expires_at: new Date(now.getTime() + 15 * 60000).toISOString(),
       rates: actualRates,
       assumptions: [
+        ...(input.round_number > 1
+          ? [
+              "This estimate includes one AI analysis of your follow-up and saved findings before focused web research. Editing the question does not call a model. Original requirements and all prior round results remain preserved.",
+            ]
+          : []),
         "Dedicated price research includes a seven-day web pass and structured extraction; a thirty-day fallback and extraction are included only when the first pass has no usable sourced recent price. Four calls are reserved, with at most two web searches.",
         "DeepSeek and later-round Exa search incurs an additional OpenRouter platform search charge (Exa Auto at USD0.007 per request including up to ten results; this plan limits results to eight), independent of BYOK model inference (OpenRouter web-search documentation checked 2026-09-09). Native search follows the explicitly selected model and provider; hosted Anthropic endpoints use priced Exa search. Unsupported endpoints fail rather than silently switching engines.",
         "Evidence extraction uses the model named in this estimate; its actual configured rates are included. A more economical research choice does not silently downgrade source attribution to the cheapest model.",

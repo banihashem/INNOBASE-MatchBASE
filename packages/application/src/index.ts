@@ -36,3 +36,4 @@ export * from "./consultant-v3-service.js";
 export * from "./preparation-gateway.js";
 export * from "./consultant-research-cost.js";
 export * from "./interpretation-correction.js";
+export { getResearchRoundReview } from "./research-review.js";

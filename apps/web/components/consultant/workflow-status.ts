@@ -37,6 +37,8 @@ export function workflowLabel(state: string, stoppedByUser = false): string {
   return "Research in progress";
 }
 export function phaseLabel(phase: string, loop = 0): string {
+  if (phase === "research_focus_analysis")
+    return "Analysing your follow-up and saved findings";
   if (phase === "user_cancelled") return "Stopped by you";
   if (phase.startsWith("price_research")) {
     const window = phase.includes("30") ? "last 30 days" : "last 7 days";

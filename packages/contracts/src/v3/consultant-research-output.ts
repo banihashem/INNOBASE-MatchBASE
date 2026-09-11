@@ -9,6 +9,8 @@ import type {
   VerificationStatusV2,
 } from "../v2/consultant-research-output.js";
 import type { ApprovedRequestSnapshotV3 } from "./approved-request.js";
+import type { ResearchReview } from "./research-review.js";
+import { validateResearchReview } from "./research-review.js";
 import { verifyApprovedRequestSnapshotV3 } from "./approved-request.js";
 
 export const CONSULTANT_RESEARCH_OUTPUT_V3_SCHEMA_VERSION =
@@ -317,6 +319,7 @@ export interface ResearchPriceSearchV3 {
   readonly limitations: readonly string[];
 }
 export interface ConsultantResearchOutputV3 extends FourIdTrace {
+  readonly research_review?: ResearchReview;
   readonly price_research?: ResearchPriceSearchV3;
   readonly public_social_checks?: readonly PublicSocialCheckV3[];
   readonly approved_request_snapshot?: ApprovedRequestSnapshotV3;
@@ -730,6 +733,8 @@ export function parseConsultantResearchOutputV3(
     )
       throw new Error(`Invalid telemetry.${key}.`);
   array(root.limitations_and_disclosures, "limitations_and_disclosures");
+  if (root.research_review !== undefined)
+    validateResearchReview(root.research_review);
 
   return root as unknown as ConsultantResearchOutputV3;
 }

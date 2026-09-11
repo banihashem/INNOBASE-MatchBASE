@@ -117,7 +117,14 @@ const database = process.env.MATCHBASE_CONSULTANT_TEST_DATABASE_URL;
       assert.equal(a.execution_id, b.execution_id);
       assert.equal(a.job.job_id, b.job.job_id);
       assert.ok(a.replayed !== b.replayed);
-      const output = { supplier_candidates: [], marker: "immutable round one" };
+      const output = {
+        user_profile_id: identity.user_profile_id,
+        research_run_id: identity.run_id,
+        execution_id: a.execution_id,
+        classification_id: identity.classification_id,
+        supplier_candidates: [],
+        marker: "immutable round one",
+      };
       await completeResearchRound(
         pool,
         identity.account_id,

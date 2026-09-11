@@ -28,6 +28,33 @@ const costs = {
   by_execution: {},
   disclosure: "Synthetic cost records for UI qualification; no paid requests.",
 };
+function makeReview(round = 2) {
+  return {
+    version: "research-review.v1",
+    round_number: round,
+    leads: [
+      {
+        lead_id: round === 2 ? "lead-current" : "lead-historical",
+        name: round === 2 ? "Incomplete Logistics" : "Historical Logistics",
+        website_url: "https://example.com/logistics",
+        source_urls: [
+          `https://example.com/evidence/${"long-source-path-".repeat(12)}`,
+        ],
+        status: "needs_review",
+        reason: "Destination service is not yet documented.",
+        missing_evidence: [
+          "Dated destination service evidence",
+          "Official company contact",
+        ],
+        first_seen_round: 1,
+        last_seen_round: round,
+      },
+    ],
+    coverage_gaps: ["Confirm destination coverage before admitting this lead."],
+    summary: { discovered: 1, documented: 0, needs_review: 1, excluded: 0 },
+    changes: { new_leads: round === 1 ? 1 : 0, promoted: 0 },
+  };
+}
 function makePlan(tier = "default") {
   const lanes = models.slice(0, { default: 2, advanced: 3, ultra: 5 }[tier]);
   return {
@@ -104,6 +131,7 @@ async function intercept(page, options = {}) {
   output.research_run_id = runId;
   output.execution_id = executionId;
   output.supplier_candidates = [];
+  if (options.review) output.research_review = makeReview();
   output.executive_summary.direct_answer =
     "No supplier profile is ready in this synthetic research. The independently sourced market benchmark remains available below.";
   output.price_research = {
@@ -196,9 +224,39 @@ async function intercept(page, options = {}) {
                   candidate_count: 0,
                   plan: makePlan(),
                 },
+                ...(options.review
+                  ? [
+                      {
+                        round_id: "round-latest",
+                        round_number: 2,
+                        status: "completed",
+                        execution_id: executionId,
+                        output_available: true,
+                        candidate_count: 0,
+                        plan: { ...makePlan(), round_number: 2 },
+                      },
+                    ]
+                  : []),
               ]
             : [],
-          next_round: options.output ? 2 : 1,
+          next_round: options.review ? 3 : options.output ? 2 : 1,
+          ...(options.review ? { research_review: makeReview() } : {}),
+          ...(url.searchParams.has("round_id")
+            ? {
+                output: {
+                  ...output,
+                  ...(options.review
+                    ? {
+                        research_review: makeReview(
+                          url.searchParams.get("round_id") === "round-fixture"
+                            ? 1
+                            : 2,
+                        ),
+                      }
+                    : {}),
+                },
+              }
+            : {}),
         });
       const body = req.postDataJSON();
       actions.push(body);
@@ -206,7 +264,16 @@ async function intercept(page, options = {}) {
         return reply({
           quote_id: `quote-${body.research_tier}`,
           choices: [],
-          plan: makePlan(body.research_tier),
+          plan: {
+            ...makePlan(body.research_tier),
+            ...(options.review
+              ? {
+                  round_number: 3,
+                  follow_up: body.follow_up,
+                  focus_analysis_required: true,
+                }
+              : {}),
+          },
         });
       if (body.action === "approve") {
         state = "research_dispatching";
@@ -411,6 +478,106 @@ test("L02 mobile tier controls support keyboard choice without starting research
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("radio", { name: /^Ultra/ })).toBeChecked();
   await visualChecks(page, "mobile-tier-keyboard", testInfo);
+  expect(mock.actions).toEqual([]);
+  expect(mock.blocked).toEqual([]);
+});
+
+test("MB-UX-QUALITY-001 L01 follow-up selection is quoted and editing invalidates approval", async ({
+  page,
+}, testInfo) => {
+  const mock = await intercept(page, { output: true, review: true });
+  await page.goto(workflowUrl);
+  const review = page.getByRole("region", {
+    name: "Research review for round 2",
+  });
+  await expect(review).toBeVisible();
+  await expect(review).toContainText("they are not documented suppliers");
+  await review.getByText(/Incomplete research leads/).click();
+  await expect(
+    review.getByText("Dated destination service evidence"),
+  ).toBeVisible();
+  await review
+    .getByRole("checkbox", {
+      name: "Include Incomplete Logistics in follow-up focus",
+    })
+    .check();
+  await page
+    .getByText("Review rounds or research further", { exact: true })
+    .click();
+  const focus = page.getByRole("textbox", {
+    name: /Follow-up focus or question/,
+  });
+  await expect(focus).toHaveAttribute("dir", "auto");
+  await focus.fill("بررسی شواهد مسیر · 核查目的地服务");
+  expect(mock.actions).toEqual([]);
+  await page
+    .getByRole("button", { name: "Get cost estimate · no research starts" })
+    .click();
+  const approval = page.getByRole("button", {
+    name: "Approve cost estimate & start round 3",
+  });
+  await expect(approval).toBeEnabled();
+  expect(mock.actions).toHaveLength(1);
+  expect(mock.actions[0]).toMatchObject({
+    action: "quote",
+    follow_up: {
+      question: "بررسی شواهد مسیر · 核查目的地服务",
+      lead_ids: ["lead-current"],
+    },
+  });
+  await expect(
+    page.getByText(
+      "Approval includes AI planning, then focused research. Editing the focus requires a new estimate.",
+    ),
+  ).toBeVisible();
+  await focus.fill("Confirm dated official evidence first.");
+  await expect(approval).toHaveCount(0);
+  expect(mock.actions).toHaveLength(1);
+  await visualChecks(page, "quality-follow-up-desktop", testInfo);
+  expect(mock.blocked).toEqual([]);
+});
+
+test("MB-UX-QUALITY-001 L01 mobile history is read-only and lead evidence fits the viewport", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mock = await intercept(page, { output: true, review: true });
+  await page.goto(workflowUrl);
+  const latest = page.getByRole("region", {
+    name: "Research review for round 2",
+  });
+  await latest.getByText(/Incomplete research leads/).click();
+  await expect(
+    latest.getByRole("link", { name: /long-source-path/ }),
+  ).toBeVisible();
+  await latest
+    .getByRole("checkbox", { name: /Include Incomplete Logistics/ })
+    .focus();
+  await page.keyboard.press("Space");
+  await expect(latest.getByRole("checkbox")).toBeChecked();
+  await visualChecks(page, "quality-leads-mobile", testInfo);
+  await page
+    .getByText("Review rounds or research further", { exact: true })
+    .click();
+  await page.getByRole("button", { name: "View round 1 result" }).click();
+  const historical = page.getByRole("region", {
+    name: "Research review for round 1",
+  });
+  await expect(historical).toBeVisible();
+  // A new panel may preserve the native details state when React reuses its DOM.
+  const leadDetails = historical.locator("details");
+  if (!(await leadDetails.evaluate((element) => element.open)))
+    await historical.getByText(/Incomplete research leads/).click();
+  await expect(
+    historical.getByText("Historical Logistics", { exact: true }),
+  ).toBeVisible();
+  await expect(historical.getByRole("checkbox")).toHaveCount(0);
+  await visualChecks(page, "quality-history-mobile", testInfo);
+  await page
+    .getByRole("button", { name: "Show latest review for follow-up" })
+    .click();
+  await expect(latest).toBeVisible();
+  await expect(latest.getByRole("checkbox")).toBeChecked();
   expect(mock.actions).toEqual([]);
   expect(mock.blocked).toEqual([]);
 });

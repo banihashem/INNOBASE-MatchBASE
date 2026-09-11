@@ -19,12 +19,14 @@ import { ResearchRoundControl } from "../../../components/consultant/ResearchRou
 import { StopResearchButton } from "../../../components/consultant/StopResearchButton";
 import {
   workflowLabel,
+  isProviderCredentialFailure,
   type ActivityStep,
 } from "../../../components/consultant/workflow-status";
 import { errorMessage } from "../../../components/consultant/workflow-response";
 import { useWorkflowPolling } from "../../../components/consultant/useWorkflowPolling";
 import { useStep1Fidelity } from "../../../components/consultant/useStep1Fidelity";
 import { InterpretationApprovalStep } from "../../../components/consultant/InterpretationApprovalStep";
+import { PreparationRecoveryNotice } from "../../../components/consultant/PreparationRecoveryNotice";
 import { useConsultantReportDownloads } from "../../../components/consultant/useConsultantReportDownloads";
 import { ConsultantResultsSection } from "../../../components/consultant/ConsultantResultsSection";
 import { NewDraftTransitionModal } from "../../../components/consultant/NewDraftTransitionModal";
@@ -1218,6 +1220,9 @@ export default function ConsultantWorkflowPage() {
     )
     .slice(0, 20);
   const visibleSuppliers = suppliers.slice(0, revealedCount);
+  const preparationCredentialFailure =
+    retryAction === "prepare" &&
+    isProviderCredentialFailure(workflowError ?? "");
 
   const workflowFeedback = (
     <>
@@ -1231,24 +1236,39 @@ export default function ConsultantWorkflowPage() {
           <p>
             {workflowProgress?.phase === "user_cancelled"
               ? "Research stopped. Your saved request and completed results are retained."
-              : workflowError.includes("HTTP 403")
-                ? "The research service could not authorize this request."
-                : workflowError.includes("HTTP 429")
-                  ? "The research service is temporarily busy. Your request is saved."
-                  : workflowError.includes("Network") ||
-                      workflowError.includes("fetch")
-                    ? "The connection was interrupted. Your last saved request is retained."
-                    : "This step could not finish. Your last saved request and completed results are retained."}
+              : preparationCredentialFailure
+                ? "The advisory service could not use an accepted provider credential. Your approved interpretation is saved."
+                : workflowError.includes("HTTP 403")
+                  ? "The research service could not authorize this request."
+                  : workflowError.includes("HTTP 429")
+                    ? "The research service is temporarily busy. Your request is saved."
+                    : workflowError.includes("Network") ||
+                        workflowError.includes("fetch")
+                      ? "The connection was interrupted. Your last saved request is retained."
+                      : "This step could not finish. Your last saved request and completed results are retained."}
           </p>
           <details className="workflow-support mt-3">
             <summary>Support details</summary>
             <p>{workflowError}</p>
           </details>
-          {workflowError.includes("HTTP 403") && (
+          {preparationCredentialFailure ? (
             <p className="mt-2">
-              Research access was denied. The API key spending limit or provider
-              permissions must be checked before another retry can succeed.
+              Preparation could not recover using the available configured
+              routes. The provider key or provider access must be restored
+              before another retry can succeed. Your request does not need to be
+              rewritten for this error.
             </p>
+          ) : (
+            workflowError.includes("HTTP 403") && (
+              <p className="mt-2">
+                Research access was denied. The API key spending limit or
+                provider permissions must be checked before another retry can
+                succeed.
+              </p>
+            )
+          )}
+          {retryAction === "prepare" && workflowState === "workflow_failed" && (
+            <PreparationRecoveryNotice />
           )}
           {runId &&
             workflowState === "workflow_failed" &&

@@ -55,7 +55,10 @@ import {
   hydrateResearchContinuation,
   getResearchRoundReview,
 } from "./research-review.js";
-import { LivePreparationModelGateway } from "./live-preparation.js";
+import {
+  LivePreparationModelGateway,
+  type PreparationCallOptions,
+} from "./live-preparation.js";
 import { LiveResearchError } from "./openrouter-model-policy.js";
 
 export type ConsultantExecutionMode = "live" | "demonstration" | "hybrid";
@@ -65,6 +68,9 @@ export interface ConsultantWorkflowProgress {
   max_loops: number;
   message: string;
   updated_at: string;
+  recovery_attempt?: number;
+  max_recovery_attempts?: number;
+  recovery_scheduled?: boolean;
 }
 
 export interface ConsultantIntakeSubmission {
@@ -114,6 +120,7 @@ export interface WorkflowSession {
   };
   classification: ProductClassificationRecord | null;
   advisory_version_id: string | null;
+  advisory_source_hash?: string;
   step2_advisory: Step2AdvisoryResult | null;
   research_prompt_version_id: string | null;
   step3_deep_prompt: {
@@ -140,10 +147,14 @@ const activeSessions = new Map<string, WorkflowSession>();
 function preparationGateway(
   mode: ConsultantExecutionMode,
   on_checkpoint?: (event: any) => Promise<void>,
+  recovery?: PreparationCallOptions,
 ) {
   return mode === "demonstration"
     ? new PreparationModelGateway()
-    : new LivePreparationModelGateway(on_checkpoint ? { on_checkpoint } : {});
+    : new LivePreparationModelGateway({
+        ...(on_checkpoint ? { on_checkpoint } : {}),
+        ...recovery,
+      });
 }
 
 export function getWorkflowSession(runId: string): WorkflowSession | null {
@@ -234,6 +245,7 @@ function mapSessionToRecord(
       classification_id: session.classification_id,
       step1_interpretation: session.step1_interpretation,
       advisory_version_id: session.advisory_version_id,
+      advisory_source_hash: session.advisory_source_hash,
       research_prompt_version_id: session.research_prompt_version_id,
       revealed_count: session.revealed_count,
       progress: session.progress,
@@ -303,6 +315,9 @@ function mapRecordToSession(
     classification,
     advisory_version_id:
       (metadata.advisory_version_id as string | undefined) ?? null,
+    ...(typeof metadata.advisory_source_hash === "string"
+      ? { advisory_source_hash: metadata.advisory_source_hash }
+      : {}),
     step2_advisory: advisory,
     research_prompt_version_id:
       (metadata.research_prompt_version_id as string | undefined) ?? null,
@@ -743,11 +758,61 @@ export async function generateApprovedConsultantPreparation(
   runId: string,
   db?: Queryable,
   assertLease?: () => Promise<void>,
+  signal?: AbortSignal,
 ): Promise<WorkflowSession> {
   const session = activeSessions.get(runId);
   if (!session?.approved_request_revision || !session.classification)
     throw new Error("An approved request is required.");
   const approvedRevision = session.approved_request_revision;
+  const executionId = session.execution_id;
+  const sourceHash = (current = session) =>
+    crypto
+      .createHash("sha256")
+      .update(
+        JSON.stringify(
+          {
+            approved_request: current.approved_request_revision,
+            classification: current.classification,
+            mode: current.mode,
+          },
+          (_key, value: unknown) =>
+            value && typeof value === "object" && !Array.isArray(value)
+              ? Object.fromEntries(
+                  Object.entries(value).sort(([left], [right]) =>
+                    left < right ? -1 : left > right ? 1 : 0,
+                  ),
+                )
+              : value,
+        ),
+      )
+      .digest("hex");
+  const approvedSourceHash = sourceHash();
+  const assertCurrentPreparation = async () => {
+    signal?.throwIfAborted();
+    if (assertLease) await assertLease();
+    const current = activeSessions.get(runId);
+    if (
+      !current ||
+      current.execution_id !== executionId ||
+      sourceHash(current) !== approvedSourceHash ||
+      session.execution_id !== executionId ||
+      sourceHash() !== approvedSourceHash ||
+      ![
+        "prep_step2_advisory_generating",
+        "prep_step3_prompt_synthesizing",
+      ].includes(session.state)
+    )
+      throw new LiveResearchError(
+        "MB-409-PREPARATION-STALE",
+        "The preparation execution or its approved request changed.",
+      );
+  };
+  const savedAdvisory =
+    session.advisory_source_hash === approvedSourceHash &&
+    session.advisory_version_id &&
+    session.step2_advisory
+      ? session.step2_advisory
+      : null;
   session.state = "prep_step2_advisory_generating";
   session.error = undefined;
   session.retry_action = "prepare";
@@ -756,14 +821,26 @@ export async function generateApprovedConsultantPreparation(
     phase: "advisory",
     loop: 0,
     max_loops: 3,
-    message: "Researching product and trade guidance.",
+    message: savedAdvisory
+      ? "Retaining completed advisory research for the same approved request."
+      : "Researching product and trade guidance.",
   });
-  const gateway = preparationGateway(session.mode, checkpoint);
-  const advisory = await gateway.generateAdvisoryLoops(
-    approvedRevision,
-    session.classification!,
-  );
-  session.advisory_version_id = crypto.randomUUID();
+  const gateway = preparationGateway(session.mode, checkpoint, {
+    preparation_recovery: true,
+    automatic_recovery_attempts: 3,
+    before_call: assertCurrentPreparation,
+    on_preparation_checkpoint: checkpoint,
+    ...(signal ? { signal } : {}),
+  });
+  const advisory =
+    savedAdvisory ??
+    (await gateway.generateAdvisoryLoops(
+      approvedRevision,
+      session.classification!,
+    ));
+  await assertCurrentPreparation();
+  if (!savedAdvisory) session.advisory_version_id = crypto.randomUUID();
+  session.advisory_source_hash = approvedSourceHash;
   session.step2_advisory = advisory;
   session.state = "prep_step3_prompt_synthesizing";
   if (db) await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
@@ -774,6 +851,7 @@ export async function generateApprovedConsultantPreparation(
     advisory,
     session.classification!,
   );
+  await assertCurrentPreparation();
   session.research_prompt_version_id = crypto.randomUUID();
   session.step3_deep_prompt = {
     prompt_text: promptResult.prompt_text,
@@ -1223,6 +1301,15 @@ function createWorkflowCheckpoint(
         ),
         message: String(event.message ?? "Research in progress."),
         updated_at: new Date().toISOString(),
+        ...(Number.isInteger(event.recovery_attempt)
+          ? { recovery_attempt: event.recovery_attempt }
+          : {}),
+        ...(Number.isInteger(event.max_recovery_attempts)
+          ? { max_recovery_attempts: event.max_recovery_attempts }
+          : {}),
+        ...(typeof event.recovery_scheduled === "boolean"
+          ? { recovery_scheduled: event.recovery_scheduled }
+          : {}),
       };
       if (phase.includes("verification"))
         session.state = "verification_loop_running";

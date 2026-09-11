@@ -195,6 +195,12 @@ export class LiveResearchError extends Error {
     message: string,
     readonly retryable = false,
     readonly audited_response?: OpenRouterCompletionResult,
+    readonly provider_failure?: {
+      readonly http_status: number;
+      readonly category: string;
+      readonly provider_name: string;
+      readonly is_byok: boolean;
+    },
   ) {
     super(`${code}: ${message}`);
     this.name = "LiveResearchError";
@@ -760,10 +766,28 @@ export async function callOpenRouterCompletion(
     );
     // Provider bodies may echo credentials or user input. Expose only controlled error codes.
     if (!response.ok) {
-      const category = providerErrorCategory(
-        await response.text().catch(() => ""),
-        params.model,
-      );
+      const errorBody = await response.text().catch(() => "");
+      const category = providerErrorCategory(errorBody, params.model);
+      // Only a named upstream endpoint can establish a provider-local failure.
+      // Gateway authentication/policy errors must never trigger route substitution.
+      let providerFailure: LiveResearchError["provider_failure"];
+      try {
+        const metadata = JSON.parse(errorBody)?.error?.metadata;
+        if (
+          typeof metadata?.provider_name === "string" &&
+          capabilities.provider_names?.includes(metadata.provider_name) &&
+          typeof metadata.is_byok === "boolean"
+        ) {
+          providerFailure = {
+            http_status: response.status,
+            category,
+            provider_name: metadata.provider_name,
+            is_byok: metadata.is_byok,
+          };
+        }
+      } catch {
+        // Unstructured error bodies remain non-localized; never retain raw data.
+      }
       const webPermissionDenied =
         category ===
         "OpenAI organization permissions disable the hosted web_search_preview tool";
@@ -782,6 +806,8 @@ export async function callOpenRouterCompletion(
         !webPermissionDenied &&
           !terminalCategory &&
           (response.status === 429 || response.status >= 500),
+        undefined,
+        providerFailure,
       );
     }
     const data = (await response.json()) as {

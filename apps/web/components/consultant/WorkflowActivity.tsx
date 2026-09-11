@@ -45,7 +45,7 @@ export function WorkflowActivity({
     retryAction === "research"
       ? "Your saved request and approvals are retained. No research is running. A new execution requires a fresh cost estimate and your approval. Completed round results are retained."
       : retryAction === "prepare"
-        ? "Your approved interpretation is saved. No research is running. Retry restarts advisory research and research-plan preparation; the plan still needs your approval."
+        ? "Your approved interpretation is saved. No research is running. A manual retry starts preparation again and may repeat paid work; automatic recovery within an active attempt retains completed topics. Your research plan still needs approval."
         : "Your saved request is retained. No research is running. Retry repeats the failed interpretation or preparation step.";
   const ready = resultReady(state);
   const awaiting =
@@ -58,6 +58,17 @@ export function WorkflowActivity({
     !awaiting &&
     state !== "invalidated" &&
     (busy || state !== "intake_draft");
+  const preparing = state.startsWith("prep_");
+  const recoveryAttempt = progress?.recovery_attempt;
+  const recoveryLimit = progress?.max_recovery_attempts;
+  const recoveringPreparation =
+    active &&
+    preparing &&
+    Number.isInteger(recoveryAttempt) &&
+    Number.isInteger(recoveryLimit) &&
+    recoveryAttempt! > 1 &&
+    recoveryAttempt! <= recoveryLimit! &&
+    recoveryLimit! <= 3;
   const age = progress?.updated_at ? now - Date.parse(progress.updated_at) : 0;
   const quiet = active && age > 120000;
   const failure = [...activity].reverse().find((step) => step.failed > 0);
@@ -84,7 +95,9 @@ export function WorkflowActivity({
         : ready
           ? "Your research results are ready"
           : runningSteps.length > 1
-            ? "Research steps are running in parallel"
+            ? preparing
+              ? "Preparing and checking your request"
+              : "Research steps are running in parallel"
             : phaseLabel(
                 runningSteps[0]?.phase ||
                   progress?.phase ||
@@ -94,7 +107,7 @@ export function WorkflowActivity({
   const stages = [
     "Your request",
     "English interpretation · Your approval",
-    "Advisory research · 3 rounds",
+    "Advisory research · 3 topics",
     "Research plan · Your approval",
     "Supplier discovery across independent research sources",
     "Evidence review · one approved round at a time",
@@ -199,7 +212,9 @@ export function WorkflowActivity({
                   ? "Preparing download"
                   : ready
                     ? "Result saved"
-                    : "Research in progress"}
+                    : preparing
+                      ? "Preparation in progress"
+                      : "Research in progress"}
               </span>
               <span>
                 {ready && !pdfBusy ? "100%" : "Completion time not yet known"}
@@ -247,6 +262,13 @@ export function WorkflowActivity({
             {phaseLabel(progress.phase || "queued", progress.loop)}
           </p>
         )}
+        {recoveringPreparation && !connectionError && (
+          <p className="activity-current-operation" role="status">
+            Automatic recovery · Attempt {recoveryAttempt} of {recoveryLimit}.
+            Completed topics are retained. Each model call may be charged and is
+            recorded in your costs.
+          </p>
+        )}
         {failure && failed && (
           <p>
             <strong>
@@ -259,7 +281,8 @@ export function WorkflowActivity({
           progress.loop > 0 &&
           (progress.max_loops ?? 0) > 1 && (
             <p>
-              Research step {progress.loop}
+              {preparing ? "Preparation topic" : "Research step"}{" "}
+              {progress.loop}
               {progress.max_loops ? ` of up to ${progress.max_loops}` : ""}
             </p>
           )}

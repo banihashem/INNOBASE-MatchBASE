@@ -13,6 +13,14 @@ export interface WorkflowProgress {
   max_loops?: number;
   message?: string;
   updated_at?: string;
+  recovery_attempt?: number;
+  max_recovery_attempts?: number;
+  recovery_scheduled?: boolean;
+}
+export function isProviderCredentialFailure(error: string): boolean {
+  return /provider credential (?:is not accepted|was rejected)|invalid (?:api.?key|authentication credentials)|API key not valid|UNAUTHENTICATED/i.test(
+    error,
+  );
 }
 export const resultReady = (state: string) =>
   ["progressive_reveal_ready", "workflow_complete"].includes(state);
@@ -40,6 +48,9 @@ export function phaseLabel(phase: string, loop = 0): string {
   if (phase === "step1_correction") return "Drafting the English correction";
   if (phase === "step1_correction_validation")
     return "Checking correction requirements";
+  if (phase === "step2_advisory_validation")
+    return `Checking advisory evidence · Topic ${loop} of 3`;
+  if (phase === "step3_prompt_validation") return "Checking your research plan";
   if (phase === "research_focus_analysis")
     return "Analysing your follow-up and saved findings";
   if (phase === "user_cancelled") return "Stopped by you";
@@ -80,7 +91,7 @@ export function phaseLabel(phase: string, loop = 0): string {
   if (phase === "source_retrieval")
     return "Reading supplier websites and supporting sources";
   if (phase.includes("advisory"))
-    return `Advisory research · Round ${loop} of 3`;
+    return `Advisory research · Topic ${loop} of 3`;
   if (phase.includes("prompt")) return "Preparing your editable research plan";
   if (phase === "step1_translation" || phase.includes("interpret"))
     return "Interpreting and structuring your request in English";

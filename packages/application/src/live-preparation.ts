@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   computeSnapshotContentHash,
+  parseApprovedRequestFactsV3,
   type ProductClassificationRecord,
   type ExplicitRequirementLedger,
   type ComparisonOperator,
@@ -16,8 +17,15 @@ import {
   LiveResearchError,
   runLiveCompletion,
   safePublicEvidenceUrl,
+  liveRecoveryAttemptLimit,
+  waitForLiveRecovery,
+  withLiveStageBudget,
   type LiveCallOptions,
+  type OpenRouterCompletionParams,
+  type OpenRouterCompletionResult,
+  type LiveResearchCheckpoint,
 } from "./openrouter-model-policy.js";
+import { getConfiguredProviderRoute } from "./openrouter-byok-policy.js";
 import {
   objectSchema,
   parseLiveJson,
@@ -156,7 +164,7 @@ function readAdvisoryProse(text: string): string {
   if (!analysis || structuredJson || internalEnvelope || fencedJson)
     throw new LiveResearchError(
       "MB-422-LIVE-ADVISORY-FORMAT",
-      "Advisory output included an internal request envelope or JSON instead of a readable briefing. Preparation must be retried explicitly.",
+      "Advisory output included an internal request envelope or JSON instead of a readable briefing.",
     );
   return analysis;
 }
@@ -167,8 +175,339 @@ const promptSchema = objectSchema({
   target_supplier_count: { type: "integer", minimum: 1, maximum: 20 },
 });
 
+export interface PreparationCallOptions extends LiveCallOptions {
+  /** Only the approved preparation operation enables bounded, strictly BYOK recovery. */
+  readonly preparation_recovery?: boolean;
+  readonly on_preparation_checkpoint?: (
+    event: Record<string, unknown>,
+  ) => void | Promise<void>;
+}
+
+function configuredNativePreparationModels(): string[] {
+  const models = getConfiguredLiveModels();
+  return [...new Set([models.lane_gemini, models.lane_openai])].filter(
+    (model) => {
+      if (!/^(google\/gemini-|openai\/)/.test(model)) return false;
+      try {
+        const route = getConfiguredProviderRoute(model);
+        return model.startsWith("google/")
+          ? ["google-ai-studio", "google-vertex"].includes(route)
+          : ["openai", "azure"].includes(route);
+      } catch {
+        return false;
+      }
+    },
+  );
+}
+
+function recoverablePreparationContent(error: unknown): boolean {
+  return (
+    error instanceof LiveResearchError &&
+    [
+      "MB-422-LIVE-EVIDENCE",
+      "MB-422-LIVE-ADVISORY-FORMAT",
+      "MB-422-LIVE-SCHEMA",
+      "MB-422-LIVE-OUTPUT-LIMIT",
+      "MB-422-LIVE-PROMPT-FIDELITY",
+    ].includes(error.code)
+  );
+}
+
+/** Research methods must not turn an approved certification alternative into an admission gate. */
+function validatePromptCertificationAlternatives(
+  approvedRequest: ApprovedRequestRevision,
+  prompt: Step3PromptResult,
+): Step3PromptResult {
+  const alternatives = parseApprovedRequestFactsV3(
+    approvedRequest.english_translation,
+  ).facts.filter(
+    (fact) =>
+      fact.concept === "certification" &&
+      fact.qualifiers.alternative === "applicable_standard",
+  );
+  const entries = [
+    { text: prompt.prompt_text, threshold: false },
+    ...[...prompt.discovery_criteria, ...prompt.evidence_thresholds].map(
+      (text) => ({ text, threshold: true }),
+    ),
+  ];
+  for (const fact of alternatives) {
+    const certification = String(fact.value);
+    const certificatePattern = certification
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\s+/g, "\\s*");
+    const certificate = new RegExp(`\\b${certificatePattern}\\b`, "i");
+    // Separate an independent admission directive from a lookup, negation or OR option.
+    const independentDirective = `(?:only\\s+(?:include|admit|accept|shortlist|qualify)|(?:reject|exclude|disqualify|require|enforce|treat|make)\\b|(?:suppliers?|manufacturers?|candidates?|companies|providers?)\\s+(?:must|shall|have|hold))`;
+    const clauses = entries.flatMap(({ text, threshold }) =>
+      text
+        .replace(/[*_`]/g, "")
+        .split(
+          new RegExp(
+            `(?<=[.!?;])\\s+|\\r?\\n|\\u2022|,\\s*(?=${independentDirective})|\\s+(?:and|but|however|then)\\s+(?=${independentDirective}|${certificatePattern}\\s+(?:is|must|shall))`,
+            "i",
+          ),
+        )
+        .map((clause) => ({
+          clause,
+          threshold,
+          thresholdStatus:
+            threshold &&
+            /\b(?:verified\s+status|admission|eligibility|qualification)\b/i.test(
+              text,
+            ),
+        })),
+    );
+    for (const { clause, threshold, thresholdStatus } of clauses) {
+      if (!certificate.test(clause)) continue;
+      // A lookup or a question about applicability is not an admission requirement.
+      if (
+        /^\s*(?:[-\d.)]+\s*)?(?:example\s+)?(?:search\s+(?:terms?|queries)|queries|query)\s*[:=]/i.test(
+          clause,
+        ) ||
+        /\b(?:search|query)\b[^.!?;]*["'][^"']*["']/i.test(clause) ||
+        /\b(?:check|verify|assess|confirm|determine|research|investigate)\s+(?:whether|if)\b/i.test(
+          clause,
+        )
+      )
+        continue;
+      const preservedAlternative = new RegExp(
+        `(?:${certificatePattern}[^;.!?]*\\b(?:or|and/or)\\b[^;.!?]*\\b(?:applicable|equivalent|relevant|appropriate|alternative)\\b[^;.!?]*\\bstandards?\\b|\\b(?:applicable|equivalent|relevant|appropriate|alternative)\\b[^;.!?]*\\bstandards?\\b[^;.!?]*\\bor\\s+${certificatePattern})`,
+        "i",
+      ).test(clause);
+      const negatedGate = new RegExp(
+        `(?:\\b(?:do\\s+not|don't|never|must\\s+not|should\\s+not)\\b[^;.!?]*(?:require|enforce|treat|make|reject|exclude|assume|impose)[^;.!?]*${certificatePattern}|${certificatePattern}[^;.!?]*\\b(?:is\\s+not|required\\s+only\\s+if|must\\s+not|should\\s+not|not\\s+(?:mandatory|required|a\\s+(?:default|mandatory)))\\b)`,
+        "i",
+      ).test(clause);
+      if (preservedAlternative || negatedGate) continue;
+      const certificateNoun = `(?:\\s+(?:certifications?|certificates?|standards?))?`;
+      const explicitPatterns = [
+        `\\b(?:mandatory|compulsory|non-negotiable|required)\\s+(?:(?:certifications?|certificates?|standards?)\\s*(?::|is|includes?)?\\s*)?${certificatePattern}`,
+        `${certificatePattern}${certificateNoun}\\s*(?:(?:is|must\\s+be|shall\\s+be)\\s+|:\\s*)?(?:mandatory|compulsory|non-negotiable|required)\\b`,
+        `\\b(?:treat|make|use|apply)\\s+${certificatePattern}${certificateNoun}\\s+as\\s+(?:a\\s+|the\\s+)?(?:(?:default|mandatory|hard|admission)\\s+)*(?:gate|check|threshold|requirement)\\b`,
+        `\\b(?:must|shall)\\s+(?:have|hold|carry|possess|provide|submit|demonstrate)\\s+(?:valid\\s+|current\\s+|an?\\s+)?${certificatePattern}`,
+        `\\bonly\\s+(?:include|admit|accept|shortlist|qualify)\\s+(?:suppliers?|manufacturers?|candidates?|companies|providers?)\\s+(?:with|holding|having|that\\s+(?:have|hold)|who\\s+(?:have|hold))\\s+(?:valid\\s+|current\\s+|an?\\s+)?${certificatePattern}`,
+        `\\b(?:reject|exclude|disqualify)\\s+(?:suppliers?|manufacturers?|candidates?|companies|providers?)\\s+(?:without|lacking|missing)\\s+(?:valid\\s+|current\\s+|an?\\s+)?${certificatePattern}`,
+      ];
+      if (threshold)
+        explicitPatterns.push(
+          `\\b(?:supplier|manufacturer|candidate|company|provider)\\s+(?:has|holds|possesses|carries)\\s+(?:valid\\s+|current\\s+|an?\\s+)?${certificatePattern}`,
+        );
+      if (
+        thresholdStatus &&
+        !new RegExp(
+          `\\b(?:if|when|where)\\s+(?:a\\s+supplier\\s+claims\\s+${certificatePattern}|${certificatePattern}${certificateNoun}\\s+is\\s+(?:claimed|reported|offered))\\b`,
+          "i",
+        ).test(clause)
+      )
+        explicitPatterns.push(
+          `${certificatePattern}${certificateNoun}\\s+(?:must|shall)\\s+be\\s+(?:supported|evidenced|verified|documented)\\b`,
+        );
+      const explicitGate = explicitPatterns.some((pattern) =>
+        new RegExp(pattern, "i").test(clause),
+      );
+      if (explicitGate)
+        throw new LiveResearchError(
+          "MB-422-LIVE-PROMPT-FIDELITY",
+          `The research method makes ${certification} an admission requirement although the approved request permits an applicable standard. Preserve the permitted certification alternative; do not impose a default mandatory gate.`,
+        );
+    }
+  }
+  return prompt;
+}
+
+function localizedPreparationRouteFailure(error: unknown): boolean {
+  return (
+    error instanceof LiveResearchError &&
+    error.code === "MB-502-LIVE-PROVIDER" &&
+    error.provider_failure?.is_byok === true &&
+    [400, 404].includes(error.provider_failure.http_status) &&
+    [
+      "provider credential is not accepted",
+      "native web search is unavailable on the selected endpoint",
+      "no compatible model endpoint is available",
+    ].includes(error.provider_failure.category)
+  );
+}
+
 export class LivePreparationModelGateway {
-  constructor(private readonly options: LiveCallOptions = {}) {}
+  constructor(private readonly options: PreparationCallOptions = {}) {}
+
+  private async runPreparationStage<T>(
+    request: OpenRouterCompletionParams,
+    context: {
+      phase: string;
+      loop: number;
+      max_loops?: number;
+      require_web?: boolean;
+    },
+    validate: (result: OpenRouterCompletionResult) => T,
+    unavailableModels = new Set<string>(),
+  ): Promise<T> {
+    const enabled = Boolean(
+      this.options.preparation_recovery && this.options.before_call,
+    );
+    const limit = liveRecoveryAttemptLimit({
+      ...this.options,
+      automatic_recovery_attempts: enabled
+        ? (this.options.automatic_recovery_attempts ?? 1)
+        : 1,
+    });
+    const budget = withLiveStageBudget({
+      ...this.options,
+      automatic_recovery_attempts: limit,
+    });
+    const {
+      approved_rates: _rates,
+      before_call: dispatchGuard,
+      ...byokOptions
+    } = budget.options;
+    const alternatives = context.require_web
+      ? configuredNativePreparationModels()
+      : [];
+    let model = request.model;
+    if (enabled && unavailableModels.has(model))
+      model =
+        alternatives.find((candidate) => !unavailableModels.has(candidate)) ??
+        model;
+    const validation = async (
+      state: string,
+      message: string,
+      attempt: number,
+    ) =>
+      this.options.on_preparation_checkpoint?.({
+        phase: `${context.phase}_validation`,
+        stage: `${context.phase}_validation`,
+        loop: context.loop,
+        max_loops: context.max_loops ?? 1,
+        state,
+        message,
+        recovery_attempt: attempt,
+        max_recovery_attempts: limit,
+      });
+    await validation(
+      "started",
+      "Checking preparation evidence and response format.",
+      1,
+    );
+    let feedback: string | undefined;
+    for (let attempt = 1; ; attempt++) {
+      this.options.signal?.throwIfAborted();
+      let failedCheckpoint: LiveResearchCheckpoint | undefined;
+      let guardFailure: unknown;
+      try {
+        const messages = feedback
+          ? [
+              ...request.messages,
+              { role: "system" as const, content: feedback },
+            ]
+          : request.messages;
+        if (Buffer.byteLength(JSON.stringify(messages), "utf8") + 512 > 160000)
+          throw new LiveResearchError(
+            "MB-422-PREPARATION-INPUT",
+            "The approved preparation context exceeds its bounded input allowance.",
+          );
+        const completion = await runLiveCompletion(
+          { ...request, model, messages },
+          context,
+          {
+            ...byokOptions,
+            // This outer loop shares transport, format and route recovery slots.
+            automatic_recovery_attempts: 1,
+            web_engine: "native",
+            ...(dispatchGuard
+              ? {
+                  before_call: async (
+                    params: OpenRouterCompletionParams,
+                    web: boolean,
+                  ) => {
+                    try {
+                      await dispatchGuard(params, web);
+                    } catch (error) {
+                      guardFailure = error;
+                      throw error;
+                    }
+                  },
+                }
+              : {}),
+            on_checkpoint: async (event) => {
+              const decorated = {
+                ...event,
+                recovery_attempt: attempt,
+                max_recovery_attempts: limit,
+                recovery_scheduled: false,
+              };
+              if (event.state === "failed") failedCheckpoint = decorated;
+              else await this.options.on_checkpoint?.(decorated);
+            },
+          },
+        );
+        const output = validate(completion);
+        this.options.signal?.throwIfAborted();
+        await validation(
+          "completed",
+          "Preparation evidence and response format checked.",
+          attempt,
+        );
+        return output;
+      } catch (caught) {
+        const error = guardFailure ?? caught;
+        const routeFailure = enabled && localizedPreparationRouteFailure(error);
+        if (routeFailure) unavailableModels.add(model);
+        const replacement = routeFailure
+          ? alternatives.find((candidate) => !unavailableModels.has(candidate))
+          : undefined;
+        const transient =
+          error instanceof LiveResearchError &&
+          error.retryable &&
+          [
+            "MB-503-LIVE-TRANSPORT",
+            "MB-502-LIVE-PROVIDER",
+            "MB-502-LIVE-RESPONSE",
+          ].includes(error.code);
+        const recover =
+          enabled &&
+          attempt < limit &&
+          budget.remaining() > 0 &&
+          !this.options.signal?.aborted &&
+          Boolean(
+            replacement || transient || recoverablePreparationContent(error),
+          );
+        if (failedCheckpoint)
+          await this.options.on_checkpoint?.({
+            ...failedCheckpoint,
+            recovery_scheduled: recover,
+            ...(recover
+              ? {
+                  message: replacement
+                    ? `The selected provider route is unavailable. Continuing this topic with ${replacement} using its configured BYOK route.`
+                    : `Preparation is retrying this topic (${attempt + 1} of ${limit}).`,
+                }
+              : {}),
+          });
+        await validation(
+          recover ? "retrying" : "failed",
+          recover
+            ? replacement
+              ? `Continuing the same topic with ${replacement}; native evidence and BYOK verification remain required.`
+              : `Repairing the preparation response (${attempt + 1} of ${limit}); completed topics are retained.`
+            : "Preparation could not produce a valid response within this operation's allowance.",
+          attempt,
+        );
+        if (!recover) throw error;
+        if (replacement) model = replacement;
+        feedback = recoverablePreparationContent(error)
+          ? error instanceof LiveResearchError &&
+            error.code === "MB-422-LIVE-PROMPT-FIDELITY"
+            ? `${error.message} Repair the research method and all discovery/evidence thresholds. Return complete schema-conforming JSON without changing the approved request.`
+            : context.require_web
+              ? "The previous response did not pass evidence or readable-briefing validation. Perform native web research and return concise English prose with provider citation annotations. Do not return JSON or repeat internal request envelopes. Preserve every approved requirement and leave unsupported assertions unknown."
+              : "The previous response did not satisfy the required JSON schema. Return complete valid schema-conforming JSON while preserving the authoritative approved request."
+          : undefined;
+        if (transient) await waitForLiveRecovery(this.options, attempt);
+      }
+    }
+  }
 
   async extractAndInterpret(intake: {
     product_requirement: string;
@@ -299,8 +638,9 @@ export class LivePreparationModelGateway {
       "Supply structure, direct manufacturer versus importer pathways, capability evidence gaps and verification priorities",
     ];
     const outputs: AdvisoryPayload[] = [];
+    const unavailableModels = new Set<string>();
     for (let index = 0; index < topics.length; index++) {
-      const result = await runLiveCompletion(
+      const output = await this.runPreparationStage(
         {
           model: index === 1 ? models.lane_openai : models.lane_gemini,
           messages: [
@@ -335,25 +675,34 @@ export class LivePreparationModelGateway {
           max_loops: 3,
           require_web: true,
         },
-        this.options,
+        (result) => {
+          const sources = (result.citations ?? []).flatMap((citation) => {
+            const url = safePublicEvidenceUrl(citation.url);
+            return url
+              ? [
+                  {
+                    title: citation.title,
+                    url,
+                    publisher: new URL(url).hostname,
+                  },
+                ]
+              : [];
+          });
+          if (!sources.length)
+            throw new LiveResearchError(
+              "MB-422-LIVE-EVIDENCE",
+              "Advisory sources could not be matched to native citations.",
+            );
+          return {
+            analysis: readAdvisoryProse(result.text),
+            sources,
+            sourcing_risks: [],
+            verification_priorities: [],
+          };
+        },
+        unavailableModels,
       );
-      const sources = (result.citations ?? []).flatMap((citation) => {
-        const url = safePublicEvidenceUrl(citation.url);
-        return url
-          ? [{ title: citation.title, url, publisher: new URL(url).hostname }]
-          : [];
-      });
-      if (!sources.length)
-        throw new LiveResearchError(
-          "MB-422-LIVE-EVIDENCE",
-          "Advisory sources could not be matched to native citations.",
-        );
-      outputs.push({
-        analysis: readAdvisoryProse(result.text),
-        sources,
-        sourcing_risks: [],
-        verification_priorities: [],
-      });
+      outputs.push(output);
     }
     return {
       loop1_trade_lane: outputs[0]!.analysis,
@@ -380,13 +729,13 @@ export class LivePreparationModelGateway {
     advisory: Step2AdvisoryResult,
     classification: ProductClassificationRecord,
   ): Promise<Step3PromptResult> {
-    const result = await runLiveCompletion(
+    const prompt = await this.runPreparationStage(
       {
         model: getConfiguredLiveModels().synthesis,
         messages: [
           {
             role: "system",
-            content: `${RESEARCH_PROMPT_AUTHORING_INSTRUCTIONS}\n${REQUEST_STRUCTURING_FRAMEWORK}\nKeep the human-approved text authoritative; advisory supplies context, not new mandatory requirements. Include parallel Gemini/OpenAI native discovery, entity deduplication, one initial research round with immediate results, optional user-approved gap-focused rounds with estimates, a simple or thoughtful third round, optional public-social rounds four and five, claim-level primary citations, exact constraint checks, meaningful exclusions, commercial unknowns and up to 20 verified suppliers with truthful fewer/no-match outcomes. Do not write predetermined companies, guessed contact information or static product defaults.`,
+            content: `${RESEARCH_PROMPT_AUTHORING_INSTRUCTIONS}\n${REQUEST_STRUCTURING_FRAMEWORK}\nKeep the human-approved text authoritative; advisory supplies context, not new mandatory requirements. Preserve permitted certification alternatives explicitly: if ISO 9001 or an applicable standard is allowed, inspect both paths and their applicability; never promote ISO 9001 alone into a mandatory/default admission gate. Neutral certificate lookup is allowed and does not establish mandatory certification. Include parallel Gemini/OpenAI native discovery, entity deduplication, one initial research round with immediate results, optional user-approved gap-focused rounds with estimates, a simple or thoughtful third round, optional public-social rounds four and five, claim-level primary citations, exact constraint checks, meaningful exclusions, commercial unknowns and up to 20 verified suppliers with truthful fewer/no-match outcomes. Execute only the currently approved research round. Each later round requires a separate current estimate and explicit human cost approval; method descriptions never authorize automatic continuation. Do not write predetermined companies, guessed contact information or static product defaults.`,
           },
           {
             role: "user",
@@ -408,9 +757,12 @@ export class LivePreparationModelGateway {
         max_tokens: 14000,
       },
       { phase: "step3_prompt", loop: 1 },
-      this.options,
+      (result) =>
+        validatePromptCertificationAlternatives(
+          approvedRequest,
+          parseLiveJson<Step3PromptResult>(result.text, promptSchema),
+        ),
     );
-    const prompt = parseLiveJson<Step3PromptResult>(result.text, promptSchema);
     return {
       ...prompt,
       prompt_text: `AUTHORITATIVE HUMAN-APPROVED REQUEST (preserve every requirement):\n${approvedRequest.english_translation}\n\nRESEARCH METHOD:\n${prompt.prompt_text}`,

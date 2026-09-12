@@ -338,18 +338,26 @@ test("MB-UX-LIVE-001 L15 cancelling a scheduled retry prevents another paid call
 
 test("MB-UX-LIVE-001 L04 research deadlines are bounded and phase-specific without changing the provider wire format", async (t) => {
   const fixture = providerFixture(t);
-  for (const phase of [
+  const phases = [
     "step1_translation",
     "step2_advisory",
     "step3_prompt",
     "discovery_gemini",
     "discovery_openai",
+    "discovery_deepseek",
+    "discovery_anthropic",
+    "discovery_xai",
+    "discovery_additional_6",
     "verification",
     "discovery_gemini_extraction",
     "discovery_openai_extraction",
+    "discovery_deepseek_extraction_index",
+    "discovery_deepseek_extraction_batch",
+    "discovery_gemini_extraction_recovery",
     "verification_extraction",
     "synthesis",
-  ]) {
+  ];
+  for (const phase of phases) {
     const events = [];
     const expected = phase.startsWith("step") ? 180000 : 600000;
     await runLiveCompletion(
@@ -372,9 +380,12 @@ test("MB-UX-LIVE-001 L04 research deadlines are bounded and phase-specific witho
   );
   assert.equal(fixture.calls.at(-1).deadline.milliseconds, 45000);
   assert.ok(events.every((event) => event.request_timeout_ms === 45000));
-  assert.equal(fixture.calls.length, 12);
+  assert.equal(fixture.calls.length, phases.length + 2);
   assert.ok(fixture.calls.every((call) => call.dispatcher.destroyed));
-  assert.equal(new Set(fixture.calls.map((call) => call.dispatcher)).size, 12);
+  assert.equal(
+    new Set(fixture.calls.map((call) => call.dispatcher)).size,
+    phases.length + 2,
+  );
 });
 
 test("MB-UX-LIVE-001 L04 native completion can finish after the shorter preparation deadline expires", async (t) => {

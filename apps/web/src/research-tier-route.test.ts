@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     costs: vi.fn(),
     plan: vi.fn(),
     availability: vi.fn(),
+    modelChoices: vi.fn(),
     worker: vi.fn(),
     rounds: vi.fn(),
     events: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock("@matchbase/application", () => ({
   summarizeResearchCosts: mocks.costs,
   buildResearchRoundPlan: mocks.plan,
   configuredResearchTierAvailability: mocks.availability,
+  researchModelChoices: mocks.modelChoices,
   runNextConsultantWorkflowJob: mocks.worker,
 }));
 vi.mock("@matchbase/data", () => ({
@@ -101,6 +103,7 @@ beforeEach(() => {
   mocks.hash.mockReturnValue("approved-request-hash");
   mocks.rounds.mockResolvedValue([]);
   mocks.events.mockResolvedValue([]);
+  mocks.modelChoices.mockResolvedValue([]);
   mocks.costs.mockReturnValue({ recorded_total_usd: 0, complete: true });
   mocks.save.mockResolvedValue(quoteId);
   mocks.plan.mockImplementation(async (input) => ({
@@ -114,6 +117,60 @@ afterEach(() => {
 });
 
 describe("research tier HTTP approval boundary", () => {
+  const readModelChoices = () =>
+    GET(
+      new Request(
+        `http://localhost/api/v1/consultant/research-rounds?run_id=${runId}&view=model_choices`,
+      ),
+    );
+  it("MB-UX-QUALITY-001 L07 lists eligible Gemini and DeepSeek routes without saving or dispatching", async () => {
+    const choices = [
+      { model: "google/gemini-research", billing_mode: "byok" },
+      { model: "deepseek/research", billing_mode: "openrouter_credits" },
+    ];
+    mocks.modelChoices.mockResolvedValue(choices);
+    const response = await readModelChoices();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(await response.json()).toEqual({ choices });
+    expect(mocks.authorize).toHaveBeenCalled();
+    expect(mocks.modelChoices).toHaveBeenCalledOnce();
+    expect(mocks.modelChoices).toHaveBeenCalledWith({ for_followup: true });
+    expect(mocks.rounds).not.toHaveBeenCalled();
+    expect(mocks.events).not.toHaveBeenCalled();
+    expect(mocks.plan).not.toHaveBeenCalled();
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.approve).not.toHaveBeenCalled();
+    expect(mocks.worker).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it("MB-UX-QUALITY-001 L07 checks ownership before reading account model choices", async () => {
+    mocks.authorize.mockRejectedValue(
+      new mocks.Fault(403, "MB-403-ACCESS", "Access denied."),
+    );
+    expect((await readModelChoices()).status).toBe(403);
+    expect(mocks.modelChoices).not.toHaveBeenCalled();
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+  it("MB-UX-QUALITY-001 L07 does not request provider metadata in demonstration mode", async () => {
+    mocks.restore.mockResolvedValue({ ...session, mode: "demonstration" });
+    expect(await (await readModelChoices()).json()).toEqual({ choices: [] });
+    expect(mocks.modelChoices).not.toHaveBeenCalled();
+  });
+  it("MB-UX-QUALITY-001 L07 returns an unavailable catalog without leaking provider errors or starting research", async () => {
+    mocks.modelChoices.mockRejectedValue(
+      new Error("private provider metadata"),
+    );
+    const response = await readModelChoices();
+    expect(response.status).toBe(503);
+    expect(JSON.stringify(await response.json())).not.toContain(
+      "private provider metadata",
+    );
+    expect(mocks.plan).not.toHaveBeenCalled();
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.worker).not.toHaveBeenCalled();
+  });
   const review = {
     version: "research-review.v1",
     round_number: 1,

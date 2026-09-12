@@ -161,6 +161,105 @@ for (const [id, tag, name] of [
     assert.equal(reads, 0);
     assert.equal(events.at(-1).approved_billing_mode, "openrouter_credits");
   });
+test("MB-UX-QUALITY-001 L07 DeepSeek Exa discovery survives the preparation deadline with its approved billing and evidence", async (t) => {
+  setupFamily("deepseek/deepseek-v4-pro-0813", "ionstream", "Ionstream");
+  body.choices[0].message.annotations = [
+    {
+      type: "url_citation",
+      url_citation: {
+        url: "https://registry.example.com/scope",
+        title: "Registry scope",
+        content: "The registry contains no matching supplier entries.",
+      },
+    },
+  ];
+  const deadlines = [];
+  t.mock.method(AbortSignal, "timeout", (milliseconds) => {
+    const controller = new AbortController();
+    deadlines.push({ milliseconds, controller });
+    return controller.signal;
+  });
+  const transport = globalThis.fetch;
+  const pending = [];
+  let announceReady;
+  const ready = new Promise((resolve) => {
+    announceReady = resolve;
+  });
+  t.mock.method(globalThis, "fetch", async (target, options = {}) => {
+    if (!String(target).endsWith("/chat/completions"))
+      return transport(target, options);
+    return new Promise((resolve, reject) => {
+      options.signal.addEventListener(
+        "abort",
+        () => reject(options.signal.reason),
+        { once: true },
+      );
+      pending.push({
+        options,
+        finish: () => resolve(transport(target, options)),
+      });
+      if (pending.length === 2) announceReady();
+    });
+  });
+  let guards = 0;
+  const options = {
+    approved_rates: [rate()],
+    before_call: async () => {
+      guards++;
+    },
+  };
+  const short = runLiveCompletion(
+    request(),
+    { phase: "step3_prompt", loop: 1 },
+    options,
+  ).then(
+    () => assert.fail("Preparation should time out."),
+    (error) => error,
+  );
+  const events = [];
+  const research = runLiveCompletion(
+    request(),
+    { phase: "discovery_deepseek", loop: 1, require_web: true },
+    {
+      ...options,
+      web_engine: "exa",
+      on_checkpoint: (event) => events.push(event),
+    },
+  ).then(
+    (result) => ({ result }),
+    (error) => ({ error }),
+  );
+  await ready;
+  for (const deadline of deadlines.filter(
+    (entry) => entry.milliseconds === 180000,
+  )) {
+    deadline.controller.abort(
+      new DOMException("Fixture preparation deadline", "TimeoutError"),
+    );
+  }
+  assert.equal((await short).code, "MB-503-LIVE-TRANSPORT");
+  const long = pending.find(
+    (entry) => JSON.parse(entry.options.body).plugins?.[0]?.engine === "exa",
+  );
+  assert.ok(long);
+  assert.equal(long.options.signal.aborted, false);
+  long.finish();
+  const outcome = await research;
+  assert.equal(outcome.error, undefined);
+  assert.equal(outcome.result.model, model);
+  assert.equal(outcome.result.is_byok, false);
+  assert.equal(outcome.result.citations.length, 1);
+  assert.equal(guards, 2);
+  assert.equal(posts.length, 1);
+  assert.deepEqual(posts[0].provider.only, ["ionstream"]);
+  assert.equal(posts[0].provider.allow_fallbacks, false);
+  assert.equal(posts[0].plugins[0].engine, "exa");
+  assert.ok(events.every((event) => event.request_timeout_ms === 600000));
+  assert.equal(events.at(-1).state, "completed");
+  assert.equal(events.at(-1).native_web, false);
+  assert.equal(events.at(-1).approved_billing_mode, "openrouter_credits");
+});
+
 test("unapproved extra families and credit calls without a round guard cannot dispatch", async () => {
   await assert.rejects(
     runLiveCompletion(request(), { phase: "discovery", loop: 1 }),

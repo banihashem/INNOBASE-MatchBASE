@@ -50,6 +50,9 @@ export function ResearchRoundControl({
   const [overview, setOverview] = useState<Overview | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [choices, setChoices] = useState<ResearchModelRate[]>([]);
+  const [choicesLoading, setChoicesLoading] = useState(false);
+  const [choicesError, setChoicesError] = useState("");
+  const [choicesRetry, setChoicesRetry] = useState(0);
   const [depth, setDepth] = useState<ResearchDepth>("simple");
   const [researchTier, setResearchTier] = useState<ResearchTier>("default");
   const [model, setModel] = useState("");
@@ -69,7 +72,39 @@ export function ResearchRoundControl({
     setLeadIds([]);
     setQuote(null);
     setHistoricalReview(null);
+    setChoices([]);
+    setModel("");
   }, [runId]);
+  const modelChoicesEnabled =
+    Boolean(overview) && overview!.next_round >= 2 && overview!.next_round <= 5;
+  useEffect(() => {
+    if (!modelChoicesEnabled) return;
+    const controller = new AbortController();
+    setChoicesLoading(true);
+    setChoicesError("");
+    void (async () => {
+      try {
+        const response = await fetch(
+          `${endpoint}?run_id=${encodeURIComponent(runId)}&view=model_choices`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        const data = await response.json();
+        if (!response.ok || !Array.isArray(data.choices))
+          throw new Error(
+            "Model choices could not be loaded. Retry to check current access and pricing.",
+          );
+        if (!controller.signal.aborted) setChoices(data.choices);
+      } catch {
+        if (!controller.signal.aborted)
+          setChoicesError(
+            "Model choices could not be loaded. Retry to check current access and pricing.",
+          );
+      } finally {
+        if (!controller.signal.aborted) setChoicesLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [runId, modelChoicesEnabled, choicesRetry]);
   const refresh = useCallback(
     async (signal?: AbortSignal) => {
       const response = await fetch(
@@ -585,6 +620,8 @@ export function ResearchRoundControl({
                       Model selection
                       <select
                         aria-label="Research model"
+                        aria-describedby="research-model-help"
+                        disabled={choicesLoading}
                         className="block rounded bg-slate-800 border border-slate-500 p-2 mt-1 max-w-full"
                         value={model}
                         onChange={(e) => {
@@ -600,6 +637,32 @@ export function ResearchRoundControl({
                         ))}
                       </select>
                     </label>
+                  </div>
+                  <div
+                    id="research-model-help"
+                    className="text-sm text-slate-300"
+                  >
+                    {choicesLoading ? (
+                      <p role="status">Checking model access and pricing…</p>
+                    ) : choicesError ? (
+                      <div>
+                        <p role="status">{choicesError}</p>
+                        <button
+                          type="button"
+                          className="mt-2 underline underline-offset-4"
+                          onClick={() => setChoicesRetry((value) => value + 1)}
+                        >
+                          Retry model choices
+                        </button>
+                      </div>
+                    ) : (
+                      <p>
+                        {choices.length
+                          ? "Models that support research and structured analysis are listed. Your estimate rechecks access and pricing before approval."
+                          : "No eligible model choices are currently listed. The cost estimate will check whether a system recommendation is available."}{" "}
+                        Loading or selecting a model does not start research.
+                      </p>
+                    )}
                   </div>
                 </fieldset>
               )}

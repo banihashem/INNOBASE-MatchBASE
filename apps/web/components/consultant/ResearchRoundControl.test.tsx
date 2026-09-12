@@ -59,6 +59,135 @@ const researchReview = {
   summary: { discovered: 4, documented: 3, needs_review: 1, excluded: 0 },
   changes: { new_leads: 1, promoted: 0 },
 };
+it("MB-UX-QUALITY-001 L07 loads Gemini and DeepSeek before a later-round estimate and again after reopening", async () => {
+  const actions: Record<string, unknown>[] = [];
+  const catalogRuns: string[] = [];
+  const started = vi.fn();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.includes("view=model_choices")) {
+        catalogRuns.push(
+          new URL(url, "http://localhost").searchParams.get("run_id")!,
+        );
+        return Response.json({
+          choices: [
+            { model: "google/gemini-research" },
+            { model: "deepseek/research" },
+          ],
+        });
+      }
+      if (!options?.body)
+        return Response.json({ costs, rounds: [], next_round: 2 });
+      const body = JSON.parse(String(options.body));
+      actions.push(body);
+      return Response.json({
+        quote_id: "selected-model-quote",
+        choices: [
+          { model: "google/gemini-research" },
+          { model: "deepseek/research" },
+        ],
+        plan: { ...plan, round_number: 2 },
+      });
+    }),
+  );
+  const props = {
+    runId: "run-one",
+    workflowState: "workflow_complete",
+    onStarted: started,
+    onPreview: vi.fn(),
+  };
+  const view = render(<ResearchRoundControl {...props} />);
+  await screen.findByRole("option", { name: "deepseek/research" });
+  expect(
+    screen.getByRole("option", { name: "google/gemini-research" }),
+  ).toBeInTheDocument();
+  expect(actions).toHaveLength(0);
+  fireEvent.change(screen.getByRole("combobox", { name: "Research model" }), {
+    target: { value: "deepseek/research" },
+  });
+  expect(actions).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: /Get cost estimate/ }));
+  await screen.findByRole("button", { name: /Approve cost estimate/ });
+  expect(actions).toEqual([
+    expect.objectContaining({ action: "quote", model: "deepseek/research" }),
+  ]);
+  view.unmount();
+  render(<ResearchRoundControl {...props} />);
+  await screen.findByRole("option", { name: "deepseek/research" });
+  expect(catalogRuns).toEqual(["run-one", "run-one"]);
+  expect(actions).toHaveLength(1);
+  expect(started).not.toHaveBeenCalled();
+});
+it("MB-UX-QUALITY-001 L07 reports catalog loading failure and retries without quoting or dispatching", async () => {
+  let catalogAttempts = 0;
+  const post = vi.fn();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, options?: RequestInit) => {
+      if (options?.body) {
+        post();
+        throw new Error("Unexpected mutation");
+      }
+      if (url.includes("view=model_choices")) {
+        catalogAttempts++;
+        return catalogAttempts === 1
+          ? Response.json(
+              { error: "sensitive provider detail" },
+              { status: 503 },
+            )
+          : Response.json({ choices: [{ model: "deepseek/research" }] });
+      }
+      return Response.json({ costs, rounds: [], next_round: 2 });
+    }),
+  );
+  render(
+    <ResearchRoundControl
+      runId="run"
+      workflowState="workflow_complete"
+      onStarted={vi.fn()}
+      onPreview={vi.fn()}
+    />,
+  );
+  const retry = await screen.findByRole("button", {
+    name: "Retry model choices",
+  });
+  expect(
+    screen.queryByText("sensitive provider detail"),
+  ).not.toBeInTheDocument();
+  fireEvent.click(retry);
+  await screen.findByRole("option", { name: "deepseek/research" });
+  expect(catalogAttempts).toBe(2);
+  expect(post).not.toHaveBeenCalled();
+});
+it("MB-UX-QUALITY-001 L07 loads model metadata only when later-round selection is available", async () => {
+  let nextRound = 1;
+  const catalog = vi.fn();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.includes("view=model_choices")) {
+        catalog();
+        return Response.json({ choices: [] });
+      }
+      return Response.json({ costs, rounds: [], next_round: nextRound });
+    }),
+  );
+  const props = {
+    runId: "run-one",
+    workflowState: "prep_step3_prompt_approved",
+    onStarted: vi.fn(),
+    onPreview: vi.fn(),
+  };
+  const first = render(<ResearchRoundControl {...props} />);
+  await screen.findByRole("radio", { name: /^Default/ });
+  expect(catalog).not.toHaveBeenCalled();
+  first.unmount();
+  nextRound = 6;
+  render(<ResearchRoundControl {...props} />);
+  await screen.findByText(/Five research rounds have been recorded/);
+  expect(catalog).not.toHaveBeenCalled();
+});
 it("MB-UX-QUALITY-001 L01 saves focus with the quote and invalidates approval on edits without paid calls", async () => {
   const requests: Record<string, unknown>[] = [];
   vi.stubGlobal(

@@ -9,6 +9,7 @@ import {
   summarizeResearchCosts,
   buildResearchRoundPlan,
   configuredResearchTierAvailability,
+  researchModelChoices,
   runNextConsultantWorkflowJob,
 } from "@matchbase/application";
 import {
@@ -71,6 +72,17 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const runId = url.searchParams.get("run_id") ?? "";
     const { context, pool, session } = await access(req, runId);
+    // Model discovery reads current account eligibility and prices; it creates no quote.
+    if (url.searchParams.get("view") === "model_choices")
+      return NextResponse.json(
+        {
+          choices:
+            session.mode === "demonstration"
+              ? []
+              : await researchModelChoices({ for_followup: true }),
+        },
+        { headers: { "Cache-Control": "private, no-store" } },
+      );
     const [rounds, events] = await Promise.all([
       listResearchRounds(pool, context.accountId, runId),
       readConsultantCostEvents(pool, context.accountId, runId),

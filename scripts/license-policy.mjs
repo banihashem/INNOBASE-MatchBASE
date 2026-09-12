@@ -27,6 +27,8 @@ const reviewed = new Set([
 ]);
 
 const reviewedPackageLicenses = new Map([
+  // Pinned PDF decompression dependency; preserve its MIT and zlib notices.
+  ["(MIT AND Zlib)", new Set(["pako@1.0.11"])],
   // Exact Linux patch review: docs/DELIVERY_LIFECYCLE.md; no blanket LGPL admission.
   [
     "LGPL-3.0-or-later",

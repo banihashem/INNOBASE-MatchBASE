@@ -36,6 +36,8 @@ The active Consultant production boundary and outstanding durable command/result
 
 ## Security references
 
+QUALITY001 L06 pins `pdf-lib@1.17.1` for reading actual rendered PDF page counts. Its transitive `pako@1.0.11` declares `(MIT AND Zlib)`. The installed root LICENSE and `lib/zlib/README` notices were inspected; retain both notices, preserve attribution and mark any future modified sources. Only this exact package/version is admitted under that composite expression. The locked code remains unmodified and the dependency audit reports no known vulnerabilities. [Upstream MIT notice](https://github.com/nodeca/pako/blob/1.0.11/LICENSE) and [zlib notice](https://github.com/nodeca/pako/blob/1.0.11/lib/zlib/README) record the package terms.
+
 The Sharp 0.35.4 security patch brings `@img/sharp-libvips-linux-x64@1.3.3` under `LGPL-3.0-or-later`. The installed package metadata and bundled README notices were inspected; it remains an unmodified prebuilt library used in CI and the local container. The exact package/version is admitted alongside the historical 1.3.2 baseline; unknown packages and versions remain rejected. Preserve the package README notices when packaging. This source-only release does not publish that binary or a container image; binary redistribution and its notice/source obligations must be qualified before any such production delivery. [Upstream third-party notices](https://github.com/lovell/sharp-libvips/blob/main/THIRD-PARTY-NOTICES.md) distinguish library terms from the Apache-licensed packaging scripts.
 
 - [GitHub Actions secure use](https://docs.github.com/en/actions/reference/security/secure-use): immutable action SHAs and minimal token permissions.

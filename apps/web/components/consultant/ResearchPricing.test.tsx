@@ -40,6 +40,7 @@ function candidate(id: string, price: number): SupplierEntityV3 {
     },
     commercial: {
       price_min: price,
+      price_max: price,
       currency: "USD",
       unit: "MT",
       incoterm: "FOB",
@@ -60,26 +61,95 @@ function output(
     supplier_candidates: suppliers,
     evidence_sources: sources,
     claims: suppliers.flatMap((supplier) =>
-      supplier.commercial.price_min === undefined
-        ? []
-        : [
-            {
-              claim_id: supplier.candidate_id,
-              supplier_entity_id: supplier.supplier_entity_id,
-              claim_type: "pricing",
-              field_path: "commercial.price_min",
-              normalized_value: supplier.commercial.price_min,
-              claim_text: `commercial.price_min: ${supplier.commercial.price_min}`,
-              status: "externally_verified",
-              confidence: "medium",
-              conflict_status: "single_source",
-              evidence_ids: supplier.commercial.commercial_evidence_ids,
-            },
-          ],
+      (["price_min", "price_max"] as const).flatMap((bound) =>
+        supplier.commercial[bound] === undefined
+          ? []
+          : [
+              {
+                claim_id: `${supplier.candidate_id}-${bound}`,
+                supplier_entity_id: supplier.supplier_entity_id,
+                claim_type: "pricing",
+                field_path: `commercial.${bound}`,
+                normalized_value: supplier.commercial[bound],
+                claim_text: `commercial.${bound}: ${supplier.commercial[bound]}`,
+                status: "externally_verified",
+                confidence: "medium",
+                conflict_status: "single_source",
+                evidence_ids: supplier.commercial.commercial_evidence_ids,
+              },
+            ],
+      ),
     ),
   };
 }
 describe("Section 3 research pricing", () => {
+  it("MB-UX-QUALITY-001 L06 preserves sourced lower bounds without turning them into exact or aggregate prices", () => {
+    const base = candidate("Lower-bound supplier", 100);
+    const { price_max: _maximum, ...commercial } = base.commercial;
+    const record = {
+      ...base,
+      commercial: { ...commercial, price_validity: "Until 2026-10-01" },
+    };
+    const saved = structuredClone(record);
+    const data = output([record]);
+    render(
+      <SupplierPriceSummary
+        supplier={record}
+        evidence={data.evidence_sources}
+        claims={data.claims}
+        detailed
+      />,
+    );
+    expect(screen.getByText(/Lower bound only: USD 100 \/ MT/)).toBeVisible();
+    expect(screen.getByText(/Price date:/).parentElement).toHaveTextContent(
+      "Updated on 2024-11-14",
+    );
+    expect(screen.getByText(/Validity \/ source wording:/)).toHaveTextContent(
+      "Until 2026-10-01",
+    );
+    expect(screen.getByRole("link")).toHaveAttribute("href", source.source_url);
+    expect(researchPriceGroups(data)).toHaveLength(0);
+    cleanup();
+    render(<ResearchPricing output={data} />);
+    expect(
+      screen.getByText(/No comparable supplier price range/),
+    ).toBeVisible();
+    expect(
+      screen.getByText("One-sided supplier price indications (1)"),
+    ).toBeVisible();
+    expect(screen.queryByText("USD 100 / MT")).not.toBeInTheDocument();
+    expect(additionalPriceEvidence(data)).toEqual([]);
+    expect(record).toEqual(saved);
+  });
+
+  it("MB-UX-QUALITY-001 L06 retains an upper-bound price date and named place without inventing a closed range", () => {
+    const base = candidate("Upper-bound supplier", 100);
+    const { price_min: _minimum, ...commercial } = base.commercial;
+    const record = {
+      ...base,
+      commercial: {
+        ...commercial,
+        price_max: 100,
+        price_validity: "Until 2026-10-01",
+      },
+    };
+    render(
+      <SupplierPriceSummary supplier={record} evidence={[source]} detailed />,
+    );
+    expect(screen.getByText(/Upper bound only: USD 100 \/ MT/)).toBeVisible();
+    expect(screen.getByText(/Price date:/).parentElement).toHaveTextContent(
+      "Updated on 2024-11-14",
+    );
+    expect(screen.getByText(/Delivery basis:/)).toHaveTextContent("FOB Mundra");
+    expect(screen.getByText(/Validity \/ source wording:/)).toHaveTextContent(
+      "Until 2026-10-01",
+    );
+    expect(
+      screen.queryByText("Not stated in supplier price evidence"),
+    ).not.toBeInTheDocument();
+    expect(researchPriceGroups(output([record]))).toHaveLength(0);
+  });
+
   it("ranges all stored suppliers, including unrevealed profiles, and exposes dated source detail", () => {
     const data = output([candidate("A", 100), candidate("B", 120)]);
     render(<ResearchPricing output={data} />);
@@ -269,7 +339,7 @@ describe("Section 3 research pricing", () => {
     const claims = data.claims.map(
       ({ normalized_value: _value, ...claim }) => ({
         ...claim,
-        claim_text: "commercial.price_min: 230.00",
+        claim_text: `${claim.field_path}: 230.00`,
       }),
     );
     expect(researchPriceGroups({ ...data, claims })[0]?.low).toBe(230);

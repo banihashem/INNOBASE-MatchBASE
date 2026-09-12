@@ -2,6 +2,11 @@ import type {
   ConsultantResearchOutputV3,
   SupplierEntityV3,
 } from "@matchbase/contracts";
+import {
+  displaySupplierText,
+  getSupplierLocationSummary,
+  getSupplierWebsite,
+} from "@matchbase/contracts";
 import "./consultant-results.css";
 import { ApprovedRequestSummary } from "./ApprovedRequestSummary";
 import { ResearchPricing, SupplierPriceSummary } from "./ResearchPricing";
@@ -134,6 +139,8 @@ export function ConsultantResultsSection({
       {/* Candidate Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {visibleSuppliers.map((supp) => {
+          const location = getSupplierLocationSummary(supp);
+          const website = getSupplierWebsite(supp);
           const isIllustrative =
             output.research_mode === "fixture" ||
             supp.legal_name.includes("[Illustrative]") ||
@@ -194,16 +201,16 @@ export function ConsultantResultsSection({
                 {/* Details row */}
                 <div className="supplier-key-facts text-sm space-y-1 my-3 bg-slate-800/60 p-2.5 rounded border border-slate-700/60">
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Country / Origin:</span>
-                    <span className="font-mono font-medium text-slate-200">
-                      {supp.country_of_registration}
+                    <span className="text-slate-400">{location.label}:</span>
+                    <span className="font-medium text-slate-200 text-right break-words">
+                      {location.value}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Capacity &amp; MOQ:</span>
                     <span className="text-slate-200 text-right break-words">
-                      {supp.commercial.production_capacity ?? "Not found"}{" "}
-                      &bull; {supp.commercial.moq ?? "Not found"}
+                      {displaySupplierText(supp.commercial.production_capacity)}{" "}
+                      &bull; {displaySupplierText(supp.commercial.moq)}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -214,19 +221,17 @@ export function ConsultantResultsSection({
                       <span className="font-mono text-slate-300">
                         {supp.candidate_id}
                       </span>
-                    ) : (
+                    ) : website ? (
                       <a
-                        href={
-                          supp.website && /^https?:\/\//i.test(supp.website)
-                            ? supp.website
-                            : undefined
-                        }
+                        href={website.href}
                         target="_blank"
                         rel="noreferrer"
                         className="text-sky-400 hover:text-sky-300 underline truncate max-w-[200px]"
                       >
-                        {supp.primary_domain}
+                        {website.label}
                       </a>
+                    ) : (
+                      <span className="text-slate-300">Not established</span>
                     )}
                   </div>
                   {isIllustrative && (

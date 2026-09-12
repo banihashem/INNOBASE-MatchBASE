@@ -1,10 +1,11 @@
 #!/usr/bin/env node
+import { resolveScriptTestTargets } from "./lib/database-config.mjs";
 import assert from "node:assert/strict";
 import { validateStep1RequirementFidelity } from "../packages/contracts/dist/src/index.js";
 import { synthesizeConsultantOutputV3 } from "../packages/application/dist/synthesis-engine.js";
 import { generateConsultantLandscapeHtml } from "../packages/reporting/dist/src/consultant-landscape-report.js";
 
-const BASE_URL = process.env.BASE_URL || "http://127.0.0.1:3000";
+const { baseUrl: BASE_URL, fetch } = resolveScriptTestTargets();
 
 console.log(
   "=================================================================",

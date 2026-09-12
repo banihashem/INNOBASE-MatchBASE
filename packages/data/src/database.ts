@@ -5,6 +5,7 @@ import {
   type QueryResult,
   type QueryResultRow,
 } from "pg";
+import { assertDisposableTestDatabase } from "./test-database-safety.js";
 
 export interface Queryable {
   query<R extends QueryResultRow = QueryResultRow>(
@@ -23,6 +24,7 @@ export interface ConnectionPool extends Queryable {
 }
 
 export function createPool(config: PoolConfig): ConnectionPool {
+  assertDisposableTestDatabase(config);
   return new Pool(config) as ConnectionPool;
 }
 

@@ -106,6 +106,11 @@ test("exact package start cold-boots the owned standalone HTML, static, and API 
       ...process.env,
       DATABASE_URL:
         "postgresql://fixture:fixture@127.0.0.1:1/local_fixture_only",
+      MATCHBASE_DATABASE_URL:
+        "postgresql://fixture:fixture@127.0.0.1:1/local_fixture_only",
+      MATCHBASE_DISPOSABLE_TEST_DATABASE_URL:
+        "postgresql://fixture:fixture@127.0.0.1:1/local_fixture_only",
+      MATCHBASE_TEST_DATABASE_GUARD: "required",
       MATCHBASE_ENVIRONMENT: "test",
       MATCHBASE_OIDC_SIMULATOR: "true",
       MATCHBASE_SYNTHETIC_FIXTURE: "true",

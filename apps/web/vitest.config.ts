@@ -14,6 +14,7 @@ export default defineConfig({
       "src/admin-p4-route-core.test.ts",
       "src/artifact-download-route-core.test.ts",
       "src/consultant-route-core.test.ts",
+      "src/consultant-pdf-route.test.ts",
       "src/consultant-workflow-submission.test.ts",
       "src/research-tier-route.test.ts",
       "src/canonicalization-runtime.test.ts",

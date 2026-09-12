@@ -5,6 +5,7 @@ import type {
   ClaimV3,
   ResearchPriceSearchV3,
 } from "@matchbase/contracts";
+import { displaySupplierText } from "@matchbase/contracts";
 import {
   additionalPriceEvidence,
   formatPrice,
@@ -104,14 +105,17 @@ export function SupplierPriceSummary({
       <p>
         <strong>Price: </strong>
         {price
-          ? formatPrice(price.low, price.high, c.currency, c.unit)
-          : c.price_max !== undefined
-            ? `Upper bound only: ${c.currency ?? "Currency not stated"} ${c.price_max}${c.unit ? ` / ${c.unit}` : ""}`
-            : "No attributable price found"}
+          ? price.low !== undefined && price.high !== undefined
+            ? formatPrice(price.low, price.high, c.currency, c.unit)
+            : `${price.low === undefined ? "Upper" : "Lower"} bound only: ${displaySupplierText(c.currency, "Currency not stated")} ${price.low ?? price.high} / ${displaySupplierText(c.unit, "unit not stated")}`
+          : "No attributable price found"}
       </p>
       <p>
         <strong>Price date: </strong>
-        {price?.date ?? "Not stated in supplier price evidence"}
+        {displaySupplierText(
+          c.price_date,
+          "Not stated in supplier price evidence",
+        )}
       </p>
       {price && (
         <>
@@ -121,13 +125,15 @@ export function SupplierPriceSummary({
               "Not stated"}
           </p>
           <p>Recorded indication; current quotation required.</p>
-          {!price.sources.length && <p>No linked price source available.</p>}
+          {price && !price.sources.length && (
+            <p>No linked price source available.</p>
+          )}
         </>
       )}
       {detailed && price && (
         <>
           <p>Validity / source wording: {c.price_validity ?? "Not stated"}</p>
-          <SourceLinks sources={price.sources} />
+          {price && <SourceLinks sources={price.sources} />}
         </>
       )}
     </div>
@@ -142,6 +148,18 @@ export function ResearchPricing({
   const groups = researchPriceGroups(output);
   const additional = additionalPriceEvidence(output);
   const count = groups.reduce((total, group) => total + group.prices.length, 0);
+  const oneSided = output.supplier_candidates.filter((supplier) => {
+    const price = supplierPrice(
+      supplier,
+      output.evidence_sources,
+      output.claims,
+    );
+    return (
+      price &&
+      (price.low === undefined || price.high === undefined) &&
+      (price.sources.length > 0 || output.research_mode === "fixture")
+    );
+  });
   return (
     <section
       aria-labelledby="research-pricing-heading"
@@ -160,9 +178,10 @@ export function ResearchPricing({
       )}
       <p className="text-sm">
         {count} of {output.supplier_candidates.length} supplier profiles have
-        sourced prices. These are observed indications, not a current market
-        quotation or a delivered-cost estimate. Different products, currencies,
-        units, delivery terms, quantities and price dates are shown separately.
+        sourced prices with both bounds recorded. These are observed
+        indications, not a current market quotation or a delivered-cost
+        estimate. Different products, currencies, units, delivery terms,
+        quantities and price dates are shown separately.
       </p>
       {output.research_mode === "fixture" && (
         <p>Illustrative fixture prices only.</p>
@@ -216,6 +235,28 @@ export function ResearchPricing({
           </div>
         );
       })}
+      {oneSided.length > 0 && (
+        <details className="border-t border-slate-700 pt-3 text-sm">
+          <summary className="cursor-pointer">
+            One-sided supplier price indications ({oneSided.length})
+          </summary>
+          <p>
+            A minimum or maximum alone is excluded from the comparable price
+            range.
+          </p>
+          {oneSided.map((supplier) => (
+            <div key={supplier.candidate_id} className="mt-3">
+              <strong>{supplier.legal_name}</strong>
+              <SupplierPriceSummary
+                supplier={supplier}
+                evidence={output.evidence_sources}
+                claims={output.claims}
+                detailed
+              />
+            </div>
+          ))}
+        </details>
+      )}
       {additional.length > 0 && (
         <div className="border-t border-slate-700 pt-3 space-y-3 text-sm">
           <h4 className="font-semibold text-amber-200">

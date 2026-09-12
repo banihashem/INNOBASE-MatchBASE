@@ -9,7 +9,7 @@ import {
   savePdfReportLedger,
 } from "@matchbase/data";
 import {
-  generateConsultantPdf,
+  generateConsultantPdfArtifact,
   ConsultantPdfRendererUnavailableError,
   ConsultantReportLanguageError,
 } from "@matchbase/reporting";
@@ -157,16 +157,13 @@ async function handlePdfRequest(
       output.report_artifact?.filename ??
       `MatchBASE_Consultant_Report_${effectiveRunId}.pdf`;
 
-    // Dynamic page count
-    const candidatesCount = output.supplier_candidates?.length ?? 0;
-    const matrixPages =
-      candidatesCount === 0 ? 1 : Math.ceil(candidatesCount / 5);
-    const pageCount = 4 + matrixPages;
-
     // Generate or retrieve PDF bytes via single-flight renderer
     let pdfBuffer: Buffer;
+    let pageCount: number;
     try {
-      pdfBuffer = await generateConsultantPdf(output);
+      const artifact = await generateConsultantPdfArtifact(output);
+      pdfBuffer = artifact.bytes;
+      pageCount = artifact.pageCount;
     } catch (renderError) {
       console.error("Consultant PDF generation failed:", renderError);
       if (

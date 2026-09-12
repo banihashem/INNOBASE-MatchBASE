@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-import { resolveScriptDatabaseUrl } from "./lib/database-config.mjs";
+import { resolveScriptTestTargets } from "./lib/database-config.mjs";
 import assert from "node:assert/strict";
 import pg from "../packages/data/node_modules/pg/lib/index.js";
 
-const BASE_URL = process.env.BASE_URL || "http://127.0.0.1:3000";
-const DB_URL = resolveScriptDatabaseUrl();
+const {
+  baseUrl: BASE_URL,
+  databaseUrl: DB_URL,
+  fetch,
+} = resolveScriptTestTargets();
 
 console.log(
   "=== MatchBASE Consultant V3 Draft & Session Isolation Test Suite ===",

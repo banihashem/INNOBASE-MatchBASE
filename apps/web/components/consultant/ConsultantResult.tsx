@@ -1,15 +1,18 @@
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import {
   type ConsultantResultProjectionV1,
   type ConsultantResultProjectionV2,
   type ConsultantResearchOutputV2,
   type ConsultantResearchOutputV3,
   type DemoProjectionV1,
-  adaptV3ToV2ConsultantOutput,
+  type SupplierEntityV3,
 } from "@matchbase/contracts";
 import { StandardResult } from "../standard/StandardResult";
 import type { StandardResultProjectionV1 } from "../standard/types";
 import { ConsultantResearchOutputView } from "./ConsultantResearchOutputView";
+import { ConsultantResultsSection } from "./ConsultantResultsSection";
+import { SupplierDossierModal } from "./SupplierDossierModal";
+import { useConsultantReportDownloads } from "./useConsultantReportDownloads";
 
 export type ConsultantVisibleResult =
   | DemoProjectionV1
@@ -39,8 +42,9 @@ export function ConsultantResultView({
 }) {
   if (result.schema_version === "consultant-research-output.v3")
     return (
-      <ConsultantResearchOutputView
-        result={adaptV3ToV2ConsultantOutput(result)}
+      <ConsultantV3ResultView
+        key={`${result.research_run_id}:${result.execution_id}`}
+        result={result}
         onBack={onBack}
         {...(headingRef ? { headingRef } : {})}
         {...(artifactDownload ? { artifactDownload } : {})}
@@ -423,5 +427,92 @@ export function ConsultantResultView({
         </>
       }
     />
+  );
+}
+
+function ConsultantV3ResultView({
+  result,
+  onBack,
+  headingRef,
+  artifactDownload,
+}: {
+  result: ConsultantResearchOutputV3;
+  onBack: () => void;
+  headingRef?: RefObject<HTMLHeadingElement | null>;
+  artifactDownload?: ResultArtifactDownload | null;
+}) {
+  const [revealedCount, setRevealedCount] = useState(5);
+  const [selectedSupplier, setSelectedSupplier] =
+    useState<SupplierEntityV3 | null>(null);
+  const [downloadMessage, setDownloadMessage] = useState("");
+  const suppliers = [...result.supplier_candidates].sort(
+    (left, right) => left.assessment.rank - right.assessment.rank,
+  );
+  const artifactUrl =
+    artifactDownload?.run_id === result.research_run_id
+      ? artifactDownload.href
+      : undefined;
+  const canonicalReportUrl = `/api/v1/consultant/reports/${encodeURIComponent(result.research_run_id)}/pdf`;
+  // Generic report links must stay bound to the execution currently being inspected.
+  const reportUrl =
+    artifactUrl === canonicalReportUrl ? undefined : artifactUrl;
+  const { isPdfDownloading, handlePdfDownload, handleJsonExport } =
+    useConsultantReportDownloads(
+      result,
+      result.research_run_id,
+      setDownloadMessage,
+      reportUrl,
+    );
+
+  return (
+    <div className="standard-section space-y-6">
+      <button type="button" className="secondary-action" onClick={onBack}>
+        Return to runs
+      </button>
+      <h1 ref={headingRef} tabIndex={-1}>
+        Saved supplier research
+      </h1>
+      {result.research_mode === "fixture" && (
+        <p className="error-summary">
+          Illustrative research data; these profiles are not externally
+          verified.
+        </p>
+      )}
+      {downloadMessage && <p role="status">{downloadMessage}</p>}
+      <ConsultantResultsSection
+        output={result}
+        suppliers={suppliers}
+        visibleSuppliers={suppliers.slice(0, revealedCount)}
+        revealedCount={revealedCount}
+        isLoading={false}
+        isPdfDownloading={isPdfDownloading}
+        handlePdfDownload={handlePdfDownload}
+        handleJsonExport={handleJsonExport}
+        handleRevealMore={async () =>
+          setRevealedCount((count) => Math.min(count + 5, suppliers.length))
+        }
+        onSelectSupplier={setSelectedSupplier}
+      />
+      {result.limitations_and_disclosures.length > 0 && (
+        <section aria-label="Saved research limitations" className="space-y-2">
+          <h2>Research limitations</h2>
+          {result.limitations_and_disclosures.map((limitation, index) => (
+            <p key={index}>
+              <strong>{limitation.title}: </strong>
+              {limitation.description}
+            </p>
+          ))}
+        </section>
+      )}
+      <SupplierDossierModal
+        supplier={selectedSupplier}
+        isOpen={selectedSupplier !== null}
+        onClose={() => setSelectedSupplier(null)}
+        approvedRequest={result.approved_request_snapshot}
+        evidenceSources={result.evidence_sources}
+        claims={result.claims}
+        recentPrices={result.price_research}
+      />
+    </div>
   );
 }

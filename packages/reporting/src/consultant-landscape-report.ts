@@ -1,5 +1,10 @@
 import {
+  displaySupplierText,
   formatApprovedFactV3,
+  getSupplierFactAlternatives,
+  getSupplierLocationSummary,
+  getSupplierProductOrigin,
+  getSupplierWebsite,
   parseApprovedRequestFactsV3,
   type ConsultantResearchOutputV3,
   type SupplierEntityV3,
@@ -36,10 +41,15 @@ function englishOverview(output: ConsultantResearchOutputV3): string {
   ).length;
   const contactCount = output.supplier_candidates.filter(
     (s) =>
-      s.contacts?.sales_email ||
-      s.contacts?.export_email ||
-      s.contacts?.general_email ||
-      s.contacts?.phone,
+      displaySupplierText(s.contacts?.sales_email, "") ||
+      displaySupplierText(s.contacts?.export_email, "") ||
+      displaySupplierText(s.contacts?.general_email, "") ||
+      displaySupplierText(s.contacts?.phone, "") ||
+      displaySupplierText(s.contacts?.whatsapp_business, "") ||
+      displaySupplierText(s.contacts?.linkedin_company_url, "") ||
+      s.contacts?.other_official_social_urls?.some((url) =>
+        displaySupplierText(url, ""),
+      ),
   ).length;
   return `${count} supplier profiles, ${output.evidence_sources.length} evidence sources and ${output.claims.length} claims are retained${scope}. ${count ? "The supplier dossiers retain their recorded fit assessments and unresolved validation requirements; inclusion does not establish full compliance with the buyer's request." : "No supplier profile passed the publication requirements in this result, so no supplier ranking can be presented. Recorded sources remain available in the source register; their existence alone does not establish an eligible supplier."} ${priceCount} profiles contain an observed price and ${contactCount} contain business contact data. The complete approved English request below remains authoritative, including requirements not represented by typed fields. Review source observations, missing evidence, commercial limitations and recorded costs in the remaining report sections.`;
 }
@@ -79,7 +89,15 @@ const price = (s: SupplierEntityV3): string => {
   const c = s.commercial;
   if (c.price_min === undefined && c.price_max === undefined)
     return "Unknown / quotation required";
-  return `${c.price_min ?? "?"}${c.price_max !== undefined && c.price_max !== c.price_min ? ` - ${c.price_max}` : ""} ${c.currency ?? "currency unknown"} / ${c.unit ?? "unit unknown"}`;
+  const amount =
+    c.price_min === undefined
+      ? `Up to ${c.price_max}`
+      : c.price_max === undefined
+        ? `From ${c.price_min}`
+        : c.price_min === c.price_max
+          ? String(c.price_min)
+          : `${c.price_min} - ${c.price_max}`;
+  return `${amount} ${displaySupplierText(c.currency, "currency not established")} / ${displaySupplierText(c.unit, "unit not established")}`;
 };
 
 /** Full supplier landscape, rendered from run-bound approved facts and observed evidence only. */
@@ -247,7 +265,12 @@ export function generateConsultantLandscapeHtml(
         ? `Supplier Landscape - ${offset + 1} to ${Math.min(offset + 5, suppliers.length)} of ${suppliers.length}`
         : "Supplier Landscape - No Published Profiles",
       group.length
-        ? `<table class="landscape"><thead><tr><th>Rank / supplier</th><th>Country / role</th><th>Product / model</th><th>Fit / evidence</th><th>Observed price / terms</th><th>Principal gap</th></tr></thead><tbody>${group.map((s, i) => `<tr><td><a href="#supplier-${offset + i}">${s.assessment.rank}. ${esc(s.legal_name)}</a></td><td>${esc(s.country_of_registration)}<br>${esc(s.manufacturer_status)}</td><td>${esc(s.offering.product_name)}<br>${display(s.offering.model_or_sku)}</td><td>${esc(s.assessment.compatibility_score)} / ${esc(s.assessment.fit_band)}<br>Evidence: ${esc(s.assessment.evidence_confidence)}</td><td>${esc(price(s))}<br>${display(s.commercial.incoterm)} ${display(s.commercial.incoterm_location)}</td><td>${display(s.assessment.limiting_gaps[0] ?? s.assessment.unknowns[0])}</td></tr>`).join("")}</tbody></table>`
+        ? `<table class="landscape"><thead><tr><th>Rank / supplier</th><th>Supplier location / role</th><th>Product / model</th><th>Fit / evidence</th><th>Observed price / terms</th><th>Principal gap</th></tr></thead><tbody>${group
+            .map((s, i) => {
+              const location = getSupplierLocationSummary(s);
+              return `<tr><td><a href="#supplier-${offset + i}">${s.assessment.rank}. ${esc(s.legal_name)}</a></td><td><b>${esc(location.label)}:</b> ${esc(location.value)}<br>${display(s.manufacturer_status)}</td><td>${esc(s.offering.product_name)}<br>${display(s.offering.model_or_sku)}</td><td>${esc(s.assessment.compatibility_score)} / ${esc(s.assessment.fit_band)}<br>Evidence: ${esc(s.assessment.evidence_confidence)}</td><td>${esc(price(s))}<br>Price date: ${esc(displaySupplierText(s.commercial.price_date))}<br>${display(s.commercial.incoterm)} ${display(s.commercial.incoterm_location)}</td><td>${display(s.assessment.limiting_gaps[0] ?? s.assessment.unknowns[0])}</td></tr>`;
+            })
+            .join("")}</tbody></table>`
         : "<p>No supplier candidates were returned. Buyer requirements remain available above; no company profiles have been invented.</p>",
       `landscape-${offset}`,
     );
@@ -255,6 +278,8 @@ export function generateConsultantLandscapeHtml(
 
   suppliers.forEach((s, index) => {
     const c = s.contacts;
+    const website = getSupplierWebsite(s);
+    const productOrigin = getSupplierProductOrigin(s);
     section(
       `${s.assessment.rank}. ${s.legal_name}`,
       `<div class="profile-top"><strong>${esc(s.assessment.fit_band)} / ${esc(s.assessment.compatibility_score)} fit score</strong><span>Evidence ${esc(s.assessment.evidence_confidence)} | Identity ${esc(s.identity_confidence)} | Completeness ${esc(s.assessment.data_completeness)}%</span></div><div class="columns"><div><h2>Company identity and direct contact</h2>${rows(
@@ -264,10 +289,14 @@ export function generateConsultantLandscapeHtml(
             [s.trading_name, ...s.brand_names].filter(Boolean),
           ],
           [
-            "Country / company role",
-            `${s.country_of_registration} / ${s.supplier_type} / ${s.manufacturer_status}`,
+            "Country of registration",
+            displaySupplierText(s.country_of_registration),
           ],
-          ["Registered headquarters", s.headquarters_address],
+          [
+            "Company role",
+            `${displaySupplierText(s.supplier_type)} / ${displaySupplierText(s.manufacturer_status)}`,
+          ],
+          ["Headquarters", displaySupplierText(s.headquarters_address)],
           ["Manufacturing locations", s.manufacturing_locations],
           [
             "Registry identifiers",
@@ -278,16 +307,32 @@ export function generateConsultantLandscapeHtml(
               : undefined,
           ],
         ],
-      )}<p><b>Official website:</b> ${link(s.website)}</p><p><b>Official contact page:</b> ${link(c?.contact_page_url)}</p>${rows(
+      )}<p><b>Website:</b> ${website ? link(website.href, website.label) : "Not established"}</p><p><b>Contact page:</b> ${link(c?.contact_page_url)}</p>${rows(
         [
-          [
-            "Sales / export email",
-            c?.sales_email ?? c?.export_email ?? c?.general_email,
-          ],
-          ["Telephone", c?.phone],
+          ["Sales email", displaySupplierText(c?.sales_email)],
+          ["Export email", displaySupplierText(c?.export_email)],
+          ["General email", displaySupplierText(c?.general_email)],
+          ["Telephone", displaySupplierText(c?.phone)],
+          ...(displaySupplierText(c?.whatsapp_business, "")
+            ? [
+                [
+                  "WhatsApp Business",
+                  displaySupplierText(c?.whatsapp_business),
+                ] as const,
+              ]
+            : []),
           ["Contact verification", c?.verification_status],
         ],
-      )}<p>${refs(s.identity_evidence_ids)} ${refs(c?.contact_evidence_ids)}</p></div><div><h2>Observed offering</h2>${rows(
+      )}${displaySupplierText(c?.linkedin_company_url, "") ? `<p><b>LinkedIn:</b> ${link(c?.linkedin_company_url)}</p>` : ""}${
+        c?.other_official_social_urls?.some((url) =>
+          displaySupplierText(url, ""),
+        )
+          ? `<p><b>Other recorded social channels:</b></p><ul>${c.other_official_social_urls
+              .filter((url) => displaySupplierText(url, ""))
+              .map((url) => `<li>${link(url)}</li>`)
+              .join("")}</ul>`
+          : ""
+      }<p>${refs(s.identity_evidence_ids)} ${refs(c?.contact_evidence_ids)}</p></div><div><h2>Observed offering</h2>${rows(
         [
           ["Product", s.offering.product_name],
           [
@@ -296,9 +341,10 @@ export function generateConsultantLandscapeHtml(
           ],
           ["Model / SKU", s.offering.model_or_sku],
           ["Description", s.offering.description],
+          [productOrigin.label, productOrigin.value],
           [
-            "Origin / manufacturing site",
-            `${s.offering.country_of_origin} / ${s.offering.manufacturing_site ?? "Unknown"}`,
+            "Manufacturing site",
+            displaySupplierText(s.offering.manufacturing_site),
           ],
           ["Use cases", s.offering.use_cases],
         ],
@@ -319,6 +365,7 @@ export function generateConsultantLandscapeHtml(
           ],
           ["Lead time", s.commercial.lead_time],
           ["Payment terms", s.commercial.payment_terms],
+          ["Price source date", displaySupplierText(s.commercial.price_date)],
           ["Price validity", s.commercial.price_validity],
         ],
       )}<p>${refs(s.commercial.commercial_evidence_ids)}</p></div><div><h2>Decision notes</h2><h3>Positive drivers</h3>${list(s.assessment.positive_drivers)}<h3>Limiting gaps and unknowns</h3>${list([...s.assessment.limiting_gaps, ...s.assessment.unknowns])}<h3>Required next validation</h3>${list(s.assessment.required_validation)}<p>${esc(s.assessment.recommended_next_action)}</p></div></div>`,
@@ -327,9 +374,14 @@ export function generateConsultantLandscapeHtml(
     const claims = output.claims.filter(
       (claim) => claim.supplier_entity_id === s.supplier_entity_id,
     );
+    const alternatives = getSupplierFactAlternatives(
+      s,
+      output.claims,
+      output.evidence_sources,
+    );
     section(
       `${s.legal_name} - Verification Dossier`,
-      `<h2>Buyer requirement reference</h2><p>${approved ? `Approved revision ${esc(approved.revision_id)} / SHA-256 ${esc(approved.content_hash)}. Assessments below must be read against the complete approved request.` : "Approved request lineage is unavailable; current buyer compliance cannot be inferred."}</p><h2>Mandatory constraint results</h2>${s.assessment.mandatory_constraint_results.length ? `<table><thead><tr><th>Constraint</th><th>Recorded result</th><th>Evidence</th></tr></thead><tbody>${s.assessment.mandatory_constraint_results.map((r) => `<tr><td>${esc(r.constraint)}</td><td>${demo ? "Illustrative / not evaluated for this request" : r.satisfied ? "Recorded as satisfied - inspect evidence" : "Not established / validation required"}</td><td>${refs(r.evidence_ids)}</td></tr>`).join("")}</tbody></table>` : "<p>No constraint-level result is recorded.</p>"}<div class="columns"><div><h2>Certificates and compliance scope</h2>${
+      `<h2>Buyer requirement reference</h2><p>${approved ? `Approved revision ${esc(approved.revision_id)} / SHA-256 ${esc(approved.content_hash)}. Assessments below must be read against the complete approved request.` : "Approved request lineage is unavailable; current buyer compliance cannot be inferred."}</p>${alternatives.length ? `<h2>Other recorded values</h2><p>Linked evidence retains additional values beyond the profile summary. Source dates, sites or product variants may differ; multiple observations do not by themselves establish a contradiction.</p><table><thead><tr><th>Field</th><th>Recorded value</th><th>Evidence</th></tr></thead><tbody>${alternatives.flatMap((field) => field.observations.map((observation) => `<tr><td>${esc(field.label)}</td><td>${esc(observation.value)}</td><td>${refs(observation.evidence_ids)}</td></tr>`)).join("")}</tbody></table>` : ""}<h2>Mandatory constraint results</h2>${s.assessment.mandatory_constraint_results.length ? `<table><thead><tr><th>Constraint</th><th>Recorded result</th><th>Evidence</th></tr></thead><tbody>${s.assessment.mandatory_constraint_results.map((r) => `<tr><td>${esc(r.constraint)}</td><td>${demo ? "Illustrative / not evaluated for this request" : r.satisfied ? "Recorded as satisfied - inspect evidence" : "Not established / validation required"}</td><td>${refs(r.evidence_ids)}</td></tr>`).join("")}</tbody></table>` : "<p>No constraint-level result is recorded.</p>"}<div class="columns"><div><h2>Certificates and compliance scope</h2>${
         s.certifications.length
           ? s.certifications
               .map(
@@ -444,6 +496,7 @@ export function generateConsultantLandscapeHtml(
     throw new ConsultantReportLanguageError();
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(output.title)}</title><style>
   @page{size:A4 landscape}*{box-sizing:border-box}body{margin:0;font:8.5pt/1.25 Arial,Helvetica,sans-serif;color:#172b3a;background:#fff}a{color:#155e75;text-decoration:none;overflow-wrap:anywhere}h1{font-size:17pt;line-height:1.15;margin:8px 0 10px;letter-spacing:-.4px}h2{font-size:10.5pt;color:#123e55;margin:9px 0 5px}h3{font-size:9pt;margin:6px 0 3px}p{margin:4px 0 6px}ul,ol{margin:4px 0 8px;padding-left:19px}li{margin:2px 0}.page{break-before:page;padding:0}.page:first-child{break-before:auto}header{display:flex;justify-content:space-between;border-bottom:2px solid #0d766e;padding-bottom:8px;color:#164e63;font-size:9pt;font-weight:bold}footer{border-top:1px solid #ccd8dd;margin-top:12px;padding-top:6px;font-size:8pt;color:#475b67;overflow-wrap:anywhere}.notice,.live{padding:5px 8px;font-size:8pt;margin-top:8px;border-left:4px solid #b7791f;background:#fffbeb;color:#713f12}.live{border-color:#0f766e;background:#f0fdfa;color:#115e59}.cover-title{font-size:23pt;color:#0f4b60;margin:16px 0 10px;font-weight:bold;line-height:1.2}.lead{font-size:10pt;max-width:95%}.metrics{display:flex;gap:15px;margin:16px 0}.metrics>div{flex:1;background:#f0f6f8;border-top:3px solid #0f766e;padding:10px}.metrics b{display:block;font-size:20pt}.metrics span{display:block;font-size:9pt}.columns{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:6px 0;align-items:start}.profile-top{display:flex;justify-content:space-between;background:#eaf4f5;padding:7px;gap:12px}.approved-text{white-space:pre-wrap;border-left:3px solid #0f766e;padding:12px;background:#f8fafc;overflow-wrap:anywhere}.muted{color:#5b6871}table{width:100%;border-collapse:collapse;table-layout:fixed;margin:6px 0 8px;font-size:8pt}th,td{text-align:left;vertical-align:top;padding:2px 5px;border:1px solid #d5dfe3;overflow-wrap:anywhere}th{background:#e9f1f4;font-weight:bold}thead{display:table-header-group}tr{break-inside:avoid}.facts th{width:34%;color:#29434f}.facts td{background:#fff}.landscape th:nth-child(1){width:19%}.landscape th:nth-child(3){width:20%}.source{break-inside:avoid;border-bottom:1px solid #d5dfe3;margin:12px 0;padding-bottom:7px}h1,h2,h3{break-after:avoid}article{margin:10px 0}p,li{orphans:3;widows:3}
-  .page[id^="dossier-"] h1{font-size:15pt;margin-bottom:6px}.page[id^="dossier-"] h2{margin-top:6px}.page[id^="dossier-"] .columns{margin:4px 0}footer{display:none}
+  .page[id^="dossier-"] h1,.page[id^="supplier-"] h1{font-size:15pt;margin-bottom:6px}.page[id^="dossier-"] h2,.page[id^="supplier-"] h2{margin-top:6px}.page[id^="dossier-"] .columns,.page[id^="supplier-"] .columns{margin:4px 0}.page[id^="supplier-"] table{margin:4px 0 6px}footer{display:none}
+  .page[id^="dossier-"] > table:last-of-type tbody tr:nth-last-child(2){break-after:avoid}
   </style></head><body>${sections.join("\n")}</body></html>`;
 }

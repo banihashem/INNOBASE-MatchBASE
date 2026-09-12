@@ -11,6 +11,7 @@ export * from "./admin-entitlements.js";
 export * from "./admin-runs.js";
 export * from "./admin-research.js";
 export * from "./database.js";
+export * from "./test-database-safety.js";
 export * from "./leases.js";
 export * from "./consultant-workflow-jobs.js";
 export * from "./migrations.js";

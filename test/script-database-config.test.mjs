@@ -13,18 +13,24 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 
 test("script database configuration selects canonical before compatibility", () => {
   assert.equal(
-    resolveScriptDatabaseUrl({
-      MATCHBASE_DATABASE_URL: " postgresql://canonical.invalid/app ",
-      DATABASE_URL: "postgresql://fallback.invalid/app",
-    }),
+    resolveScriptDatabaseUrl(
+      {
+        MATCHBASE_DATABASE_URL: " postgresql://canonical.invalid/app ",
+        DATABASE_URL: "postgresql://fallback.invalid/app",
+      },
+      ["node", "runtime-script.mjs"],
+    ),
     "postgresql://canonical.invalid/app",
   );
   for (const canonical of [undefined, "", " \t "]) {
     assert.equal(
-      resolveScriptDatabaseUrl({
-        MATCHBASE_DATABASE_URL: canonical,
-        DATABASE_URL: " postgresql://fallback.invalid/app ",
-      }),
+      resolveScriptDatabaseUrl(
+        {
+          MATCHBASE_DATABASE_URL: canonical,
+          DATABASE_URL: " postgresql://fallback.invalid/app ",
+        },
+        ["node", "runtime-script.mjs"],
+      ),
       "postgresql://fallback.invalid/app",
     );
   }

@@ -3,6 +3,24 @@ import test from "node:test";
 
 import { validateLicenseInventory } from "../scripts/license-policy.mjs";
 
+test("MB-UX-QUALITY-001 L06 admits only the reviewed PDF decompression package", () => {
+  assert.equal(
+    validateLicenseInventory({
+      "(MIT AND Zlib)": [{ name: "pako", versions: ["1.0.11"] }],
+    }),
+    1,
+  );
+  for (const entry of [
+    { name: "another-package", versions: ["1.0.11"] },
+    { name: "pako", versions: ["1.0.12"] },
+  ]) {
+    assert.throws(
+      () => validateLicenseInventory({ "(MIT AND Zlib)": [entry] }),
+      /Unreviewed dependency licenses/,
+    );
+  }
+});
+
 test("accepts only the reviewed Linux libvips package and locked version", () => {
   assert.equal(
     validateLicenseInventory({

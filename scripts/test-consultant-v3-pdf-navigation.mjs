@@ -1,8 +1,13 @@
 #!/usr/bin/env node
+import { resolveScriptTestTargets } from "./lib/database-config.mjs";
 import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
 
-const BASE_URL = process.env.BASE_URL || "http://127.0.0.1:3000";
+const {
+  baseUrl: BASE_URL,
+  createBrowserContext,
+  fetch,
+} = resolveScriptTestTargets();
 
 console.log("=== MatchBASE Consultant V3 PDF Navigation & Delivery Suite ===");
 
@@ -214,7 +219,7 @@ async function runNavigationTests() {
     "\n--- [9] Browser Navigation Qualification (5 Sequential Navigations) ---",
   );
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
+  const context = await createBrowserContext(browser);
   const page = await context.newPage();
 
   // Login

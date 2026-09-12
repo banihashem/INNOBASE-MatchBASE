@@ -63,10 +63,14 @@ try {
     if ($Action -eq 'Build') {
         # Each build qualifies all database-dependent tests against disposable data.
         $unitContainer = 'matchbase-unit-' + [guid]::NewGuid().ToString('N')
-        $previousDatabase = $env:DATABASE_URL
-        $previousConsultantDatabase = $env:MATCHBASE_CONSULTANT_TEST_DATABASE_URL
+        $testEnvironmentNames = @('DATABASE_URL', 'MATCHBASE_DATABASE_URL', 'MATCHBASE_CONSULTANT_TEST_DATABASE_URL', 'MATCHBASE_DISPOSABLE_TEST_DATABASE_URL', 'MATCHBASE_TEST_DATABASE_GUARD') + @(Get-ChildItem Env: | Where-Object { $_.Name -match 'DATABASE_URL|OPENROUTER|API_KEY|^PG(HOST|PORT|DATABASE|USER|PASSWORD|SERVICE|SERVICEFILE)$|^MATCHBASE_PROVIDER_' } | ForEach-Object { $_.Name })
+        $previousTestEnvironment = @{}
+        foreach ($testEnvironmentName in ($testEnvironmentNames | Select-Object -Unique)) {
+            $previousTestEnvironment[$testEnvironmentName] = [Environment]::GetEnvironmentVariable($testEnvironmentName, 'Process')
+            [Environment]::SetEnvironmentVariable($testEnvironmentName, $null, 'Process')
+        }
         try {
-            & docker run -d --name $unitContainer --label matchbase.role=unit-test --publish '127.0.0.1::5432' --tmpfs /var/lib/postgresql --env POSTGRES_HOST_AUTH_METHOD=trust postgres:18.1-bookworm@sha256:cc9f4143a8d2fa8cf3749d0cb4d26ecf2d53a77a2ac807e9ebd67ae22426221a | Out-Null
+            & docker run -d --name $unitContainer --label matchbase.role=unit-test --publish '127.0.0.1::5432' --tmpfs /var/lib/postgresql --env POSTGRES_HOST_AUTH_METHOD=trust --env POSTGRES_DB=matchbase_test postgres:18.1-bookworm@sha256:cc9f4143a8d2fa8cf3749d0cb4d26ecf2d53a77a2ac807e9ebd67ae22426221a | Out-Null
             Assert-NativeSuccess 'Disposable unit database creation'
             $ready = $false
             for ($attempt=0; $attempt -lt 60; $attempt++) {
@@ -78,14 +82,18 @@ try {
             $binding = & docker port $unitContainer 5432/tcp
             Assert-NativeSuccess 'Disposable database port lookup'
             if ($binding -notmatch '^127\.0\.0\.1:(\d+)$') { throw 'Unit database is not bound to loopback.' }
-            $env:DATABASE_URL = "postgresql://postgres@127.0.0.1:$($Matches[1])/postgres"
+            $env:DATABASE_URL = "postgresql://postgres@127.0.0.1:$($Matches[1])/matchbase_test"
+            $env:MATCHBASE_DATABASE_URL = $env:DATABASE_URL
             $env:MATCHBASE_CONSULTANT_TEST_DATABASE_URL = $env:DATABASE_URL
+            $env:MATCHBASE_DISPOSABLE_TEST_DATABASE_URL = $env:DATABASE_URL
+            $env:MATCHBASE_TEST_DATABASE_GUARD = 'required'
             # Source is not sent to the application image builder before this succeeds.
             & pnpm run test:unit
             Assert-NativeSuccess 'Complete unit suite including real PostgreSQL tests'
         } finally {
-            $env:DATABASE_URL = $previousDatabase
-            $env:MATCHBASE_CONSULTANT_TEST_DATABASE_URL = $previousConsultantDatabase
+            foreach ($testEnvironmentName in $previousTestEnvironment.Keys) {
+                [Environment]::SetEnvironmentVariable($testEnvironmentName, $previousTestEnvironment[$testEnvironmentName], 'Process')
+            }
             & docker rm -f $unitContainer | Out-Null
         }
         & docker build --file Dockerfile.local --target local-runtime --tag matchbase-local:current .

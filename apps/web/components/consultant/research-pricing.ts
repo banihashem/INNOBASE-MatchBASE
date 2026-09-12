@@ -7,8 +7,8 @@ import type {
 
 export interface SupplierPrice {
   supplier: SupplierEntityV3;
-  low: number;
-  high: number;
+  low: number | undefined;
+  high: number | undefined;
   sources: readonly EvidenceSourceV3[];
   date: string | undefined;
 }
@@ -19,15 +19,18 @@ export function supplierPrice(
   claims: readonly ClaimV3[] = [],
 ): SupplierPrice | undefined {
   const c = supplier.commercial;
-  // A one-sided bound is not a complete price or a closed range.
+  // Preserve missing bounds; a minimum alone is not an exact price.
   if (
-    c.price_min === undefined ||
-    !Number.isFinite(c.price_min) ||
-    c.price_min < 0
+    (c.price_min === undefined && c.price_max === undefined) ||
+    (c.price_min !== undefined &&
+      (!Number.isFinite(c.price_min) || c.price_min < 0)) ||
+    (c.price_max !== undefined &&
+      (!Number.isFinite(c.price_max) || c.price_max < 0)) ||
+    (c.price_min !== undefined &&
+      c.price_max !== undefined &&
+      c.price_max < c.price_min)
   )
     return undefined;
-  const high = c.price_max ?? c.price_min;
-  if (!Number.isFinite(high) || high < c.price_min) return undefined;
   const boundSources = (field: string, amount: number) =>
     claims
       .filter((claim) => {
@@ -57,19 +60,23 @@ export function supplierPrice(
             ),
         ),
       );
-  const lowIds = boundSources("commercial.price_min", c.price_min);
+  const lowIds =
+    c.price_min === undefined
+      ? []
+      : boundSources("commercial.price_min", c.price_min);
   const highIds =
     c.price_max === undefined
-      ? lowIds
-      : boundSources("commercial.price_max", high);
+      ? []
+      : boundSources("commercial.price_max", c.price_max);
   const priceIds =
-    lowIds.length && highIds.length
+    (c.price_min === undefined || lowIds.length) &&
+    (c.price_max === undefined || highIds.length)
       ? new Set([...lowIds, ...highIds])
       : new Set<string>();
   return {
     supplier,
     low: c.price_min,
-    high,
+    high: c.price_max,
     date: c.price_date,
     sources: evidence.filter((s) => priceIds.has(s.evidence_id)),
   };
@@ -85,14 +92,22 @@ export function formatPrice(
 }
 
 export function researchPriceGroups(output: ConsultantResearchOutputV3) {
-  const groups = new Map<string, SupplierPrice[]>();
+  const groups = new Map<
+    string,
+    (SupplierPrice & { low: number; high: number })[]
+  >();
   for (const supplier of output.supplier_candidates) {
     const price = supplierPrice(
       supplier,
       output.evidence_sources,
       output.claims,
     );
-    if (!price || (!price.sources.length && output.research_mode !== "fixture"))
+    if (
+      !price ||
+      price.low === undefined ||
+      price.high === undefined ||
+      (!price.sources.length && output.research_mode !== "fixture")
+    )
       continue;
     const c = supplier.commercial;
     // Do not convert currencies, infer units, or merge different product/basis/date/quantity tiers.
@@ -122,7 +137,10 @@ export function researchPriceGroups(output: ConsultantResearchOutputV3) {
       ...basis.map((value) => value?.trim().toLowerCase() ?? ""),
       !c.currency || !c.unit || !c.incoterm ? supplier.candidate_id : "",
     ]);
-    groups.set(key, [...(groups.get(key) ?? []), price]);
+    groups.set(key, [
+      ...(groups.get(key) ?? []),
+      { ...price, low: price.low, high: price.high },
+    ]);
   }
   return [...groups.values()].map((prices) => ({
     prices,

@@ -1,8 +1,13 @@
 #!/usr/bin/env node
+import { resolveScriptTestTargets } from "./lib/database-config.mjs";
 import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
 
-const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
+const {
+  baseUrl: BASE_URL,
+  createBrowserContext,
+  fetch,
+} = resolveScriptTestTargets();
 
 console.log("=== MatchBASE Consultant V3 Conflict Escape & Safety Test ===");
 
@@ -140,7 +145,7 @@ async function main() {
     "\n--- [3] Browser E2E: Escape Key Safety & Local Text Preservation ---",
   );
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
+  const context = await createBrowserContext(browser);
   const page = await context.newPage();
 
   page.on("console", (msg) => {
@@ -151,7 +156,7 @@ async function main() {
   // Set shared authenticated session cookie for Playwright context
   const cookieParts = cookie.split("; ").map((p) => {
     const [name, ...val] = p.split("=");
-    return { name, value: val.join("="), domain: "localhost", path: "/" };
+    return { name, value: val.join("="), url: BASE_URL };
   });
   await context.addCookies(cookieParts);
 

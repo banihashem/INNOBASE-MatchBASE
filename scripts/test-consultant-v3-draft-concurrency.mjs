@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+import { resolveScriptTestTargets } from "./lib/database-config.mjs";
 import assert from "node:assert/strict";
 
-const BASE_URL = process.env.BASE_URL || "http://127.0.0.1:3000";
+const { baseUrl: BASE_URL, fetch } = resolveScriptTestTargets();
 
 console.log(
   "=== MatchBASE Consultant V3 Draft Concurrency & 422 Coherence Test Suite ===",

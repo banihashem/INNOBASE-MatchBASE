@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { displaySupplierText } from "@matchbase/contracts";
 import type {
   ClaimV3,
   EvidenceSourceV3,
@@ -339,14 +340,25 @@ export function reconcileLiveCandidateRecords(
     }
     const identity = bestProof(old.identity, next.identity);
     const product = bestProof(old.product, next.product);
+    // A field may have multiple source observations. Preserve differing values
+    // and their provenance so assembly can disclose a conflict instead of
+    // choosing whichever extraction happened to arrive first.
     const facts = [...old.facts];
+    const factKey = (fact: LiveCandidateRecord["facts"][number]) =>
+      JSON.stringify([
+        fact.field_path,
+        fact.value,
+        fact.claim_type,
+        fact.quote,
+        [...fact.source_urls].sort(),
+      ]);
+    const factKeys = new Set(facts.map(factKey));
     for (const fact of next.facts) {
-      const index = facts.findIndex(
-        (item) => item.field_path === fact.field_path,
-      );
-      if (index < 0) facts.push(fact);
-      else if (!supported(facts[index]!) && supported(fact))
-        facts[index] = fact;
+      const key = factKey(fact);
+      if (!factKeys.has(key)) {
+        facts.push(fact);
+        factKeys.add(key);
+      }
     }
     const constraints = new Map<
       string,
@@ -773,6 +785,64 @@ export function evaluateLiveCandidate(
   return problems;
 }
 
+/** Only literal field-absence notes can be superseded by a grounded value.
+ * Availability, freshness, independent verification and RFQ qualifications
+ * remain open even when a public observation exists. */
+function unresolvedFieldNotes(
+  notes: readonly string[],
+  establishedFields: ReadonlySet<string>,
+): string[] {
+  const fields: readonly (readonly [string, readonly string[]])[] = [
+    ["sales email", ["contacts.sales_email"]],
+    ["export email", ["contacts.export_email"]],
+    ["general email", ["contacts.general_email"]],
+    [
+      "email",
+      [
+        "contacts.sales_email",
+        "contacts.export_email",
+        "contacts.general_email",
+      ],
+    ],
+    ["phone", ["contacts.phone"]],
+    ["telephone", ["contacts.phone"]],
+    ["contact page", ["contacts.contact_page_url"]],
+    ["headquarters address", ["headquarters_address"]],
+    ["country of registration", ["country_of_registration"]],
+    ["registration country", ["country_of_registration"]],
+    ["country of origin", ["country_of_origin"]],
+    ["manufacturing location", ["manufacturing_location"]],
+    ["moq", ["commercial.moq"]],
+    ["minimum order quantity", ["commercial.moq"]],
+    ["production capacity", ["commercial.production_capacity"]],
+    ["lead time", ["commercial.lead_time"]],
+    ["payment terms", ["commercial.payment_terms"]],
+    ["incoterm", ["commercial.incoterm"]],
+    ["incoterm location", ["commercial.incoterm_location"]],
+  ];
+  const missing =
+    "(?:not found|not recorded|not stated|not provided|unknown|missing)";
+  return notes.filter((note) => {
+    const normalized = note
+      .normalize("NFKC")
+      .trim()
+      .toLowerCase()
+      .replace(/[.!]$/, "")
+      .replace(/\s+/g, " ");
+    return !fields.some(([label, paths]) => {
+      if (!paths.some((path) => establishedFields.has(path))) return false;
+      return (
+        new RegExp(
+          `^(?:public |published )?${label}(?:: | (?:is |was )?)${missing}$`,
+        ).test(normalized) ||
+        new RegExp(
+          `^no (?:public |published )?${label}(?: (?:was |is )?(?:found|recorded|stated|provided))?$`,
+        ).test(normalized)
+      );
+    });
+  });
+}
+
 export function assembleLiveSuppliers(
   records: readonly LiveCandidateRecord[],
   requirements: readonly string[],
@@ -813,6 +883,7 @@ export function assembleLiveSuppliers(
       type: ClaimV3["claim_type"],
       field: string,
       status: ClaimV3["status"] = "externally_verified",
+      normalizedValue?: string,
     ): string[] => {
       const sources = proofSources(proof, evidence);
       if (!sources.length) return [];
@@ -828,6 +899,9 @@ export function assembleLiveSuppliers(
         claim_type: type,
         field_path: field,
         claim_text: text,
+        ...(normalizedValue !== undefined
+          ? { normalized_value: normalizedValue }
+          : {}),
         status,
         // Multiple URLs or a company's own social profiles are not independent origins.
         // The current contract does not establish independent ownership, so do not infer it.
@@ -850,6 +924,7 @@ export function assembleLiveSuppliers(
       "offering.product_name",
     );
     const facts = new Map<string, { value: string; evidence_ids: string[] }>();
+    const acceptedFacts = new Map<string, LiveCandidateRecord["facts"]>();
     for (const fact of candidate.facts) {
       // A literal masking notice is evidence of an unavailable address, not a contact.
       if (
@@ -858,7 +933,7 @@ export function assembleLiveSuppliers(
       )
         continue;
       if (
-        !fact.value.trim() ||
+        !displaySupplierText(fact.value, "") ||
         !fact.quote.toLowerCase().includes(fact.value.toLowerCase())
       )
         continue;
@@ -890,15 +965,74 @@ export function assembleLiveSuppliers(
         )
           continue;
       }
-      const ids = makeClaim(
-        `${fact.field_path}: ${fact.value}`,
-        fact,
-        fact.claim_type,
-        fact.field_path,
-      );
-      if (ids.length)
-        facts.set(fact.field_path, { value: fact.value, evidence_ids: ids });
+      if (proofSources(fact, evidence).length)
+        acceptedFacts.set(fact.field_path, [
+          ...(acceptedFacts.get(fact.field_path) ?? []),
+          fact,
+        ]);
     }
+    const conflictingFields: string[] = [];
+    const additionalContacts: string[] = [];
+    const manufacturingLocations: string[] = [];
+    for (const [path, observations] of acceptedFacts) {
+      const valueKey = (value: string) =>
+        /^commercial\.price_(?:min|max)$/.test(path) &&
+        /^\d+(?:\.\d+)?$/.test(value)
+          ? String(Number(value))
+          : value.normalize("NFKC").trim().toLowerCase().replace(/\s+/g, " ");
+      const values = new Set(observations.map((fact) => valueKey(fact.value)));
+      // Sites and business contacts can legitimately be plural. A scalar contact
+      // is chosen deterministically; all other published contacts remain claims.
+      const pluralContact = path.startsWith("contacts.");
+      const conflicting =
+        values.size > 1 && path !== "manufacturing_location" && !pluralContact;
+      if (conflicting) conflictingFields.push(path);
+      if (values.size > 1 && pluralContact)
+        additionalContacts.push(
+          `${values.size} published values are retained for ${path}; additional contacts are available in the source claims.`,
+        );
+      const ids = observations.flatMap((fact) =>
+        // Differing dates, sites or product variants can explain alternatives.
+        // Withhold an unresolved scalar without claiming a proven contradiction.
+        makeClaim(
+          `${fact.field_path}: ${fact.value}`,
+          fact,
+          fact.claim_type,
+          fact.field_path,
+          "externally_verified",
+          fact.value,
+        ),
+      );
+      if (!conflicting) {
+        facts.set(path, {
+          value: [...observations].sort(
+            (a, b) =>
+              valueKey(a.value).localeCompare(valueKey(b.value)) ||
+              a.value.localeCompare(b.value),
+          )[0]!.value,
+          evidence_ids: [...new Set(ids)],
+        });
+        if (path === "manufacturing_location") {
+          const included = new Set<string>();
+          for (const fact of observations) {
+            if (!included.has(valueKey(fact.value)))
+              manufacturingLocations.push(fact.value);
+            included.add(valueKey(fact.value));
+          }
+        }
+      }
+    }
+    const candidateUnknowns = unresolvedFieldNotes(
+      candidate.unknowns,
+      new Set(facts.keys()),
+    );
+    const factConflicts = conflictingFields.map((field) =>
+      field === "headquarters_address"
+        ? "Alternative headquarters addresses remain unresolved; review the retained source claims before establishing the current headquarters."
+        : field.startsWith("commercial.price_")
+          ? `Multiple source observations for ${field} have unresolved price, date or product basis; review the retained claims before establishing one commercial value.`
+          : `Multiple source observations for ${field} remain unresolved; review the retained claims before establishing a single value.`,
+    );
     const pendingRequirements: string[] = [];
     const constraints = requirements.map((requirement) => {
       const matches = candidate.constraints.filter(
@@ -961,7 +1095,9 @@ export function assembleLiveSuppliers(
     const observedPrices: { price_min?: number; price_max?: number } = {};
     for (const path of pricePaths) {
       const fact = facts.get(path);
-      const raw = candidate.facts.find((entry) => entry.field_path === path);
+      const raw = acceptedFacts
+        .get(path)
+        ?.find((entry) => entry.value === fact?.value);
       if (
         !fact ||
         !raw?.quote.includes(fact.value) ||
@@ -985,16 +1121,13 @@ export function assembleLiveSuppliers(
     const hasPublicPrice =
       observedPrices.price_min !== undefined ||
       observedPrices.price_max !== undefined;
-    const companyHost = new URL(website).hostname.replace(/^www\./, "");
     const certifications = candidate.certifications.flatMap((certification) => {
       const sources = proofSources(certification, evidence);
       if (!sources.length) return [];
       const independentlyEvidenced = sources.some(
         (source) =>
           source.source_type === "official_registry" ||
-          source.source_type === "government_trade_portal" ||
-          new URL(source.source_url).hostname.replace(/^www\./, "") !==
-            companyHost,
+          source.source_type === "government_trade_portal",
       );
       const ids = makeClaim(
         `${certification.name}: ${certification.scope}`,
@@ -1077,9 +1210,7 @@ export function assembleLiveSuppliers(
         optionalValue("country_of_registration") ?? "Not verified",
       headquarters_address:
         optionalValue("headquarters_address") ?? "Not verified",
-      manufacturing_locations: optionalValue("manufacturing_location")
-        ? [optionalValue("manufacturing_location")!]
-        : [],
+      manufacturing_locations: manufacturingLocations,
       website,
       primary_domain: new URL(website).hostname,
       identity_confidence: identityIds.length > 1 ? "high" : "medium",
@@ -1166,7 +1297,11 @@ export function assembleLiveSuppliers(
         identity_confidence: "medium",
         data_completeness: Math.round(
           ((2 + facts.size) /
-            (2 + facts.size + candidate.unknowns.length + 3)) *
+            (2 +
+              facts.size +
+              candidateUnknowns.length +
+              factConflicts.length +
+              3)) *
             100,
         ),
         dimension_scores: dimensions,
@@ -1174,21 +1309,28 @@ export function assembleLiveSuppliers(
         positive_drivers: [
           "Official identity and product capability supported by native web primary citations.",
           `${constraints.filter((item) => item.satisfied).length} of ${requirements.length} mandatory criteria have supporting primary citations.`,
+          ...additionalContacts,
         ],
         limiting_gaps: [
-          ...candidate.unknowns,
+          ...candidateUnknowns,
+          ...factConflicts,
           ...pendingRequirements,
           ...unknownDimensions,
         ],
         risk_flags: [
           ...candidate.risks,
+          ...factConflicts,
           ...(pendingRequirements.length
             ? [
                 "Conditional match: unverified requirements require confirmation before procurement.",
               ]
             : []),
         ],
-        unknowns: [...candidate.unknowns, ...pendingRequirements],
+        unknowns: [
+          ...candidateUnknowns,
+          ...factConflicts,
+          ...pendingRequirements,
+        ],
         required_validation: [
           "Confirm current documents, commercial terms and supply availability directly before procurement.",
         ],

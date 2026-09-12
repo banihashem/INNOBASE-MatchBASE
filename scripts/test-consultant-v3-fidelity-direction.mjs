@@ -1,11 +1,12 @@
 #!/usr/bin/env node
+import { resolveScriptTestTargets } from "./lib/database-config.mjs";
 import assert from "node:assert/strict";
 import {
   extractExplicitRequirementLedger,
   validateStep1RequirementFidelity,
 } from "../packages/contracts/dist/src/v3/requirement-fidelity.js";
 
-const BASE_URL = process.env.BASE_URL || "http://127.0.0.1:3000";
+const { baseUrl: BASE_URL, fetch } = resolveScriptTestTargets();
 
 console.log(
   "=== MatchBASE Consultant V3 Requirement Fidelity & Directional Test ===",

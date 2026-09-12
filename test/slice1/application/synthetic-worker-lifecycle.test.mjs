@@ -77,6 +77,9 @@ function spawnWorker(databaseUrl, environmentOverrides = {}) {
     env: {
       ...process.env,
       DATABASE_URL: databaseUrl,
+      MATCHBASE_DATABASE_URL: databaseUrl,
+      MATCHBASE_DISPOSABLE_TEST_DATABASE_URL: databaseUrl,
+      MATCHBASE_TEST_DATABASE_GUARD: "required",
       MATCHBASE_ENVIRONMENT: "test",
       MATCHBASE_SYNTHETIC_FIXTURE: "true",
       MATCHBASE_DIGEST_KEY: "local-synthetic-digest-key-32-bytes-minimum",

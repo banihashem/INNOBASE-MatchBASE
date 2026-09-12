@@ -8,6 +8,12 @@ import type {
   ApprovedRequestSnapshotV3,
   ResearchPriceSearchV3,
 } from "@matchbase/contracts";
+import {
+  displaySupplierText,
+  getSupplierFactAlternatives,
+  getSupplierProductOrigin,
+  getSupplierWebsite,
+} from "@matchbase/contracts";
 
 import { ApprovedRequestSummary } from "./ApprovedRequestSummary";
 import { SupplierPriceSummary } from "./ResearchPricing";
@@ -76,6 +82,8 @@ export function SupplierDossierModal({
   if (!isOpen || !supplier) return null;
 
   const assessment = supplier.assessment;
+  const website = getSupplierWebsite(supplier);
+  const productOrigin = getSupplierProductOrigin(supplier);
   const isIllustrative =
     supplier.legal_name.includes("[Illustrative]") ||
     supplier.candidate_id.startsWith("cand-demo-") ||
@@ -106,6 +114,24 @@ export function SupplierDossierModal({
   );
   const publicUrl = (value?: string | null) =>
     value && /^https?:\/\//i.test(value) ? value : undefined;
+  const contacts = isIllustrative
+    ? []
+    : [
+        ["Sales email", supplier.contacts?.sales_email],
+        ["Export email", supplier.contacts?.export_email],
+        ["General email", supplier.contacts?.general_email],
+        ["Phone", supplier.contacts?.phone],
+        ["WhatsApp Business", supplier.contacts?.whatsapp_business],
+      ].flatMap(([label, value]) => {
+        const displayValue = displaySupplierText(value, "");
+        return displayValue ? [{ label: label!, value: displayValue }] : [];
+      });
+  const contactStatus = supplier.contacts?.verification_status ?? "unverified";
+  const factAlternatives = getSupplierFactAlternatives(
+    supplier,
+    claims,
+    evidenceSources,
+  );
 
   return (
     <div
@@ -212,14 +238,16 @@ export function SupplierDossierModal({
                 Corporate Registration & Operations
               </h3>
               <dl className="grid grid-cols-3 gap-2 text-xs">
-                <dt className="text-slate-500 font-medium">Country:</dt>
+                <dt className="text-slate-500 font-medium">
+                  Registered country:
+                </dt>
                 <dd className="col-span-2 font-semibold text-slate-800">
-                  {supplier.country_of_registration}
+                  {displaySupplierText(supplier.country_of_registration)}
                 </dd>
 
                 <dt className="text-slate-500 font-medium">Headquarters:</dt>
                 <dd className="col-span-2 text-slate-800">
-                  {supplier.headquarters_address}
+                  {displaySupplierText(supplier.headquarters_address)}
                 </dd>
 
                 <dt className="text-slate-500 font-medium">
@@ -238,17 +266,17 @@ export function SupplierDossierModal({
                     <span className="italic text-slate-500">
                       Not applicable — illustrative entity
                     </span>
-                  ) : (
+                  ) : website ? (
                     <a
-                      href={publicUrl(supplier.website)}
+                      href={website.href}
                       target="_blank"
                       rel="noreferrer"
                       className="underline text-sky-600 hover:text-sky-800"
                     >
-                      {supplier.primary_domain ??
-                        supplier.website ??
-                        "Not found in inspected sources"}
+                      {website.label}
                     </a>
+                  ) : (
+                    "Not established"
                   )}
                 </dd>
               </dl>
@@ -271,38 +299,43 @@ export function SupplierDossierModal({
                   : "Public Commercial Contacts"}
               </h3>
               <dl className="grid grid-cols-3 gap-2 text-xs">
-                <dt className="text-slate-500 font-medium">Sales Desk:</dt>
-                <dd className="col-span-2 font-mono text-slate-800">
-                  {isIllustrative
-                    ? "Not applicable — illustrative profile"
-                    : (supplier.contacts?.sales_email ??
-                      supplier.contacts?.export_email ??
-                      supplier.contacts?.general_email ??
-                      "Not found in inspected sources")}
-                </dd>
-
-                <dt className="text-slate-500 font-medium">Phone:</dt>
-                <dd className="col-span-2 text-slate-800">
-                  {isIllustrative
-                    ? "Not applicable — illustrative profile"
-                    : (supplier.contacts?.phone ??
-                      "Not found in inspected sources")}
-                </dd>
+                {contacts.map((contact) => (
+                  <div key={contact.label} className="contents">
+                    <dt className="text-slate-500 font-medium">
+                      {contact.label}:
+                    </dt>
+                    <dd className="col-span-2 text-slate-800 break-words">
+                      {contact.value}
+                    </dd>
+                  </div>
+                ))}
+                {!contacts.length && (
+                  <>
+                    <dt className="text-slate-500 font-medium">
+                      Direct contacts:
+                    </dt>
+                    <dd className="col-span-2 text-slate-800">
+                      {isIllustrative
+                        ? "Not applicable — illustrative profile"
+                        : "Not established"}
+                    </dd>
+                  </>
+                )}
 
                 <dt className="text-slate-500 font-medium">Verification:</dt>
                 <dd className="col-span-2">
                   <span
                     className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
-                      isIllustrative
+                      isIllustrative || contactStatus === "claimed"
                         ? "bg-amber-100 text-amber-800"
-                        : "bg-emerald-100 text-emerald-800"
+                        : contactStatus === "verified"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-slate-100 text-slate-700"
                     }`}
                   >
                     {isIllustrative
                       ? "Demonstration Profile (Not Externally Verified)"
-                      : (
-                          supplier.contacts?.verification_status ?? "unverified"
-                        ).replaceAll("_", " ")}
+                      : contactStatus.replaceAll("_", " ")}
                   </span>
                 </dd>
               </dl>
@@ -375,6 +408,13 @@ export function SupplierDossierModal({
               <p className="text-sm text-slate-600 mb-2">
                 <strong>Product:</strong> {supplier.offering.product_name}
               </p>
+              <p className="text-sm text-slate-600 mb-2">
+                <strong>{productOrigin.label}:</strong> {productOrigin.value}
+              </p>
+              <p className="text-sm text-slate-600 mb-2">
+                <strong>Product manufacturing site:</strong>{" "}
+                {displaySupplierText(supplier.offering.manufacturing_site)}
+              </p>
               <div className="text-sm space-y-1">
                 {Object.entries(supplier.offering.specifications).map(
                   ([k, v]) => (
@@ -409,8 +449,9 @@ export function SupplierDossierModal({
                 <div className="flex justify-between border-b border-slate-100 py-0.5">
                   <span className="text-slate-500">Production Capacity:</span>
                   <span className="font-medium text-slate-800">
-                    {supplier.commercial.production_capacity ??
-                      "Not found in inspected sources"}
+                    {displaySupplierText(
+                      supplier.commercial.production_capacity,
+                    )}
                   </span>
                 </div>
                 <div className="flex justify-between border-b border-slate-100 py-0.5">
@@ -418,8 +459,7 @@ export function SupplierDossierModal({
                     Minimum Order Quantity (MOQ):
                   </span>
                   <span className="font-medium text-slate-800">
-                    {supplier.commercial.moq ??
-                      "Not found in inspected sources"}
+                    {displaySupplierText(supplier.commercial.moq)}
                   </span>
                 </div>
                 <div className="flex justify-between border-b border-slate-100 py-0.5">
@@ -433,13 +473,18 @@ export function SupplierDossierModal({
                   </span>
                 </div>
                 <div className="flex justify-between border-b border-slate-100 py-0.5">
-                  <span className="text-slate-500">Lead Time & Inco:</span>
+                  <span className="text-slate-500">Lead time:</span>
                   <span className="font-medium text-slate-800">
-                    {supplier.commercial.lead_time ??
-                      "Not found in inspected sources"}{" "}
-                    &bull;{" "}
-                    {supplier.commercial.incoterm ??
-                      "Not found in inspected sources"}
+                    {displaySupplierText(supplier.commercial.lead_time)}
+                  </span>
+                </div>
+                <div className="flex justify-between border-b border-slate-100 py-0.5">
+                  <span className="text-slate-500">
+                    Incoterm / named place:
+                  </span>
+                  <span className="font-medium text-slate-800">
+                    {displaySupplierText(supplier.commercial.incoterm)} /{" "}
+                    {displaySupplierText(supplier.commercial.incoterm_location)}
                   </span>
                 </div>
               </div>
@@ -569,6 +614,58 @@ export function SupplierDossierModal({
               >
                 Company LinkedIn page
               </a>
+            )}
+            {supplier.contacts?.other_official_social_urls
+              ?.filter((url) => publicUrl(url))
+              .map((url) => (
+                <a
+                  key={url}
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block underline text-sky-700 text-xs"
+                >
+                  Other official social profile: {url}
+                </a>
+              ))}
+            {factAlternatives.length > 0 && (
+              <details className="border border-slate-200 rounded-lg p-3">
+                <summary className="font-semibold cursor-pointer">
+                  Other recorded values
+                </summary>
+                <p className="text-sm my-3">
+                  Sources may describe different dates, sites or product
+                  variants; compare the evidence before choosing a value.
+                </p>
+                {factAlternatives.map((field) => (
+                  <div key={field.field_path} className="space-y-2 mb-4">
+                    <h4 className="font-semibold">{field.label}</h4>
+                    <ul className="list-disc pl-5 space-y-2">
+                      {field.observations.map((observation, index) => (
+                        <li key={index}>
+                          <span>{observation.value}</span>
+                          {observation.evidence_ids.map((id) => {
+                            const source = evidenceSources.find(
+                              (item) => item.evidence_id === id,
+                            );
+                            return source ? (
+                              <a
+                                key={id}
+                                href={publicUrl(source.source_url)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block underline text-sky-700 text-xs"
+                              >
+                                {source.source_title}
+                              </a>
+                            ) : null;
+                          })}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </details>
             )}
             <h4 className="font-semibold text-sm">Sources inspected</h4>
             {sources.length ? (

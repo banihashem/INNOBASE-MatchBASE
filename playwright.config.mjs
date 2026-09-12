@@ -1,4 +1,13 @@
 import { defineConfig } from "@playwright/test";
+import { assertDisposableTestDatabase } from "./packages/data/dist/test-database-safety.js";
+
+// Validate before any browser web-server command can migrate or seed a database.
+for (const name of Object.keys(process.env)) {
+  if (/OPENROUTER|API_KEY|^MATCHBASE_PROVIDER_/i.test(name))
+    delete process.env[name];
+}
+process.env.MATCHBASE_TEST_DATABASE_GUARD = "required";
+assertDisposableTestDatabase({ connectionString: process.env.DATABASE_URL });
 
 const testDeploymentId = `slice1-playwright-${process.pid}-${Date.now()}`;
 
@@ -53,6 +62,9 @@ export default defineConfig({
       env: {
         DATABASE_URL: process.env.DATABASE_URL ?? "",
         MATCHBASE_DATABASE_URL: process.env.DATABASE_URL ?? "",
+        MATCHBASE_TEST_DATABASE_GUARD: "required",
+        MATCHBASE_DISPOSABLE_TEST_DATABASE_URL:
+          process.env.MATCHBASE_DISPOSABLE_TEST_DATABASE_URL ?? "",
         MATCHBASE_ENVIRONMENT: "test",
         MATCHBASE_OIDC_SIMULATOR: "true",
         MATCHBASE_SYNTHETIC_FIXTURE: "true",
@@ -68,6 +80,10 @@ export default defineConfig({
       timeout: 30_000,
       env: {
         DATABASE_URL: process.env.DATABASE_URL ?? "",
+        MATCHBASE_DATABASE_URL: process.env.DATABASE_URL ?? "",
+        MATCHBASE_TEST_DATABASE_GUARD: "required",
+        MATCHBASE_DISPOSABLE_TEST_DATABASE_URL:
+          process.env.MATCHBASE_DISPOSABLE_TEST_DATABASE_URL ?? "",
         MATCHBASE_ENVIRONMENT: "test",
         MATCHBASE_SYNTHETIC_FIXTURE: "true",
         MATCHBASE_DIGEST_KEY: process.env.MATCHBASE_DIGEST_KEY ?? "",

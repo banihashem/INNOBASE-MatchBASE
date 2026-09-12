@@ -5,6 +5,7 @@ export function useConsultantReportDownloads(
   output: ConsultantResearchOutputV3 | null,
   runId: string | null,
   triggerToast: (message: string) => void,
+  reportUrl?: string,
 ) {
   const [isPdfDownloading, setIsPdfDownloading] = useState(false);
   // Action 5: JSON Export with toast confirmation (F14)
@@ -33,7 +34,8 @@ export function useConsultantReportDownloads(
     setIsPdfDownloading(true);
     try {
       const res = await fetch(
-        `/api/v1/consultant/reports/${targetRunId}/pdf${execution}`,
+        reportUrl ??
+          `/api/v1/consultant/reports/${encodeURIComponent(targetRunId)}/pdf${execution}`,
         {
           method: "GET",
           headers: {

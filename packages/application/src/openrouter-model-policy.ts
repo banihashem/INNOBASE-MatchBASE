@@ -93,6 +93,9 @@ export interface OpenRouterModelCapabilities {
   readonly endpoint_prices?: readonly Record<string, unknown>[];
 }
 export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
+  readonly recovery_message?: string;
+  readonly recovery_original_model?: string;
+  readonly recovery_next_model?: string;
   readonly recovery_attempt?: number;
   readonly max_recovery_attempts?: number;
   readonly recovery_scheduled?: boolean;
@@ -169,6 +172,17 @@ export interface LiveCallOptions {
   /** Conservative serialized-message byte budget used by the approved call guard. */
   readonly max_input_bytes?: number;
   readonly approved_rates?: readonly ResearchModelRate[];
+  /** Explicit alternatives priced in this round; legacy approvals have none. */
+  readonly approved_model_fallbacks?: Readonly<
+    Record<string, readonly string[]>
+  >;
+  readonly approved_search_engines?: Readonly<Record<string, "native" | "exa">>;
+  /** In-memory stage scope shared by transport and content-repair callers. */
+  readonly stage_recovery_state?: {
+    readonly remaining: () => number;
+    readonly attempt_limit: number;
+    readonly replacements: Map<string, string>;
+  };
   readonly max_output_tokens?: number;
   readonly reasoning_effort?: "high" | "low";
   readonly web_engine?: "native" | "exa";
@@ -1038,11 +1052,15 @@ export async function callOpenRouterCompletion(
         "MB-502-LIVE-RESPONSE",
         failure.error_type === "recitation"
           ? "Provider stopped this response for recitation. The blocked text is excluded; this response is not automatically retried."
-          : failure.kind === "provider_error"
-            ? "Provider generation was interrupted by a temporary upstream error."
-            : failure.kind === "refusal"
-              ? "Provider declined this response. It is excluded and is not automatically retried."
-              : "Provider returned an empty or incomplete response.",
+          : ["malformed_function_call", "unexpected_tool_call"].includes(
+                failure.error_type ?? "",
+              )
+            ? "Provider generated an invalid tool call. The incomplete response is excluded from research evidence."
+            : failure.kind === "provider_error"
+              ? "Provider generation was interrupted by a temporary upstream error."
+              : failure.kind === "refusal"
+                ? "Provider declined this response. It is excluded and is not automatically retried."
+                : "Provider returned an empty or incomplete response.",
         failure.kind === "provider_error" || failure.kind === "empty_response",
         auditedResponse,
       );
@@ -1118,10 +1136,16 @@ export function withLiveStageBudget(options: LiveCallOptions): {
   remaining: () => number;
 } {
   let remaining = liveRecoveryAttemptLimit(options);
+  const stageRecovery = {
+    remaining: () => remaining,
+    attempt_limit: remaining,
+    replacements: new Map<string, string>(),
+  };
   return {
     remaining: () => remaining,
     options: {
       ...options,
+      stage_recovery_state: stageRecovery,
       // Keep legacy calls without a guard ineligible for automatic retries.
       ...(options.before_call
         ? {
@@ -1182,6 +1206,37 @@ function transientCompletionFailure(error: unknown): boolean {
   );
 }
 
+function approvedRecoveryModel(
+  original: string,
+  current: string,
+  context: LiveCompletionContext,
+  options: LiveCallOptions,
+): string | undefined {
+  if (!options.before_call || current !== original) return undefined;
+  const alternatives = options.approved_model_fallbacks?.[original];
+  if (alternatives?.length !== 1 || alternatives[0] === original)
+    return undefined;
+  const candidate = alternatives[0]!;
+  const primary = options.approved_rates?.find(
+    (rate) => rate.model === original,
+  );
+  const replacement = options.approved_rates?.find(
+    (rate) => rate.model === candidate,
+  );
+  if (
+    !primary ||
+    !replacement ||
+    (primary.billing_mode ?? "byok") !== (replacement.billing_mode ?? "byok") ||
+    replacement.structured_outputs !== true ||
+    ((options.reasoning_effort ?? context.reasoning_effort ?? "high") ===
+      "high" &&
+      !replacement.reasoning) ||
+    (context.require_web && !options.approved_search_engines?.[candidate])
+  )
+    return undefined;
+  return candidate;
+}
+
 export async function runLiveCompletion(
   request: Omit<OpenRouterCompletionParams, "reasoning">,
   context: LiveCompletionContext,
@@ -1192,27 +1247,75 @@ export async function runLiveCompletion(
   );
   const signal = signals.length ? AbortSignal.any(signals) : undefined;
   const attempts = liveRecoveryAttemptLimit(options);
+  const stage = options.stage_recovery_state;
+  let model = stage?.replacements.get(request.model) ?? request.model;
   for (let attempt = 1; ; attempt++) {
     signal?.throwIfAborted();
+    const currentModel = model;
+    const replacementEngine = options.approved_search_engines?.[currentModel];
     try {
-      return await runLiveCompletionAttempt(request, context, {
-        ...options,
-        on_checkpoint: async (checkpoint) => {
-          await options.on_checkpoint?.({
-            ...checkpoint,
-            recovery_attempt: attempt,
-            max_recovery_attempts: attempts,
-            ...(checkpoint.recovery_scheduled && attempt < attempts
-              ? {
-                  message: `${context.phase} encountered a temporary provider failure. Retrying this stage (${attempt + 1} of ${attempts}) within the approved allowance.`,
-                }
-              : { recovery_scheduled: false }),
-          });
+      return await runLiveCompletionAttempt(
+        { ...request, model: currentModel },
+        context,
+        {
+          ...options,
+          ...(context.require_web &&
+          currentModel !== request.model &&
+          replacementEngine
+            ? { web_engine: replacementEngine }
+            : {}),
+          on_checkpoint: async (checkpoint) => {
+            const hasNext = Boolean(
+              checkpoint.recovery_scheduled &&
+              !signal?.aborted &&
+              (stage ? stage.remaining() > 0 : attempt < attempts),
+            );
+            const alternative = hasNext
+              ? approvedRecoveryModel(
+                  request.model,
+                  currentModel,
+                  context,
+                  options,
+                )
+              : undefined;
+            if (alternative) {
+              model = alternative;
+              stage?.replacements.set(request.model, alternative);
+            }
+            const actualAttempt = stage
+              ? Math.max(1, stage.attempt_limit - stage.remaining())
+              : attempt;
+            const totalAttempts = stage?.attempt_limit ?? attempts;
+            const recoveryMessage = hasNext
+              ? alternative
+                ? `${currentModel} could not complete this stage because of a technical failure. Continuing with the approved alternative ${alternative} (${actualAttempt + 1} of ${totalAttempts}) within this round's allowance.`
+                : `Retrying this stage with ${currentModel} (${actualAttempt + 1} of ${totalAttempts}) within this round's approved allowance.`
+              : currentModel !== request.model && checkpoint.state !== "failed"
+                ? `${checkpoint.state === "completed" ? "Completed" : "Continuing"} this stage with the approved alternative ${currentModel}. Original model: ${request.model}.`
+                : undefined;
+            await options.on_checkpoint?.({
+              ...checkpoint,
+              recovery_attempt: actualAttempt,
+              max_recovery_attempts: totalAttempts,
+              recovery_scheduled: hasNext,
+              ...(recoveryMessage
+                ? {
+                    message: recoveryMessage,
+                    recovery_message: recoveryMessage,
+                  }
+                : {}),
+              ...(alternative || currentModel !== request.model
+                ? { recovery_original_model: request.model }
+                : {}),
+              ...(hasNext ? { recovery_next_model: model } : {}),
+            });
+          },
         },
-      });
+      );
     } catch (error) {
       if (
         attempt >= attempts ||
+        (stage && stage.remaining() <= 0) ||
         signal?.aborted ||
         !transientCompletionFailure(error)
       )

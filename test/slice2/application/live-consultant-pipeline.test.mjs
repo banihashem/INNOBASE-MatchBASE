@@ -8,6 +8,7 @@ import {
   safePublicEvidenceUrl,
 } from "../../../packages/application/dist/openrouter-model-policy.js";
 import { LivePreparationModelGateway } from "../../../packages/application/dist/live-preparation.js";
+import { createRoundCallGuard } from "../../../packages/application/dist/consultant-research-cost.js";
 import { ResearchRoundFault } from "../../../packages/data/dist/consultant-research-rounds.js";
 import { synthesizeConsultantOutputV3 } from "../../../packages/application/dist/synthesis-engine.js";
 import {
@@ -1042,6 +1043,120 @@ const partialRound = {
   synthesis_model: "openai/gpt-5.2",
   candidate_limit_per_search: 10,
 };
+
+test("MB-UX-QUALITY-001 L09 round three replaces a failed web model without repeating focus or mutating earlier findings", async () => {
+  const first = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: partialRound,
+  });
+  const retained = JSON.stringify(first.continuation);
+  const primary = "google/gemini-3.8-flash";
+  const alternate = "openai/gpt-5.2";
+  const rates = [primary, alternate].map((model) => ({
+    model,
+    provider: model === primary ? "google-ai-studio" : "openai",
+    billing_mode: "byok",
+    structured_outputs: true,
+    reasoning: true,
+    input_usd_per_token: 0.000001,
+    output_usd_per_token: 0.000002,
+    request_usd: 0,
+    web_search_usd: 0.01,
+  }));
+  const plan = {
+    ...partialRound,
+    mode: "live",
+    round_number: 3,
+    depth: "deep",
+    research_models: [primary],
+    extraction_model: primary,
+    synthesis_model: primary,
+    model_fallbacks: { [primary]: [alternate] },
+    search_engines: { [primary]: "exa", [alternate]: "exa" },
+    search_engine: "exa",
+    rates,
+    max_calls: 24,
+    max_input_tokens_per_call: 240000,
+    max_output_tokens_per_call: 20000,
+    automatic_recovery_attempts: 3,
+    focus_analysis_required: true,
+    recovery_call_reserve: 6,
+    follow_up: { question: "Clarify offering evidence", lead_ids: [] },
+  };
+  const frozenPlan = JSON.stringify(plan);
+  let focusCalls = 0;
+  const webModels = [];
+  dispatch = (body) => {
+    if (body.response_format?.json_schema?.name === "research_focus_plan") {
+      focusCalls++;
+      return respond(
+        {
+          objective: "Clarify primary offering evidence",
+          question_summary: "Check retained company evidence",
+          priority_lead_ids: [],
+          search_tasks: ["Verify official company and offering sources"],
+          evidence_gaps: ["Current quote"],
+          scope_notes: ["Keep prior requirements"],
+        },
+        [],
+      );
+    }
+    if (body.plugins?.length) {
+      webModels.push(body.model);
+      assert.equal(body.plugins[0].engine, "exa");
+      assert.ok(JSON.parse(body.messages[1].content).focused_research_plan);
+      if (body.model === primary)
+        return respond("", [], {
+          choices: [
+            {
+              finish_reason: "error",
+              native_finish_reason: "MALFORMED_FUNCTION_CALL",
+              message: { content: "" },
+            },
+          ],
+        });
+    }
+    return respond(discovery());
+  };
+  const result = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: plan,
+    continuation: first.continuation,
+    approved_rates: rates,
+    automatic_recovery_attempts: 3,
+    max_output_tokens: 20000,
+    before_call: createRoundCallGuard(plan),
+  });
+  assert.equal(focusCalls, 1);
+  assert.deepEqual(webModels, [primary, alternate]);
+  assert.equal(result.stop_reason, "user_review");
+  assert.equal(result.verification_loops_completed, 3);
+  assert.equal(result.candidates.length, 1);
+  assert.equal(
+    result.candidates[0].supplier_entity_id,
+    first.candidates[0].supplier_entity_id,
+  );
+  assert.equal(JSON.stringify(first.continuation), retained);
+  assert.equal(JSON.stringify(plan), frozenPlan);
+  const failure = result.checkpoints.find(
+    (event) => event.phase === "verification" && event.state === "failed",
+  );
+  assert.equal(failure.provider_error_type, "malformed_function_call");
+  assert.equal(failure.recovery_next_model, alternate);
+  assert.match(
+    failure.recovery_message,
+    /approved alternative openai\/gpt-5\.2/,
+  );
+  assert.ok(
+    result.checkpoints.some(
+      (event) =>
+        event.phase === "verification" &&
+        event.state === "completed" &&
+        event.requested_model === alternate &&
+        event.recovery_attempt === 2,
+    ),
+  );
+});
 test("MB-UX-LIVE-001 L13 complementary same-company evidence survives a missing website in the next round", async () => {
   const unknown = { status: "unknown", source_urls: [], quote: "" };
   dispatch = () =>

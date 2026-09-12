@@ -16,6 +16,8 @@ export interface WorkflowProgress {
   recovery_attempt?: number;
   max_recovery_attempts?: number;
   recovery_scheduled?: boolean;
+  /** Server-authored recovery copy; raw provider diagnostics stay in support details. */
+  recovery_message?: string;
 }
 export function isProviderCredentialFailure(error: string): boolean {
   return /provider credential (?:is not accepted|was rejected)|invalid (?:api.?key|authentication credentials)|API key not valid|UNAUTHENTICATED/i.test(

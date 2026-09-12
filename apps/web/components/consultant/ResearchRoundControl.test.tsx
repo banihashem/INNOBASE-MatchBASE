@@ -4,6 +4,7 @@ import {
   screen,
   fireEvent,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ResearchRoundControl } from "./ResearchRoundControl";
@@ -59,6 +60,131 @@ const researchReview = {
   summary: { discovered: 4, documented: 3, needs_review: 1, excluded: 0 },
   changes: { new_leads: 1, promoted: 0 },
 };
+it("MB-UX-QUALITY-001 L09 discloses named technical recovery before approval and clears it when the model changes", async () => {
+  const actions: string[] = [];
+  const started = vi.fn();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.includes("view=model_choices"))
+        return Response.json({
+          choices: [{ model: "google/gemini" }, { model: "openai/gpt" }],
+        });
+      if (!options?.body)
+        return Response.json({ costs, rounds: [], next_round: 3 });
+      const body = JSON.parse(String(options.body));
+      actions.push(body.action);
+      return Response.json({
+        quote_id: "recovery-quote",
+        choices: [{ model: "google/gemini" }, { model: "openai/gpt" }],
+        plan: {
+          ...plan,
+          mode: "live",
+          round_number: 3,
+          research_models: ["google/gemini"],
+          model_fallbacks: { "google/gemini": ["openai/gpt"] },
+          automatic_recovery_attempts: 3,
+          recovery_call_reserve: 6,
+        },
+      });
+    }),
+  );
+  render(
+    <ResearchRoundControl
+      runId="recovery-run"
+      workflowState="workflow_failed"
+      onStarted={started}
+      onPreview={vi.fn()}
+    />,
+  );
+  await screen.findByRole("option", { name: "google/gemini" });
+  expect(actions).toEqual([]);
+  expect(screen.queryByText(/Automatic model recovery included/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /Get cost estimate/ }));
+  const disclosure = await screen.findByRole("region", {
+    name: "Model recovery included in this estimate",
+  });
+  expect(disclosure).toBeVisible();
+  expect(disclosure).toHaveTextContent(
+    "Primary: google/gemini · Alternative: openai/gpt",
+  );
+  expect(disclosure).toHaveTextContent("technical failure");
+  expect(disclosure).toHaveTextContent(
+    "Content refusals and access or payment restrictions do not trigger a model switch",
+  );
+  expect(disclosure).toHaveTextContent(
+    "same billing mode (BYOK or OpenRouter credits)",
+  );
+  expect(disclosure).toHaveTextContent("already included in this estimate");
+  expect(disclosure).toHaveTextContent("3 total attempts per step");
+  expect(disclosure).toHaveTextContent("reserve of 6 additional calls");
+  expect(disclosure).toHaveTextContent("No extra round starts automatically");
+  expect(within(disclosure).queryByRole("button")).toBeNull();
+  expect(actions).toEqual(["quote"]);
+  expect(started).not.toHaveBeenCalled();
+  expect(
+    screen.getByRole("button", {
+      name: "Approve cost estimate & start round 3",
+    }),
+  ).toBeEnabled();
+  fireEvent.change(screen.getByRole("combobox", { name: "Research model" }), {
+    target: { value: "openai/gpt" },
+  });
+  expect(
+    screen.queryByRole("region", {
+      name: "Model recovery included in this estimate",
+    }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: /Approve cost estimate/ }),
+  ).toBeNull();
+  expect(actions).toEqual(["quote"]);
+});
+
+it.each(["legacy", "demonstration"])(
+  "MB-UX-QUALITY-001 L09 never implies fallback consent for a %s estimate",
+  async (kind) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, options?: RequestInit) => {
+        if (url.includes("view=model_choices"))
+          return Response.json({ choices: [] });
+        if (!options?.body)
+          return Response.json({ costs, rounds: [], next_round: 3 });
+        return Response.json({
+          quote_id: "unchanged-quote",
+          choices: [],
+          plan: {
+            ...plan,
+            round_number: 3,
+            mode: kind === "demonstration" ? "demonstration" : "live",
+            ...(kind === "demonstration"
+              ? { model_fallbacks: { "google/gemini": ["openai/gpt"] } }
+              : {}),
+          },
+        });
+      }),
+    );
+    render(
+      <ResearchRoundControl
+        runId="unchanged-run"
+        workflowState="workflow_complete"
+        onStarted={vi.fn()}
+        onPreview={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Get cost estimate/ }),
+    );
+    await screen.findByRole("button", { name: /Approve cost estimate/ });
+    expect(
+      screen.queryByRole("region", {
+        name: "Model recovery included in this estimate",
+      }),
+    ).toBeNull();
+  },
+);
+
 it("MB-UX-QUALITY-001 L07 loads Gemini and DeepSeek before a later-round estimate and again after reopening", async () => {
   const actions: Record<string, unknown>[] = [];
   const catalogRuns: string[] = [];

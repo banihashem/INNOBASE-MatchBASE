@@ -579,7 +579,38 @@ export async function buildResearchRoundPlan(input: {
       : input.round_number > 1 && input.depth === "deep"
         ? selected!.model
         : configured.synthesis;
-  const rateIds = [...new Set([...research, synthesis, extraction])];
+  // A fallback is part of a new quote, never an extension of historical consent.
+  // Keep its billing mode unchanged and prefer an independent model family.
+  const fallbackRate =
+    input.mode === "live" && input.round_number > 1 && selected
+      ? [...ranked]
+          .filter(
+            (rate) =>
+              rate.model !== selected.model &&
+              rate.structured_outputs === true &&
+              (input.depth !== "deep" || rate.reasoning) &&
+              (rate.billing_mode ?? "byok") ===
+                (selected.billing_mode ?? "byok"),
+          )
+          .sort(
+            (a, b) =>
+              Number(b.model.split("/")[0] !== selected.model.split("/")[0]) -
+                Number(
+                  a.model.split("/")[0] !== selected.model.split("/")[0],
+                ) || qualityOrder(a, b),
+          )[0]
+      : undefined;
+  const modelFallbacks = fallbackRate
+    ? { [selected!.model]: [fallbackRate.model] }
+    : undefined;
+  const rateIds = [
+    ...new Set([
+      ...research,
+      synthesis,
+      extraction,
+      ...(fallbackRate ? [fallbackRate.model] : []),
+    ]),
+  ];
   const rates =
     input.mode === "demonstration"
       ? []
@@ -619,8 +650,14 @@ export async function buildResearchRoundPlan(input: {
       "Default research requires Google/OpenAI BYOK models for discovery, extraction and synthesis. Review the configured synthesis model.",
     );
   const native = input.round_number === 1;
+  const approvedSearchModels = [
+    ...new Set([
+      ...research,
+      ...research.flatMap((model) => modelFallbacks?.[model] ?? []),
+    ]),
+  ];
   const searchEngines = Object.fromEntries(
-    research.map((model) => [
+    approvedSearchModels.map((model) => [
       model,
       native
         ? researchSearchEngineForModel(
@@ -664,6 +701,26 @@ export async function buildResearchRoundPlan(input: {
     actualRates.find((r) => r.model === synthesis),
     ...Array.from({ length: recoveryReserve }, () => conservativeRetryRate),
   ];
+  const highRatesForCalls = ratesForCalls.map((rate) => {
+    if (!rate || !("model" in rate)) return rate;
+    const alternatives = modelFallbacks?.[rate.model as string] ?? [];
+    const applicable = actualRates.filter(
+      (candidate) =>
+        candidate.model === rate.model ||
+        alternatives.includes(candidate.model),
+    );
+    return {
+      input_usd_per_token: Math.max(
+        ...applicable.map((candidate) => candidate.input_usd_per_token),
+      ),
+      output_usd_per_token: Math.max(
+        ...applicable.map((candidate) => candidate.output_usd_per_token),
+      ),
+      request_usd: Math.max(
+        ...applicable.map((candidate) => candidate.request_usd),
+      ),
+    };
+  });
   const webAllowance = (model: string, engine: "native" | "exa") =>
     engine === "exa"
       ? 0.007
@@ -681,13 +738,15 @@ export async function buildResearchRoundPlan(input: {
     recoveryReserve *
       Math.max(
         0.007,
-        ...research.map((model) => webAllowance(model, searchEngines[model]!)),
+        ...approvedSearchModels.map((model) =>
+          webAllowance(model, searchEngines[model]!),
+        ),
       );
   const estimate = (high: boolean) =>
     input.mode === "demonstration"
       ? 0
       : precise(
-          ratesForCalls.reduce(
+          (high ? highRatesForCalls : ratesForCalls).reduce(
             (sum, r) =>
               sum +
               (r
@@ -735,6 +794,7 @@ export async function buildResearchRoundPlan(input: {
           : purposes[input.round_number - 1]!,
       focus_requirements: normalizeResearchGaps(input.focus_requirements),
       research_models: research,
+      ...(modelFallbacks ? { model_fallbacks: modelFallbacks } : {}),
       extraction_model: extraction,
       synthesis_model: synthesis,
       search_engine: native ? "native" : "exa",
@@ -761,6 +821,15 @@ export async function buildResearchRoundPlan(input: {
       expires_at: new Date(now.getTime() + 15 * 60000).toISOString(),
       rates: actualRates,
       assumptions: [
+        ...(fallbackRate
+          ? [
+              `Automatic technical recovery may use ${fallbackRate.model} through ${fallbackRate.provider} (${fallbackRate.billing_mode ?? "byok"}) instead of ${selected!.model}, using Exa for web research. The estimate includes six shared recovery calls and at most three total attempts per stage within the total call allowance. The high estimate prices affected stage calls and the recovery reserve at the highest applicable primary or alternative rates. Refusals, safety blocks, authentication, billing, permission, cancellation and approval failures never authorize substitution. No following round starts automatically.`,
+            ]
+          : input.mode === "live" && input.round_number > 1
+            ? [
+                "No compatible same-billing alternative is available in this estimate. Technical recovery retains the selected model within the existing attempt and call allowances; any other model requires a new estimate and approval.",
+              ]
+            : []),
         ...(input.round_number > 1
           ? [
               "This estimate includes one AI analysis of your follow-up and saved findings before focused web research. Editing the question does not call a model. Original requirements and all prior round results remain preserved.",
@@ -787,6 +856,48 @@ export function createRoundCallGuard(
   plan: ResearchRoundPlan,
   previouslyConsumedCalls = 0,
 ) {
+  const primaryModels = new Set([
+    ...plan.research_models,
+    plan.extraction_model,
+    plan.synthesis_model,
+  ]);
+  const approvedFallbacks = new Map<string, string>();
+  for (const [primary, alternatives] of Object.entries(
+    plan.model_fallbacks ?? {},
+  )) {
+    const alternative = alternatives?.[0];
+    const primaryRate = plan.rates.find((rate) => rate.model === primary);
+    const alternativeRate = plan.rates.find(
+      (rate) => rate.model === alternative,
+    );
+    if (
+      plan.mode !== "live" ||
+      plan.round_number < 2 ||
+      (plan.automatic_recovery_attempts ?? 1) <= 1 ||
+      (plan.recovery_call_reserve ?? 0) < 1 ||
+      !primaryModels.has(primary) ||
+      !Array.isArray(alternatives) ||
+      alternatives.length !== 1 ||
+      typeof alternative !== "string" ||
+      alternative === primary ||
+      !primaryRate ||
+      !alternativeRate ||
+      primaryRate.structured_outputs !== true ||
+      alternativeRate.structured_outputs !== true ||
+      (plan.depth === "deep" &&
+        (!primaryRate.reasoning || !alternativeRate.reasoning)) ||
+      (primaryRate.billing_mode ?? "byok") !==
+        (alternativeRate.billing_mode ?? "byok") ||
+      (plan.research_models.includes(primary) &&
+        !["native", "exa"].includes(plan.search_engines?.[alternative] ?? ""))
+    )
+      throw new ResearchRoundFault(
+        409,
+        "MB-409-ROUND-FALLBACK",
+        "The recovery alternative is not covered by a compatible priced approval. Review a new estimate before further work.",
+      );
+    approvedFallbacks.set(primary, alternative);
+  }
   if (
     !Number.isSafeInteger(previouslyConsumedCalls) ||
     previouslyConsumedCalls < 0
@@ -798,9 +909,14 @@ export function createRoundCallGuard(
     );
   let calls = previouslyConsumedCalls;
   return async (request: OpenRouterCompletionParams, web: boolean) => {
-    const allowed = web
+    const primaryAllowed = web
       ? plan.research_models
       : [plan.extraction_model, plan.synthesis_model];
+    // One hop only. Pricing a model does not authorize it for every role.
+    const allowed = primaryAllowed.flatMap((model) => [
+      model,
+      ...(approvedFallbacks.has(model) ? [approvedFallbacks.get(model)!] : []),
+    ]);
     const rate = plan.rates.find((r) => r.model === request.model);
     if (
       plan.mode === "live" &&

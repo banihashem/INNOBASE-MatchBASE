@@ -144,6 +144,19 @@ export function classifyResponseFailure(input: {
     classifications.some((entry) => entry.kind === "refusal")
   )
     return { kind: "refusal", error_type: "refusal" };
+  // L09: these provider generation defects are technical tool-call failures,
+  // not consent or content-policy decisions. Mixed unknown/restricted errors
+  // remain terminal instead of gaining retry authority from a native reason.
+  if (
+    ["MALFORMED_FUNCTION_CALL", "UNEXPECTED_TOOL_CALL"].includes(
+      input.native_finish_reason ?? "",
+    ) &&
+    classifications.every((entry) => entry.kind === "provider_error")
+  )
+    return {
+      kind: "provider_error",
+      error_type: input.native_finish_reason!.toLowerCase(),
+    };
   if (
     input.native_finish_reason &&
     input.native_finish_reason !== "STOP" &&

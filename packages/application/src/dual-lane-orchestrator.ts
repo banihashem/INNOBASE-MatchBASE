@@ -251,6 +251,12 @@ export async function executeDualLaneResearch(
   const reviewedAt = new Map<string, number>();
   const callback: LiveCallOptions = {
     ...options,
+    ...(options.round_plan
+      ? {
+          approved_model_fallbacks: options.round_plan.model_fallbacks,
+          approved_search_engines: options.round_plan.search_engines,
+        }
+      : {}),
     ...(options.signal ? { signal: options.signal } : {}),
     on_checkpoint: async (checkpoint) => {
       checkpoints.push(checkpoint);

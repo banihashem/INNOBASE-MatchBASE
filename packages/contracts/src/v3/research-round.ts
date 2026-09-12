@@ -30,6 +30,8 @@ export interface ResearchRoundPlan {
   purpose: string;
   focus_requirements: string[];
   research_models: string[];
+  /** Fresh follow-up approval only: one named, priced, same-billing recovery alternative per primary. */
+  model_fallbacks?: Record<string, string[]>;
   extraction_model: string;
   synthesis_model: string;
   search_engine: "native" | "exa";

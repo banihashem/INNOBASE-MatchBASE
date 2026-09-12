@@ -192,9 +192,11 @@ test("MB-UX-LIVE-001 L15 transport and structural retry layers share a three-cal
   assert.equal(budget.remaining(), 1);
   // The outer schema validator requests another attempt after the first
   // successful transport returned malformed JSON. Only one call remains.
+  // L09: retain the final provider failure instead of a fourth no-dispatch
+  // guard failure overwriting its cause; the shared three-call ceiling holds.
   await assert.rejects(
     runLiveCompletion(request, { phase: "synthesis", loop: 1 }, budget.options),
-    { code: "MB-409-STAGE-ALLOWANCE" },
+    { code: "MB-502-LIVE-PROVIDER" },
   );
   assert.equal(budget.remaining(), 0);
   assert.equal(fixture.calls.length, 3);

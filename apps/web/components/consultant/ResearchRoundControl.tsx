@@ -271,6 +271,9 @@ export function ResearchRoundControl({
   const expired = quote
     ? new Date(quote.plan.expires_at).getTime() <= Date.now()
     : false;
+  const modelFallbacks = Object.entries(
+    quote?.plan.model_fallbacks ?? {},
+  ).filter(([, alternatives]) => alternatives.length > 0);
   const costs = overview?.costs;
   const review = historicalReview
     ? historicalReview.review
@@ -722,6 +725,48 @@ export function ResearchRoundControl({
                     An estimate, not a guaranteed spending cap. Valid until{" "}
                     {new Date(quote.plan.expires_at).toLocaleTimeString()}.
                   </p>
+                  {quote.plan.mode === "live" && modelFallbacks.length > 0 && (
+                    <section
+                      aria-label="Model recovery included in this estimate"
+                      className="rounded-lg border border-sky-700 bg-sky-950/30 p-3 text-sm space-y-2"
+                    >
+                      <h5 className="font-semibold">
+                        Automatic model recovery included
+                      </h5>
+                      <p>
+                        If a technical failure interrupts a step, this round may
+                        continue with the named alternative below. Content
+                        refusals and access or payment restrictions do not
+                        trigger a model switch.
+                      </p>
+                      <ul className="space-y-1 break-words">
+                        {modelFallbacks.map(([primary, alternatives]) => (
+                          <li key={primary}>
+                            Primary: {primary} · Alternative:{" "}
+                            {alternatives.join(", ")}
+                          </li>
+                        ))}
+                      </ul>
+                      <p>
+                        The alternative uses the same billing mode (BYOK or
+                        OpenRouter credits) as its primary model. BYOK models
+                        use their own configured provider keys. Recovery calls
+                        are already included in this estimate and the round’s
+                        call allowance; they are recorded in your costs. No
+                        extra round starts automatically.
+                      </p>
+                      {quote.plan.automatic_recovery_attempts &&
+                        quote.plan.recovery_call_reserve && (
+                          <p>
+                            Up to {quote.plan.automatic_recovery_attempts} total
+                            attempts per step, including the first attempt.
+                            Recovery shares a reserve of{" "}
+                            {quote.plan.recovery_call_reserve} additional calls
+                            across this round.
+                          </p>
+                        )}
+                    </section>
+                  )}
                   {quote.plan.mode !== "demonstration" &&
                     quote.plan.rates?.some(
                       (rate) => rate.billing_mode === "openrouter_credits",

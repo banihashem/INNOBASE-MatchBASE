@@ -11,6 +11,48 @@ const started = {
   failed: 0,
   updated_at: "2026-09-09T10:00:00Z",
 };
+it("MB-UX-QUALITY-001 L09 shows server-confirmed model recovery without promoting raw provider errors", () => {
+  const recoveryMessage =
+    "Continuing this step with openai/gpt, the approved alternative to google/gemini. No extra round starts.";
+  const progress = {
+    phase: "verification_selected",
+    loop: 3,
+    recovery_attempt: 2,
+    max_recovery_attempts: 3,
+    recovery_scheduled: true,
+    recovery_message: recoveryMessage,
+    message: "MB-502 raw provider exception belongs in support only",
+  };
+  const { rerender } = render(
+    <WorkflowActivity state="verification_loop_running" progress={progress} />,
+  );
+  expect(screen.getByText(recoveryMessage)).toBeVisible();
+  expect(screen.getByText(/Research step recovery/)).toHaveTextContent(
+    "Attempt 2 of 3",
+  );
+  expect(
+    screen.getByText(/Previous round results and selected leads/),
+  ).toHaveTextContent("approved round allowance");
+  for (const status of screen.getAllByRole("status"))
+    expect(status).not.toHaveTextContent("MB-502");
+  expect(screen.getByLabelText("Current operation")).not.toHaveTextContent(
+    "MB-502",
+  );
+  expect(screen.getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
+  rerender(
+    <WorkflowActivity
+      state="verification_loop_running"
+      progress={progress}
+      connectionError="Disconnected"
+    />,
+  );
+  expect(screen.queryByText(recoveryMessage)).toBeNull();
+  expect(screen.queryByText(/Research step recovery/)).toBeNull();
+  rerender(<WorkflowActivity state="workflow_failed" progress={progress} />);
+  expect(screen.queryByText(recoveryMessage)).toBeNull();
+  expect(screen.queryByText(/Research step recovery/)).toBeNull();
+});
+
 it("MB-UX-QUALITY-001 L05 shows bounded focus recovery with retained prior results", () => {
   const { rerender } = render(
     <WorkflowActivity

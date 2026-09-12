@@ -72,6 +72,9 @@ export interface ConsultantWorkflowProgress {
   recovery_attempt?: number;
   max_recovery_attempts?: number;
   recovery_scheduled?: boolean;
+  recovery_message?: string;
+  recovery_original_model?: string;
+  recovery_next_model?: string;
 }
 
 export interface ConsultantIntakeSubmission {
@@ -1321,6 +1324,23 @@ function createWorkflowCheckpoint(
           : {}),
         ...(typeof event.recovery_scheduled === "boolean"
           ? { recovery_scheduled: event.recovery_scheduled }
+          : {}),
+        ...(typeof event.recovery_message === "string" &&
+        event.recovery_message.length > 0 &&
+        event.recovery_message.length <= 600 &&
+        Array.from(event.recovery_message as string).every(
+          (character) =>
+            character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127,
+        )
+          ? { recovery_message: event.recovery_message }
+          : {}),
+        ...(typeof event.recovery_original_model === "string" &&
+        /^[a-z0-9][a-z0-9._:/-]{0,199}$/i.test(event.recovery_original_model)
+          ? { recovery_original_model: event.recovery_original_model }
+          : {}),
+        ...(typeof event.recovery_next_model === "string" &&
+        /^[a-z0-9][a-z0-9._:/-]{0,199}$/i.test(event.recovery_next_model)
+          ? { recovery_next_model: event.recovery_next_model }
           : {}),
       };
       if (phase.includes("verification"))

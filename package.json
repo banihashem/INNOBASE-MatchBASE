@@ -106,7 +106,7 @@
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.62.1",
-    "@secretlint/quick-start": "13.0.4",
+    "@secretlint/quick-start": "13.0.5",
     "oxlint": "1.78.0",
     "prettier": "3.9.6",
     "secretlint": "13.0.4",

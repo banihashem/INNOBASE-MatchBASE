@@ -607,6 +607,38 @@ export async function executeDualLaneResearch(
     ),
   );
   if (failed?.status === "rejected") {
+    // Preserve independently completed searches when one audited native path
+    // has a provider generation error or a confirmed recitation block. This
+    // neither retries a refusal nor uses the blocked response as evidence.
+    // Other refusals, authorization/audit and persistence failures stay terminal.
+    const independentNativeFailure = (error: unknown, index: number) => {
+      if (
+        !(error instanceof LiveResearchError) ||
+        error.code !== "MB-502-LIVE-RESPONSE" ||
+        !error.audited_response
+      )
+        return false;
+      const response = error.audited_response;
+      const kind = response.response_failure_kind;
+      const recitation =
+        kind === "refusal" &&
+        response.native_finish_reason === "RECITATION" &&
+        response.provider_error_type === "recitation";
+      return (
+        (kind === "provider_error" || recitation) &&
+        checkpoints.some(
+          (checkpoint) =>
+            checkpoint.request_id === response.request_id &&
+            checkpoint.phase === discoveryPhases[index] &&
+            checkpoint.state === "failed" &&
+            checkpoint.dispatched === true &&
+            checkpoint.response_failure_kind === kind &&
+            (!recitation ||
+              (checkpoint.native_finish_reason === "RECITATION" &&
+                checkpoint.provider_error_type === "recitation")),
+        )
+      );
+    };
     // L10: a validated sibling may still produce useful round-one results.
     // Only native-discovery output exhaustion is recoverable here. Extraction,
     // validation, consent, cancellation and persistence failures stay terminal.
@@ -635,8 +667,9 @@ export async function executeDualLaneResearch(
       options.round_plan?.round_number === 1 &&
       successful.length > 0 &&
       discovery.every(
-        (entry) =>
+        (entry, index) =>
           entry.status === "fulfilled" ||
+          independentNativeFailure(entry.reason, index) ||
           recoverableExtractionFailure(entry.reason) ||
           (entry.reason instanceof LiveResearchError &&
             [
@@ -647,7 +680,7 @@ export async function executeDualLaneResearch(
             ].includes(entry.reason.code)),
       );
     if (!legacyPartialAllowed && !recoveryPartialAllowed) throw failed.reason;
-    for (const entry of discovery) {
+    for (const [index, entry] of discovery.entries()) {
       if (entry.status !== "rejected") continue;
       const response = (entry.reason as LiveResearchError).audited_response;
       if (
@@ -655,8 +688,13 @@ export async function executeDualLaneResearch(
         !calls.some((call) => call.request_id === response.request_id)
       )
         calls.push(response);
+      const failureDescription = independentNativeFailure(entry.reason, index)
+        ? response?.native_finish_reason === "RECITATION"
+          ? "was stopped by the provider's recitation protection; that response is excluded from evidence and was not retried"
+          : "ended with a provider generation error; its incomplete response is excluded from evidence"
+        : "could not complete within its approved allowance";
       coverageGaps.push(
-        `Partial research coverage: ${response?.requested_model ?? response?.model ?? "An approved search path"} could not complete within its approved allowance. ${successful.length} of ${discovery.length} approved discovery paths completed extraction. Only supported findings are included; independent cross-checking is incomplete. All recorded attempts count toward usage. Additional research requires a new estimate and approval.`,
+        `Partial research coverage: ${response?.requested_model ?? response?.model ?? "An approved search path"} ${failureDescription}. ${successful.length} of ${discovery.length} approved discovery paths completed extraction. Only supported findings are included; independent cross-checking is incomplete. All recorded attempts count toward usage. Additional research requires a new estimate and approval.`,
       );
     }
   }

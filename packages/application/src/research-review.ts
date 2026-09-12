@@ -9,7 +9,10 @@ import {
   type CandidateIndex,
 } from "./native-candidate-index.js";
 import { researchCitationInventory } from "./research-source-context.js";
-import type { OpenRouterCompletionResult } from "./openrouter-model-policy.js";
+import type {
+  LiveResearchCheckpoint,
+  OpenRouterCompletionResult,
+} from "./openrouter-model-policy.js";
 
 export interface CollectedResearchLead {
   lead_id: string;
@@ -231,19 +234,23 @@ export async function hydrateResearchContinuation(
   }
   const events = await db.query<{
     phase: string;
-    detail: {
-      response_content?: string;
-      response_citations?: {
-        url: string;
-        title: string;
-        content_excerpt?: string;
-      }[];
-    };
+    detail: Partial<LiveResearchCheckpoint>;
   }>(
     `SELECT phase,detail FROM consultant_workflow_event WHERE account_id=$1 AND run_id=$2 AND execution_id=$3 AND detail ? 'response_content' ORDER BY event_id`,
     [round.account_id, round.run_id, round.execution_id],
   );
-  const native = events.rows.filter(
+  // Raw failed responses remain in the audit history, never in follow-up
+  // grounding. A completed index can still retain an incomplete research lead
+  // when its subsequent supplier-details extraction failed.
+  const completed = events.rows.filter(
+    ({ detail }) =>
+      detail.state === "completed" &&
+      !detail.response_failure_kind &&
+      (!detail.finish_reason || detail.finish_reason === "stop") &&
+      (!detail.native_finish_reason ||
+        detail.native_finish_reason.toUpperCase() === "STOP"),
+  );
+  const native = completed.filter(
     (event) =>
       /^(discovery|verification)/.test(event.phase) &&
       !event.phase.includes("extraction"),
@@ -276,7 +283,7 @@ export async function hydrateResearchContinuation(
     })),
   };
   let leads: CollectedResearchLead[] = ancestorLeads;
-  for (const event of events.rows.filter((item) =>
+  for (const event of completed.filter((item) =>
     item.phase.endsWith("extraction_index"),
   )) {
     try {

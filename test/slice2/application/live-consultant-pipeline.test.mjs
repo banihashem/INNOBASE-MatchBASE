@@ -1209,6 +1209,432 @@ test("MB-UX-LIVE-001 L10 two exhausted discovery paths cannot publish or start s
   assert.equal(requests.length, 2);
 });
 
+const generationFailureResponse = (finishReason = "error", extra = {}) =>
+  respond(
+    "An ungrounded unfinished supplier claim must never be published",
+    [],
+    {
+      choices: [
+        {
+          finish_reason: finishReason,
+          ...(finishReason === "error"
+            ? {
+                error: {
+                  code: 502,
+                  metadata: { error_type: "provider_unavailable" },
+                },
+              }
+            : {}),
+          message: {
+            content:
+              "An ungrounded unfinished supplier claim must never be published",
+            annotations: [],
+          },
+        },
+      ],
+      usage: {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        cost: 0,
+        cost_details: { upstream_inference_cost: 0.02 },
+      },
+      ...extra,
+    },
+  );
+
+test("MB-UX-QUALITY-001 L08 exhausted Gemini generation errors retain independently completed evidence and billed attempts", async () => {
+  dispatch = (body) =>
+    body.plugins?.length && body.model.startsWith("google/")
+      ? generationFailureResponse()
+      : respond(discovery());
+  let reservations = 0;
+  const result = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: partialRound,
+    automatic_recovery_attempts: 3,
+    before_call: async () => {
+      assert.ok(++reservations <= 7, "No unapproved call can be dispatched");
+    },
+  });
+  assert.equal(requests.length, 7);
+  assert.equal(reservations, 7);
+  assert.equal(
+    requests.filter(
+      (body) => body.plugins?.length && body.model.startsWith("google/"),
+    ).length,
+    3,
+  );
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].legal_name, "Acme Industrial");
+  assert.equal(result.continuation.roster.length, 1);
+  assert.equal(result.lane_g_result.finish_reason, "error");
+  assert.equal(result.lane_o_result.finish_reason, "stop");
+  assert.equal(result.total_input_tokens, 40);
+  assert.equal(result.total_output_tokens, 80);
+  assert.ok(Math.abs(result.total_cost_usd - 0.18) < 1e-9);
+  assert.equal(result.executed_models.length, 7);
+  assert.match(result.synthesis_summary, /provider generation error/);
+  assert.match(result.synthesis_summary, /1 of 2 approved discovery paths/);
+  assert.match(
+    result.synthesis_summary,
+    /incomplete response is excluded from evidence/,
+  );
+  assert.doesNotMatch(
+    JSON.stringify(result.evidence_sources),
+    /ungrounded unfinished/,
+  );
+  assert.doesNotMatch(JSON.stringify(result.claims), /ungrounded unfinished/);
+  assert.equal(
+    result.checkpoints.filter(
+      (event) =>
+        event.phase === "discovery_gemini" &&
+        event.state === "failed" &&
+        event.response_failure_kind === "provider_error",
+    ).length,
+    3,
+  );
+  const output = synthesizeConsultantOutputV3({
+    user_profile_id: randomUUID(),
+    research_run_id: randomUUID(),
+    execution_id: randomUUID(),
+    classification_id: randomUUID(),
+    product_name: "Pump",
+    product_category: "Pumps",
+    dual_lane_result: result,
+  });
+  assert.equal(output.research_status, "partial");
+  assert.ok(
+    output.limitations_and_disclosures.some(
+      (item) =>
+        item.title === "Partial research coverage" &&
+        item.severity === "critical",
+    ),
+  );
+});
+
+test("MB-UX-QUALITY-001 L08 all failed generation paths cannot fabricate a partial result", async () => {
+  dispatch = () => generationFailureResponse();
+  await assert.rejects(
+    executeDualLaneResearch(intake, {
+      mode: "live",
+      round_plan: partialRound,
+      automatic_recovery_attempts: 3,
+      before_call: async () => {},
+    }),
+    { code: "MB-502-LIVE-RESPONSE" },
+  );
+  assert.equal(requests.length, 6);
+  assert.ok(requests.every((body) => body.plugins?.length));
+});
+
+test("MB-UX-QUALITY-001 L08 Ultra preserves four completed families without retrying a Gemini recitation block", async () => {
+  const extraModels = [
+    ["anthropic/claude-sonnet-5", "anthropic", "Anthropic"],
+    ["deepseek/deepseek-v4-pro-0813", "ionstream", "Ionstream"],
+    ["x-ai/grok-4.20", "xai", "xAI"],
+  ];
+  const familyById = new Map(extraModels.map((entry) => [entry[0], entry]));
+  const parameters = ["max_tokens", "reasoning", "structured_outputs"];
+  const pricing = { prompt: "0.000001", completion: "0.000002" };
+  const fixtureFetch = globalThis.fetch;
+  dispatch = (body) =>
+    body.plugins?.length && body.model.startsWith("google/")
+      ? generationFailureResponse("error", {
+          id: "generation-gemini-recitation",
+          choices: [
+            {
+              finish_reason: "error",
+              message: {
+                content:
+                  "An ungrounded unfinished supplier claim must never be published",
+                annotations: [],
+              },
+            },
+          ],
+        })
+      : respond(discovery());
+  globalThis.fetch = async (target, options) => {
+    const address = String(target);
+    if (address.endsWith("/models/user")) {
+      const data = await (await fixtureFetch(target, options)).json();
+      data.data.push(
+        ...extraModels.map(([id]) => ({
+          id,
+          supported_parameters: parameters,
+        })),
+      );
+      return Response.json(data);
+    }
+    if (address.endsWith("/endpoints/zdr"))
+      return Response.json({
+        data: extraModels.map(([model_id, tag]) => ({ model_id, tag })),
+      });
+    if (address.endsWith("/endpoints")) {
+      const family = extraModels.find(([id]) =>
+        address.includes(`/models/${id}/`),
+      );
+      if (family) {
+        const [model_id, tag, provider_name] = family;
+        return Response.json({
+          data: {
+            endpoints: [
+              {
+                model_id,
+                tag,
+                provider_name,
+                status: 0,
+                pricing,
+                name: `${provider_name} | ${model_id}`,
+                supported_parameters: parameters,
+              },
+            ],
+          },
+        });
+      }
+    }
+    if (address.includes("/generation?")) {
+      const id = new URL(address).searchParams.get("id");
+      if (id === "generation-gemini-recitation")
+        return Response.json({
+          data: {
+            id,
+            model: "google/gemini-3.8-flash",
+            provider_name: "Google AI Studio",
+            is_byok: true,
+            upstream_inference_cost: 0.02,
+            finish_reason: "error",
+            native_finish_reason: "RECITATION",
+            cancelled: false,
+            tokens_prompt: 100,
+            tokens_completion: 50,
+          },
+        });
+      const family = extraModels.find(
+        ([model]) => id === `generation-${model}`,
+      );
+      if (family)
+        return Response.json({
+          data: {
+            id,
+            model: family[0],
+            provider_name: family[2],
+            is_byok: false,
+            total_cost: 0.01,
+          },
+        });
+    }
+    const response = await fixtureFetch(target, options);
+    if (address.endsWith("/chat/completions")) {
+      const body = JSON.parse(options.body);
+      const family = familyById.get(body.model);
+      if (family) {
+        const envelope = await response.json();
+        envelope.id = `generation-${body.model}`;
+        envelope.model = body.model;
+        envelope.provider = family[2];
+        envelope.openrouter_metadata = { is_byok: false };
+        envelope.usage = {
+          prompt_tokens: 10,
+          completion_tokens: 20,
+          cost: 0.01,
+        };
+        return Response.json(envelope);
+      }
+    }
+    return response;
+  };
+  const researchModels = [
+    ...partialRound.research_models,
+    ...extraModels.map(([id]) => id),
+  ];
+  let reservations = 0;
+  const result = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: {
+      ...partialRound,
+      research_models: researchModels,
+      search_engines: Object.fromEntries(
+        researchModels.map((id) => [id, familyById.has(id) ? "exa" : "native"]),
+      ),
+    },
+    automatic_recovery_attempts: 3,
+    approved_rates: extraModels.map(
+      ([model, provider, provider_display_name]) => ({
+        model,
+        provider,
+        provider_display_name,
+        billing_mode: "openrouter_credits",
+        input_usd_per_token: 0.000001,
+        output_usd_per_token: 0.000002,
+        request_usd: 0,
+        web_search_usd: 0,
+        reasoning: true,
+        source_url: `https://openrouter.ai/api/v1/models/${model}/endpoints`,
+      }),
+    ),
+    before_call: async () => {
+      assert.ok(++reservations <= 14, "Only approved independent work can run");
+    },
+  });
+  assert.equal(requests.length, 14);
+  assert.equal(reservations, 14);
+  assert.equal(
+    requests.filter(
+      (body) => body.plugins?.length && body.model.startsWith("google/"),
+    ).length,
+    1,
+  );
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.lane_g_result.native_finish_reason, "RECITATION");
+  assert.match(result.synthesis_summary, /recitation protection/);
+  assert.match(result.synthesis_summary, /was not retried/);
+  assert.match(result.synthesis_summary, /4 of 5 approved discovery paths/);
+  assert.doesNotMatch(JSON.stringify(result.claims), /ungrounded unfinished/);
+  for (const phase of ["openai", "anthropic", "deepseek", "xai"])
+    assert.ok(
+      result.checkpoints.some(
+        (event) =>
+          event.phase === `discovery_${phase}_extraction_batch` &&
+          event.state === "completed",
+      ),
+    );
+  const failed = result.checkpoints.find(
+    (event) => event.phase === "discovery_gemini" && event.state === "failed",
+  );
+  assert.equal(failed.response_failure_kind, "refusal");
+  assert.equal(failed.recovery_scheduled, false);
+  assert.equal(failed.is_byok, true);
+  for (const [model] of extraModels) {
+    const actual = result.checkpoints.find(
+      (event) => event.requested_model === model && event.state === "completed",
+    );
+    assert.equal(actual.is_byok, false);
+    assert.equal(actual.cost_usd, 0.01);
+  }
+});
+
+test("MB-UX-QUALITY-001 L08 refused or unsupported native responses remain terminal despite a completed sibling", async () => {
+  for (const finishReason of [
+    "content_filter",
+    "tool_calls",
+    "unknown_finish",
+  ]) {
+    requests = [];
+    dispatch = (body) =>
+      body.plugins?.length && body.model.startsWith("google/")
+        ? generationFailureResponse(finishReason)
+        : respond(discovery());
+    await assert.rejects(
+      executeDualLaneResearch(intake, {
+        mode: "live",
+        round_plan: partialRound,
+        automatic_recovery_attempts: 3,
+        before_call: async () => {},
+      }),
+      { code: "MB-502-LIVE-RESPONSE" },
+    );
+    assert.equal(
+      requests.filter(
+        (body) => body.plugins?.length && body.model.startsWith("google/"),
+      ).length,
+      1,
+    );
+    assert.equal(
+      requests.some(
+        (body) =>
+          body.response_format?.json_schema?.name ===
+          "matchbase_live_synthesis",
+      ),
+      false,
+    );
+  }
+});
+
+test("MB-UX-QUALITY-001 L08 failed native checkpoint persistence is not converted into partial research", async () => {
+  dispatch = (body) =>
+    body.plugins?.length && body.model.startsWith("google/")
+      ? generationFailureResponse()
+      : respond(discovery());
+  await assert.rejects(
+    executeDualLaneResearch(intake, {
+      mode: "live",
+      round_plan: partialRound,
+      automatic_recovery_attempts: 3,
+      before_call: async () => {},
+      on_checkpoint: async (event) => {
+        if (event.phase === "discovery_gemini" && event.state === "failed")
+          throw new Error("The fixture checkpoint cannot be persisted");
+      },
+    }),
+    /checkpoint cannot be persisted/,
+  );
+  assert.equal(
+    requests.filter(
+      (body) => body.plugins?.length && body.model.startsWith("google/"),
+    ).length,
+    1,
+  );
+  assert.equal(
+    requests.some(
+      (body) =>
+        body.response_format?.json_schema?.name === "matchbase_live_synthesis",
+    ),
+    false,
+  );
+});
+
+test("MB-UX-QUALITY-001 L08 recitation metadata cannot waive a simultaneous policy rejection", async () => {
+  dispatch = (body) =>
+    body.plugins?.length && body.model.startsWith("google/")
+      ? generationFailureResponse("error", {
+          choices: [
+            {
+              finish_reason: "error",
+              native_finish_reason: "RECITATION",
+              error: {
+                code: 403,
+                metadata: { error_type: "content_policy_violation" },
+              },
+              message: {
+                content: "Blocked content must remain excluded",
+                annotations: [],
+              },
+            },
+          ],
+        })
+      : respond(discovery());
+  const events = [];
+  await assert.rejects(
+    executeDualLaneResearch(intake, {
+      mode: "live",
+      round_plan: partialRound,
+      automatic_recovery_attempts: 3,
+      before_call: async () => {},
+      on_checkpoint: async (event) => events.push(event),
+    }),
+    { code: "MB-502-LIVE-RESPONSE" },
+  );
+  const failed = events.find(
+    (event) => event.phase === "discovery_gemini" && event.state === "failed",
+  );
+  assert.equal(failed.native_finish_reason, "RECITATION");
+  assert.notEqual(failed.provider_error_type, "recitation");
+  assert.equal(failed.recovery_scheduled, false);
+  assert.equal(
+    requests.filter(
+      (body) => body.plugins?.length && body.model.startsWith("google/"),
+    ).length,
+    1,
+  );
+  assert.equal(
+    requests.some(
+      (body) =>
+        body.response_format?.json_schema?.name === "matchbase_live_synthesis",
+    ),
+    false,
+  );
+});
+
 test("MB-UX-LIVE-001 L15 partial publication accounts for the successful index of a failed extraction lane", async () => {
   dispatch = (body) => {
     const schema = body.response_format?.json_schema?.name;

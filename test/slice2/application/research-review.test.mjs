@@ -396,6 +396,7 @@ test("MB-UX-QUALITY-001 L01 legacy later rounds recover only completed owned anc
           {
             phase: "discovery_openai",
             detail: {
+              state: "completed",
               response_content: names
                 .map((name) => `${name} makes pumps.`)
                 .join(" "),
@@ -404,6 +405,7 @@ test("MB-UX-QUALITY-001 L01 legacy later rounds recover only completed owned anc
           {
             phase: "discovery_openai_extraction_index",
             detail: {
+              state: "completed",
               response_content: indexText(names.map((name) => indexed(name))),
             },
           },
@@ -451,6 +453,7 @@ test("MB-UX-QUALITY-001 L01 historical projection admits only native-grounded na
     {
       phase: "discovery_gemini",
       detail: {
+        state: "completed",
         response_content: "Native Company offers industrial pumps.",
         response_citations: [
           {
@@ -472,6 +475,7 @@ test("MB-UX-QUALITY-001 L01 historical projection admits only native-grounded na
     {
       phase: "discovery_extraction_index",
       detail: {
+        state: "completed",
         response_content: indexText([
           {
             legal_name: "Native Company",
@@ -593,15 +597,18 @@ test("MB-UX-QUALITY-001 L01 corrupt historical indexes cannot self-ground a supp
   const rows = [
     {
       phase: "discovery_extraction_index",
-      detail: { response_content: indexText([indexed("Invented Company")]) },
+      detail: {
+        state: "completed",
+        response_content: indexText([indexed("Invented Company")]),
+      },
     },
     {
       phase: "verification_extraction_index",
-      detail: { response_content: "not JSON" },
+      detail: { state: "completed", response_content: "not JSON" },
     },
     {
       phase: "verification_extraction_index",
-      detail: { response_content: "{}" },
+      detail: { state: "completed", response_content: "{}" },
     },
   ];
   const hydrated = await hydrateResearchContinuation(
@@ -670,11 +677,15 @@ test("MB-UX-QUALITY-001 L01 malformed historical index members do not discard gr
   const rows = [
     {
       phase: "discovery_gemini",
-      detail: { response_content: "Retained Peer makes pumps." },
+      detail: {
+        state: "completed",
+        response_content: "Retained Peer makes pumps.",
+      },
     },
     {
       phase: "discovery_extraction_index",
       detail: {
+        state: "completed",
         response_content: indexText([null, indexed("Retained Peer"), 42]),
       },
     },
@@ -691,4 +702,131 @@ test("MB-UX-QUALITY-001 L01 malformed historical index members do not discard gr
     hydrated.indexed_leads.map((lead) => lead.name),
     ["Retained Peer"],
   );
+});
+
+test("MB-UX-QUALITY-001 L08 hydration excludes failed or blocked native authority while preserving completed-index incomplete leads", async () => {
+  const goodUrl = "https://retained.example.org/catalog";
+  const blockedUrl = "https://blocked.example.org/catalog";
+  const rows = deepFreeze([
+    {
+      phase: "discovery_openai",
+      detail: {
+        state: "completed",
+        finish_reason: "stop",
+        native_finish_reason: "STOP",
+        response_content:
+          "Pending Dossier manufactures pumps. Failed Index Name supplies valves. Started Index Name supplies pipes. Unfinished Index Name supplies fittings.",
+        response_citations: [
+          {
+            url: goodUrl,
+            title: "Completed discovery",
+            content_excerpt: "Pending Dossier manufactures pumps.",
+          },
+        ],
+      },
+    },
+    {
+      phase: "discovery_gemini",
+      detail: {
+        state: "failed",
+        finish_reason: "error",
+        native_finish_reason: "RECITATION",
+        response_failure_kind: "refusal",
+        response_content: "Blocked Prose Name manufactures pumps.",
+        response_citations: [
+          {
+            url: blockedUrl,
+            title: "Blocked response",
+            content_excerpt: "Blocked Citation Name supplies valves.",
+          },
+        ],
+      },
+    },
+    {
+      phase: "discovery_deepseek",
+      detail: {
+        state: "failed",
+        finish_reason: "error",
+        response_failure_kind: "provider_error",
+        response_content: "Provider Error Name manufactures pumps.",
+      },
+    },
+    {
+      phase: "verification",
+      detail: {
+        state: "completed",
+        finish_reason: "stop",
+        native_finish_reason: "RECITATION",
+        response_content: "Mislabelled Blocked Name manufactures pumps.",
+      },
+    },
+    {
+      phase: "discovery_openai_extraction_index",
+      detail: {
+        state: "completed",
+        finish_reason: "stop",
+        response_content: indexText([
+          indexed("Pending Dossier", goodUrl),
+          indexed("Blocked Prose Name", blockedUrl),
+          indexed("Blocked Citation Name", blockedUrl),
+          indexed("Provider Error Name", goodUrl),
+          indexed("Mislabelled Blocked Name", blockedUrl),
+        ]),
+      },
+    },
+    {
+      phase: "discovery_openai_extraction_batch",
+      detail: {
+        state: "failed",
+        finish_reason: "length",
+        response_content: "Pending Dossier supplier details are incomplete",
+      },
+    },
+    ...[
+      ["failed", "error", "Failed Index Name"],
+      ["started", undefined, "Started Index Name"],
+      ["completed", "length", "Unfinished Index Name"],
+    ].map(([state, finish_reason, name]) => ({
+      phase: "discovery_openai_extraction_index",
+      detail: {
+        state,
+        finish_reason,
+        response_content: indexText([indexed(name, goodUrl)]),
+      },
+    })),
+  ]);
+  const originalEvents = structuredClone(rows);
+  const round = deepFreeze(legacyRound({ round_number: 1 }));
+  const hydrated = await hydrateResearchContinuation(
+    {
+      async query(sql, values) {
+        assert.match(sql, /^SELECT /);
+        assert.deepEqual(values, [
+          round.account_id,
+          round.run_id,
+          round.execution_id,
+        ]);
+        return { rows };
+      },
+    },
+    round,
+  );
+  assert.deepEqual(
+    hydrated.indexed_leads.map((lead) => lead.name),
+    ["Pending Dossier"],
+  );
+  assert.deepEqual(hydrated.indexed_leads[0].source_urls, [goodUrl]);
+  const review = buildResearchReview(hydrated, [], [], 1);
+  assert.equal(review.summary.needs_review, 1);
+  assert.equal(review.summary.documented, 0);
+  assert.equal(review.leads[0].status, "needs_review");
+  assert.match(review.leads[0].reason, /not a verified supplier/);
+  assert.doesNotMatch(JSON.stringify(hydrated), /Blocked|Provider Error/);
+  assert.deepEqual(
+    rows,
+    originalEvents,
+    "Raw failure and partial-response audit history must remain untouched",
+  );
+  assert.equal(round.continuation, null);
+  assert.equal(globalThis.fetch.mock.callCount(), 0);
 });

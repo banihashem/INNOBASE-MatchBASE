@@ -3,6 +3,34 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { generateConsultantLandscapeHtml } from "./consultant-landscape-report.js";
 import type { ConsultantResearchOutputV3 } from "@matchbase/contracts";
+import { PDFDocument } from "pdf-lib";
+
+export interface ConsultantPdfArtifact {
+  readonly bytes: Buffer;
+  readonly pageCount: number;
+}
+
+/** Read the actual page tree; supplier/section counts do not reflect PDF pagination. */
+export async function readConsultantPdfPageCount(
+  bytes: Uint8Array,
+): Promise<number> {
+  try {
+    const document = await PDFDocument.load(bytes, {
+      updateMetadata: false,
+      throwOnInvalidObject: true,
+    });
+    const pageCount = document.getPageCount();
+    if (!Number.isSafeInteger(pageCount) || pageCount < 1) {
+      throw new Error("PDF does not contain a valid page count.");
+    }
+    return pageCount;
+  } catch (error) {
+    throw new ConsultantPdfRendererUnavailableError(
+      "Consultant PDF page metadata could not be read.",
+      error,
+    );
+  }
+}
 
 export class ConsultantPdfRendererUnavailableError extends Error {
   readonly code = "MB-503-PDF-RENDERER-UNAVAILABLE";
@@ -127,6 +155,7 @@ export class ConsultantPdfRenderer {
       if (fs.existsSync(cacheFilePath)) {
         const cachedBuf = fs.readFileSync(cacheFilePath);
         if (this.isValidPdf(cachedBuf)) {
+          await readConsultantPdfPageCount(cachedBuf);
           return cachedBuf;
         }
       }
@@ -180,6 +209,7 @@ export class ConsultantPdfRenderer {
                 `Rendered PDF failed validity check: bytes=${pdfBuf.length}`,
               );
             }
+            await readConsultantPdfPageCount(pdfBuf);
             // Save to cache
             try {
               fs.writeFileSync(cacheFilePath, pdfBuf);
@@ -217,6 +247,14 @@ export class ConsultantPdfRenderer {
     }
   }
 
+  async renderPdfArtifact(
+    output: ConsultantResearchOutputV3,
+  ): Promise<ConsultantPdfArtifact> {
+    const bytes = await this.renderPdf(output);
+    // Inspect these exact bytes on both fresh renders and cache hits; never re-save them.
+    return { bytes, pageCount: await readConsultantPdfPageCount(bytes) };
+  }
+
   private isValidPdf(buf: Buffer): boolean {
     return (
       buf.length > 10240 && buf.subarray(0, 5).toString("utf-8") === "%PDF-"
@@ -232,4 +270,10 @@ export async function generateConsultantPdf(
   output: ConsultantResearchOutputV3,
 ): Promise<Buffer> {
   return ConsultantPdfRenderer.getInstance().renderPdf(output);
+}
+
+export async function generateConsultantPdfArtifact(
+  output: ConsultantResearchOutputV3,
+): Promise<ConsultantPdfArtifact> {
+  return ConsultantPdfRenderer.getInstance().renderPdfArtifact(output);
 }

@@ -255,6 +255,9 @@ importers:
       "@playwright/test":
         specifier: 1.62.1
         version: 1.62.1
+      pdf-lib:
+        specifier: 1.17.1
+        version: 1.17.1
     devDependencies:
       "@types/node":
         specifier: 24.13.3
@@ -982,6 +985,18 @@ packages:
     engines: { node: ^20.19.0 || >=22.12.0 }
     cpu: [x64]
     os: [win32]
+
+  "@pdf-lib/standard-fonts@1.0.0":
+    resolution:
+      {
+        integrity: sha512-hU30BK9IUN/su0Mn9VdlVKsWBS6GyhVfqjwl1FjZN4TxP6cCw0jP2w7V3Hf5uX7M0AZJ16vey9yE0ny7Sa59ZA==,
+      }
+
+  "@pdf-lib/upng@1.0.1":
+    resolution:
+      {
+        integrity: sha512-dQK2FUMQtowVP00mtIksrlZhdFXQZPC+taih1q4CvPZ5vqdxR/LKBaFg0oAfzd1GlHZXXSPdQfzQnt+ViGvEIQ==,
+      }
 
   "@playwright/test@1.62.1":
     resolution:
@@ -2583,6 +2598,12 @@ packages:
       }
     engines: { node: ">=18" }
 
+  pako@1.0.11:
+    resolution:
+      {
+        integrity: sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw==,
+      }
+
   parse-json@8.3.0:
     resolution:
       {
@@ -2606,6 +2627,12 @@ packages:
     resolution:
       {
         integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==,
+      }
+
+  pdf-lib@1.17.1:
+    resolution:
+      {
+        integrity: sha512-V/mpyJAoTsN4cnP31vc0wfNA1+p20evqqnap0KLoRUN0Yk/p3wN52DOEsL4oBFcLdb76hlpKPtzJIgo67j/XLw==,
       }
 
   pg-cloudflare@1.4.0:
@@ -3268,6 +3295,12 @@ packages:
         integrity: sha512-Y/arvbn+rrz3JCKl9C4kVNfTfSm2/mEp5FSz5EsZSANGPSlQrpRI5M4PKF+mJnE52jOO90PnPSc3Ur3bTQw0gA==,
       }
 
+  tslib@1.14.1:
+    resolution:
+      {
+        integrity: sha512-Xni35NKzjgMrwevysHTCArtLDpPvye8zV/0E4EyYn43P7/7qvQwPh9BGkHewbMulVntbigmcT7rdX3BNo9wRJg==,
+      }
+
   tslib@2.8.1:
     resolution:
       {
@@ -3805,6 +3838,14 @@ snapshots:
 
   "@oxlint/binding-win32-x64-msvc@1.78.0":
     optional: true
+
+  "@pdf-lib/standard-fonts@1.0.0":
+    dependencies:
+      pako: 1.0.11
+
+  "@pdf-lib/upng@1.0.1":
+    dependencies:
+      pako: 1.0.11
 
   "@playwright/test@1.62.1":
     dependencies:
@@ -4633,6 +4674,8 @@ snapshots:
 
   p-map@7.0.6: {}
 
+  pako@1.0.11: {}
+
   parse-json@8.3.0:
     dependencies:
       "@babel/code-frame": 7.29.7
@@ -4646,6 +4689,13 @@ snapshots:
   path-parse@1.0.7: {}
 
   pathe@2.0.3: {}
+
+  pdf-lib@1.17.1:
+    dependencies:
+      "@pdf-lib/standard-fonts": 1.0.0
+      "@pdf-lib/upng": 1.0.1
+      pako: 1.0.11
+      tslib: 1.14.1
 
   pg-cloudflare@1.4.0:
     optional: true
@@ -5067,6 +5117,8 @@ snapshots:
       punycode: 2.3.1
 
   ts-interface-checker@0.1.13: {}
+
+  tslib@1.14.1: {}
 
   tslib@2.8.1: {}
 

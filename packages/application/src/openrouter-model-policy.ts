@@ -560,14 +560,18 @@ function finiteNonnegative(value: unknown): value is number {
 const DEFAULT_COMPLETION_TIMEOUT_MS = 180000;
 const RESEARCH_COMPLETION_TIMEOUT_MS = 600000;
 const longResearchPhases = new Set([
-  "discovery_gemini",
-  "discovery_openai",
   "verification",
-  "discovery_gemini_extraction",
-  "discovery_openai_extraction",
   "verification_extraction",
   "synthesis",
 ]);
+// Discovery has the same bounded deadline for every approved model family.
+// Extraction suffixes and additional approved lanes inherit that deadline.
+function isLongResearchPhase(phase: string): boolean {
+  return (
+    /^discovery_[a-z0-9]+(?:_[a-z0-9]+)*$/.test(phase) ||
+    longResearchPhases.has(phase)
+  );
+}
 function validateCompletionTimeout(timeoutMs: number): number {
   if (
     !Number.isInteger(timeoutMs) ||
@@ -1163,7 +1167,7 @@ async function runLiveCompletionAttempt(
   try {
     const timeoutMs = validateCompletionTimeout(
       request.timeout_ms === undefined
-        ? longResearchPhases.has(context.phase)
+        ? isLongResearchPhase(context.phase)
           ? RESEARCH_COMPLETION_TIMEOUT_MS
           : DEFAULT_COMPLETION_TIMEOUT_MS
         : request.timeout_ms,

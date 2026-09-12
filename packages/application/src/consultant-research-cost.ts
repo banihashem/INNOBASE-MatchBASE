@@ -353,7 +353,9 @@ export function researchModelSuitability(model: string): number {
   if (model.startsWith("x-ai/grok-4")) return 40;
   return 0;
 }
-export async function researchModelChoices() {
+export async function researchModelChoices(
+  options: { for_followup?: boolean } = {},
+) {
   const configured = getConfiguredLiveModels();
   const models = (await userModels())
     .filter((m) => {
@@ -392,7 +394,12 @@ export async function researchModelChoices() {
     ]),
   ];
   const results = await Promise.allSettled(ids.map(currentResearchModelRate));
-  return results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  return results.flatMap((r) =>
+    r.status === "fulfilled" &&
+    (!options.for_followup || r.value.structured_outputs === true)
+      ? [r.value]
+      : [],
+  );
 }
 /** Configuration visibility only; a configured route does not establish key health or pricing. */
 export function configuredResearchTierAvailability(): Record<
@@ -459,7 +466,9 @@ export async function buildResearchRoundPlan(input: {
       "Select a supported research tier.",
     );
   const choices =
-    input.mode === "demonstration" ? [] : await researchModelChoices();
+    input.mode === "demonstration"
+      ? []
+      : await researchModelChoices({ for_followup: input.round_number > 1 });
   const configured = getConfiguredLiveModels();
   const ordered = choices
     .filter((c) => c.structured_outputs !== false)
@@ -582,6 +591,19 @@ export async function buildResearchRoundPlan(input: {
       "Pricing for a required discovery model is unavailable.",
     );
   const actualRates = rates as ResearchModelRate[];
+  if (
+    input.mode === "live" &&
+    [extraction, synthesis].some(
+      (model) =>
+        actualRates.find((rate) => rate.model === model)?.structured_outputs !==
+        true,
+    )
+  )
+    throw new ResearchRoundFault(
+      422,
+      "MB-422-MODEL-CAPABILITY",
+      "Extraction and analysis require endpoints with structured output support. Select a compatible model before approving research.",
+    );
   if (
     input.round_number === 1 &&
     tier === "default" &&

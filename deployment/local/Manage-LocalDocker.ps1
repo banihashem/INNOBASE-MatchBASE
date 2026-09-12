@@ -8,6 +8,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $appRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
+. (Join-Path $PSScriptRoot 'LocalRuntimeEnvironment.ps1')
 function Assert-NativeSuccess([string]$Operation) {
     if ($LASTEXITCODE -ne 0) { throw "$Operation failed. No further operation was performed." }
 }
@@ -63,7 +64,7 @@ try {
     if ($Action -eq 'Build') {
         # Each build qualifies all database-dependent tests against disposable data.
         $unitContainer = 'matchbase-unit-' + [guid]::NewGuid().ToString('N')
-        $testEnvironmentNames = @('DATABASE_URL', 'MATCHBASE_DATABASE_URL', 'MATCHBASE_CONSULTANT_TEST_DATABASE_URL', 'MATCHBASE_DISPOSABLE_TEST_DATABASE_URL', 'MATCHBASE_TEST_DATABASE_GUARD') + @(Get-ChildItem Env: | Where-Object { $_.Name -match 'DATABASE_URL|OPENROUTER|API_KEY|^PG(HOST|PORT|DATABASE|USER|PASSWORD|SERVICE|SERVICEFILE)$|^MATCHBASE_PROVIDER_' } | ForEach-Object { $_.Name })
+        $testEnvironmentNames = Get-LocalTestEnvironmentNames -ExistingNames @(Get-ChildItem Env: | ForEach-Object { $_.Name })
         $previousTestEnvironment = @{}
         foreach ($testEnvironmentName in ($testEnvironmentNames | Select-Object -Unique)) {
             $previousTestEnvironment[$testEnvironmentName] = [Environment]::GetEnvironmentVariable($testEnvironmentName, 'Process')
@@ -116,12 +117,7 @@ try {
         $bindAddress = $LanAddress
         $originHost = $LanAddress
     }
-    $runtime = @{}
-    foreach ($name in @('MATCHBASE_DATABASE_URL', 'MATCHBASE_DIGEST_KEY', 'MATCHBASE_OPENROUTER_API_KEY', 'MATCHBASE_PROVIDER_GOOGLE', 'MATCHBASE_PROVIDER_OPENAI', 'MATCHBASE_PROVIDER_ROUTES')) {
-        $value = [Environment]::GetEnvironmentVariable($name, 'User')
-        if (-not $value) { $value = [Environment]::GetEnvironmentVariable($name, 'Process') }
-        if ($value) { $runtime[$name] = $value }
-    }
+    $runtime = Get-LocalRuntimeEnvironment
     if (-not $runtime.MATCHBASE_DATABASE_URL -or -not $runtime.MATCHBASE_DIGEST_KEY -or -not $runtime.MATCHBASE_OPENROUTER_API_KEY) {
         throw 'Provision the database URL, digest key and OpenRouter key in the Windows User environment.'
     }

@@ -9,6 +9,210 @@ import {
   configuredResearchTierAvailability,
   researchModelSuitability,
 } from "../../../packages/application/dist/consultant-research-cost.js";
+
+test("MB-UX-QUALITY-001 L07 quoted model roles require selected-endpoint structured capability", async (t) => {
+  const gemini = "google/gemini-3.8-flash";
+  const deepseekTextOnly = "deepseek/deepseek-v4-pro";
+  const deepseekStructured = "deepseek/deepseek-v4-pro-0813";
+  const badConfiguredSynthesis = "google/gemini-text-only";
+  const settings = {
+    MATCHBASE_OPENROUTER_API_KEY: randomUUID(),
+    MATCHBASE_PROVIDER_ROUTES: "{}",
+    MATCHBASE_PROVIDER_GOOGLE: "google-ai-studio",
+    MATCHBASE_PROVIDER_OPENAI: "openai",
+    MATCHBASE_PROVIDER_ANTHROPIC: "",
+    MATCHBASE_PROVIDER_DEEPSEEK: "",
+    MATCHBASE_PROVIDER_XAI: "",
+    MATCHBASE_MODEL_GEMINI: gemini,
+    MATCHBASE_MODEL_OPENAI: "openai/gpt-5.2",
+    MATCHBASE_MODEL_PREPARATION: "openai/gpt-5.2",
+    MATCHBASE_MODEL_SYNTHESIS: "openai/gpt-5.2",
+  };
+  const previous = Object.fromEntries(
+    Object.keys(settings).map((name) => [name, process.env[name]]),
+  );
+  Object.assign(process.env, settings);
+  t.after(() => {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+  const models = [
+    gemini,
+    "openai/gpt-5.2",
+    "anthropic/claude-sonnet-5",
+    deepseekTextOnly,
+    deepseekStructured,
+    "x-ai/grok-4.3",
+    badConfiguredSynthesis,
+  ];
+  let listedModels = [...models];
+  const supportsStructured = (id) =>
+    ![deepseekTextOnly, badConfiguredSynthesis].includes(id);
+  const provider = (id) =>
+    id === deepseekTextOnly
+      ? "digitalocean"
+      : id === deepseekStructured
+        ? "ionstream"
+        : {
+            google: "google-ai-studio",
+            openai: "openai",
+            anthropic: "anthropic",
+            "x-ai": "xai",
+          }[id.split("/")[0]];
+  const parameters = ["max_tokens", "reasoning", "structured_outputs"];
+  const pricing = { prompt: "0.000001", completion: "0.000002" };
+  let completions = 0;
+  t.mock.method(globalThis, "fetch", async (target) => {
+    const url = String(target);
+    if (url.includes("chat/completions")) completions++;
+    assert.equal(
+      completions,
+      0,
+      "Capability qualification must never invoke inference",
+    );
+    if (url.endsWith("/models/user"))
+      return Response.json({
+        data: listedModels.map((id) => ({
+          id,
+          pricing,
+          // The aggregate catalog can advertise capabilities absent from a specific endpoint.
+          supported_parameters: parameters,
+        })),
+      });
+    if (url.endsWith("/endpoints/zdr"))
+      return Response.json({
+        data: listedModels.map((id) => ({ model_id: id, tag: provider(id) })),
+      });
+    assert.ok(url.endsWith("/endpoints"));
+    const id = decodeURIComponent(
+      new URL(url).pathname.split("/models/")[1].replace(/\/endpoints$/, ""),
+    );
+    return Response.json({
+      data: {
+        endpoints: [
+          {
+            model_id: id,
+            tag: provider(id),
+            provider_name: provider(id),
+            status: 0,
+            pricing,
+            supported_parameters: supportsStructured(id)
+              ? parameters
+              : parameters.filter((name) => name !== "structured_outputs"),
+          },
+        ],
+      },
+    });
+  });
+  const input = {
+    mode: "live",
+    round_number: 2,
+    depth: "simple",
+    request_hash: "approved-role-capability-request",
+    parent_round_id: "previous-completed-round",
+    focus_requirements: [],
+  };
+
+  await t.test(
+    "follow-up choices omit text-only endpoints but retain structured DeepSeek and Gemini",
+    async () => {
+      const discovery = await researchModelChoices();
+      assert.ok(discovery.some((rate) => rate.model === deepseekTextOnly));
+      const followup = await researchModelChoices({ for_followup: true });
+      assert.ok(followup.every((rate) => rate.structured_outputs === true));
+      for (const id of [gemini, deepseekStructured])
+        assert.ok(followup.some((rate) => rate.model === id));
+      assert.equal(
+        followup.some((rate) => rate.model === deepseekTextOnly),
+        false,
+      );
+    },
+  );
+  await t.test(
+    "explicit text-only DeepSeek cannot produce a simple or deep follow-up quote",
+    async () => {
+      for (const depth of ["simple", "deep"])
+        await assert.rejects(
+          buildResearchRoundPlan({
+            ...input,
+            depth,
+            selected_model: deepseekTextOnly,
+          }),
+          {
+            code: "MB-422-MODEL-UNAVAILABLE",
+          },
+        );
+      assert.equal(completions, 0);
+    },
+  );
+  await t.test(
+    "structured DeepSeek and Gemini retain their explicit follow-up roles",
+    async () => {
+      for (const id of [gemini, deepseekStructured])
+        for (const depth of ["simple", "deep"]) {
+          const { plan, choices } = await buildResearchRoundPlan({
+            ...input,
+            depth,
+            selected_model: id,
+          });
+          assert.deepEqual(plan.research_models, [id]);
+          assert.equal(plan.synthesis_model, id);
+          assert.equal(
+            plan.extraction_model,
+            depth === "deep" ? id : "openai/gpt-5.2",
+          );
+          assert.ok(choices.every((rate) => rate.structured_outputs === true));
+        }
+    },
+  );
+  await t.test(
+    "Ultra retains a text-only DeepSeek discovery path when other approved roles supply structure",
+    async () => {
+      listedModels = models.filter((id) => id !== deepseekStructured);
+      process.env.MATCHBASE_OPENROUTER_API_KEY = randomUUID();
+      const { plan } = await buildResearchRoundPlan({
+        ...input,
+        round_number: 1,
+        parent_round_id: null,
+        research_tier: "ultra",
+      });
+      assert.ok(plan.research_models.includes(deepseekTextOnly));
+      assert.equal(plan.search_engines[deepseekTextOnly], "exa");
+      assert.equal(
+        plan.rates.find((rate) => rate.model === deepseekTextOnly)
+          .structured_outputs,
+        false,
+      );
+      for (const id of [plan.extraction_model, plan.synthesis_model])
+        assert.equal(
+          plan.rates.find((rate) => rate.model === id).structured_outputs,
+          true,
+        );
+      listedModels = [...models];
+      process.env.MATCHBASE_OPENROUTER_API_KEY = randomUUID();
+    },
+  );
+  await t.test(
+    "a configured extraction role without structure is rejected before a first-round quote",
+    async () => {
+      process.env.MATCHBASE_MODEL_SYNTHESIS = badConfiguredSynthesis;
+      await assert.rejects(
+        buildResearchRoundPlan({
+          ...input,
+          round_number: 1,
+          parent_round_id: null,
+        }),
+        {
+          code: "MB-422-MODEL-CAPABILITY",
+        },
+      );
+      assert.equal(completions, 0);
+    },
+  );
+});
+
 const event = (detail, phase = "research", execution_id = "execution") => ({
   execution_id,
   phase,

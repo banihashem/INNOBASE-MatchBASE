@@ -4,6 +4,11 @@ import { ResearchRoundFault } from "@matchbase/data";
 import { Agent } from "undici";
 import { fetchPrimaryEvidenceText } from "./live-source-fetch.js";
 import {
+  classifyResponseFailure,
+  normalizedNativeFinishReason,
+  type ResponseFailureKind,
+} from "./openrouter-response-failure.js";
+import {
   auditOpenRouterByok,
   getConfiguredProviderRoute,
   getApprovedProviderRoute,
@@ -59,6 +64,9 @@ export interface OpenRouterCompletionResult extends Partial<OpenRouterByokAudit>
   readonly input_tokens: number;
   readonly output_tokens: number;
   readonly finish_reason?: string | undefined;
+  readonly native_finish_reason?: string | undefined;
+  readonly response_failure_kind?: ResponseFailureKind;
+  readonly provider_error_type?: string | undefined;
   readonly reasoning_tokens?: number | undefined;
   readonly latency_ms: number;
   readonly cost_usd: number;
@@ -122,6 +130,9 @@ export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
   readonly input_tokens?: number;
   readonly output_tokens?: number;
   readonly finish_reason?: string | undefined;
+  readonly native_finish_reason?: string | undefined;
+  readonly response_failure_kind?: ResponseFailureKind;
+  readonly provider_error_type?: string | undefined;
   readonly reasoning_tokens?: number | undefined;
   readonly cost_usd?: number;
   readonly usage_reported?: boolean;
@@ -822,8 +833,11 @@ export async function callOpenRouterCompletion(
       error?: unknown;
       choices?: {
         finish_reason?: string;
+        native_finish_reason?: unknown;
+        error?: unknown;
         message?: {
           content?: string;
+          refusal?: unknown;
           annotations?: {
             type?: string;
             url_citation?: {
@@ -929,24 +943,107 @@ export async function callOpenRouterCompletion(
         ? { cost_usd: audit.openrouter_cost_usd, cost_reported: true }
         : {}),
     };
-    if (choice?.finish_reason === "length")
+    let nativeFinishReason = normalizedNativeFinishReason(
+      choice?.native_finish_reason,
+    );
+    const classify = () =>
+      classifyResponseFailure({
+        errors: [data.error, choice?.error],
+        ...(choice?.finish_reason
+          ? { finish_reason: choice.finish_reason }
+          : {}),
+        ...(nativeFinishReason
+          ? { native_finish_reason: nativeFinishReason }
+          : {}),
+        refusal: choice?.message?.refusal,
+        text,
+      });
+    let failure = classify();
+    if (
+      choice?.finish_reason === "error" &&
+      !nativeFinishReason &&
+      generationId &&
+      (failure?.error_type === "unknown" || failure?.kind === "refusal")
+    ) {
+      // A single read-only diagnostic can identify provider stops omitted from
+      // the completion body. Never reinterpret an unknown stop as transient.
+      let metadata: Record<string, unknown> | undefined;
+      try {
+        const diagnostic = await fetch(
+          `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(generationId)}`,
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${apiKey}` },
+            redirect: "error",
+            signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]),
+          },
+        );
+        if (diagnostic.ok) {
+          const value = (await diagnostic.json())?.data;
+          if (value && typeof value === "object" && !Array.isArray(value))
+            metadata = value;
+        }
+      } catch {
+        signal.throwIfAborted();
+      }
+      if (metadata) {
+        if (
+          metadata.id !== generationId ||
+          metadata.model !== auditedResponse.model ||
+          metadata.provider_name !== auditedResponse.actual_provider ||
+          (typeof metadata.is_byok === "boolean" &&
+            metadata.is_byok !== auditedResponse.is_byok)
+        )
+          throw new LiveResearchError(
+            "MB-502-LIVE-PROVIDER-DRIFT",
+            "Failure metadata does not match the audited generation.",
+            false,
+            auditedResponse,
+          );
+        nativeFinishReason =
+          metadata.cancelled === true
+            ? "CANCELLED"
+            : normalizedNativeFinishReason(metadata.native_finish_reason);
+        failure = classify();
+      }
+    }
+    auditedResponse = {
+      ...auditedResponse,
+      ...(nativeFinishReason
+        ? { native_finish_reason: nativeFinishReason }
+        : {}),
+      ...(failure
+        ? {
+            response_failure_kind: failure.kind,
+            ...(failure.error_type
+              ? { provider_error_type: failure.error_type }
+              : {}),
+          }
+        : {}),
+    };
+    if (
+      choice?.finish_reason === "length" &&
+      !data.error &&
+      !choice?.error &&
+      (!failure || failure.kind === "empty_response")
+    )
       throw new LiveResearchError(
         "MB-422-LIVE-OUTPUT-LIMIT",
         `Provider exhausted the approved output allowance (${auditedResponse.output_tokens} output tokens, ${auditedResponse.reasoning_tokens ?? "unknown"} reasoning tokens). The incomplete response and usage are retained. Review a fresh estimate before another attempt.`,
         false,
         auditedResponse,
       );
-    if (
-      data.error ||
-      typeof text !== "string" ||
-      !text.trim() ||
-      (choice?.finish_reason && choice.finish_reason !== "stop")
-    )
+    if (failure)
       throw new LiveResearchError(
         "MB-502-LIVE-RESPONSE",
-        "Provider returned an empty, incomplete, or refused response.",
-        !data.error &&
-          (!choice?.finish_reason || choice.finish_reason === "stop"),
+        failure.error_type === "recitation"
+          ? "Provider stopped this response for recitation. The blocked text is excluded; this response is not automatically retried."
+          : failure.kind === "provider_error"
+            ? "Provider generation was interrupted by a temporary upstream error."
+            : failure.kind === "refusal"
+              ? "Provider declined this response. It is excluded and is not automatically retried."
+              : "Provider returned an empty or incomplete response.",
+        failure.kind === "provider_error" || failure.kind === "empty_response",
         auditedResponse,
       );
     return auditedResponse;
@@ -1389,6 +1486,9 @@ async function runLiveCompletionAttempt(
             input_tokens: auditedResponse.input_tokens,
             output_tokens: auditedResponse.output_tokens,
             finish_reason: auditedResponse.finish_reason,
+            native_finish_reason: auditedResponse.native_finish_reason,
+            response_failure_kind: auditedResponse.response_failure_kind,
+            provider_error_type: auditedResponse.provider_error_type,
             reasoning_tokens: auditedResponse.reasoning_tokens,
             cost_usd: auditedResponse.cost_usd,
             cost_reported: auditedResponse.cost_reported ?? false,

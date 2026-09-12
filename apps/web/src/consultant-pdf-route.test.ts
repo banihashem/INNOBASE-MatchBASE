@@ -52,7 +52,7 @@ const bytes = Buffer.from("%PDF-1.4\nSynthetic exact response bytes");
 const request = (method: string, headers?: HeadersInit) =>
   new Request(`http://localhost/api/v1/consultant/reports/${runId}/pdf`, {
     method,
-    headers,
+    ...(headers ? { headers } : {}),
   });
 
 beforeEach(() => {

@@ -33,6 +33,24 @@ const SYSTEM_MESSAGE_RESERVE = " ".repeat(12000);
 // Leave space for the bounded focus plan and dynamic round details.
 const FOCUSED_ANALYSIS_RESERVE_BYTES = 60000;
 const FOCUS_OUTPUT_TOKEN_LIMIT = 12000;
+
+/** Excerpt only source prose; retain every identity, date, status and claim link. */
+function sourceContext(
+  source: ResearchContinuation["evidence"][number][1]["source"],
+  excerptSize: number,
+) {
+  return {
+    ...source,
+    ...(typeof source.excerpt_summary === "string"
+      ? {
+          excerpt_summary: [...source.excerpt_summary]
+            .slice(0, excerptSize)
+            .join(""),
+        }
+      : {}),
+  };
+}
+
 function methodContext(prior: ResearchContinuation, excerptSize: number) {
   return (prior.method_reviews ?? []).map(({ sources, ...review }) => ({
     ...review,
@@ -143,7 +161,7 @@ export function buildResearchFocusContext(
       })),
       prior_evidence: prior.evidence.map(([id, record]) => ({
         id,
-        source: record.source,
+        source: sourceContext(record.source, excerptSize),
         excerpt: record.authoritative_text.slice(0, excerptSize),
       })),
       source_inventory: prior.retrieved.map(([url, value]) => ({
@@ -161,7 +179,7 @@ export function buildResearchFocusContext(
           }
         : {}),
       requested_round_purpose: plan.purpose,
-      context_disclosure: `All lead names, dossier names and source references are included. Detailed records and source text are excerpts (up to ${excerptSize} characters per evidence passage). Full records remain in the saved previous round. Absence from an excerpt is not evidence of absence; request source inspection for unresolved details.`,
+      context_disclosure: `All lead names, dossier names and source references are included. Detailed records, source narrative summaries and source text are excerpts (up to ${excerptSize} characters per evidence passage). Source identities, metadata, dates, statuses and supporting or contradicting claim links are unchanged. Full evidence memory and prior relationship hypotheses are retained. Full records remain in the saved previous round. Absence from an excerpt is not evidence of absence; request source inspection for unresolved details.`,
     };
     const serialized = JSON.stringify(context);
     if (
@@ -261,7 +279,9 @@ export function buildFocusedWebContext(
       previously_cited_sources: prior.evidence.map(([id, record]) => ({
         id,
         source_urls: [...new Set(sourceReferences(record.source))],
-        source_excerpt: JSON.stringify(record.source).slice(0, excerptSize),
+        source_excerpt: JSON.stringify(
+          sourceContext(record.source, excerptSize),
+        ).slice(0, excerptSize),
       })),
       additional_source_urls: additionalSources,
       current_date:

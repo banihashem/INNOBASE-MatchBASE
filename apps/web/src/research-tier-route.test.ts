@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
     hash: vi.fn(),
     costs: vi.fn(),
     plan: vi.fn(),
+    preflight: vi.fn(),
     availability: vi.fn(),
     modelChoices: vi.fn(),
     worker: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock("@matchbase/application", () => ({
   researchRequestHash: mocks.hash,
   summarizeResearchCosts: mocks.costs,
   buildResearchRoundPlan: mocks.plan,
+  preflightResearchRoundContext: mocks.preflight,
   configuredResearchTierAvailability: mocks.availability,
   researchModelChoices: mocks.modelChoices,
   runNextConsultantWorkflowJob: mocks.worker,
@@ -106,6 +108,7 @@ beforeEach(() => {
   mocks.modelChoices.mockResolvedValue([]);
   mocks.costs.mockReturnValue({ recorded_total_usd: 0, complete: true });
   mocks.save.mockResolvedValue(quoteId);
+  mocks.preflight.mockResolvedValue(undefined);
   mocks.plan.mockImplementation(async (input) => ({
     plan: { ...input, models: ["synthetic/model"] },
     choices: [],
@@ -184,6 +187,46 @@ describe("research tier HTTP approval boundary", () => {
     output: { research_review: review },
     continuation: { remaining_gaps: ["Official service evidence"] },
   };
+  it("MB-UX-QUALITY-001 L13 rejects impossible context before saving a quote or starting work", async () => {
+    mocks.rounds.mockResolvedValue([parent]);
+    mocks.preflight.mockRejectedValue(
+      new mocks.Fault(
+        409,
+        "MB-409-FOCUS-CONTEXT",
+        "Saved research exceeds the processing allowance. No estimate was created.",
+      ),
+    );
+    const response = await post({ action: "quote", depth: "deep" });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      code: "MB-409-FOCUS-CONTEXT",
+      error:
+        "Saved research exceeds the processing allowance. No estimate was created.",
+    });
+    expect(mocks.preflight).toHaveBeenCalledWith(
+      mocks.pool,
+      session,
+      expect.objectContaining({ parent_round_id: parent.round_id }),
+      parent,
+    );
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.approve).not.toHaveBeenCalled();
+    expect(mocks.worker).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it("MB-UX-QUALITY-001 L13 saves the exact quoted plan only after capacity qualification succeeds", async () => {
+    mocks.rounds.mockResolvedValue([parent]);
+    mocks.save.mockImplementation(async (_pool, _session, plan) => {
+      expect(mocks.preflight).toHaveBeenCalledOnce();
+      expect(mocks.preflight.mock.calls[0]?.[2]).toBe(plan);
+      return quoteId;
+    });
+    expect((await post({ action: "quote", depth: "simple" })).status).toBe(200);
+    expect(mocks.save).toHaveBeenCalledOnce();
+    expect(mocks.approve).not.toHaveBeenCalled();
+    expect(mocks.worker).not.toHaveBeenCalled();
+  });
   it("MB-UX-QUALITY-001 L01 saves multilingual focus without dispatch or raw search focus", async () => {
     mocks.rounds.mockResolvedValue([parent]);
     const focus = {

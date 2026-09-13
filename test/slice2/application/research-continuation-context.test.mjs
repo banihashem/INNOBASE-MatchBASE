@@ -13,8 +13,17 @@ for (const scenario of [
   "synthesis-exhausted",
   "mixed-native",
   "focused",
+  "progressive-2",
+  "progressive-4",
+  "progressive-5",
+  "progressive-no-citations",
 ])
   test(`MB-UX-LIVE-001 L15 retained-source publication with ${scenario}`, async (t) => {
+    const progressive = scenario.startsWith("progressive-");
+    const focused = scenario === "focused" || progressive;
+    const roundNumber = ["progressive-4", "progressive-5"].includes(scenario)
+      ? Number(scenario.at(-1))
+      : 2;
     const model = "openai/gpt-5.2";
     const env = {
       MATCHBASE_OPENROUTER_API_KEY: randomUUID(),
@@ -36,6 +45,10 @@ for (const scenario of [
     const manufacturerUrl =
       "https://vertex-networking.example.com/datasheets/lmx24";
     const unsupportedUrl = "https://unrelated-seller.example.com/contacts";
+    const socialUrl = "https://profiles.example.org/aster-network";
+    const institutionUrl = "https://registry.example.org/record/aster";
+    const methodText =
+      "Method-only source passage; entity match remains unresolved.";
     const identityQuote = `${name} is an IT equipment seller in Dubai, United Arab Emirates.`;
     const productQuote = `${name} sells the LMX24 unmanaged network switch.`;
     const email = "sales@aster-network.example.com";
@@ -74,7 +87,7 @@ for (const scenario of [
     // This is the historical failure shape: retrieval succeeded but no extraction
     // evidence was accepted, and native_citations did not yet exist in the schema.
     const continuation = {
-      ...(scenario === "focused"
+      ...(focused
         ? {
             indexed_leads: [
               {
@@ -102,8 +115,9 @@ for (const scenario of [
     const plan = {
       mode: "live",
       version: "research-round.v1",
-      round_number: 2,
-      ...(scenario === "focused"
+      round_number: roundNumber,
+      ...(progressive ? { research_strategy: "progressive-evidence.v1" } : {}),
+      ...(focused
         ? {
             focus_analysis_required: true,
             follow_up: {
@@ -247,7 +261,7 @@ for (const scenario of [
       let result,
         annotations = [];
       if (!schema) {
-        if (scenario === "focused") {
+        if (focused) {
           assert.equal(
             requests[0].response_format.json_schema.name,
             "research_focus_plan",
@@ -278,6 +292,42 @@ for (const scenario of [
             },
           },
         ];
+        if (progressive && input.instruction.includes("Research method:")) {
+          assert.match(
+            body.messages[0].content,
+            /no login|public access only/i,
+          );
+          result =
+            "Company-specific method reference needs scoped verification. A relationship is only a hypothesis.";
+          annotations =
+            scenario === "progressive-no-citations"
+              ? []
+              : [
+                  {
+                    type: "url_citation",
+                    url_citation: {
+                      url: input.instruction.includes("official_institutions")
+                        ? institutionUrl
+                        : socialUrl,
+                      title: "Method-only reference",
+                      content: methodText,
+                    },
+                  },
+                ];
+        } else if (progressive) {
+          const methodContext = input.previous_method_reviews;
+          assert.ok(
+            methodContext?.length >= 1,
+            "Actual method references must feed main focused research",
+          );
+          assert.equal(methodContext[0].round_number, roundNumber);
+          if (scenario !== "progressive-no-citations") {
+            assert.equal(methodContext[0].sources[0].url, socialUrl);
+            assert.ok(methodContext[0].sources[0].excerpt.includes(methodText));
+            if (roundNumber >= 4)
+              assert.equal(methodContext[1].sources[0].url, institutionUrl);
+          }
+        }
       } else if (schema === "research_focus_plan") {
         assert.equal(
           body.plugins,
@@ -299,10 +349,10 @@ for (const scenario of [
           search_tasks: ["Inspect official identity and dated offers"],
           evidence_gaps: ["Current quotation"],
           scope_notes: ["Keep the approved product requirement"],
+          ...(progressive ? { insights: [] } : {}),
         };
       } else if (schema === "matchbase_native_candidate_index") {
-        if (scenario === "focused")
-          assert.deepEqual(input.priority_candidate_names, [name]);
+        if (focused) assert.deepEqual(input.priority_candidate_names, [name]);
         indexSeen = true;
         const citations = new Map(
           input.native_citations.map((citation) => [
@@ -320,6 +370,14 @@ for (const scenario of [
         );
         assert.ok(citations.get(productUrl)?.includes(productQuote));
         assert.ok(citations.has(manufacturerUrl));
+        if (progressive && scenario !== "progressive-no-citations") {
+          assert.ok(
+            citations.get(socialUrl)?.includes(methodText),
+            "Method-only citation provenance must reach extraction",
+          );
+          if (roundNumber >= 4)
+            assert.ok(citations.get(institutionUrl)?.includes(methodText));
+        }
         result = {
           candidates: [
             {
@@ -436,6 +494,8 @@ for (const scenario of [
         before_call: createRoundCallGuard(plan),
         source_retriever: async (url) => {
           retrievals.push(url);
+          if (progressive && [socialUrl, institutionUrl].includes(url))
+            return fetched(url, methodText);
           assert.equal(
             url,
             manufacturerUrl,
@@ -448,13 +508,68 @@ for (const scenario of [
     assert.ok(indexSeen && batchSeen);
     assert.equal(
       requests.length,
-      scenario === "legacy"
-        ? 4
-        : ["synthesis-exhausted", "mixed-native"].includes(scenario)
-          ? 6
-          : 5,
+      progressive
+        ? roundNumber >= 4
+          ? 7
+          : 6
+        : scenario === "legacy"
+          ? 4
+          : ["synthesis-exhausted", "mixed-native"].includes(scenario)
+            ? 6
+            : 5,
       "Only the failing stage repeats; successful search, index and extraction are retained",
     );
+    if (progressive) {
+      assert.equal(
+        result.continuation.evidence_memory.round_number,
+        roundNumber,
+      );
+      assert.equal(
+        result.continuation.method_reviews.length,
+        roundNumber >= 4 ? 2 : 1,
+      );
+      assert.equal(
+        result.continuation.method_reviews[0].status,
+        scenario === "progressive-no-citations"
+          ? "incomplete"
+          : "references_found",
+      );
+      assert.equal(
+        result.continuation.method_reviews[0].sources.length,
+        scenario === "progressive-no-citations" ? 0 : 1,
+      );
+      assert.ok(
+        result.checkpoints.some(
+          (checkpoint) => checkpoint.phase === "social_evidence_research",
+        ),
+      );
+      assert.ok(
+        result.checkpoints
+          .filter((checkpoint) =>
+            [
+              "social_evidence_research",
+              "institutional_evidence_research",
+            ].includes(checkpoint.phase),
+          )
+          .every((checkpoint) => checkpoint.request_timeout_ms === 600000),
+      );
+      if (roundNumber >= 4)
+        assert.ok(
+          result.checkpoints.some(
+            (checkpoint) =>
+              checkpoint.phase === "institutional_evidence_research",
+          ),
+        );
+      assert.equal(
+        result.candidates.length,
+        1,
+        "A supplementary gap must not discard a sourced dossier",
+      );
+      assert.equal(
+        result.continuation.collected_responses.length,
+        requests.length,
+      );
+    }
     assert.equal(
       requests.filter(
         (body) =>
@@ -487,7 +602,11 @@ for (const scenario of [
       assert.ok(
         Math.abs(result.total_cost_usd - requests.length * 0.01) < 1e-9,
       );
-    assert.deepEqual(retrievals, [manufacturerUrl]);
+    const methodUrls =
+      progressive && scenario !== "progressive-no-citations"
+        ? [socialUrl, ...(roundNumber >= 4 ? [institutionUrl] : [])]
+        : [];
+    assert.deepEqual(retrievals, [...methodUrls, manufacturerUrl]);
     assert.equal(result.stop_reason, "user_review");
     if (scenario === "focused") {
       assert.equal(
@@ -525,7 +644,10 @@ for (const scenario of [
     const urls = new Set(
       result.continuation.native_citations.map((citation) => citation.url),
     );
-    assert.deepEqual(urls, new Set([contactUrl, productUrl, manufacturerUrl]));
+    assert.deepEqual(
+      urls,
+      new Set([contactUrl, productUrl, manufacturerUrl, ...methodUrls]),
+    );
     assert.ok(
       result.evidence_sources.every((source) =>
         [contactUrl, productUrl].includes(source.source_url),

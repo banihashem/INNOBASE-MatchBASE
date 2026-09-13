@@ -9,6 +9,7 @@ import type {
 import { ResearchRoundFault } from "@matchbase/data";
 import { getConfiguredProviderRoute } from "./openrouter-byok-policy.js";
 import { normalizeResearchGaps } from "./research-gap-normalizer.js";
+import { progressiveResearchMethods } from "./progressive-research-policy.js";
 import {
   getConfiguredLiveModels,
   researchSearchEngineForModel,
@@ -650,6 +651,14 @@ export async function buildResearchRoundPlan(input: {
       "Default research requires Google/OpenAI BYOK models for discovery, extraction and synthesis. Review the configured synthesis model.",
     );
   const native = input.round_number === 1;
+  const researchStrategy = native
+    ? undefined
+    : ("progressive-evidence.v1" as const);
+  const progressiveMethods = progressiveResearchMethods({
+    round_number: input.round_number,
+    ...(researchStrategy ? { research_strategy: researchStrategy } : {}),
+  });
+  const methodCalls = progressiveMethods.length;
   const approvedSearchModels = [
     ...new Set([
       ...research,
@@ -676,7 +685,9 @@ export async function buildResearchRoundPlan(input: {
   const baseCalls =
     (input.round_number === 1
       ? research.length * (2 + Math.ceil(candidateLimit / 2)) + 1
-      : 14) + priceCalls;
+      : 14) +
+    priceCalls +
+    methodCalls;
   const recoveryReserve = 6;
   const calls = baseCalls + recoveryReserve;
   const conservativeRetryRate = actualRates.length
@@ -692,8 +703,12 @@ export async function buildResearchRoundPlan(input: {
     : undefined;
   const ratesForCalls = [
     ...research.map((model) => actualRates.find((r) => r.model === model)),
-    ...Array.from({ length: baseCalls - research.length - 3 }, () =>
-      actualRates.find((r) => r.model === extraction),
+    ...Array.from({ length: methodCalls }, () =>
+      actualRates.find((r) => r.model === research[0]),
+    ),
+    ...Array.from(
+      { length: baseCalls - research.length - methodCalls - 3 },
+      () => actualRates.find((r) => r.model === extraction),
     ),
     ...Array.from({ length: 2 }, () =>
       actualRates.find((r) => r.model === priceModel),
@@ -734,6 +749,7 @@ export async function buildResearchRoundPlan(input: {
       (sum, model) => sum + webAllowance(model, searchEngines[model]!),
       0,
     ) +
+    methodCalls * webAllowance(research[0]!, searchEngines[research[0]!]!) +
     2 * webAllowance(priceModel, priceEngine) +
     recoveryReserve *
       Math.max(
@@ -762,17 +778,17 @@ export async function buildResearchRoundPlan(input: {
   const now = new Date();
   const titles = [
     "Initial supplier research",
-    "Resolve the most important gaps",
-    "Focused evidence refinement",
-    "Public social evidence review",
-    "Independent social and evidence audit",
+    "Public social evidence and remaining gaps",
+    "Relationship insights and focused research",
+    "Country-specific official records",
+    "Independent institutional cross-check",
   ];
   const purposes = [
     "Discover up to 20 companies through two search paths. Establish seller identity, relevant product or service evidence and published contacts first; publish conditional findings with unresolved quotation requirements.",
-    "Reuse the saved roster and resolve missing seller identity and product or service evidence before refining quotation, warranty and order-specific details. Preserve unknown requirements as explicit gaps.",
-    "Analyse the buyer follow-up against saved findings, then deepen research into useful evidence gaps. Preserve prior round history and unresolved requirements.",
-    "Check relevant accessible public corporate profiles, identity linkage and dated business claims. Missing profiles are not a qualification failure.",
-    "Challenge source independence, contradictions and unresolved claims; seek better primary evidence. No private accounts or supplier contact.",
+    "Analyse the buyer follow-up and saved findings, review public corporate social evidence, and resolve missing seller identity and offering evidence before refining quotation and order-specific details. Preserve unresolved requirements.",
+    "Use evidence-linked relationship hypotheses, contradictions and the buyer focus to deepen research. Continue public social corroboration and preserve earlier findings without treating inferred relationships as facts.",
+    "Investigate official registries, customs publicity, trade ministries and relevant regulators in evidenced countries of registration and operation. Continue public social corroboration and distinguish unavailable records from absent evidence.",
+    "Cross-check institutional records and source independence, resolve material conflicts, and investigate evidenced branches, facilities or related entities. Preserve record scope and access limitations; no private accounts or supplier contact.",
   ];
   return {
     choices,
@@ -780,6 +796,7 @@ export async function buildResearchRoundPlan(input: {
       version: "research-round.v1",
       ...(input.round_number > 1
         ? {
+            research_strategy: researchStrategy!,
             focus_analysis_required: true,
             follow_up: input.follow_up ?? { question: "", lead_ids: [] },
           }
@@ -833,6 +850,8 @@ export async function buildResearchRoundPlan(input: {
         ...(input.round_number > 1
           ? [
               "This estimate includes one AI analysis of your follow-up and saved findings before focused web research. Editing the question does not call a model. Original requirements and all prior round results remain preserved.",
+              `This new research strategy includes ${methodCalls} additional web ${methodCalls === 1 ? "call" : "calls"} using the selected research model: ${progressiveMethods.map((method) => (method === "public_social" ? "public corporate social review" : "country-specific official institutional review")).join(" and ")}. These calls, their search charges and approved recovery alternatives are included in this estimate; the six-call shared recovery reserve is unchanged. Earlier approved plans are not expanded.`,
+              "Relationships derived from saved evidence guide targeted questions, not unverified ownership or capability claims. Public source access varies by country: login, CAPTCHA, paid documents and non-public customs records are reported as limitations, never bypassed or assumed to exist.",
             ]
           : []),
         "Dedicated price research includes a seven-day web pass and structured extraction; a thirty-day fallback and extraction are included only when the first pass has no usable sourced recent price. Four calls are reserved, with at most two web searches.",
@@ -856,6 +875,7 @@ export function createRoundCallGuard(
   plan: ResearchRoundPlan,
   previouslyConsumedCalls = 0,
 ) {
+  progressiveResearchMethods(plan);
   const primaryModels = new Set([
     ...plan.research_models,
     plan.extraction_model,

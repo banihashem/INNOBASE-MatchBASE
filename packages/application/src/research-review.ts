@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
-import type { ResearchReview, SupplierEntityV3 } from "@matchbase/contracts";
+import {
+  validateResearchEvidenceMemory,
+  validateResearchMethodReview,
+  type ResearchReview,
+  type SupplierEntityV3,
+} from "@matchbase/contracts";
 import type { ResearchContinuation } from "./dual-lane-orchestrator.js";
 import { evaluateLiveCandidate } from "./live-supplier-evidence.js";
 import { safePublicEvidenceUrl } from "./openrouter-model-policy.js";
@@ -75,6 +80,10 @@ export function buildResearchReview(
   round: number,
   previous?: ResearchReview,
 ): ResearchReview {
+  if (continuation?.evidence_memory)
+    validateResearchEvidenceMemory(continuation.evidence_memory);
+  for (const method of continuation?.method_reviews ?? [])
+    validateResearchMethodReview(method);
   let collected = continuation?.indexed_leads ?? [];
   for (const [, item] of continuation?.roster ?? []) {
     if (
@@ -176,6 +185,12 @@ export function buildResearchReview(
     },
     ...(continuation?.focus_analysis
       ? { focus_analysis: continuation.focus_analysis }
+      : {}),
+    ...(continuation?.evidence_memory
+      ? { evidence_memory: structuredClone(continuation.evidence_memory) }
+      : {}),
+    ...(continuation?.method_reviews
+      ? { method_reviews: structuredClone(continuation.method_reviews) }
       : {}),
   };
 }

@@ -588,6 +588,8 @@ const longResearchPhases = new Set([
   "verification",
   "verification_extraction",
   "synthesis",
+  "social_evidence_research",
+  "institutional_evidence_research",
 ]);
 // Discovery has the same bounded deadline for every approved model family.
 // Extraction suffixes and additional approved lanes inherit that deadline.

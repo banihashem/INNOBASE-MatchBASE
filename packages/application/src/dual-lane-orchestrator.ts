@@ -9,6 +9,8 @@ import {
   type ResearchRoundPlan,
   type ResearchPriceSearchV3,
   type ResearchFocusAnalysis,
+  type ResearchEvidenceMemory,
+  type ResearchMethodReview,
 } from "@matchbase/contracts";
 import {
   getConfiguredLiveModels,
@@ -70,6 +72,16 @@ import {
   planResearchFocus,
 } from "./research-focus-planner.js";
 import { buildResearchSynthesisMessages } from "./research-synthesis-context.js";
+import { buildResearchEvidenceMemory } from "./research-evidence-memory.js";
+import {
+  progressiveResearchMethods,
+  progressiveResearchInstructions,
+  requiresPublicSocialReview,
+} from "./progressive-research-policy.js";
+import {
+  buildMethodReview,
+  executeProgressiveMethod,
+} from "./progressive-method-research.js";
 
 export interface DualLaneExecutionInput {
   readonly product_requirement: string;
@@ -89,6 +101,8 @@ export interface DualLaneExecutionOptions extends LiveCallOptions {
   readonly source_retriever?: typeof fetchPrimaryEvidenceText;
 }
 export interface ResearchContinuation {
+  evidence_memory?: ResearchEvidenceMemory;
+  method_reviews?: ResearchMethodReview[];
   indexed_leads?: CollectedResearchLead[];
   focus_analysis?: ResearchFocusAnalysis;
   /** JSON-encoded raw responses remain lossless even for characters jsonb cannot represent. */
@@ -140,7 +154,7 @@ Include a country_of_registration fact with an exact supporting source quotation
 Return a detailed plain-English evidence briefing with native citations, exact source URLs and short verbatim quotations for every supported company identity, capability, constraint and commercial fact. Organize the notes by company and explicitly name remaining evidence gaps. Distinguish exhausted discovery from unresolved verification. Do not return JSON or another research plan: a separate non-web extraction step will structure these notes without adding evidence.`;
 
 export function buildFocusedResearchInstructions(plan: ResearchRoundPlan) {
-  const instruction = `${plan.purpose} Focus on these unresolved differentiators: ${normalizeResearchGaps(plan.focus_requirements).join("; ")}. Reuse existing evidence and return updated records only where new evidence changes or supplements findings. Review up to20 candidates. ${plan.round_number >= 4 ? "Review accessible public corporate social profiles and cite actual profiles/posts. Link profiles to the legal company using website reciprocity and corporate contacts. Distinguish reviewed, access_limited, no_profile_found after an actual search, and not_executed. Badges/followers are not qualification. Company websites and their social accounts are one controlled evidence origin. Do not bypass login, collect private employee data, contact anyone or invent profiles/dates. Record platform limits and latest activity actually seen; lack of a profile is not failure." : ""}`;
+  const instruction = `${plan.purpose} Focus on these unresolved differentiators: ${normalizeResearchGaps(plan.focus_requirements).join("; ")}. Reuse existing evidence and return updated records only where new evidence changes or supplements findings. Review up to20 candidates. ${requiresPublicSocialReview(plan) ? "Review accessible public corporate social profiles and cite actual profiles/posts. Link profiles to the legal company using website reciprocity and corporate contacts. Distinguish reviewed, access_limited, no_profile_found after an actual search, and not_executed. Badges/followers are not qualification. Company websites and their social accounts are one controlled evidence origin. Do not bypass login, collect private employee data, contact anyone or invent profiles/dates. Record platform limits and latest activity actually seen; lack of a profile is not failure." : ""} ${progressiveResearchInstructions(plan)}`;
   return {
     instruction,
     system_instruction: `${RESEARCH_EXECUTION_INSTRUCTIONS}\n${buildNativeResearchRoundInstructions("verification", plan.round_number, instruction)}\n${EVIDENCE_POLICY}`,
@@ -229,6 +243,10 @@ export async function executeDualLaneResearch(
   const checkpoints: LiveResearchCheckpoint[] = [];
   const calls: OpenRouterCompletionResult[] = [];
   const nativeResults = new Map<string, OpenRouterCompletionResult>();
+  const methodResults: OpenRouterCompletionResult[] = [];
+  const methodReviews = structuredClone(
+    options.continuation?.method_reviews ?? [],
+  );
   let indexedLeads = structuredClone(options.continuation?.indexed_leads ?? []);
   let focusAnalysis: ResearchFocusAnalysis | undefined;
   const evidence = new Map<string, LiveEvidenceRecord>(
@@ -295,7 +313,8 @@ export async function executeDualLaneResearch(
       (url) =>
         !refreshedSources.has(url) &&
         (retrieved.get(url) == null ||
-          (options.round_plan?.round_number ?? 0) >= 4),
+          (options.round_plan?.round_number ?? 0) >= 4 ||
+          options.round_plan?.research_strategy === "progressive-evidence.v1"),
     );
     for (let index = 0; index < citedUrls.length; index += 3) {
       const chunk = citedUrls.slice(index, index + 3);
@@ -304,7 +323,9 @@ export async function executeDualLaneResearch(
           if (
             refreshedSources.has(url) ||
             (retrieved.get(url) != null &&
-              (options.round_plan?.round_number ?? 0) < 4)
+              (options.round_plan?.round_number ?? 0) < 4 &&
+              options.round_plan?.research_strategy !==
+                "progressive-evidence.v1")
           )
             return retrieved.get(url)!;
           const pending = pendingSources.get(url);
@@ -401,6 +422,7 @@ export async function executeDualLaneResearch(
                         options.round_plan,
                         {
                           ...options.continuation,
+                          method_reviews: methodReviews,
                           indexed_leads: indexedLeads,
                           roster: [...roster.entries()],
                           evidence: [...evidence.entries()],
@@ -500,7 +522,10 @@ export async function executeDualLaneResearch(
     // Retrieval enriches extraction only; the provider response/usage remains immutable.
     const authorityCitations = researchCitationInventory(
       result.citations ?? [],
-      options.continuation?.native_citations ?? [],
+      [
+        ...(options.continuation?.native_citations ?? []),
+        ...methodResults.flatMap((entry) => entry.citations ?? []),
+      ],
       retrieved,
     );
     const extractionCitations = authorityCitations.flatMap((citation) => {
@@ -577,6 +602,49 @@ export async function executeDualLaneResearch(
               ? "discovery_xai"
               : `discovery_${family}`;
   });
+  if (options.round_plan) {
+    const methods = progressiveResearchMethods(options.round_plan);
+    if (methods.length && (!focusAnalysis || !options.continuation))
+      throw new LiveResearchError(
+        "MB-409-FOCUS-PARENT",
+        "Progressive research requires saved findings and their approved focus analysis.",
+      );
+    for (const method of methods) {
+      const methodRun = await executeProgressiveMethod(
+        method,
+        input,
+        options.round_plan,
+        {
+          ...options.continuation!,
+          method_reviews: methodReviews,
+        },
+        focusAnalysis!,
+        callback,
+      );
+      if (methodRun.result) {
+        calls.push(methodRun.result);
+        methodResults.push(methodRun.result);
+        await retrieveCitedSources(
+          methodRun.result,
+          options.round_plan.round_number,
+        );
+      }
+      const currentRetrievals = new Map(
+        [...retrieved].filter(([url]) => refreshedSources.has(url)),
+      );
+      methodReviews.push(
+        buildMethodReview(
+          method,
+          options.round_plan,
+          methodRun.lead_ids,
+          methodRun.searched_at,
+          methodRun.result,
+          currentRetrievals,
+          methodRun.failure_code,
+        ),
+      );
+    }
+  }
   const discovery = await Promise.allSettled(
     options.round_plan && options.round_plan.round_number > 1
       ? [
@@ -606,6 +674,16 @@ export async function executeDualLaneResearch(
       : `Unresolved earlier-round limitation: ${gap}`,
   );
   coverageGaps.push(
+    ...methodReviews
+      .filter(
+        (review) =>
+          review.round_number === options.round_plan?.round_number &&
+          review.status !== "references_found",
+      )
+      .map(
+        (review) =>
+          `${review.method === "public_social" ? "Public social" : "Official institutional"} reference search: ${review.status}. ${review.limitations.slice(-2).join(" ")}`,
+      ),
     ...successful.flatMap((entry) =>
       entry.parsed.remaining_gaps.filter((gap) =>
         gap.startsWith("Partial extraction coverage:"),
@@ -1076,6 +1154,36 @@ export async function executeDualLaneResearch(
       cost_reported: checkpoint.cost_reported ?? false,
     });
   }
+  const continuation: ResearchContinuation | undefined = options.round_plan
+    ? {
+        indexed_leads: indexedLeads,
+        collected_responses: [
+          ...(options.continuation?.collected_responses ?? []),
+          ...calls.map((response) => JSON.stringify(response)),
+        ],
+        ...(focusAnalysis ? { focus_analysis: focusAnalysis } : {}),
+        method_reviews: methodReviews,
+        native_citations: researchCitationInventory(
+          [
+            ...successful.map((entry) => entry.result),
+            ...methodResults,
+          ].flatMap((result) => result.citations ?? []),
+          options.continuation?.native_citations ?? [],
+          retrieved,
+        ),
+        coverage_gaps: coverageGaps,
+        entity_ids: [...entityIds],
+        roster: [...roster],
+        evidence: [...evidence],
+        retrieved: [...retrieved],
+        remaining_gaps: normalizeResearchGaps(previous.remaining_gaps, 40),
+      }
+    : undefined;
+  if (continuation && options.round_plan)
+    continuation.evidence_memory = buildResearchEvidenceMemory(
+      continuation,
+      options.round_plan.round_number,
+    );
   return {
     lane_g_result:
       discovery[0]?.status === "fulfilled"
@@ -1105,29 +1213,7 @@ export async function executeDualLaneResearch(
     executed_models: calls
       .filter((call) => call.live_api_invoked)
       .map((call) => call.model),
-    ...(options.round_plan
-      ? {
-          continuation: {
-            indexed_leads: indexedLeads,
-            collected_responses: [
-              ...(options.continuation?.collected_responses ?? []),
-              ...calls.map((response) => JSON.stringify(response)),
-            ],
-            ...(focusAnalysis ? { focus_analysis: focusAnalysis } : {}),
-            native_citations: researchCitationInventory(
-              successful.flatMap((entry) => entry.result.citations ?? []),
-              options.continuation?.native_citations ?? [],
-              retrieved,
-            ),
-            coverage_gaps: coverageGaps,
-            entity_ids: [...entityIds],
-            roster: [...roster],
-            evidence: [...evidence],
-            retrieved: [...retrieved],
-            remaining_gaps: normalizeResearchGaps(previous.remaining_gaps, 40),
-          },
-        }
-      : {}),
+    ...(continuation ? { continuation } : {}),
     ...assembled,
     candidates: rankedCandidates,
     synthesis_result: synthesisResult,

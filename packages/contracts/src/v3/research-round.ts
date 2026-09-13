@@ -17,6 +17,8 @@ export interface ResearchModelRate {
   source_url: string;
 }
 export interface ResearchRoundPlan {
+  /** Newly quoted research methods; absent preserves historical approval scope. */
+  research_strategy?: "progressive-evidence.v1";
   /** Included in this quote's call and cost allowance; never executed while editing. */
   focus_analysis_required?: boolean;
   follow_up?: { question: string; lead_ids: string[] };

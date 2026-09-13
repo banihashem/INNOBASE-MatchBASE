@@ -55,6 +55,10 @@ export function phaseLabel(phase: string, loop = 0): string {
   if (phase === "step3_prompt_validation") return "Checking your research plan";
   if (phase === "research_focus_analysis")
     return "Analysing your follow-up and saved findings";
+  if (phase.startsWith("social_evidence_research"))
+    return "Checking public corporate profiles and social sources";
+  if (phase.startsWith("institutional_evidence_research"))
+    return "Checking country registries and institutional records";
   if (phase === "user_cancelled") return "Stopped by you";
   if (phase.startsWith("price_research")) {
     const window = phase.includes("30") ? "last 30 days" : "last 7 days";

@@ -11,6 +11,37 @@ const started = {
   failed: 0,
   updated_at: "2026-09-09T10:00:00Z",
 };
+it.each([
+  [
+    "social_evidence_research",
+    "Checking public corporate profiles and social sources",
+  ],
+  [
+    "institutional_evidence_research",
+    "Checking country registries and institutional records",
+  ],
+])(
+  "MB-UX-QUALITY-001 L11 shows %s as recorded work without an invented progress percentage",
+  (phase, label) => {
+    render(
+      <WorkflowActivity
+        state="verification_loop_running"
+        progress={{ phase, loop: 4, message: "Checking sources" }}
+        activity={[{ ...started, phase }]}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: label })).toBeVisible();
+    expect(screen.getByRole("progressbar")).not.toHaveAttribute(
+      "aria-valuenow",
+    );
+    expect(screen.getByLabelText("Current operation")).toHaveTextContent(label);
+    expect(
+      screen.getByText(/0 operation\(s\) completed · 1 in progress/),
+    ).toBeVisible();
+    expect(screen.queryByText("Results saved")).toBeNull();
+  },
+);
+
 it("MB-UX-QUALITY-001 L09 shows server-confirmed model recovery without promoting raw provider errors", () => {
   const recoveryMessage =
     "Continuing this step with openai/gpt, the approved alternative to google/gemini. No extra round starts.";

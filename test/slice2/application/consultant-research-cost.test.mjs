@@ -289,7 +289,7 @@ test("MB-UX-COST-001 each approval has a bounded allowance and no sixth round", 
   assert.equal(plan.automatic_recovery_attempts, 3);
   assert.equal(plan.extraction_batch_size, 2);
   assert.equal(plan.recovery_call_reserve, 6);
-  assert.equal(plan.max_calls, 24); // Includes one focus-analysis and four dedicated price-stage calls.
+  assert.equal(plan.max_calls, 25); // Includes focus analysis, price research and public social review.
   assert.equal(plan.focus_analysis_required, true);
   assert.deepEqual(plan.follow_up, { question: "", lead_ids: [] });
   assert.ok(plan.assumptions.some((text) => text.includes("one AI analysis")));

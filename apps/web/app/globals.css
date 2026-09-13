@@ -2448,8 +2448,12 @@ footer {
 }
 .activity-complete-heading a,
 .activity-complete-heading button {
+  background: transparent;
+  border: 0;
   color: #9de9dd;
+  cursor: pointer;
   font-size: 13px;
+  min-height: 44px;
   padding: 8px 0;
   text-decoration: underline;
   text-underline-offset: 3px;

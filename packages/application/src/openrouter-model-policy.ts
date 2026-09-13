@@ -2,6 +2,10 @@ import { createHash, randomUUID } from "node:crypto";
 import type { ResearchModelRate } from "@matchbase/contracts";
 import { ResearchRoundFault } from "@matchbase/data";
 import { Agent } from "undici";
+import {
+  classifyProviderHttpFailure,
+  type ProviderHttpFailure,
+} from "./provider-http-failure.js";
 import { fetchPrimaryEvidenceText } from "./live-source-fetch.js";
 import {
   classifyResponseFailure,
@@ -93,6 +97,7 @@ export interface OpenRouterModelCapabilities {
   readonly endpoint_prices?: readonly Record<string, unknown>[];
 }
 export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
+  readonly provider_http_failure?: ProviderHttpFailure;
   readonly recovery_message?: string;
   readonly recovery_original_model?: string;
   readonly recovery_next_model?: string;
@@ -123,6 +128,8 @@ export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
   readonly request_hash: string;
   readonly request_timeout_ms?: number;
   readonly request_input_bytes?: number;
+  readonly request_schema_sha256?: string;
+  readonly request_schema_bytes?: number;
   readonly request_output_token_limit?: number;
   readonly provider_generation_id?: string;
   readonly started_at: string;
@@ -226,6 +233,7 @@ export class LiveResearchError extends Error {
       readonly provider_name: string;
       readonly is_byok: boolean;
     },
+    readonly provider_http_failure?: ProviderHttpFailure,
   ) {
     super(`${code}: ${message}`);
     this.name = "LiveResearchError";
@@ -799,6 +807,32 @@ export async function callOpenRouterCompletion(
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "");
       const category = providerErrorCategory(errorBody, params.model);
+      const diagnostic = classifyProviderHttpFailure(
+        errorBody,
+        response.status,
+        params.response_format?.type ?? "text",
+      );
+      const legacyRestriction: ProviderHttpFailure["category"] | undefined =
+        category === "provider credential is not accepted"
+          ? "authentication"
+          : category === "provider credit limit prevents execution"
+            ? "billing"
+            : category === "account privacy policy has no compatible endpoint"
+              ? "privacy"
+              : category ===
+                  "OpenAI organization permissions disable the hosted web_search_preview tool"
+                ? "permission"
+                : category ===
+                    "native web search is unavailable on the selected endpoint"
+                  ? "web_unavailable"
+                  : undefined;
+      const httpFailure: ProviderHttpFailure = legacyRestriction
+        ? {
+            http_status: diagnostic.http_status,
+            request_format: diagnostic.request_format,
+            category: legacyRestriction,
+          }
+        : diagnostic;
       // Only a named upstream endpoint can establish a provider-local failure.
       // Gateway authentication/policy errors must never trigger route substitution.
       let providerFailure: LiveResearchError["provider_failure"];
@@ -822,23 +856,35 @@ export async function callOpenRouterCompletion(
       const webPermissionDenied =
         category ===
         "OpenAI organization permissions disable the hosted web_search_preview tool";
-      const terminalCategory = [
-        "provider credential is not accepted",
-        "provider credit limit prevents execution",
-        "account privacy policy has no compatible endpoint",
-        "requested parameters are unsupported by available endpoints",
-        "native web search is unavailable on the selected endpoint",
-      ].includes(category);
+      const terminalCategory =
+        [
+          "provider credential is not accepted",
+          "provider credit limit prevents execution",
+          "account privacy policy has no compatible endpoint",
+          "requested parameters are unsupported by available endpoints",
+          "native web search is unavailable on the selected endpoint",
+        ].includes(category) ||
+        [
+          "authentication",
+          "billing",
+          "privacy",
+          "permission",
+          "refusal",
+          "context_limit",
+          "schema_compatibility",
+          "unsupported_parameters",
+        ].includes(httpFailure.category);
       throw new LiveResearchError(
         webPermissionDenied
           ? "MB-403-LIVE-WEB-PERMISSION"
           : "MB-502-LIVE-PROVIDER",
-        `Provider returned HTTP ${response.status}: ${category}.`,
+        `Provider returned HTTP ${response.status}: ${httpFailure.category === "schema_compatibility" ? "the endpoint rejected the structured-output schema" : category}.`,
         !webPermissionDenied &&
           !terminalCategory &&
           (response.status === 429 || response.status >= 500),
         undefined,
         providerFailure,
+        httpFailure,
       );
     }
     const data = (await response.json()) as {
@@ -1246,9 +1292,16 @@ export function selectApprovedStructuredRecovery(
   options: LiveCallOptions,
 ): { original_model: string; next_model: string } | undefined {
   const stage = options.stage_recovery_state;
+  const httpSchemaFailure =
+    error instanceof LiveResearchError &&
+    error.code === "MB-502-LIVE-PROVIDER" &&
+    error.provider_http_failure?.category === "schema_compatibility" &&
+    error.provider_http_failure.request_format === "json_schema" &&
+    [400, 422].includes(error.provider_http_failure.http_status);
   if (
     !(error instanceof LiveResearchError) ||
-    !["MB-422-LIVE-JSON", "MB-422-LIVE-SCHEMA"].includes(error.code) ||
+    (!httpSchemaFailure &&
+      !["MB-422-LIVE-JSON", "MB-422-LIVE-SCHEMA"].includes(error.code)) ||
     !options.before_call ||
     !stage ||
     options.signal?.aborted
@@ -1271,6 +1324,9 @@ export function selectApprovedStructuredRecovery(
     options,
   );
   const current = stage.replacements.get(model);
+  // A rejected schema must move to the one approved alternative; do not send
+  // the same incompatible schema repeatedly or extend the replacement chain.
+  if (httpSchemaFailure && current) return undefined;
   if (!alternative || (current && current !== alternative)) return undefined;
   stage.replacements.set(model, alternative);
   return { original_model: model, next_model: alternative };
@@ -1291,6 +1347,8 @@ export async function runLiveCompletion(
   for (let attempt = 1; ; attempt++) {
     signal?.throwIfAborted();
     const currentModel = model;
+    let structuredRecoverySelected:
+      { original_model: string; next_model: string } | undefined;
     const replacementEngine = options.approved_search_engines?.[currentModel];
     try {
       return await runLiveCompletionAttempt(
@@ -1304,19 +1362,40 @@ export async function runLiveCompletion(
             ? { web_engine: replacementEngine }
             : {}),
           on_checkpoint: async (checkpoint) => {
+            if (
+              attempts > 1 &&
+              attempt < attempts &&
+              checkpoint.state === "failed" &&
+              checkpoint.provider_http_failure?.category ===
+                "schema_compatibility"
+            )
+              structuredRecoverySelected = selectApprovedStructuredRecovery(
+                currentModel,
+                new LiveResearchError(
+                  "MB-502-LIVE-PROVIDER",
+                  "Structured schema was rejected.",
+                  false,
+                  undefined,
+                  undefined,
+                  checkpoint.provider_http_failure,
+                ),
+                options,
+              );
             const hasNext = Boolean(
-              checkpoint.recovery_scheduled &&
+              (checkpoint.recovery_scheduled || structuredRecoverySelected) &&
               !signal?.aborted &&
               (stage ? stage.remaining() > 0 : attempt < attempts),
             );
-            const alternative = hasNext
-              ? approvedRecoveryModel(
-                  request.model,
-                  currentModel,
-                  context,
-                  options,
-                )
-              : undefined;
+            const alternative =
+              structuredRecoverySelected?.next_model ??
+              (hasNext
+                ? approvedRecoveryModel(
+                    request.model,
+                    currentModel,
+                    context,
+                    options,
+                  )
+                : undefined);
             if (alternative) {
               model = alternative;
               stage?.replacements.set(request.model, alternative);
@@ -1352,6 +1431,20 @@ export async function runLiveCompletion(
         },
       );
     } catch (error) {
+      // An outer owner (focus planning) deliberately sets attempts=1 and calls
+      // this selector itself. Preserve its single shared accounting boundary.
+      const schemaReplacement = structuredRecoverySelected;
+      if (
+        schemaReplacement &&
+        error instanceof LiveResearchError &&
+        error.code === "MB-502-LIVE-PROVIDER" &&
+        error.provider_http_failure?.category === "schema_compatibility" &&
+        !signal?.aborted
+      ) {
+        model = schemaReplacement.next_model;
+        await waitForLiveRecovery(signal ? { signal } : {}, attempt);
+        continue;
+      }
       if (
         attempt >= attempts ||
         (stage && stage.remaining() <= 0) ||
@@ -1378,6 +1471,10 @@ async function runLiveCompletionAttempt(
       ),
     };
   const effort = options.reasoning_effort ?? context.reasoning_effort ?? "high";
+  const requestSchema =
+    request.response_format?.type === "json_schema"
+      ? JSON.stringify(request.response_format.json_schema.schema)
+      : undefined;
   const checkpointId = randomUUID();
   let auditedResponse: OpenRouterCompletionResult | undefined;
   let checkpoint: LiveResearchCheckpoint = {
@@ -1397,6 +1494,14 @@ async function runLiveCompletionAttempt(
       .digest("hex"),
     request_input_bytes:
       Buffer.byteLength(JSON.stringify(request.messages), "utf8") + 512,
+    ...(requestSchema
+      ? {
+          request_schema_sha256: createHash("sha256")
+            .update(requestSchema)
+            .digest("hex"),
+          request_schema_bytes: Buffer.byteLength(requestSchema, "utf8"),
+        }
+      : {}),
     request_output_token_limit: request.max_tokens ?? 12000,
     started_at: new Date().toISOString(),
     native_web: Boolean(context.require_web) && options.web_engine !== "exa",
@@ -1620,6 +1725,9 @@ async function runLiveCompletionAttempt(
       message: `${context.phase} request failed.`,
       completed_at: new Date().toISOString(),
       error: safeError.message,
+      ...(safeError.provider_http_failure
+        ? { provider_http_failure: safeError.provider_http_failure }
+        : {}),
       ...(auditedResponse
         ? {
             response_content: auditedResponse.text.slice(0, 200000),

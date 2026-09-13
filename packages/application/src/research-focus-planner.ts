@@ -10,12 +10,14 @@ import {
   runLiveCompletion,
   LiveResearchError,
   liveRecoveryAttemptLimit,
+  selectApprovedStructuredRecovery,
   withLiveStageBudget,
   waitForLiveRecovery,
   type LiveCallOptions,
   type LiveResearchCheckpoint,
 } from "./openrouter-model-policy.js";
 import { objectSchema, parseLiveJson } from "./live-json-schema.js";
+import { researchFocusWireSchema } from "./research-focus-wire-schema.js";
 import {
   buildResearchEvidenceMemory,
   validateResearchFocusInsights,
@@ -320,7 +322,10 @@ export async function planResearchFocus(
   const progressiveInstruction = progressive
     ? " PROGRESSIVE EVIDENCE ANALYSIS: Inspect the source-backed evidence memory before relying on excerpts. Identify relationships, repeated origins, shared contacts or locations, conflicting observations and useful research opportunities. Produce at most eight insights, or an empty array when none are defensible. Every insight must reference existing retained lead IDs and source URLs, state its basis as a research_hypothesis and ask a concrete next evidence question. Shared sources, contacts, names, corporate websites and social profiles do not prove common ownership, legal identity, independent corroboration or suitability. Never infer jurisdiction from a URL suffix or name. Reported affiliation remains a hypothesis until verified in an appropriate current source. Integrate the buyer focus with these hypotheses and the assigned social or institutional source tasks; do not replace the buyer focus. Country records require a source-backed jurisdiction, exact entity disambiguation, document dates and scope; aggregate customs statistics are market context, not company transactions. Do not treat source references alone as verified findings. Return exactly this schema: " +
       JSON.stringify(schema)
-    : "";
+    : plan.extraction_model.startsWith("google/gemini-")
+      ? " Return exactly this schema, including all value and list limits: " +
+        JSON.stringify(schema)
+      : "";
   const budget = withLiveStageBudget({
     ...options,
     automatic_recovery_attempts: limit - previouslyConsumedAttempts,
@@ -355,7 +360,12 @@ export async function planResearchFocus(
             json_schema: {
               name: "research_focus_plan",
               strict: true,
-              schema,
+              schema: researchFocusWireSchema(
+                schema,
+                budget.options.stage_recovery_state?.replacements.get(
+                  plan.extraction_model,
+                ) ?? plan.extraction_model,
+              ),
             },
           },
         },
@@ -432,12 +442,20 @@ export async function planResearchFocus(
           "MB-422-LIVE-SCHEMA",
           "MB-422-FOCUS-PLAN",
         ].includes(error.code);
+      const alternative =
+        !guardFailure && attempt < limit && budget.remaining() > 0
+          ? selectApprovedStructuredRecovery(
+              plan.extraction_model,
+              error,
+              budget.options,
+            )
+          : undefined;
       const recover =
         !guardFailure &&
         !options.signal?.aborted &&
         attempt < limit &&
         budget.remaining() > 0 &&
-        (transient || contentFailure);
+        (transient || contentFailure || Boolean(alternative));
       if (terminalCheckpoint)
         await options.on_checkpoint?.({
           ...terminalCheckpoint,
@@ -447,9 +465,21 @@ export async function planResearchFocus(
               ? error.code
               : "MB-503-LIVE-CHECKPOINT",
           recovery_scheduled: recover,
+          ...(alternative
+            ? {
+                recovery_original_model: alternative.original_model,
+                recovery_next_model: alternative.next_model,
+                recovery_message: `Continuing focused planning with the approved alternative ${alternative.next_model} after a structured-output validation or compatibility failure. Saved findings and the round allowance are retained.`,
+              }
+            : {}),
           message: recover
-            ? `Repairing the focused research plan (${attempt + 1} of ${limit}) within the approved round allowance. Saved findings and selected leads are retained.`
-            : "Focused research planning could not complete within this stage's approved allowance. Saved findings and selected leads are retained.",
+            ? alternative
+              ? `Continuing focused planning with the approved alternative ${alternative.next_model} (${attempt + 1} of ${limit}). Saved findings and selected leads are retained.`
+              : `Repairing the focused research plan (${attempt + 1} of ${limit}) within the approved round allowance. Saved findings and selected leads are retained.`
+            : error instanceof LiveResearchError &&
+                error.code === "MB-502-LIVE-PROVIDER"
+              ? "The provider rejected focused planning and no automatic recovery is available for this failure. Saved findings and selected leads are retained."
+              : "Focused research planning could not complete within this stage's approved allowance. Saved findings and selected leads are retained.",
         });
       if (!recover) throw error;
       feedback = contentFailure

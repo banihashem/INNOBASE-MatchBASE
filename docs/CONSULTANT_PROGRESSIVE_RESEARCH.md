@@ -1,6 +1,6 @@
 # Progressive Consultant research
 
-Activity: MB-UX-QUALITY-001 L01/L05/L11. Canonical implementation root: `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE`. Product authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`.
+Activity: MB-UX-QUALITY-001 L01/L05/L11/L12. Canonical implementation root: `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE`. Product authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`.
 
 ## Round lifecycle
 
@@ -23,6 +23,8 @@ Each supplementary method saves `method_reviews` with its round, observation tim
 Official investigation separates registered country, operating facility and served market. Registries, licences, filings and public customs records support different facts. Aggregate trade statistics cannot establish a company's shipment or price. Login, CAPTCHA, paywall and unavailable/nonpublic data remain access limitations, not absence of registration or activity. Corporate websites and their own social posts are one originating assertion. New interfaces and English PDFs expose hypotheses, references, changes and limitations separately from assessed supplier dossiers. Current social access checks cannot inherit an old retrieval timestamp as a new review.
 
 ## Focus reliability
+
+Gemini focus requests use a smaller provider grammar containing required object shape, types and essential enums. The complete value, array-size and provenance constraints remain in the prompt and local validator. Simplifying the wire representation never admits an invalid plan. An explicitly identified HTTP structured-schema compatibility error can use the approved same-billing alternative within the shared attempt allowance; unknown400, authentication, billing, privacy, permission, refusal and cancellation do not authorize that substitution. HTTP checkpoints retain only normalized diagnostic categories and schema fingerprints, never raw upstream error bodies. A provider rejection is reported separately from exhausted recovery attempts.
 
 Focus analysis uses a concise schema and groups common evidence questions instead of repeating each supplier dossier. Its combined reasoning/output limit is at most 12,000 tokens, bounded further by the approved per-call allowance. Every selected lead is retained even when more than twenty are selected; the model's additional priority list is independently limited. Truncated, invalid or transient responses share at most three actual calls, including previous attempts in the same execution. Every dispatched attempt remains in usage accounting. Unknown facts cannot be filled from a truncated response.
 

@@ -2446,8 +2446,8 @@ footer {
   font-size: 17px;
   margin: 0;
 }
-.activity-complete-heading a,
-.activity-complete-heading button {
+.workflow-activity-complete .activity-complete-heading a,
+.workflow-activity-complete .activity-complete-heading button {
   background: transparent;
   border: 0;
   color: #9de9dd;

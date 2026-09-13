@@ -508,7 +508,7 @@ test("DEV-004 L01 signed-out entry, Consultant dashboard, profile and saved-requ
     .getByRole("link", { name: /Sign in as Consultant|Continue with Google/ })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Your sourcing dashboard" }),
+    page.getByRole("heading", { name: "Your workspace" }),
   ).toBeVisible();
   await checkView(page, "dashboard");
   await page
@@ -940,7 +940,7 @@ test("DEV-004 L01 mobile dashboard, saved reports and supplier dossier have no p
     state: "progressive_reveal_ready",
   });
   for (const [url, heading] of [
-    ["/?view=home", "Your sourcing dashboard"],
+    ["/?view=home", "Your workspace"],
     ["/?view=history", "Your research"],
     ["/?view=reports", "Supplier reports"],
     ["/?view=profile", "Your profile"],

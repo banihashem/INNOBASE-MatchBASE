@@ -7,7 +7,7 @@ test("Consultant Home sign-in reaches the saved workspace through the real sessi
   await page.goto("/");
   await page.getByRole("link", { name: /Sign in as Consultant/i }).click();
   await expect(
-    page.getByRole("heading", { name: "Your sourcing dashboard" }),
+    page.getByRole("heading", { name: "Your workspace" }),
   ).toBeVisible();
   const identity = await page.request.get("/api/v1/me");
   expect(identity.ok()).toBe(true);

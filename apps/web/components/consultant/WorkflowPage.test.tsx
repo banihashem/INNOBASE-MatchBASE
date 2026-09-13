@@ -1473,7 +1473,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "View round 1 result" }),
     );
-    await screen.findByText(/Showing the selected saved round below/);
+    await screen.findByText(/Showing the selected saved round\./);
     fireEvent.click(screen.getByRole("button", { name: "Resume Research" }));
     fireEvent.click(await screen.findByRole("button", { name: "Resume Run" }));
     await waitFor(() => expect(newReads).toBeGreaterThanOrEqual(2));
@@ -1495,6 +1495,100 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
         .length,
     ).toBe(5);
     expect(screen.getByText(/Showing 5 of 20/)).toBeVisible();
+  });
+
+  it("MB-UX-SIMPLIFY-001 L01 releases historical output after returning to latest while an approved round completes", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/consultant/workflow?run_id=history-run",
+    );
+    const makeOutput = (name: string, execution: string) => ({
+      ...GOLDEN_SCENARIO_V3_01,
+      execution_id: execution,
+      supplier_candidates: GOLDEN_SCENARIO_V3_01.supplier_candidates
+        .slice(0, 1)
+        .map((supplier) => ({ ...supplier, legal_name: name })),
+    });
+    const old = makeOutput("Historical supplier", "history-1");
+    const latest = makeOutput("Latest saved supplier", "history-2");
+    const finished = makeOutput("Newly completed supplier", "history-3");
+    const finish = deferred();
+    let reads = 0;
+    const fetchMock = vi.fn(async (url: string, options?: RequestInit) => {
+      expect(options?.method).not.toBe("POST");
+      if (url === "/api/v1/me")
+        return response({
+          tier: "consultant",
+          user_id: "user",
+          account_id: "account",
+        });
+      if (url.includes("research-rounds")) {
+        if (url.includes("round_id="))
+          return response({ output: url.includes("saved-1") ? old : latest });
+        return response({
+          ...roundOverview,
+          next_round: 3,
+          rounds: [1, 2].map((round) => ({
+            round_id: `saved-${round}`,
+            round_number: round,
+            status: "completed",
+            output_available: true,
+            candidate_count: 1,
+            plan: { ...roundQuote.plan, round_number: round },
+          })),
+        });
+      }
+      reads++;
+      if (reads === 1)
+        return response({
+          session: {
+            run_id: "history-run",
+            execution_id: "history-3",
+            state: "research_dispatching",
+            mode: "demonstration",
+            intake: {},
+            output: latest,
+            revealed_count: 5,
+          },
+        });
+      return finish.promise;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ConsultantWorkflowPage />);
+    await screen.findByRole("heading", { name: "Latest saved supplier" });
+    fireEvent.click(await screen.findByText("Saved rounds and attempts"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "View round 1 result" }),
+    );
+    await screen.findByRole("heading", { name: "Historical supplier" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show latest review for follow-up" }),
+    );
+    await screen.findByRole("heading", { name: "Latest saved supplier" });
+    await waitFor(() => expect(reads).toBeGreaterThanOrEqual(2));
+    await act(async () => {
+      finish.resolve(
+        response({
+          session: {
+            run_id: "history-run",
+            execution_id: "history-3",
+            state: "progressive_reveal_ready",
+            output: finished,
+            revealed_count: 5,
+          },
+        }),
+      );
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Newly completed supplier" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "Latest saved supplier" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Download Full PDF Report" }),
+    ).toBeEnabled();
   });
 
   it("reveals match-sorted candidates five at a time and opens their full dossier", async () => {
@@ -1528,7 +1622,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
           return response({
             session: {
               run_id: "run-results",
-              state: "completed",
+              state: "progressive_reveal_ready",
               mode: "demonstration",
               intake: {},
               output,
@@ -1548,6 +1642,21 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
       screen.getByRole("tab", { name: "Research & results" }),
     ).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "New research" })).toBeEnabled();
+    for (const tab of ["Your request", "Review & prepare"]) {
+      fireEvent.click(screen.getByRole("tab", { name: new RegExp(`^${tab}`) }));
+      expect(document.getElementById("supplier-findings")).not.toBeVisible();
+      fireEvent.click(
+        screen.getByRole("button", { name: "View supplier findings" }),
+      );
+      expect(
+        screen.getByRole("tab", { name: "Research & results" }),
+      ).toHaveAttribute("aria-selected", "true");
+      await waitFor(() =>
+        expect(
+          screen.getByRole("region", { name: "Supplier shortlist" }),
+        ).toHaveFocus(),
+      );
+    }
     const best = [...output.supplier_candidates].sort(
       (a, b) =>
         b.assessment.compatibility_score - a.assessment.compatibility_score,

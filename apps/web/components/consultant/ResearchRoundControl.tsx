@@ -1,5 +1,11 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { ResearchReviewPanel } from "./ResearchReviewPanel";
 import type {
   ConsultantResearchOutputV3,
@@ -60,14 +66,22 @@ export function ResearchRoundControl({
   runId,
   workflowState,
   hasResults = false,
+  children,
+  focusRequest = 0,
   onStarted,
   onPreview,
 }: {
   runId: string;
   workflowState: string;
   hasResults?: boolean;
+  children?: ReactNode;
+  focusRequest?: number;
   onStarted: () => void;
-  onPreview: (output: ConsultantResearchOutputV3, roundId: string) => void;
+  onPreview: (
+    output: ConsultantResearchOutputV3,
+    roundId: string,
+    latest?: boolean,
+  ) => void;
 }) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -89,6 +103,15 @@ export function ResearchRoundControl({
   const [loadError, setLoadError] = useState("");
   const visibleError = error || loadError;
   const [notice, setNotice] = useState("");
+  const focusPanel = useRef<HTMLDetailsElement>(null);
+  const focusInput = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!focusRequest || !focusPanel.current) return;
+    focusPanel.current.open = true;
+    (
+      focusInput.current ?? focusPanel.current.querySelector("summary")
+    )?.focus();
+  }, [focusRequest]);
   useEffect(() => {
     setQuestion("");
     setLeadIds([]);
@@ -249,7 +272,7 @@ export function ResearchRoundControl({
       setBusy(false);
     }
   }
-  async function preview(roundId: string) {
+  async function preview(roundId: string, latest = false) {
     setBusy(true);
     setError("");
     try {
@@ -260,13 +283,19 @@ export function ResearchRoundControl({
       const data = await response.json();
       if (!response.ok)
         throw new Error(data.error ?? "Saved result unavailable.");
-      onPreview(data.output, roundId);
-      setHistoricalReview({
-        roundId,
-        review: data.output.research_review ?? null,
-      });
+      onPreview(data.output, roundId, latest);
+      setHistoricalReview(
+        latest
+          ? null
+          : {
+              roundId,
+              review: data.output.research_review ?? null,
+            },
+      );
       setNotice(
-        "Showing the selected saved round below. Later work does not replace this saved result.",
+        latest
+          ? "Showing the latest saved findings and review."
+          : "Showing the selected saved round. Later work does not replace this saved result.",
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Saved result unavailable.");
@@ -301,19 +330,42 @@ export function ResearchRoundControl({
     ? historicalReview.review
     : overview?.research_review;
   const selectLead = (id: string, selected: boolean) => {
+    selectMany([id], selected);
+  };
+  const selectMany = (selectedIds: string[], selected: boolean) => {
     setLeadIds((ids) =>
-      selected ? [...new Set([...ids, id])] : ids.filter((item) => item !== id),
+      selected
+        ? [...new Set([...ids, ...selectedIds])]
+        : ids.filter((item) => !selectedIds.includes(item)),
     );
     setQuote(null);
+  };
+  const canFocus = !historicalReview && next >= 2 && next <= 5 && !active;
+  const useQuestion = (suggestion: string) => {
+    const existing = question.trim();
+    const updated = existing.includes(suggestion.trim())
+      ? question
+      : [existing, suggestion.trim()].filter(Boolean).join("\n\n");
+    if (updated.length > 4000) {
+      setError(
+        "This question would exceed 4,000 characters. Shorten your existing focus before adding it.",
+      );
+      return;
+    }
+    setQuestion(updated);
+    setQuote(null);
+    setError("");
+    if (focusPanel.current) focusPanel.current.open = true;
+    focusInput.current?.focus();
   };
   const button =
     "rounded-md border border-sky-400 bg-sky-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
   return (
     <section
       aria-labelledby="round-cost-heading"
-      className="rounded-xl border border-slate-600 bg-slate-900 p-5 space-y-5"
+      className="research-workspace space-y-5"
     >
-      <div>
+      <div className="sr-only">
         <h2 id="round-cost-heading" className="text-xl font-bold text-white">
           Research rounds &amp; cost
         </h2>
@@ -323,41 +375,41 @@ export function ResearchRoundControl({
         </p>
       </div>
       {costs ? (
-        <div className="rounded-lg bg-slate-800 p-4 space-y-3">
+        <div className="research-cost-strip rounded-lg border border-slate-600 bg-slate-900 p-4 space-y-3">
           <p className="text-slate-200">
             {costs.complete
               ? "Recorded spend to date"
               : "Known spend to date · accounting incomplete"}
-            <strong className="block text-3xl text-white mt-1">
+            <strong className="ml-3 text-xl text-white">
               {money(costs.recorded_total_usd)}
             </strong>
           </p>
-          <dl className="grid gap-3 sm:grid-cols-3 text-sm">
-            <div>
-              <dt className="text-slate-400">Section 1 · request entry</dt>
-              <dd>$0.00 · no model call</dd>
-            </div>
-            <div>
-              <dt className="text-slate-400">Section 2 · preparation</dt>
-              <dd>{money(costs.preparation_usd)}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-400">
-                Section 3 · all research attempts
-              </dt>
-              <dd>{money(costs.research_usd)}</dd>
-            </div>
-          </dl>
           {costs.unpriced_calls > 0 && (
             <p className="text-amber-200">
               {costs.unpriced_calls} call(s) have missing cost records. They are
               not counted as free.
             </p>
           )}
-          <details className="text-xs text-slate-300">
+          <details className="text-sm text-slate-300">
             <summary className="cursor-pointer">
               Cost accounting details
             </summary>
+            <dl className="grid gap-3 sm:grid-cols-3 text-sm mt-3">
+              <div>
+                <dt className="text-slate-400">Section 1 · request entry</dt>
+                <dd>$0.00 · no model call</dd>
+              </div>
+              <div>
+                <dt className="text-slate-400">Section 2 · preparation</dt>
+                <dd>{money(costs.preparation_usd)}</dd>
+              </div>
+              <div>
+                <dt className="text-slate-400">
+                  Section 3 · all research attempts
+                </dt>
+                <dd>{money(costs.research_usd)}</dd>
+              </div>
+            </dl>
             <p className="mt-2">
               OpenRouter charges: {money(costs.openrouter_charge_usd)} · BYOK
               upstream provider: {money(costs.byok_upstream_usd)}. Failed and
@@ -373,30 +425,72 @@ export function ResearchRoundControl({
             : "Loading recorded costs…"}
         </p>
       )}
-      {(review || historicalReview || (hasResults && overview)) && (
-        <div className="space-y-3">
-          {historicalReview && (
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <p>Showing the research review saved with the selected result.</p>
-              <button
-                type="button"
-                className={button}
-                onClick={() => setHistoricalReview(null)}
-              >
-                Show latest review for follow-up
-              </button>
-            </div>
+      {hasResults && (
+        <nav
+          aria-label="Research results navigation"
+          className="flex flex-wrap items-center gap-4 text-sm"
+        >
+          <a
+            className="text-teal-200 underline underline-offset-4"
+            href="#supplier-findings"
+          >
+            Supplier shortlist
+          </a>
+          {review && (
+            <a
+              className="text-teal-200 underline underline-offset-4"
+              href="#research-leads"
+            >
+              Research review · {review.summary.needs_review} incomplete
+            </a>
           )}
+          {overview && next <= 5 && !active && (
+            <button
+              type="button"
+              className={button}
+              onClick={() => {
+                if (focusPanel.current) focusPanel.current.open = true;
+                (
+                  focusInput.current ??
+                  focusPanel.current?.querySelector("summary")
+                )?.focus();
+              }}
+            >
+              Focus the next round
+            </button>
+          )}
+        </nav>
+      )}
+      {historicalReview && (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <p>Showing the research review saved with the selected result.</p>
+          <button
+            type="button"
+            className={button}
+            disabled={busy}
+            onClick={() => {
+              const latest = [...completed].sort(
+                (a, b) => b.round_number - a.round_number,
+              )[0];
+              if (latest) void preview(latest.round_id, true);
+            }}
+          >
+            Show latest review for follow-up
+          </button>
+        </div>
+      )}
+      {children}
+      {(review || historicalReview || (hasResults && overview)) && (
+        <div id="research-leads" className="space-y-3">
           {review ? (
             <ResearchReviewPanel
+              key={`${runId}:${historicalReview?.roundId ?? "latest"}`}
               review={review}
               selectedIds={leadIds}
               disabled={busy}
-              onSelect={
-                !historicalReview && next >= 2 && next <= 5 && !active
-                  ? selectLead
-                  : undefined
-              }
+              onSelect={canFocus ? selectLead : undefined}
+              onSelectMany={canFocus ? selectMany : undefined}
+              onUseQuestion={canFocus ? useQuestion : undefined}
             />
           ) : (
             <p className="text-sm text-slate-300">
@@ -407,82 +501,27 @@ export function ResearchRoundControl({
           )}
         </div>
       )}
-      <details open={!hasResults || active} className="research-round-options">
+      <details
+        ref={focusPanel}
+        id="next-research-round"
+        open={!hasResults || active}
+        className="research-round-options rounded-xl border border-slate-600 bg-slate-900 p-5"
+      >
         <summary className="cursor-pointer font-semibold">
-          {hasResults
-            ? "Review rounds or research further"
-            : "Plan this research round"}
+          {active
+            ? "Current research round"
+            : next > 5
+              ? "Research complete · five rounds recorded"
+              : hasResults
+                ? `Focus the next round · round ${next}`
+                : "Plan this research round"}
+          {leadIds.length > 0 && (
+            <span className="ml-2 text-sm text-teal-200">
+              {leadIds.length} selected lead(s)
+            </span>
+          )}
         </summary>
         <div className="space-y-5 mt-4">
-          {overview && overview.rounds.some((r) => r.status !== "proposed") && (
-            <div>
-              <h3 className="font-semibold">Saved rounds and attempts</h3>
-              <ul className="divide-y divide-slate-700">
-                {overview.rounds
-                  .filter((r) => r.status !== "proposed")
-                  .map((r) => (
-                    <li
-                      key={r.round_id}
-                      className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
-                    >
-                      <span>
-                        Round {r.round_number} ·{" "}
-                        {r.plan.recovery_source_execution_id
-                          ? "Recovered saved evidence"
-                          : r.status}{" "}
-                        {r.candidate_count !== null
-                          ? `· ${r.candidate_count} suppliers`
-                          : ""}
-                        <span className="mt-1 block font-semibold">
-                          {r.plan.title}
-                        </span>
-                        <span className="block text-slate-300">
-                          {r.plan.purpose}
-                        </span>
-                        <small className="block text-slate-400">
-                          {r.plan.recovery_source_execution_id
-                            ? "$0.00 · local recovery, no provider calls"
-                            : r.plan.mode === "demonstration"
-                              ? "$0.00 · demonstration"
-                              : r.execution_id &&
-                                  costs?.by_execution[r.execution_id]
-                                ? `${money(costs.by_execution[r.execution_id]!.recorded_usd)} recorded${costs.by_execution[r.execution_id]!.unpriced_calls ? " · incomplete" : ""}`
-                                : "Cost records pending"}
-                        </small>
-                        {r.plan.follow_up && (
-                          <span className="mt-2 block text-slate-300">
-                            <span className="font-semibold">
-                              Approved follow-up focus:{" "}
-                            </span>
-                            <span
-                              dir="auto"
-                              className="whitespace-pre-wrap break-words"
-                            >
-                              {r.plan.follow_up.question ||
-                                "Resolve selected evidence gaps"}
-                            </span>
-                            <span className="block">
-                              {r.plan.follow_up.lead_ids.length} selected
-                              lead(s)
-                            </span>
-                          </span>
-                        )}
-                      </span>
-                      {r.output_available && (
-                        <button
-                          type="button"
-                          className={button}
-                          disabled={busy}
-                          onClick={() => void preview(r.round_id)}
-                        >
-                          View round {r.round_number} result
-                        </button>
-                      )}
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          )}
           {active ? (
             <p role="status" className="text-sky-200">
               An approved round is in progress. Its result will be saved here;
@@ -509,13 +548,13 @@ export function ResearchRoundControl({
                 (!quote ||
                   quote.plan.research_strategy ===
                     "progressive-evidence.v1") && (
-                  <section
+                  <details
                     aria-label={`Planned research scope for round ${next}`}
-                    className="rounded-lg border border-slate-600 bg-slate-800 p-4 space-y-2 text-sm"
+                    className="rounded-lg border border-slate-600 bg-slate-800 p-3 space-y-2 text-sm"
                   >
-                    <h4 className="font-semibold">
+                    <summary className="cursor-pointer font-semibold">
                       What this round will investigate
-                    </h4>
+                    </summary>
                     <p>{followUpScope[next].description}</p>
                     <p className="text-slate-300">
                       The estimate includes these searches and AI planning from
@@ -524,7 +563,7 @@ export function ResearchRoundControl({
                       visible; another round does not guarantee more suppliers
                       or stronger evidence.
                     </p>
-                  </section>
+                  </details>
                 )}
               {next === 1 && (
                 <fieldset disabled={busy} className="space-y-3">
@@ -622,6 +661,7 @@ export function ResearchRoundControl({
                     Follow-up focus or question · any language
                   </label>
                   <textarea
+                    ref={focusInput}
                     id="research-follow-up"
                     dir="auto"
                     maxLength={4000}
@@ -919,6 +959,76 @@ export function ResearchRoundControl({
           )}
         </div>
       </details>
+      {overview && overview.rounds.some((r) => r.status !== "proposed") && (
+        <details className="rounded-lg border border-slate-600 p-4">
+          <summary className="cursor-pointer font-semibold">
+            Saved rounds and attempts
+          </summary>
+          <ul className="divide-y divide-slate-700">
+            {overview.rounds
+              .filter((r) => r.status !== "proposed")
+              .map((r) => (
+                <li
+                  key={r.round_id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+                >
+                  <span>
+                    Round {r.round_number} ·{" "}
+                    {r.plan.recovery_source_execution_id
+                      ? "Recovered saved evidence"
+                      : r.status}{" "}
+                    {r.candidate_count !== null
+                      ? `· ${r.candidate_count} suppliers`
+                      : ""}
+                    <span className="mt-1 block font-semibold">
+                      {r.plan.title}
+                    </span>
+                    <span className="block text-slate-300">
+                      {r.plan.purpose}
+                    </span>
+                    <small className="block text-slate-400">
+                      {r.plan.recovery_source_execution_id
+                        ? "$0.00 · local recovery, no provider calls"
+                        : r.plan.mode === "demonstration"
+                          ? "$0.00 · demonstration"
+                          : r.execution_id &&
+                              costs?.by_execution[r.execution_id]
+                            ? `${money(costs.by_execution[r.execution_id]!.recorded_usd)} recorded${costs.by_execution[r.execution_id]!.unpriced_calls ? " · incomplete" : ""}`
+                            : "Cost records pending"}
+                    </small>
+                    {r.plan.follow_up && (
+                      <span className="mt-2 block text-slate-300">
+                        <span className="font-semibold">
+                          Approved follow-up focus:{" "}
+                        </span>
+                        <span
+                          dir="auto"
+                          className="whitespace-pre-wrap break-words"
+                        >
+                          {r.plan.follow_up.question ||
+                            "Resolve selected evidence gaps"}
+                        </span>
+                        <span className="block">
+                          {r.plan.follow_up.lead_ids.length} selected lead(s)
+                        </span>
+                      </span>
+                    )}
+                  </span>
+                  {r.output_available && (
+                    <button
+                      type="button"
+                      className={button}
+                      disabled={busy}
+                      onClick={() => void preview(r.round_id)}
+                    >
+                      View round {r.round_number} result
+                    </button>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </details>
+      )}
       {notice && (
         <p role="status" className="text-sky-200">
           {notice}

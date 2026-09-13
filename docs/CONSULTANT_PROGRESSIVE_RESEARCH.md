@@ -1,6 +1,6 @@
 # Progressive Consultant research
 
-Activity: MB-UX-QUALITY-001 L01/L05/L11/L12/L13. Canonical implementation root: `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE`. Product authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`.
+Activity: MB-UX-QUALITY-001 L01/L05/L11/L12/L13; MB-UX-SIMPLIFY-001 L01. Canonical implementation root: `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE`. Product authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`.
 
 ## Round lifecycle
 
@@ -51,6 +51,16 @@ Documented supplier cards, supplier details and English PDFs continue to use adm
 Counts distinguish discovered names, documented suppliers, incomplete leads and excluded leads. Round history preserves earlier output; historical lead review is read-only. The buyer can return to the latest completed round to choose the next focus. Names are deduplicated by normalized observed name, not by shared website; corporate aliases still require identity evidence.
 
 Old rounds without a lead inventory are projected from grounded retained candidate-index events along the completed owned parent chain. Account, user profile, research run and classification must match, and round numbers decrease. This is a read-only compatibility projection, not a rewrite of historical output, a new web search or a claim that old prices are current.
+
+## Consultant navigation and selection
+
+The Dashboard gives one saved request priority, searches complete request and draft text, and filters by review, progress, retained results or drafts. Filter counts describe the complete loaded collection; the initial five rows and later expansion are presentation limits. A failed later attempt does not hide an earlier available report. Opening saved work does not quote, approve or start research.
+
+Section three presents compact recorded spend and material missing-cost disclosure, then supplier findings, research review and an optional next-round focus. Completed activity is a compact summary with recorded steps available on demand; active work and actionable failures retain their server-derived status. Historical attempts are separate from the next-round form. Previewing history is read-only; returning to the latest review restores its corresponding output as well.
+
+Supplier filters operate across all retained profiles before the five-item display limit and preserve the parent's match ordering and original rank labels. Registered-country filtering uses the stored registration field; a headquarters address is searchable but does not establish registration. Filtered expansion is local; the unfiltered reveal control retains its existing persistence behavior. PDF and JSON exports contain the saved report, not just the filtered view.
+
+Incomplete-lead search and filters are independent of selected lead IDs. Five leads appear per page. Bulk actions name their displayed scope, hidden selections remain selected, and a selected-only filter supports review. Existing excluded and incomplete statuses are never promoted by selection. Question, method, source and history disclosures preserve all retained records. A source-linked suggested question can be appended to the buyer focus without replacing existing text; duplicates and the 4,000-character limit are handled explicitly. Focus and selection changes invalidate an existing estimate and make no paid call. The estimate still displays actual models, billing modes, scope, retry allowance and cost before explicit approval.
 
 ## Verification and maintenance
 

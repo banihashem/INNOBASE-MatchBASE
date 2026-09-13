@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { WorkspaceSession } from "../standard/types";
 import { ConsultantWorkspace } from "./ConsultantWorkspace";
 import { ConsultantShell } from "./ConsultantShell";
@@ -21,6 +21,7 @@ type Draft = {
   draft_data?: { productRequirement?: string };
 };
 type HomeView = "home" | "history" | "reports" | "profile" | "archive";
+type ResearchFilter = "all" | "attention" | "working" | "results" | "drafts";
 const href = (item: Research) =>
   `/consultant/workflow?run_id=${encodeURIComponent(item.run_id)}`;
 const needsApproval = (item: Research) =>
@@ -48,7 +49,12 @@ const isWorking = (item: Research) =>
     "pdf_generating",
   ].includes(item.state);
 const researchStatus = (item: Research) => {
-  if (item.stopped_by_user) return "Stopped by you";
+  if (item.stopped_by_user)
+    return item.result_available
+      ? "Saved results · Stopped by you"
+      : "Stopped by you";
+  if (item.state === "workflow_failed" && item.result_available)
+    return "Saved results · Latest round stopped";
   if (
     item.state === "workflow_failed" ||
     item.state === "invalidated" ||
@@ -59,6 +65,10 @@ const researchStatus = (item: Research) => {
   if (item.result_available) return "Results ready";
   return "Open to review status";
 };
+const needsAttention = (item: Research) =>
+  needsApproval(item) ||
+  item.stopped_by_user ||
+  ["workflow_failed", "invalidated"].includes(item.state);
 const priority = (item: Research) =>
   isWorking(item)
     ? 0
@@ -74,10 +84,11 @@ const dateLabel = (date: string) =>
         timeStyle: "short",
       })
     : "Date unavailable";
-const conciseTitle = (title?: string) => {
-  const text = title?.replace(/\s+/g, " ").trim() || "Saved sourcing request";
-  return text.length > 190 ? `${text.slice(0, 187)}…` : text;
-};
+const requestTitle = (title?: string) =>
+  title?.replace(/\s+/g, " ").trim() || "Saved sourcing request";
+const normalizeSearch = (text: string) =>
+  text.normalize("NFKC").toLocaleLowerCase().replace(/\s+/g, " ").trim();
+const updatedTime = (value: string) => Date.parse(value) || 0;
 
 export function ConsultantHome({
   session,
@@ -93,6 +104,9 @@ export function ConsultantHome({
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
   const [search, setSearch] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
+  const [filter, setFilter] = useState<ResearchFilter>("all");
+  const [showAll, setShowAll] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState(false);
   useEffect(() => {
@@ -158,24 +172,73 @@ export function ConsultantHome({
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [reload, view]);
-  const reports = items.filter((item) => item.result_available);
+  const sortedItems = [...items].sort(
+    (a, b) => updatedTime(b.updated_at) - updatedTime(a.updated_at),
+  );
+  const sortedDrafts = [...drafts].sort(
+    (a, b) => updatedTime(b.updated_at) - updatedTime(a.updated_at),
+  );
+  const reports = sortedItems.filter((item) => item.result_available);
   const active = items.filter((item) => isWorking(item) || needsApproval(item));
   const latest = [...items]
     .filter(
       (item) =>
         isWorking(item) ||
         needsApproval(item) ||
-        (!item.result_available && item.state === "workflow_failed"),
+        (!item.stopped_by_user && item.state === "workflow_failed"),
     )
     .sort(
       (a, b) =>
         priority(a) - priority(b) ||
-        Date.parse(b.updated_at) - Date.parse(a.updated_at),
+        updatedTime(b.updated_at) - updatedTime(a.updated_at),
     )[0];
-  const filtered = (view === "reports" ? reports : items).filter((item) =>
-    `${item.title} ${item.run_id}`.toLowerCase().includes(search.toLowerCase()),
+  const searchWords = normalizeSearch(search).split(" ").filter(Boolean);
+  const matchesSearch = (text: string) =>
+    searchWords.every((word) => normalizeSearch(text).includes(word));
+  const statusItems = (view === "reports" ? reports : sortedItems).filter(
+    (item) =>
+      filter === "all" ||
+      (filter === "attention" && needsAttention(item)) ||
+      (filter === "working" && isWorking(item)) ||
+      (filter === "results" && item.result_available),
   );
-  const list = view === "home" && !search ? filtered.slice(0, 5) : filtered;
+  const filtered = statusItems.filter((item) =>
+    matchesSearch(`${item.title} ${item.run_id}`),
+  );
+  const matchingDrafts = sortedDrafts.filter((draft) =>
+    matchesSearch(
+      `${draft.draft_data?.productRequirement || "Untitled draft"} ${draft.draft_id}`,
+    ),
+  );
+  const limitRows =
+    view === "home" && !searchWords.length && filter === "all" && !showAll;
+  const list = limitRows ? filtered.slice(0, 5) : filtered;
+  const visibleDrafts = limitRows ? matchingDrafts.slice(0, 5) : matchingDrafts;
+  const showDrafts =
+    view !== "reports" && (filter === "all" || filter === "drafts");
+  const newestDraft = !latest && sortedDrafts[0];
+  const hasNextAction = view === "home" && Boolean(latest || newestDraft);
+  const filters: { value: ResearchFilter; label: string; count: number }[] = [
+    { value: "all", label: "All requests", count: items.length },
+    {
+      value: "attention",
+      label: "Review needed",
+      count: items.filter(needsAttention).length,
+    },
+    {
+      value: "working",
+      label: "In progress",
+      count: items.filter(isWorking).length,
+    },
+    { value: "results", label: "With results", count: reports.length },
+    { value: "drafts", label: "Drafts", count: drafts.length },
+  ];
+  const clearFilters = () => {
+    setSearch("");
+    setFilter("all");
+    setShowAll(false);
+    searchInput.current?.focus();
+  };
   const name =
     [session.user_display_name, session.display_name]
       .find(
@@ -235,11 +298,11 @@ export function ConsultantHome({
                 ? "Supplier reports"
                 : view === "history"
                   ? "Your research"
-                  : "Your sourcing dashboard"}
+                  : "Your workspace"}
           </h1>
           <p>
             {view === "home"
-              ? "Continue your work, review supplier findings or start with a new buying requirement."
+              ? "Find a saved request, review its next step or start new research."
               : view === "profile"
                 ? "Your sign-in identity and saved research workspace."
                 : view === "reports"
@@ -248,7 +311,12 @@ export function ConsultantHome({
           </p>
         </div>
         {view !== "profile" && (
-          <a className="cx-button-primary" href="/consultant/workflow?mode=new">
+          <a
+            className={
+              hasNextAction ? "cx-button-secondary" : "cx-button-primary"
+            }
+            href="/consultant/workflow?mode=new"
+          >
             + New research
           </a>
         )}
@@ -360,33 +428,26 @@ export function ConsultantHome({
         </div>
       ) : (
         <>
-          {view === "home" && loaded && (
-            <div className="cx-stats" aria-label="Saved work overview">
-              <a href="/?view=history" className="cx-stat">
-                <strong>{active.length}</strong> In progress or awaiting review
-              </a>
-              <a href="/?view=reports" className="cx-stat">
-                <strong>{reports.length}</strong> Research with results
-              </a>
-              <a href="/?view=history#saved-drafts" className="cx-stat">
-                <strong>{drafts.length}</strong> Unsubmitted drafts
-              </a>
-            </div>
-          )}
           {view === "home" && latest && (
             <section className="cx-panel cx-resume">
               <div>
-                <p className="cx-eyebrow">Continue where you left off</p>
+                <p className="cx-eyebrow">Your next step</p>
                 <h2>{workflowLabel(latest.state, latest.stopped_by_user)}</h2>
-                <p dir="auto" className="cx-snippet">
-                  {conciseTitle(latest.title)}
+                <p
+                  dir="auto"
+                  className="cx-snippet"
+                  title={requestTitle(latest.title)}
+                >
+                  {requestTitle(latest.title)}
                 </p>
                 <p className="cx-time">
                   Updated {dateLabel(latest.updated_at)}
                 </p>
                 <p>
                   {latest.state === "workflow_failed"
-                    ? "Your request is saved. Open it to review the stopped stage and available recovery options."
+                    ? latest.result_available
+                      ? "Earlier results are saved. Review them and the stopped round before deciding whether to continue."
+                      : "Your request is saved. Open it to review the stopped stage and available recovery options."
                     : isWorking(latest)
                       ? "Research is running. Open the request to follow its progress; this will not start another search."
                       : "Your next approval is ready. Review it before any further work starts."}
@@ -397,34 +458,31 @@ export function ConsultantHome({
               </a>
             </section>
           )}
-          {view === "home" && (
-            <section
-              className="cx-journey"
-              aria-label="How Consultant research works"
-            >
-              {[
-                [
-                  "01",
-                  "Describe your needs",
-                  "Add the product or service, requirements and order details in any language.",
-                ],
-                [
-                  "02",
-                  "Review the plan",
-                  "Check the English interpretation, advice and editable research plan.",
-                ],
-                [
-                  "03",
-                  "Research and decide",
-                  "Approve a round and its cost, then review supplier evidence, prices and PDF.",
-                ],
-              ].map(([n, title, copy]) => (
-                <article key={n}>
-                  <span>STEP {n}</span>
-                  <h2>{title}</h2>
-                  <p>{copy}</p>
-                </article>
-              ))}
+          {view === "home" && newestDraft && (
+            <section className="cx-panel cx-resume">
+              <div>
+                <p className="cx-eyebrow">Your next step</p>
+                <h2>Finish your saved request</h2>
+                <p
+                  dir="auto"
+                  className="cx-snippet"
+                  title={requestTitle(
+                    newestDraft.draft_data?.productRequirement,
+                  )}
+                >
+                  {requestTitle(newestDraft.draft_data?.productRequirement)}
+                </p>
+                <p>
+                  Continue editing your draft. Research starts only after the
+                  required approvals.
+                </p>
+              </div>
+              <a
+                className="cx-button-primary"
+                href={`/consultant/workflow?draft_id=${encodeURIComponent(newestDraft.draft_id)}`}
+              >
+                Open saved draft
+              </a>
             </section>
           )}
           <section className="cx-panel">
@@ -434,47 +492,115 @@ export function ConsultantHome({
                   {view === "reports"
                     ? "Ready to review and download"
                     : view === "home"
-                      ? "Recent research"
+                      ? "Your saved work"
                       : "Saved research"}
                 </h2>
                 <p>
-                  {view === "home"
-                    ? "Your latest requests and results"
-                    : "Showing the latest 100 saved research records"}
+                  Search within the latest 100 research records
+                  {view !== "reports"
+                    ? " and 20 unsubmitted drafts"
+                    : "; only requests with results are shown"}
+                  .
                 </p>
               </div>
               <label className="cx-search">
-                Find a request
+                Find a saved request
                 <input
                   type="search"
+                  ref={searchInput}
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search your research"
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setShowAll(false);
+                  }}
+                  placeholder="Product, service or request text"
                 />
               </label>
             </div>
-            {loaded && !list.length && (
+            {view !== "reports" && (
+              <div
+                className="cx-research-filters"
+                role="group"
+                aria-label="Filter saved work"
+              >
+                {filters.map(({ value, label, count }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className="cx-button-secondary"
+                    disabled={!loaded}
+                    aria-pressed={filter === value}
+                    onClick={() => {
+                      setFilter(value);
+                      setShowAll(false);
+                    }}
+                  >
+                    {label}{" "}
+                    <span aria-label={loaded ? undefined : "Not loaded"}>
+                      {loaded ? count : "—"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {loaded && (
+              <div className="cx-list-summary">
+                <p role="status" aria-live="polite">
+                  {filter === "drafts"
+                    ? `${matchingDrafts.length} matching ${matchingDrafts.length === 1 ? "draft" : "drafts"}`
+                    : `${filtered.length} ${filtered.length === 1 ? "request" : "requests"}${limitRows && filtered.length > list.length ? ` · Showing ${list.length} most recent` : ""}`}
+                  {searchWords.length > 0 && showDrafts && filter !== "drafts"
+                    ? ` · ${matchingDrafts.length} matching drafts`
+                    : ""}
+                </p>
+                {(searchWords.length > 0 || filter !== "all") && (
+                  <button
+                    type="button"
+                    className="cx-button-secondary"
+                    onClick={clearFilters}
+                  >
+                    Clear search and filters
+                  </button>
+                )}
+              </div>
+            )}
+            {filter === "attention" && (
+              <p className="cx-request-subtitle">
+                Requests awaiting your approval or stopped for review. Earlier
+                results may still be available.
+              </p>
+            )}
+            {(filter === "results" || view === "reports") && (
+              <p className="cx-request-subtitle">
+                Includes saved results from earlier rounds, even when a later
+                round stopped.
+              </p>
+            )}
+            {loaded && filter !== "drafts" && !list.length && (
               <div className="cx-empty">
                 <h3>
-                  {search
+                  {searchWords.length || filter !== "all"
                     ? "No matching requests"
                     : view === "reports"
                       ? "Your reports will appear here"
                       : "Start your first research"}
                 </h3>
                 <p>
-                  {search
-                    ? "Try another product or a shorter search term."
+                  {searchWords.length || filter !== "all"
+                    ? "Change the search or clear the filters to see your other saved work."
                     : view === "reports"
                       ? "No report is ready yet. Open your research to review its progress."
                       : "No research has been submitted yet. Describe what you need or continue a saved draft."}
                 </p>
-                {view === "reports" && !search && (
+                {view === "reports" && !searchWords.length && (
                   <a href="/?view=history">Open your research</a>
                 )}
               </div>
             )}
-            <ul className="cx-research-list">
+            <ul
+              className="cx-research-list cx-compact-list"
+              aria-label="Saved research"
+            >
               {list.map((item) => (
                 <li key={item.run_id}>
                   <div>
@@ -486,8 +612,12 @@ export function ConsultantHome({
                     {item.mode === "demonstration" && (
                       <span className="cx-mode">Demonstration data</span>
                     )}
-                    <h3 dir="auto" className="cx-snippet">
-                      {conciseTitle(item.title)}
+                    <h3
+                      dir="auto"
+                      className="cx-snippet"
+                      title={requestTitle(item.title)}
+                    >
+                      {requestTitle(item.title)}
                     </h3>
                     <p className="cx-time">
                       Updated {dateLabel(item.updated_at)}
@@ -501,53 +631,103 @@ export function ConsultantHome({
                 </li>
               ))}
             </ul>
-            {view === "home" && items.length > 5 && !search && (
-              <a href="/?view=history">View all saved research →</a>
+            {limitRows && filtered.length > list.length && (
+              <button
+                type="button"
+                className="cx-button-secondary"
+                onClick={() => setShowAll(true)}
+              >
+                Show all {filtered.length} saved requests
+              </button>
             )}
           </section>
-          {view !== "reports" && (
+          {showDrafts && (
             <section id="saved-drafts" className="cx-panel">
               <div className="cx-section-heading">
                 <div>
-                  <h2>Saved drafts</h2>
+                  <h2>Saved drafts{loaded ? ` (${drafts.length})` : ""}</h2>
                   <p>Editing a draft does not start research or use a model.</p>
                 </div>
-                {view === "home" && drafts.length > 5 && (
-                  <a href="/?view=history#saved-drafts">
+                {limitRows && matchingDrafts.length > visibleDrafts.length && (
+                  <button
+                    type="button"
+                    className="cx-button-secondary"
+                    onClick={() => {
+                      setFilter("drafts");
+                      setShowAll(true);
+                    }}
+                  >
                     View all saved drafts
-                  </a>
+                  </button>
                 )}
               </div>
-              {loaded && !drafts.length && <p>No unsubmitted drafts.</p>}
-              <ul className="cx-research-list">
-                {(view === "home" ? drafts.slice(0, 5) : drafts).map(
-                  (draft) => (
-                    <li key={draft.draft_id}>
-                      <div>
-                        <h3 dir="auto" className="cx-snippet">
-                          {conciseTitle(
-                            draft.draft_data?.productRequirement ||
-                              "Untitled draft",
-                          )}
-                        </h3>
-                        <p className="cx-time">
-                          Saved {dateLabel(draft.updated_at)}
-                        </p>
-                      </div>
-                      <a
-                        className="cx-button-secondary"
-                        href={`/consultant/workflow?draft_id=${encodeURIComponent(draft.draft_id)}`}
+              {loaded && !matchingDrafts.length && (
+                <p>
+                  {searchWords.length
+                    ? "No drafts match this search."
+                    : "No unsubmitted drafts."}
+                </p>
+              )}
+              <ul
+                className="cx-research-list cx-compact-list"
+                aria-label="Saved drafts"
+              >
+                {visibleDrafts.map((draft) => (
+                  <li key={draft.draft_id}>
+                    <div>
+                      <span className="cx-state">Unsubmitted draft</span>
+                      <h3
+                        dir="auto"
+                        className="cx-snippet"
+                        title={requestTitle(
+                          draft.draft_data?.productRequirement ||
+                            "Untitled draft",
+                        )}
                       >
-                        Continue draft
-                      </a>
-                    </li>
-                  ),
-                )}
+                        {requestTitle(
+                          draft.draft_data?.productRequirement ||
+                            "Untitled draft",
+                        )}
+                      </h3>
+                      <p className="cx-time">
+                        Saved {dateLabel(draft.updated_at)}
+                      </p>
+                    </div>
+                    <a
+                      className="cx-button-secondary"
+                      href={`/consultant/workflow?draft_id=${encodeURIComponent(draft.draft_id)}`}
+                    >
+                      Continue draft
+                    </a>
+                  </li>
+                ))}
               </ul>
               {view === "history" && drafts.length >= 20 && (
                 <p>The latest 20 unsubmitted drafts are shown.</p>
               )}
             </section>
+          )}
+          {view === "home" && (
+            <details className="cx-panel">
+              <summary>How Consultant research works</summary>
+              <ol>
+                <li>
+                  Describe the product or service, requirements and order in any
+                  language.
+                </li>
+                <li>
+                  Review the English interpretation, advice and research plan.
+                </li>
+                <li>
+                  Approve a research round and its cost, then compare supplier
+                  evidence, prices and reports.
+                </li>
+              </ol>
+              <p>
+                Each additional round needs your approval. Opening saved work
+                does not start another search.
+              </p>
+            </details>
           )}
         </>
       )}

@@ -80,6 +80,7 @@ export default function ConsultantWorkflowPage() {
   const [step3Prompt, setStep3Prompt] = useState<string>("");
   const [advisoryContext, setAdvisoryContext] = useState<any>(null);
   const [output, setOutput] = useState<ConsultantResearchOutputV3 | null>(null);
+  const [researchFocusRequest, setResearchFocusRequest] = useState(0);
   const [revealedCount, setRevealedCount] = useState<number>(5);
   const [selectedSupplier, setSelectedSupplier] =
     useState<SupplierEntityV3 | null>(null);
@@ -1144,6 +1145,7 @@ export default function ConsultantWorkflowPage() {
     if (!runId || isLoading) return;
     if (retryAction === "research") {
       setStage(3);
+      setResearchFocusRequest((value) => value + 1);
       setWorkflowError(null);
       return;
     }
@@ -1559,6 +1561,12 @@ export default function ConsultantWorkflowPage() {
               connectionError={connectionError}
               pdfBusy={isPdfDownloading}
               retryAction={retryAction}
+              onViewResults={() => {
+                setStage(3);
+                requestAnimationFrame(() =>
+                  document.getElementById("supplier-findings")?.focus(),
+                );
+              }}
             />
           )}
           {/* SECTION 1: MULTILINGUAL 3-BOX INTAKE                     */}
@@ -2343,8 +2351,11 @@ export default function ConsultantWorkflowPage() {
                     }}
                   />
                 )}
+              {workflowFeedback}
               {runId && (
                 <ResearchRoundControl
+                  key={runId}
+                  focusRequest={researchFocusRequest}
                   hasResults={Boolean(output)}
                   runId={runId}
                   workflowState={workflowState}
@@ -2352,22 +2363,42 @@ export default function ConsultantWorkflowPage() {
                     viewedRoundRef.current = null;
                     void loadExistingSession(runId);
                   }}
-                  onPreview={(saved, roundId) => {
-                    viewedRoundRef.current = { runId, roundId };
+                  onPreview={(saved, roundId, latest) => {
+                    viewedRoundRef.current = latest ? null : { runId, roundId };
                     setOutput(saved);
                     setRevealedCount(5);
                   }}
-                />
+                >
+                  {output && (
+                    <ConsultantResultsSection
+                      key={`${output.research_run_id}:${output.execution_id}`}
+                      output={output}
+                      suppliers={suppliers}
+                      visibleSuppliers={visibleSuppliers}
+                      revealedCount={revealedCount}
+                      isLoading={isLoading}
+                      isPdfDownloading={isPdfDownloading}
+                      handlePdfDownload={handlePdfDownload}
+                      handleJsonExport={handleJsonExport}
+                      handleRevealMore={handleRevealMore}
+                      onSelectSupplier={(supplier) => {
+                        setSelectedSupplier(supplier);
+                        setIsModalOpen(true);
+                      }}
+                    />
+                  )}
+                </ResearchRoundControl>
               )}
-              {workflowFeedback}
               {!output && !workflowProgress && !workflowError && (
                 <p role="status" className="text-slate-300">
                   Review the cost estimate above to start one research round.
                 </p>
               )}
               {output?.public_social_checks && (
-                <section className="rounded-lg border border-slate-600 p-4">
-                  <h3 className="font-bold">Public social evidence checks</h3>
+                <details className="rounded-lg border border-slate-600 p-4">
+                  <summary className="cursor-pointer font-semibold">
+                    Public social evidence checks
+                  </summary>
                   <ul className="mt-3 space-y-3 text-sm">
                     {output.public_social_checks.map((check, i) => (
                       <li key={i}>
@@ -2393,24 +2424,7 @@ export default function ConsultantWorkflowPage() {
                       </li>
                     ))}
                   </ul>
-                </section>
-              )}
-              {output && (
-                <ConsultantResultsSection
-                  output={output}
-                  suppliers={suppliers}
-                  visibleSuppliers={visibleSuppliers}
-                  revealedCount={revealedCount}
-                  isLoading={isLoading}
-                  isPdfDownloading={isPdfDownloading}
-                  handlePdfDownload={handlePdfDownload}
-                  handleJsonExport={handleJsonExport}
-                  handleRevealMore={handleRevealMore}
-                  onSelectSupplier={(supplier) => {
-                    setSelectedSupplier(supplier);
-                    setIsModalOpen(true);
-                  }}
-                />
+                </details>
               )}
             </div>
           )}

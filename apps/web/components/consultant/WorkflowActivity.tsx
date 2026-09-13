@@ -17,6 +17,7 @@ export function WorkflowActivity({
   connectionError = null,
   pdfBusy = false,
   retryAction = null,
+  onViewResults,
 }: {
   state: string;
   progress: WorkflowProgress | null;
@@ -25,12 +26,9 @@ export function WorkflowActivity({
   connectionError?: string | null;
   pdfBusy?: boolean;
   retryAction?: string | null;
+  onViewResults?: () => void;
 }) {
   const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 15000);
-    return () => clearInterval(timer);
-  }, []);
   const initialInterpretation =
     state === "prep_step1_interpreting" || (state === "intake_draft" && busy);
   const failureLabel =
@@ -58,6 +56,11 @@ export function WorkflowActivity({
     !awaiting &&
     state !== "invalidated" &&
     (busy || state !== "intake_draft");
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, [active]);
   const preparing = state.startsWith("prep_");
   const recoveryAttempt = progress?.recovery_attempt;
   const recoveryLimit = progress?.max_recovery_attempts;
@@ -179,6 +182,61 @@ export function WorkflowActivity({
       )}
     </div>
   );
+  if (ready && !pdfBusy) {
+    return (
+      <section
+        className="workflow-activity workflow-activity-complete"
+        aria-label="Research activity"
+      >
+        <div className="activity-complete-heading">
+          <h2>{heading}</h2>
+          <p className="sr-only" role="status" aria-label="Workflow progress">
+            {heading}
+          </p>
+          {onViewResults ? (
+            <button type="button" onClick={onViewResults}>
+              View supplier findings
+            </button>
+          ) : (
+            <a href="#supplier-findings">View supplier findings</a>
+          )}
+        </div>
+        {connectionError && (
+          <p role="alert" className="activity-warning">
+            Status connection interrupted. The last saved status is shown; this
+            does not mean the research stopped. Reconnecting automatically.
+          </p>
+        )}
+        <details className="activity-details activity-completed-history">
+          <summary>View completed research steps</summary>
+          <p>
+            Results are saved. Review available prices and evidence gaps before
+            making a decision.
+          </p>
+          {progress?.updated_at && (
+            <p className="activity-time">
+              Last update:{" "}
+              <time dateTime={progress.updated_at}>
+                {new Date(progress.updated_at).toLocaleString()}
+              </time>
+            </p>
+          )}
+          {recordedActivity}
+          <ol className="activity-roadmap" aria-label="Research plan">
+            {stages.map((label) => (
+              <li key={label}>{label}</li>
+            ))}
+          </ol>
+          {progress?.message && (
+            <details>
+              <summary>Latest technical checkpoint</summary>
+              <p>{progress.message}</p>
+            </details>
+          )}
+        </details>
+      </section>
+    );
+  }
   return (
     <section className="workflow-activity" aria-label="Research activity">
       <div>

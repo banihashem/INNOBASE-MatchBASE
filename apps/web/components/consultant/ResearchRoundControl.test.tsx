@@ -60,6 +60,139 @@ const researchReview = {
   summary: { discovered: 4, documented: 3, needs_review: 1, excluded: 0 },
   changes: { new_leads: 1, promoted: 0 },
 };
+function simplifyFixture() {
+  const posts: Record<string, any>[] = [];
+  const insight = {
+    insight_id: "question-1",
+    next_question: "Confirm independent route evidence?",
+    statement: "A possible connection requires source checks.",
+    relationship: "shared_source",
+    lead_ids: ["lead-a"],
+    source_urls: ["https://example.com/services"],
+    confidence: "low",
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.includes("view=model_choices"))
+        return Response.json({ choices: [] });
+      if (options?.body) {
+        const body = JSON.parse(String(options.body));
+        posts.push(body);
+        return Response.json({
+          quote_id: "focus-quote",
+          choices: [],
+          plan: { ...plan, round_number: 2, follow_up: body.follow_up },
+        });
+      }
+      return Response.json({
+        costs,
+        next_round: 2,
+        rounds: [
+          {
+            round_id: "latest",
+            round_number: 1,
+            status: "completed",
+            candidate_count: 3,
+            output_available: true,
+            plan,
+          },
+        ],
+        research_review: {
+          ...researchReview,
+          focus_analysis: { insights: [insight] },
+        },
+      });
+    }),
+  );
+  return posts;
+}
+it("MB-UX-SIMPLIFY-001 L01 places saved findings before research detail and opens focus without history or paid calls", async () => {
+  const posts = simplifyFixture();
+  const props = {
+    runId: "run",
+    workflowState: "workflow_failed",
+    hasResults: true,
+    onStarted: vi.fn(),
+    onPreview: vi.fn(),
+  };
+  const { rerender } = render(
+    <ResearchRoundControl {...props}>
+      <section id="supplier-findings">Saved supplier findings</section>
+    </ResearchRoundControl>,
+  );
+  await screen.findByText("Research review · round 1");
+  expect(
+    screen
+      .getByText("Saved supplier findings")
+      .compareDocumentPosition(screen.getByText("Research review · round 1")) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(screen.getByText(/missing cost records/)).toBeVisible();
+  expect(
+    screen.getByText("Cost accounting details").closest("details"),
+  ).not.toHaveAttribute("open");
+  expect(
+    screen.getByText("Saved rounds and attempts").closest("details"),
+  ).not.toHaveAttribute("open");
+  const input = screen.getByRole("textbox", { name: /Follow-up focus/ });
+  expect(input).not.toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Focus the next round" }));
+  expect(input).toBeVisible();
+  expect(input).toHaveFocus();
+  fireEvent.change(input, { target: { value: "Keep this buyer question" } });
+  rerender(
+    <ResearchRoundControl {...props} focusRequest={1}>
+      <section id="supplier-findings">Saved supplier findings</section>
+    </ResearchRoundControl>,
+  );
+  expect(input).toHaveValue("Keep this buyer question");
+  expect(posts).toEqual([]);
+});
+it("MB-UX-SIMPLIFY-001 L01 appends a cited question without losing focus text and invalidates the estimate", async () => {
+  const posts = simplifyFixture();
+  render(
+    <ResearchRoundControl
+      runId="run"
+      workflowState="workflow_complete"
+      hasResults
+      onStarted={vi.fn()}
+      onPreview={vi.fn()}
+    />,
+  );
+  await screen.findByText("Research review · round 1");
+  fireEvent.click(screen.getByRole("button", { name: "Focus the next round" }));
+  const input = screen.getByRole("textbox", { name: /Follow-up focus/ });
+  fireEvent.change(input, { target: { value: "Check the buyer's priority" } });
+  fireEvent.click(screen.getByRole("button", { name: /Get cost estimate/ }));
+  await screen.findByRole("button", { name: /Approve cost estimate/ });
+  fireEvent.click(
+    screen.getByText(/Research questions from connected findings ·/),
+  );
+  const useQuestion = screen.getByRole("button", {
+    name: "Use research question: Confirm independent route evidence?",
+  });
+  fireEvent.click(useQuestion);
+  expect(input).toHaveValue(
+    "Check the buyer's priority\n\nConfirm independent route evidence?",
+  );
+  expect(input).toHaveFocus();
+  expect(
+    screen.queryByRole("button", { name: /Approve cost estimate/ }),
+  ).toBeNull();
+  fireEvent.click(useQuestion);
+  expect(input).toHaveValue(
+    "Check the buyer's priority\n\nConfirm independent route evidence?",
+  );
+  expect(posts.map((post) => post.action)).toEqual(["quote"]);
+  fireEvent.change(input, { target: { value: "a".repeat(3990) } });
+  fireEvent.click(useQuestion);
+  expect(input).toHaveValue("a".repeat(3990));
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "Shorten your existing focus",
+  );
+  expect(posts).toHaveLength(1);
+});
 it.each([
   [2, "Evidence gaps and public profiles", "public corporate social profiles"],
   [3, "Focused relationships and evidence", "shared name, contact or website"],
@@ -104,13 +237,18 @@ it.each([
         name: `Optional round ${round} · ${title}`,
       }),
     ).toBeVisible();
-    const plannedScope = screen.getByRole("region", {
-      name: `Planned research scope for round ${round}`,
-    });
+    const plannedScope = screen.getByLabelText(
+      `Planned research scope for round ${round}`,
+    );
+    expect(plannedScope).not.toHaveAttribute("open");
+    fireEvent.click(
+      within(plannedScope).getByText("What this round will investigate"),
+    );
     expect(plannedScope).toHaveTextContent(String(scope));
     expect(plannedScope).toHaveTextContent(
       "Nothing starts before cost approval",
     );
+    fireEvent.click(screen.getByText("Saved rounds and attempts"));
     expect(screen.getByText("Previously approved search")).toBeVisible();
     expect(
       screen.getByText("Retain the exact historical research scope."),
@@ -763,7 +901,7 @@ it("DEV-004 keeps the spend visible and optional further research secondary afte
   expect(
     await screen.findByText("$0.42", { selector: "strong" }),
   ).toBeVisible();
-  const toggle = screen.getByText("Review rounds or research further");
+  const toggle = screen.getByText("Focus the next round · round 2");
   expect(toggle.closest("details")).not.toHaveAttribute("open");
   expect(
     screen.getByRole("button", { name: /Get cost estimate/ }),

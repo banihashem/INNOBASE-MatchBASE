@@ -2431,6 +2431,62 @@ footer {
   color: #cbd5e1;
   border-left: 4px solid #38bdf8;
 }
+.workflow-activity.workflow-activity-complete {
+  padding: 14px 20px;
+  border-left-color: #5ee1d0;
+}
+.workflow-activity-complete .activity-complete-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 20px;
+}
+.workflow-activity-complete h2 {
+  font-size: 17px;
+  margin: 0;
+}
+.workflow-activity-complete .activity-complete-heading a,
+.workflow-activity-complete .activity-complete-heading button {
+  background: transparent;
+  border: 0;
+  color: #9de9dd;
+  cursor: pointer;
+  font-size: 13px;
+  min-height: 44px;
+  padding: 8px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.workflow-activity-complete .activity-completed-history {
+  margin-top: 4px;
+  padding-top: 0;
+  border-top: 0;
+  font-size: 13px;
+}
+.research-workspace > section,
+.research-workspace > div,
+.research-workspace > details {
+  min-width: 0;
+}
+#supplier-findings,
+#research-leads,
+#next-research-round {
+  scroll-margin-top: 24px;
+}
+.research-workspace input,
+.research-workspace select,
+.research-workspace button,
+.research-workspace summary {
+  min-height: 44px;
+}
+.research-workspace input[type="checkbox"],
+.research-workspace input[type="radio"] {
+  min-height: auto;
+}
+.research-workspace summary {
+  align-content: center;
+}
 .activity-warning {
   color: #fde68a;
   background: #322516;

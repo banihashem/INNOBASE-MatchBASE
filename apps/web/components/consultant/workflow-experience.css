@@ -5,9 +5,9 @@
 .workflow-page-header {
   display: flex;
   justify-content: space-between;
-  gap: 32px;
-  margin-bottom: 28px;
-  padding-bottom: 28px;
+  gap: 24px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
   border-bottom: 1px solid var(--cx-line, #304258);
 }
 .workflow-back-link {
@@ -16,7 +16,7 @@
   text-decoration: none;
 }
 .workflow-eyebrow {
-  margin: 24px 0 8px;
+  margin: 12px 0 6px;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -24,10 +24,10 @@
   font-weight: 700;
 }
 .workflow-page-header h1 {
-  font-size: clamp(26px, 3vw, 36px);
+  font-size: clamp(24px, 2.5vw, 30px);
   line-height: 1.18;
   letter-spacing: -0.035em;
-  margin: 0 0 12px;
+  margin: 0 0 8px;
 }
 .workflow-page-header p:not(.workflow-eyebrow):not(.workflow-saved-state) {
   color: var(--cx-muted, #acbdd0);

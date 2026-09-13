@@ -480,6 +480,7 @@ function ConsultantV3ResultView({
       )}
       {downloadMessage && <p role="status">{downloadMessage}</p>}
       <ConsultantResultsSection
+        key={`${result.research_run_id}:${result.execution_id}`}
         output={result}
         suppliers={suppliers}
         visibleSuppliers={suppliers.slice(0, revealedCount)}

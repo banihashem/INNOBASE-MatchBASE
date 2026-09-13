@@ -45,7 +45,7 @@ test("web build emits layout, spacing and responsive Consultant utilities", () =
   assert.equal(declaration(".flex", "display"), "flex");
   assert.equal(declaration(".p-6", "padding"), "1.5rem");
   assert.equal(declaration(".max-w-lg", "max-width"), "32rem");
-  assert.equal(declaration(".text-3xl", "font-size"), "1.875rem");
+  assert.equal(declaration(".text-2xl", "font-size"), "1.5rem");
   assert.equal(declaration(".text-\\[11px\\]", "font-size"), "11px");
   assert.equal(declaration(".border", "border-style"), "solid");
   assert.equal(declaration(".border-b", "border-bottom-style"), "solid");

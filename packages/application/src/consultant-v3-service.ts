@@ -63,6 +63,7 @@ import {
   type PreparationCallOptions,
 } from "./live-preparation.js";
 import { LiveResearchError } from "./openrouter-model-policy.js";
+import { consultantResearchInput } from "./research-context-preflight.js";
 
 export type ConsultantExecutionMode = "live" | "demonstration" | "hybrid";
 export interface ConsultantWorkflowProgress {
@@ -1020,6 +1021,24 @@ export async function executeConsultantWorkflowResearch(
   const parent = rounds.find(
     (item) => item.round_id === round.plan.parent_round_id,
   );
+  const focusedParentRequired =
+    mode === "live" && round.plan.focus_analysis_required;
+  if (
+    focusedParentRequired &&
+    (!parent ||
+      parent.status !== "completed" ||
+      parent.round_number + 1 !== round.plan.round_number ||
+      parent.account_id !== session.account_id ||
+      parent.user_profile_id !== session.user_profile_id ||
+      parent.run_id !== session.run_id ||
+      parent.classification_id !== session.classification_id)
+  )
+    throw new ApplicationFault(
+      409,
+      "focus-parent-required",
+      "MB-409-FOCUS-STALE",
+      "Review the latest completed research before continuing this round.",
+    );
   // A resumed approved execution retains every earlier dispatch in its allowance.
   const previousAllowance = summarizeResearchExecutionAllowance(
     (
@@ -1033,7 +1052,7 @@ export async function executeConsultantWorkflowResearch(
       previousAllowance.consumed_focus_attempts,
     extraction_batch_size: round.plan.extraction_batch_size ?? 5,
     approved_rates: round.plan.rates,
-    ...(parent?.continuation
+    ...(parent && (parent.continuation || focusedParentRequired)
       ? { continuation: await hydrateResearchContinuation(db, parent) }
       : {}),
     before_call: createRoundCallGuard(
@@ -1065,17 +1084,7 @@ export async function executeConsultantWorkflowResearch(
   // Dispatch Dual Lane Research
   session.state = "lane_gemini_running";
   const dualResult = await executeDualLaneResearch(
-    {
-      product_requirement: session.intake.product_requirement,
-      technical_compliance: session.intake.technical_compliance,
-      order_profile: session.intake.order_profile,
-      deep_prompt: session.step3_deep_prompt?.prompt_text ?? "",
-      mandatory_requirements: session.step3_deep_prompt.discovery_criteria
-        .length
-        ? session.step3_deep_prompt.discovery_criteria
-        : session.approved_request_revision.key_specifications,
-      target_supplier_count: 20,
-    },
+    consultantResearchInput(session),
     {
       mode,
       ...roundOptions,

@@ -343,6 +343,53 @@ describe("MB-UX-QUALITY-001 L05 intake readiness", () => {
 });
 
 describe("MB-UX-LIVE-001 L03 stage gates", () => {
+  it("MB-UX-QUALITY-001 L13 explains context capacity without starting or misattributing research", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/consultant/workflow?run_id=context-limit",
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, options?: RequestInit) => {
+        if (url === "/api/v1/me")
+          return response({
+            tier: "consultant",
+            user_id: "user",
+            account_id: "account",
+          });
+        if (String(url).startsWith("/api/v1/consultant/research-rounds"))
+          return response(roundOverview);
+        if (!options?.method)
+          return response({
+            session: {
+              run_id: "context-limit",
+              execution_id: "context-execution",
+              state: "workflow_failed",
+              mode: "live",
+              intake: {},
+              retry_action: "research",
+              error:
+                "MB-409-FOCUS-CONTEXT: The saved research inventory exceeds this approved analysis allowance.",
+              step1_interpretation: { english_translation: "Approved request" },
+              progress: { phase: "failed", loop: 4, max_loops: 4 },
+            },
+          });
+        requests.push(JSON.parse(String(options.body)));
+        throw new Error("No automatic mutation expected");
+      }),
+    );
+    render(<ConsultantWorkflowPage />);
+    expect(
+      await screen.findByText(
+        /The saved findings could not fit the next model request/,
+      ),
+    ).toHaveTextContent("not a rewrite of your request");
+    expect(
+      screen.getByText(/MB-409-FOCUS-CONTEXT/).closest("details"),
+    ).not.toHaveAttribute("open");
+    expect(requests).toHaveLength(0);
+  });
   it("MB-UX-QUALITY-001 L05 explains truncated research without mutating or restarting it", async () => {
     window.history.replaceState(
       {},

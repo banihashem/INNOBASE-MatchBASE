@@ -8,6 +8,7 @@ import {
   researchRequestHash,
   summarizeResearchCosts,
   buildResearchRoundPlan,
+  preflightResearchRoundContext,
   configuredResearchTierAvailability,
   researchModelChoices,
   runNextConsultantWorkflowJob,
@@ -260,6 +261,7 @@ export async function POST(req: Request) {
         : [...(session.step3_deep_prompt?.discovery_criteria ?? [])],
       mode: session.mode === "demonstration" ? "demonstration" : "live",
     });
+    await preflightResearchRoundContext(pool, session, plan, parent);
     const quoteId = await saveResearchQuote(pool, session, plan);
     return NextResponse.json({ quote_id: quoteId, plan, choices });
   } catch (error) {

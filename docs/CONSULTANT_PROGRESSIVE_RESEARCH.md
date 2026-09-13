@@ -1,6 +1,6 @@
 # Progressive Consultant research
 
-Activity: MB-UX-QUALITY-001 L01/L05/L11/L12. Canonical implementation root: `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE`. Product authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`.
+Activity: MB-UX-QUALITY-001 L01/L05/L11/L12/L13. Canonical implementation root: `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE`. Product authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`.
 
 ## Round lifecycle
 
@@ -23,6 +23,10 @@ Each supplementary method saves `method_reviews` with its round, observation tim
 Official investigation separates registered country, operating facility and served market. Registries, licences, filings and public customs records support different facts. Aggregate trade statistics cannot establish a company's shipment or price. Login, CAPTCHA, paywall and unavailable/nonpublic data remain access limitations, not absence of registration or activity. Corporate websites and their own social posts are one originating assertion. New interfaces and English PDFs expose hypotheses, references, changes and limitations separately from assessed supplier dossiers. Current social access checks cannot inherit an old retrieval timestamp as a new review.
 
 ## Focus reliability
+
+Follow-up quotation checks the owned completed parent before an estimate can be saved. It constructs the same immutable buyer input and uses the same retained-context builders as execution. Historical parent records can be reconstructed from their recorded discovery events when necessary. Invalid ownership, stale selections and irreducibly oversized mandatory context cannot become a new approvable quote. Execution retains its capacity checks, including later generated context; preflight does not guarantee an unknown model response will fit or succeed.
+
+The deterministic excerpt profile also bounds nested source-summary prose. Source IDs, URLs, dates, status values and supporting or contradicting claim links remain unchanged, as do all selected lead IDs and typed evidence memory. Only the outbound descriptive view is shortened; the saved snapshot remains complete. Capacity is measured in serialized UTF-8 bytes, separately from model token limits. An internal capacity failure asks for a system adjustment rather than a rewrite of valid buyer requirements. It does not authorize paid retries or gateway message compression.
 
 Gemini focus requests use a smaller provider grammar containing required object shape, types and essential enums. The complete value, array-size and provenance constraints remain in the prompt and local validator. Simplifying the wire representation never admits an invalid plan. An explicitly identified HTTP structured-schema compatibility error can use the approved same-billing alternative within the shared attempt allowance; unknown400, authentication, billing, privacy, permission, refusal and cancellation do not authorize that substitution. HTTP checkpoints retain only normalized diagnostic categories and schema fingerprints, never raw upstream error bodies. A provider rejection is reported separately from exhausted recovery attempts.
 

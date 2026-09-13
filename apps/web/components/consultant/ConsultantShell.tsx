@@ -50,7 +50,7 @@ export function ConsultantShell({
           {actions && <div className="cx-shell-actions">{actions}</div>}
         </div>
       </header>
-      <main id="main-content" className="consultant-shell-main">
+      <main id="main-content" className="consultant-shell-main" tabIndex={-1}>
         {children}
       </main>
     </div>

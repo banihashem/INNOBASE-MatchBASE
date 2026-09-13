@@ -327,10 +327,10 @@ it("L10 failures retain completed work, and only a saved result reaches 100 perc
       activity={[completed]}
     />,
   );
-  expect(screen.getByRole("progressbar")).toHaveAttribute(
-    "aria-valuenow",
-    "100",
-  );
+  expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "View supplier findings" }),
+  ).toHaveAttribute("href", "#supplier-findings");
   rerender(
     <WorkflowActivity
       state="progressive_reveal_ready"
@@ -438,10 +438,10 @@ it("DEV-004 completed research history is secondary while active work remains vi
   expect(
     screen.getByRole("heading", { name: "Your research results are ready" }),
   ).toBeVisible();
-  expect(screen.getByRole("progressbar")).toHaveAttribute(
-    "aria-valuenow",
-    "100",
-  );
+  expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "View supplier findings" }),
+  ).toHaveAttribute("href", "#supplier-findings");
   const summary = screen.getByText("View completed research steps");
   expect(summary.closest("details")).not.toHaveAttribute("open");
   expect(screen.getByText("Completed")).not.toBeVisible();

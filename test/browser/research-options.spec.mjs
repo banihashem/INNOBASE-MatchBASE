@@ -493,6 +493,7 @@ test("MB-UX-QUALITY-001 L01 follow-up selection is quoted and editing invalidate
   await expect(review).toBeVisible();
   await expect(review).toContainText("they are not documented suppliers");
   await review.getByText(/Incomplete research leads/).click();
+  await review.getByText(/Evidence and missing information/).click();
   await expect(
     review.getByText("Dated destination service evidence"),
   ).toBeVisible();
@@ -502,7 +503,7 @@ test("MB-UX-QUALITY-001 L01 follow-up selection is quoted and editing invalidate
     })
     .check();
   await page
-    .getByText("Review rounds or research further", { exact: true })
+    .getByRole("button", { name: "Focus the next round", exact: true })
     .click();
   const focus = page.getByRole("textbox", {
     name: /Follow-up focus or question/,
@@ -547,6 +548,7 @@ test("MB-UX-QUALITY-001 L01 mobile history is read-only and lead evidence fits t
     name: "Research review for round 2",
   });
   await latest.getByText(/Incomplete research leads/).click();
+  await latest.getByText(/Evidence and missing information/).click();
   await expect(
     latest.getByRole("link", { name: /long-source-path/ }),
   ).toBeVisible();
@@ -556,18 +558,13 @@ test("MB-UX-QUALITY-001 L01 mobile history is read-only and lead evidence fits t
   await page.keyboard.press("Space");
   await expect(latest.getByRole("checkbox")).toBeChecked();
   await visualChecks(page, "quality-leads-mobile", testInfo);
-  await page
-    .getByText("Review rounds or research further", { exact: true })
-    .click();
+  await page.getByText("Saved rounds and attempts", { exact: true }).click();
   await page.getByRole("button", { name: "View round 1 result" }).click();
   const historical = page.getByRole("region", {
     name: "Research review for round 1",
   });
   await expect(historical).toBeVisible();
-  // A new panel may preserve the native details state when React reuses its DOM.
-  const leadDetails = historical.locator("details");
-  if (!(await leadDetails.evaluate((element) => element.open)))
-    await historical.getByText(/Incomplete research leads/).click();
+  await historical.getByText(/Incomplete research leads/).click();
   await expect(
     historical.getByText("Historical Logistics", { exact: true }),
   ).toBeVisible();
@@ -577,6 +574,7 @@ test("MB-UX-QUALITY-001 L01 mobile history is read-only and lead evidence fits t
     .getByRole("button", { name: "Show latest review for follow-up" })
     .click();
   await expect(latest).toBeVisible();
+  await latest.getByText(/Incomplete research leads/).click();
   await expect(latest.getByRole("checkbox")).toBeChecked();
   expect(mock.actions).toEqual([]);
   expect(mock.blocked).toEqual([]);

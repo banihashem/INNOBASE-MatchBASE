@@ -115,6 +115,50 @@ describe("L07 Consultant journey", () => {
       screen.queryByText(/No research has been submitted/),
     ).not.toBeInTheDocument();
   });
+  it("returns to retained results after a stopped round through the same saved request", async () => {
+    const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
+      expect(options?.method).toBeUndefined();
+      return new Response(
+        JSON.stringify(
+          url.includes("history=true")
+            ? {
+                items: [
+                  {
+                    run_id: "later-round-stopped",
+                    title: "Industrial valves",
+                    state: "workflow_failed",
+                    mode: "live",
+                    updated_at: "2026-09-13T12:00:00Z",
+                    result_available: true,
+                  },
+                ],
+              }
+            : { drafts: [] },
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetcher);
+    render(<ConsultantHome session={session} />);
+    const resume = await screen.findByRole("link", {
+      name: "Open saved research",
+    });
+    expect(resume).toHaveAttribute(
+      "href",
+      "/consultant/workflow?run_id=later-round-stopped",
+    );
+    expect(screen.getByText(/Earlier results are saved/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "+ New research" })).toHaveClass(
+      "cx-button-secondary",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "With results 1" }));
+    expect(
+      screen.getByText("Saved results · Latest round stopped"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "View results & PDF" }),
+    ).toHaveAttribute("href", resume.getAttribute("href"));
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it("shows terminal failure over pending parallel work and identifies the failed round", () => {
     render(
       <WorkflowActivity

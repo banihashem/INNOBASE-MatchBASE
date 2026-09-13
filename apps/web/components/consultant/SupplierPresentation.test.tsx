@@ -111,6 +111,334 @@ function renderCard(record: SupplierEntityV3) {
   );
 }
 
+function searchSuppliers() {
+  return Array.from({ length: 12 }, (_, index) => {
+    const base = supplier();
+    return supplier({
+      legal_name: `Supplier ${index + 1}`,
+      candidate_id: `candidate-${index + 1}`,
+      supplier_entity_id: `entity-${index + 1}`,
+      brand_names: index === 9 ? ["Retained Export Brand"] : [],
+      country_of_registration: index < 6 ? "Singapore" : "Not verified",
+      headquarters_address:
+        index === 8 ? "Mumbai, India" : "Dubai, United Arab Emirates",
+      website: index === 11 ? "https://retained.de/products" : base.website,
+      offering: {
+        ...base.offering,
+        product_name: index === 10 ? "Technical hydroxide" : "Chemical product",
+        specifications: index === 10 ? { grade: "Technical" } : {},
+      },
+      assessment: { ...base.assessment, rank: index + 1 },
+    });
+  });
+}
+
+function renderSearchResults(
+  records = searchSuppliers(),
+  research = output(records),
+) {
+  const handleRevealMore = vi.fn(async () => {});
+  const handlePdfDownload = vi.fn(async () => {});
+  const handleJsonExport = vi.fn();
+  const onSelectSupplier = vi.fn();
+  const view = render(
+    <ConsultantResultsSection
+      output={research}
+      suppliers={records}
+      visibleSuppliers={records.slice(0, 5)}
+      revealedCount={5}
+      isLoading={false}
+      isPdfDownloading={false}
+      handleRevealMore={handleRevealMore}
+      handlePdfDownload={handlePdfDownload}
+      handleJsonExport={handleJsonExport}
+      onSelectSupplier={onSelectSupplier}
+    />,
+  );
+  return {
+    ...view,
+    records,
+    research,
+    handleRevealMore,
+    handlePdfDownload,
+    handleJsonExport,
+    onSelectSupplier,
+  };
+}
+
+describe("MB-UX-SIMPLIFY-001 L01 finding saved suppliers", () => {
+  it("searches all retained profiles before pagination and preserves source rank and detail identity", () => {
+    const { records, onSelectSupplier } = renderSearchResults();
+    const before = structuredClone(records);
+    expect(screen.queryByRole("heading", { name: "Supplier 9" })).toBeNull();
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Search supplier profiles" }),
+      { target: { value: "MUMBAI" } },
+    );
+    expect(screen.getByRole("heading", { name: "Supplier 9" })).toBeVisible();
+    expect(screen.getByText("Rank #9")).toBeVisible();
+    expect(
+      screen.getByText("Showing 1 of 1 matching profiles · 12 total"),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", { name: /View supplier details/ }),
+    );
+    expect(onSelectSupplier).toHaveBeenCalledExactlyOnceWith(records[8]);
+    expect(records).toEqual(before);
+  });
+
+  it.each([
+    ["technical hydroxide", "Supplier 11"],
+    ["retained export brand", "Supplier 10"],
+    ["retained.de", "Supplier 12"],
+  ])("finds stored product, brand and website wording for %s", (term, name) => {
+    renderSearchResults();
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: term },
+    });
+    expect(
+      screen.getAllByRole("heading", { name: /^Supplier \d+$/ }),
+    ).toHaveLength(1);
+    expect(screen.getByRole("heading", { name })).toBeVisible();
+  });
+
+  it("reveals filtered matches locally in groups of five and restores the existing unfiltered reveal contract", () => {
+    const { handleRevealMore } = renderSearchResults();
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "supplier" },
+    });
+    expect(
+      screen.getAllByRole("heading", { name: /^Supplier \d+$/ }),
+    ).toHaveLength(5);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show more matching suppliers/ }),
+    );
+    expect(
+      screen
+        .getAllByRole("heading", { name: /^Supplier \d+$/ })
+        .map((heading) => heading.textContent),
+    ).toEqual(
+      Array.from({ length: 10 }, (_, index) => `Supplier ${index + 1}`),
+    );
+    expect(handleRevealMore).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show more matching suppliers/ }),
+    );
+    expect(
+      screen.getAllByRole("heading", { name: /^Supplier \d+$/ }),
+    ).toHaveLength(12);
+    expect(
+      screen.queryByRole("button", { name: /Show more matching suppliers/ }),
+    ).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Clear supplier filters" }),
+    );
+    expect(
+      screen.getAllByRole("heading", { name: /^Supplier \d+$/ }),
+    ).toHaveLength(5);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show next suppliers/ }),
+    );
+    expect(handleRevealMore).toHaveBeenCalledOnce();
+  });
+
+  it("filters only recorded registration countries without deriving them from a domain, headquarters or goods origin", () => {
+    renderSearchResults();
+    const countries = screen.getByRole("combobox", {
+      name: "Registered country",
+    });
+    expect(
+      within(countries)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual([
+      "All registered countries",
+      "Singapore (6)",
+      "Not established (6)",
+    ]);
+    expect(countries).toHaveAccessibleDescription(/saved registration field/);
+    fireEvent.change(countries, { target: { value: "singapore" } });
+    expect(
+      screen.getByText("Showing 5 of 6 matching profiles · 12 total"),
+    ).toBeVisible();
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "Mumbai" },
+    });
+    expect(
+      screen.getByText(/No saved supplier profiles match these filters/),
+    ).toBeVisible();
+    fireEvent.change(countries, { target: { value: "missing" } });
+    expect(screen.getByRole("heading", { name: "Supplier 9" })).toBeVisible();
+    expect(screen.getByText("Mumbai, India")).toBeVisible();
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "retained.de" },
+    });
+    expect(screen.getByRole("heading", { name: "Supplier 12" })).toBeVisible();
+  });
+
+  it("makes a no-match filter recoverable without treating the saved research as empty", () => {
+    const { handleRevealMore } = renderSearchResults();
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "unmatched term" },
+    });
+    expect(
+      screen.getByText("Showing 0 of 0 matching profiles · 12 total"),
+    ).toBeVisible();
+    expect(
+      screen.queryByText("No supplier profiles ready in this round"),
+    ).toBeNull();
+    expect(screen.getByText(/All 12 profiles remain available/)).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: /Show next suppliers/ }),
+    ).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Clear supplier filters" }),
+    );
+    expect(screen.getByRole("searchbox")).toHaveValue("");
+    expect(screen.getByRole("searchbox")).toHaveFocus();
+    expect(screen.getByRole("combobox")).toHaveValue("all");
+    expect(
+      screen.getAllByRole("heading", { name: /^Supplier \d+$/ }),
+    ).toHaveLength(5);
+    expect(handleRevealMore).not.toHaveBeenCalled();
+  });
+
+  it("retains material limitations visibly and puts supplier cards before secondary report context", () => {
+    const records = searchSuppliers();
+    const baseResearch = output(records);
+    const research: ConsultantResearchOutputV3 = {
+      ...baseResearch,
+      executive_summary: {
+        ...baseResearch.executive_summary,
+        primary_limitation:
+          "Independent company identity checks remain incomplete.",
+        research_coverage_status: "partial",
+      },
+      limitations_and_disclosures: [
+        {
+          title: "Comparison incomplete",
+          severity: "critical",
+          description: "The AI comparison did not finish.",
+        },
+      ],
+    };
+    renderSearchResults(records, research);
+    expect(
+      screen.getByText(
+        "Independent company identity checks remain incomplete.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        "Comparison incomplete: The AI comparison did not finish.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByText(/Research coverage: partial/)).toBeVisible();
+    const firstCard = screen.getByRole("heading", { name: "Supplier 1" });
+    const priceResearch = screen.getByRole("heading", {
+      name: "Research price range",
+    });
+    expect(
+      firstCard.compareDocumentPosition(priceResearch) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen.getByText(research.executive_summary.direct_answer),
+    ).not.toBeVisible();
+    fireEvent.click(
+      screen.getByText("Research summary and assessment context"),
+    );
+    expect(
+      screen.getByText(research.executive_summary.direct_answer),
+    ).toBeVisible();
+    expect(document.querySelectorAll("#supplier-findings")).toHaveLength(1);
+    expect(
+      screen.getByRole("link", { name: "View price research" }),
+    ).toHaveAttribute("href", "#research-pricing-heading");
+  });
+
+  it("preserves incoming match order and saved rank labels when filtering suppliers with different scores and ranks", () => {
+    const records = searchSuppliers()
+      .reverse()
+      .map((record, index) => ({
+        ...record,
+        assessment: { ...record.assessment, compatibility_score: 95 - index },
+      }));
+    const original = structuredClone(records);
+    renderSearchResults(records);
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "supplier" },
+    });
+    expect(
+      screen
+        .getAllByRole("heading", { name: /^Supplier \d+$/ })
+        .map((heading) => heading.textContent),
+    ).toEqual([
+      "Supplier 12",
+      "Supplier 11",
+      "Supplier 10",
+      "Supplier 9",
+      "Supplier 8",
+    ]);
+    expect(screen.getByText("Rank #12")).toBeVisible();
+    expect(screen.getByText("Rank #8")).toBeVisible();
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Registered country" }),
+      { target: { value: "singapore" } },
+    );
+    expect(
+      screen
+        .getAllByRole("heading", { name: /^Supplier \d+$/ })
+        .map((heading) => heading.textContent),
+    ).toEqual([
+      "Supplier 6",
+      "Supplier 5",
+      "Supplier 4",
+      "Supplier 3",
+      "Supplier 2",
+    ]);
+    expect(screen.getByText("Rank #6")).toBeVisible();
+    expect(screen.getByText("Rank #2")).toBeVisible();
+    expect(records).toEqual(original);
+  });
+
+  it("keeps full-report downloads available while the displayed supplier list is filtered", () => {
+    const { handlePdfDownload, handleJsonExport, research } =
+      renderSearchResults();
+    const before = structuredClone(research);
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "Mumbai" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Download Full PDF Report" }),
+    );
+    expect(handlePdfDownload).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByText("More export options"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Export research data (JSON)" }),
+    );
+    expect(handleJsonExport).toHaveBeenCalledOnce();
+    expect(research).toEqual(before);
+  });
+
+  it("preserves the genuine empty-research state without showing unusable filters", () => {
+    renderSearchResults([]);
+    expect(
+      screen.getByText("No supplier profiles ready in this round"),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        /This does not establish that no suitable suppliers exist/,
+      ),
+    ).toBeVisible();
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(
+      screen.queryByText(/No saved supplier profiles match these filters/),
+    ).toBeNull();
+  });
+});
+
 describe("MB-UX-QUALITY-001 L06 supplier presentation consistency", () => {
   it("shows explicit origin specification wording when canonical product origin is missing, with all differing source fields retained", () => {
     const base = supplier();

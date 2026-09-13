@@ -791,6 +791,75 @@ test("MB-UX-LIVE-001 L15 splits only the truncated supplier group and retains co
   );
 });
 
+test("MB-UX-QUALITY-001 L10 malformed multi-supplier JSON splits into smaller source-scoped groups instead of exhausting the same roster", async (t) => {
+  const data = dataset(5);
+  const original = structuredClone(data.native);
+  const assigned = [];
+  const guarded = [];
+  const events = [];
+  const calls = fixture(t, (body) => {
+    assert.equal(body.plugins, undefined);
+    if (schemaName(body) === INDEX) return data.index;
+    const request = input(body);
+    const names = request.assigned_candidate_names;
+    assigned.push(names);
+    const selected = data.records.filter((record) =>
+      names.includes(record.name),
+    );
+    assert.deepEqual(
+      request.assigned_candidate_sources,
+      selected.map((record) => ({
+        legal_name: record.name,
+        source_urls: [record.url, data.registryUrl],
+      })),
+    );
+    assert.deepEqual(
+      request.native_citations.map((citation) => citation.url).sort(),
+      [...selected.map((record) => record.url), data.registryUrl].sort(),
+    );
+    assert.deepEqual(request.buyer_mandatory_criteria, criteria);
+    return names.length > 2 ? '{"candidates":[' : data.batch(names);
+  });
+  const result = await extractNativeDiscoveryPayload(
+    data.native,
+    "openai/gpt-5.2",
+    context,
+    {
+      automatic_recovery_attempts: 3,
+      before_call: async (request, web) => guarded.push({ request, web }),
+      on_checkpoint: (event) => events.push(event),
+    },
+  );
+  assert.deepEqual(
+    result.parsed.candidates,
+    data.records.map((record) => record.candidate),
+  );
+  assert.equal(assigned.filter((names) => names.length === 5).length, 1);
+  assert.deepEqual(
+    assigned.map((names) => names.length).sort(),
+    [1, 2, 2, 3, 5],
+  );
+  assert.equal(calls.filter((body) => schemaName(body) === INDEX).length, 1);
+  assert.equal(calls.length, 6);
+  assert.equal(guarded.length, calls.length);
+  assert.ok(guarded.every(({ web }) => web === false));
+  assert.ok(calls.every((body) => !body.plugins && !body.tools));
+  assert.equal(
+    events.filter(
+      (event) =>
+        event.state === "failed" && event.error === "MB-422-LIVE-SCHEMA",
+    ).length,
+    2,
+  );
+  assert.equal(
+    events.some(
+      (event) => event.state === "failed" && event.finish_reason === "length",
+    ),
+    false,
+  );
+  assert.deepEqual(data.native, original);
+});
+
 test("MB-UX-LIVE-001 L15 schema repair stays within the assigned source scope", async (t) => {
   const data = dataset(1),
     requests = [];

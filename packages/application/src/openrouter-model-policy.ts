@@ -1237,6 +1237,43 @@ function approvedRecoveryModel(
   return candidate;
 }
 
+/** Selects an approved extraction alternative after local JSON validation. */
+export function selectApprovedStructuredRecovery(
+  model: string,
+  error: unknown,
+  options: LiveCallOptions,
+): { original_model: string; next_model: string } | undefined {
+  const stage = options.stage_recovery_state;
+  if (
+    !(error instanceof LiveResearchError) ||
+    !["MB-422-LIVE-JSON", "MB-422-LIVE-SCHEMA"].includes(error.code) ||
+    !options.before_call ||
+    !stage ||
+    options.signal?.aborted
+  )
+    return undefined;
+  const remaining = stage.remaining();
+  if (
+    !Number.isInteger(remaining) ||
+    remaining <= 0 ||
+    remaining >= stage.attempt_limit ||
+    [...stage.replacements.values()].includes(model)
+  )
+    return undefined;
+  // Revalidate the same one-hop approved choice on every repair. A retained
+  // replacement never grants permission to extend or change the model chain.
+  const alternative = approvedRecoveryModel(
+    model,
+    model,
+    { phase: "structured_recovery", loop: 0, reasoning_effort: "low" },
+    options,
+  );
+  const current = stage.replacements.get(model);
+  if (!alternative || (current && current !== alternative)) return undefined;
+  stage.replacements.set(model, alternative);
+  return { original_model: model, next_model: alternative };
+}
+
 export async function runLiveCompletion(
   request: Omit<OpenRouterCompletionParams, "reasoning">,
   context: LiveCompletionContext,

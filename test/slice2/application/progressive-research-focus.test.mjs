@@ -5,10 +5,14 @@ import {
   buildResearchFocusContext,
   buildFocusedWebContext,
   planResearchFocus,
+  PROGRESSIVE_RESEARCH_FOCUS_SCHEMA,
 } from "../../../packages/application/dist/research-focus-planner.js";
+import { researchFocusWireSchema } from "../../../packages/application/dist/research-focus-wire-schema.js";
+import { validateJsonSchema } from "../../../packages/application/dist/live-json-schema.js";
 import { researchLeadKey } from "../../../packages/application/dist/research-review.js";
 
 const model = "openai/gpt-5.2";
+const gemini = "google/gemini-3.8-flash";
 const input = {
   product_requirement: "Industrial pumps",
   technical_compliance: "ISO9001 or applicable equivalent",
@@ -66,10 +70,11 @@ const valid = () => ({
   ],
 });
 
-function fixture(t, responses) {
+function fixture(t, responses, selectedModel = model) {
   const keys = {
     MATCHBASE_OPENROUTER_API_KEY: randomUUID(),
     MATCHBASE_PROVIDER_OPENAI: "openai",
+    MATCHBASE_PROVIDER_GOOGLE: "google-ai-studio",
   };
   const old = Object.fromEntries(
     Object.keys(keys).map((key) => [key, process.env[key]]),
@@ -88,15 +93,23 @@ function fixture(t, responses) {
     const targetUrl = String(target);
     if (targetUrl.endsWith("/models/user"))
       return Response.json({
-        data: [{ id: model, supported_parameters: parameters }],
+        data: [...new Set([model, selectedModel])].map((id) => ({
+          id,
+          supported_parameters: parameters,
+        })),
       });
     if (targetUrl.endsWith("/endpoints"))
       return Response.json({
         data: {
           endpoints: [
             {
-              tag: "openai",
-              model_id: model,
+              tag: targetUrl.includes("google/")
+                ? "google-ai-studio"
+                : "openai",
+              provider_name: targetUrl.includes("google/")
+                ? "Google AI Studio"
+                : "OpenAI",
+              model_id: targetUrl.includes("google/") ? selectedModel : model,
               supported_parameters: parameters,
             },
           ],
@@ -106,13 +119,23 @@ function fixture(t, responses) {
     requests.push(JSON.parse(options.body));
     const response = responses[requests.length - 1];
     assert.ok(response, "No unexpected extra paid-stage attempt");
+    if (response instanceof Response) return response;
+    const requestedModel = requests.at(-1).model;
     return Response.json({
       id: `progressive-fixture-${requests.length}`,
-      model,
+      model: requestedModel,
       openrouter_metadata: {
         is_byok: true,
         endpoints: {
-          available: [{ selected: true, model, provider: "OpenAI" }],
+          available: [
+            {
+              selected: true,
+              model: requestedModel,
+              provider: requestedModel.startsWith("google/")
+                ? "Google AI Studio"
+                : "OpenAI",
+            },
+          ],
         },
       },
       choices: [
@@ -169,6 +192,209 @@ test("MB-UX-QUALITY-001 L11 progressive analysis returns source-bound determinis
     JSON.parse(web).focused_research_plan.insights,
     result.analysis.insights,
   );
+});
+
+test("MB-UX-QUALITY-001 L12 Gemini focus uses a smaller grammar while every local value and provenance constraint remains required", async (t) => {
+  const original = structuredClone(PROGRESSIVE_RESEARCH_FOCUS_SCHEMA);
+  const wire = researchFocusWireSchema(original, gemini);
+  assert.deepEqual(original, PROGRESSIVE_RESEARCH_FOCUS_SCHEMA);
+  assert.deepEqual(wire.required, original.required);
+  assert.equal(wire.additionalProperties, false);
+  assert.equal(wire.properties.insights.items.additionalProperties, false);
+  assert.deepEqual(
+    wire.properties.insights.items.properties.kind.enum,
+    original.properties.insights.items.properties.kind.enum,
+  );
+  assert.ok(
+    !/"(?:maxLength|minLength|pattern|maxItems|minItems)"/.test(
+      JSON.stringify(wire),
+    ),
+  );
+  assert.equal(researchFocusWireSchema(original, model), original);
+  for (const mutate of [
+    (value) => {
+      value.objective = "";
+    },
+    (value) => {
+      value.objective = "x".repeat(501);
+    },
+    (value) => {
+      value.search_tasks = [];
+    },
+    (value) => {
+      value.insights = Array.from({ length: 9 }, () => valid().insights[0]);
+    },
+    (value) => {
+      value.insights[0].lead_ids = ["invalid-id"];
+    },
+    (value) => {
+      value.insights[0].source_urls = ["x".repeat(12001)];
+    },
+    (value) => {
+      value.insights[0].unrequested = true;
+    },
+  ]) {
+    const value = valid();
+    mutate(value);
+    assert.throws(
+      () => validateJsonSchema(value, original),
+      /MB-422-LIVE-SCHEMA/,
+    );
+  }
+  const malformed = valid();
+  malformed.insights[0].source_urls = ["https://unretained.example.com/"];
+  const f = fixture(t, [malformed, valid()], gemini);
+  const result = await planResearchFocus(
+    input,
+    { ...plan, round_number: 3, extraction_model: gemini },
+    prior,
+    f.options,
+  );
+  assert.equal(f.requests.length, 2);
+  assert.deepEqual(f.requests[0].response_format.json_schema.schema, wire);
+  assert.ok(
+    f.requests[0].messages[0].content.includes(JSON.stringify(original)),
+  );
+  assert.deepEqual(result.analysis.insights[0].source_urls, [url]);
+  assert.equal(
+    f.checkpoints.find((event) => event.state === "failed").error,
+    "MB-422-FOCUS-PLAN",
+  );
+});
+
+test("MB-UX-QUALITY-001 L12 explicit schema rejection switches focus to the approved BYOK alternative within one shared stage", async (t) => {
+  const rejected = Response.json(
+    {
+      error: {
+        code: 400,
+        message: "The response schema is too complex for serving.",
+        metadata: { provider_name: "Google AI Studio", is_byok: true },
+      },
+    },
+    { status: 400 },
+  );
+  const f = fixture(t, [rejected, valid()], gemini);
+  const rates = [
+    {
+      model: gemini,
+      provider: "google-ai-studio",
+      billing_mode: "byok",
+      structured_outputs: true,
+      reasoning: true,
+    },
+    {
+      model,
+      provider: "openai",
+      billing_mode: "byok",
+      structured_outputs: true,
+      reasoning: true,
+    },
+  ];
+  const result = await planResearchFocus(
+    input,
+    { ...plan, round_number: 3, extraction_model: gemini },
+    prior,
+    {
+      ...f.options,
+      approved_rates: rates,
+      approved_model_fallbacks: { [gemini]: [model] },
+      approved_search_engines: { [gemini]: "exa", [model]: "exa" },
+    },
+  );
+  assert.deepEqual(
+    f.requests.map((request) => request.model),
+    [gemini, model],
+  );
+  assert.ok(
+    f.requests.every(
+      (request) =>
+        request.provider.allow_fallbacks === false &&
+        request.plugins === undefined,
+    ),
+  );
+  assert.equal(result.result.model, model);
+  assert.deepEqual(result.analysis.priority_lead_ids, [id]);
+  assert.deepEqual(f.requests[0].messages[1], f.requests[1].messages[1]);
+  const recovered = f.checkpoints.find((event) => event.state === "failed");
+  assert.equal(recovered.recovery_scheduled, true);
+  assert.equal(recovered.recovery_next_model, model);
+  assert.equal(recovered.recovery_attempt, 1);
+  assert.equal(f.checkpoints.at(-1).recovery_attempt, 2);
+});
+
+test("MB-UX-QUALITY-001 L12 unknown HTTP400 remains terminal and does not misreport an exhausted allowance", async (t) => {
+  const f = fixture(
+    t,
+    [
+      Response.json(
+        { error: { message: "Unclassified upstream failure" } },
+        { status: 400 },
+      ),
+    ],
+    gemini,
+  );
+  await assert.rejects(
+    planResearchFocus(
+      input,
+      { ...plan, extraction_model: gemini },
+      prior,
+      f.options,
+    ),
+    /HTTP 400/,
+  );
+  assert.equal(f.requests.length, 1);
+  const failed = f.checkpoints.at(-1);
+  assert.equal(failed.recovery_scheduled, false);
+  assert.match(failed.message, /provider rejected/i);
+  assert.doesNotMatch(failed.message, /exhausted|could not complete within/i);
+});
+
+test("MB-UX-QUALITY-001 L12 focus applies Gemini grammar to the effective approved replacement model", async (t) => {
+  const f = fixture(
+    t,
+    [new Response("Temporary upstream failure", { status: 503 }), valid()],
+    gemini,
+  );
+  const result = await planResearchFocus(
+    input,
+    { ...plan, round_number: 3 },
+    prior,
+    {
+      ...f.options,
+      approved_rates: [
+        {
+          model,
+          provider: "openai",
+          billing_mode: "byok",
+          structured_outputs: true,
+          reasoning: true,
+        },
+        {
+          model: gemini,
+          provider: "google-ai-studio",
+          billing_mode: "byok",
+          structured_outputs: true,
+          reasoning: true,
+        },
+      ],
+      approved_model_fallbacks: { [model]: [gemini] },
+      approved_search_engines: { [gemini]: "exa", [model]: "exa" },
+    },
+  );
+  assert.deepEqual(
+    f.requests.map((request) => request.model),
+    [model, gemini],
+  );
+  assert.deepEqual(
+    f.requests[0].response_format.json_schema.schema,
+    PROGRESSIVE_RESEARCH_FOCUS_SCHEMA,
+  );
+  assert.deepEqual(
+    f.requests[1].response_format.json_schema.schema,
+    researchFocusWireSchema(PROGRESSIVE_RESEARCH_FOCUS_SCHEMA, gemini),
+  );
+  assert.equal(result.result.model, gemini);
+  assert.equal(result.analysis.insights[0].status, "research_hypothesis");
 });
 
 test("MB-UX-QUALITY-001 L11 unknown insight provenance repairs within existing recovery allowance before native research", async (t) => {

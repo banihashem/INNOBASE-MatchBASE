@@ -9,6 +9,7 @@ import {
   type ConsultantResearchOutputV3,
   type SupplierEntityV3,
 } from "@matchbase/contracts";
+import { renderResearchReview } from "./research-review-report.js";
 
 /** Detect untranslated scripts without treating accented legal names or units as a translation. */
 const hasUntranslatedScript = (text: string): boolean =>
@@ -200,6 +201,14 @@ export function generateConsultantLandscapeHtml(
     )}`,
     "methodology",
   );
+
+  if (output.research_review) {
+    section(
+      "Research Review and Further Investigation",
+      renderResearchReview(output.research_review),
+      "research-review",
+    );
+  }
 
   if (output.price_research) {
     const pricing = output.price_research;

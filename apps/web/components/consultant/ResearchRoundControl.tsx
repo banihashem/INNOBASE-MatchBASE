@@ -19,6 +19,28 @@ const money = (n: number) =>
     maximumFractionDigits: 4,
   }).format(n);
 const endpoint = "/api/v1/consultant/research-rounds";
+const followUpScope: Record<number, { title: string; description: string }> = {
+  2: {
+    title: "Evidence gaps and public profiles",
+    description:
+      "Review saved evidence gaps and public corporate social profiles alongside your focus. Analyse relationships in the saved findings to identify questions worth checking. Public profiles and repeated marketing do not independently verify a supplier.",
+  },
+  3: {
+    title: "Focused relationships and evidence",
+    description:
+      "Investigate questions suggested by earlier findings, your focus and public corporate sources. Test possible relationships against source evidence; a shared name, contact or website does not establish ownership.",
+  },
+  4: {
+    title: "Country official records",
+    description:
+      "Add a dedicated search of relevant country registries, trade authorities, regulators and available customs records, alongside public corporate sources. Check entity identity, jurisdiction, dates and the scope of each record. Company-level records may be unavailable or access-limited.",
+  },
+  5: {
+    title: "Independent institutional cross-check",
+    description:
+      "Cross-check unresolved questions through relevant independent institutional records and public corporate sources. Reconcile conflicting identities, dates and record scope. Aggregate trade statistics provide market context; they do not establish a supplier's shipments or capability.",
+  },
+};
 type Overview = {
   costs: ResearchCostSummary;
   rounds: ResearchRoundView[];
@@ -411,6 +433,12 @@ export function ResearchRoundControl({
                         {r.candidate_count !== null
                           ? `· ${r.candidate_count} suppliers`
                           : ""}
+                        <span className="mt-1 block font-semibold">
+                          {r.plan.title}
+                        </span>
+                        <span className="block text-slate-300">
+                          {r.plan.purpose}
+                        </span>
                         <small className="block text-slate-400">
                           {r.plan.recovery_source_execution_id
                             ? "$0.00 · local recovery, no provider calls"
@@ -465,9 +493,7 @@ export function ResearchRoundControl({
               <h3 className="font-semibold text-lg">
                 {next === 1
                   ? "Review the first-round estimate"
-                  : next <= 3
-                    ? `Optional round ${next}`
-                    : `Optional public social research · round ${next}`}
+                  : `Optional round ${next} · ${followUpScope[next]?.title}`}
               </h3>
               <p className="text-sm text-slate-300">
                 {currentRound >= 3
@@ -478,6 +504,28 @@ export function ResearchRoundControl({
                       : "The previous attempt did not produce a report. Review the new estimate before starting another attempt."
                     : "The approved plan is saved. No new research round has started."}
               </p>
+              {next >= 2 &&
+                followUpScope[next] &&
+                (!quote ||
+                  quote.plan.research_strategy ===
+                    "progressive-evidence.v1") && (
+                  <section
+                    aria-label={`Planned research scope for round ${next}`}
+                    className="rounded-lg border border-slate-600 bg-slate-800 p-4 space-y-2 text-sm"
+                  >
+                    <h4 className="font-semibold">
+                      What this round will investigate
+                    </h4>
+                    <p>{followUpScope[next].description}</p>
+                    <p className="text-slate-300">
+                      The estimate includes these searches and AI planning from
+                      saved findings. Nothing starts before cost approval.
+                      Missing sources, contradictions and access limits remain
+                      visible; another round does not guarantee more suppliers
+                      or stronger evidence.
+                    </p>
+                  </section>
+                )}
               {next === 1 && (
                 <fieldset disabled={busy} className="space-y-3">
                   <legend className="font-semibold">

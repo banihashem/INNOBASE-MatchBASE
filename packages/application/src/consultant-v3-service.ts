@@ -50,6 +50,8 @@ import {
   summarizeResearchCosts,
 } from "./consultant-research-cost.js";
 import { executeDualLaneResearch } from "./dual-lane-orchestrator.js";
+import { buildPublicSocialChecks } from "./public-social-review.js";
+import { requiresPublicSocialReview } from "./progressive-research-policy.js";
 import { synthesizeConsultantOutputV3 } from "./synthesis-engine.js";
 import {
   buildResearchReview,
@@ -1111,57 +1113,11 @@ export async function executeConsultantWorkflowResearch(
     await readConsultantCostEvents(db, session.account_id, session.run_id),
     mode === "demonstration",
   );
-  const socialChecks: NonNullable<
-    ConsultantResearchOutputV3["public_social_checks"]
-  >[number][] = [];
-  if (round.round_number >= 4 && dualResult.continuation) {
-    const continuation = dualResult.continuation;
-    for (const [, candidate] of continuation.roster) {
-      const urls = [
-        ...new Set([
-          ...candidate.identity.source_urls,
-          ...candidate.product.source_urls,
-          ...candidate.facts.flatMap((f) => f.source_urls),
-        ]),
-      ].filter((url) => {
-        try {
-          return /(^|\.)(linkedin\.com|facebook\.com|instagram\.com|youtube\.com|x\.com|twitter\.com|tiktok\.com)$/.test(
-            new URL(url).hostname,
-          );
-        } catch {
-          return false;
-        }
-      });
-      const checked = urls.filter((url) =>
-        continuation.retrieved.some(([key]) => key === url),
-      );
-      for (const url of checked)
-        socialChecks.push({
-          supplier_name: candidate.legal_name,
-          profile_url: url,
-          status: continuation.retrieved.find(([key]) => key === url)?.[1]
-            ? "reviewed"
-            : "access_limited",
-          ownership_basis:
-            "Cited in supplier research; corporate ownership is not independently established.",
-          checked_at:
-            continuation.retrieved.find(([key]) => key === url)?.[1]
-              ?.retrieved_at ?? new Date().toISOString(),
-          limitation:
-            "Public retrieval only. No private access, follower scoring, badge inference or order-acceptance confirmation.",
-        });
-      if (!checked.length)
-        socialChecks.push({
-          supplier_name: candidate.legal_name,
-          profile_url: null,
-          status: "not_executed",
-          ownership_basis: "No cited public profile was retrieved.",
-          checked_at: new Date().toISOString(),
-          limitation:
-            "This does not mean the company lacks social profiles. Missing profiles do not reduce supplier eligibility.",
-        });
-    }
-  }
+  const socialChecks = buildPublicSocialChecks(
+    round.plan,
+    dualResult,
+    new Date().toISOString(),
+  );
   output = {
     ...output,
     research_review: buildResearchReview(
@@ -1171,7 +1127,9 @@ export async function executeConsultantWorkflowResearch(
       round.round_number,
       parent ? await getResearchRoundReview(db, parent) : undefined,
     ),
-    ...(round.round_number >= 4 ? { public_social_checks: socialChecks } : {}),
+    ...(requiresPublicSocialReview(round.plan)
+      ? { public_social_checks: socialChecks }
+      : {}),
     limitations_and_disclosures: [
       ...output.limitations_and_disclosures,
       {

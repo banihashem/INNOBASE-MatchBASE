@@ -3,7 +3,12 @@ import type { ResearchReview } from "@matchbase/contracts";
 
 function publicSource(value: string): boolean {
   try {
-    return ["https:", "http:"].includes(new URL(value).protocol);
+    const url = new URL(value);
+    return (
+      ["https:", "http:"].includes(url.protocol) &&
+      !url.username &&
+      !url.password
+    );
   } catch {
     return false;
   }
@@ -21,6 +26,26 @@ export function ResearchReviewPanel({
   onSelect?: ((id: string, selected: boolean) => void) | undefined;
   disabled?: boolean;
 }) {
+  const insights = [
+    ...new Map(
+      [
+        ...(review.evidence_memory?.relationships ?? []),
+        ...(review.focus_analysis?.insights ?? []),
+      ].map((insight) => [insight.insight_id, insight]),
+    ).values(),
+  ];
+  const entityNames = new Map([
+    ...review.leads.map((lead) => [lead.lead_id, lead.name] as const),
+    ...(review.evidence_memory?.entities ?? []).map(
+      (entity) => [entity.lead_id, entity.name] as const,
+    ),
+  ]);
+  const coverageLimits = [
+    ...new Set([
+      ...review.coverage_gaps,
+      ...(review.evidence_memory?.limitations ?? []),
+    ]),
+  ];
   return (
     <section
       aria-label={`Research review for round ${review.round_number}`}
@@ -55,11 +80,153 @@ export function ResearchReviewPanel({
         New leads this round: {review.changes.new_leads} · Promoted to
         documented suppliers: {review.changes.promoted}
       </p>
-      {review.coverage_gaps.length > 0 && (
+      {insights.length > 0 && (
+        <section
+          aria-label="Research questions from connected findings"
+          className="space-y-3"
+        >
+          <h4 className="font-semibold">
+            Research questions from connected findings
+          </h4>
+          <p className="text-sm text-slate-300">
+            These are research hypotheses to verify, not established company,
+            ownership or capability facts. The next approved round can
+            investigate them alongside your focus. Shared or repeated sources
+            may not be independent evidence.
+          </p>
+          <ol className="space-y-3">
+            {insights.map((insight) => (
+              <li
+                key={insight.insight_id}
+                className="rounded border border-slate-700 bg-slate-800 p-3 space-y-2 text-sm"
+              >
+                <p className="text-amber-200">
+                  Research hypothesis · verification required
+                </p>
+                <h5 className="font-semibold" dir="auto">
+                  {insight.next_question}
+                </h5>
+                <p dir="auto">{insight.statement}</p>
+                <p className="text-slate-300">
+                  Related research records:{" "}
+                  {insight.lead_ids
+                    .map((id) => entityNames.get(id) ?? "Saved research record")
+                    .join("; ")}
+                </p>
+                <p className="font-semibold">Sources behind this question</p>
+                <ul className="space-y-1">
+                  {insight.source_urls.filter(publicSource).map((url) => (
+                    <li key={url}>
+                      <a
+                        className="break-all text-sky-300 underline"
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {url}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+      {!!review.method_reviews?.length && (
+        <section
+          aria-label="Public and institutional research sources"
+          className="space-y-3"
+        >
+          <h4 className="font-semibold">
+            Public and institutional research sources
+          </h4>
+          <p className="text-sm text-slate-300">
+            A collected reference is not necessarily a confirmed corporate
+            profile or official company record. Check the entity, issuer,
+            jurisdiction, date and what the source actually supports. Missing
+            records do not establish that a company is ineligible.
+          </p>
+          {review.method_reviews.map((method, index) => (
+            <details
+              key={`${method.method}-${method.round_number}-${index}`}
+              className="rounded border border-slate-700 p-3"
+            >
+              <summary className="cursor-pointer font-semibold">
+                {method.method === "public_social"
+                  ? "Public corporate and social sources"
+                  : "Country and institutional sources"}
+                {" · Round "}
+                {method.round_number}
+                {" · "}
+                {method.status === "references_found"
+                  ? `${method.sources.length} collected reference(s)`
+                  : method.status === "no_cited_sources"
+                    ? "No cited sources collected"
+                    : "Research incomplete"}
+              </summary>
+              <div className="mt-3 space-y-3 text-sm">
+                <p className="text-slate-300">
+                  Search recorded: {method.searched_at}
+                </p>
+                {method.limitations.length > 0 && (
+                  <div>
+                    <p className="font-semibold">Coverage limits</p>
+                    <ul className="list-disc pl-5">
+                      {method.limitations.map((limit, i) => (
+                        <li dir="auto" key={i}>
+                          {limit}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {method.sources.map((source, i) => (
+                  <article
+                    key={`${source.url}-${i}`}
+                    className="border-t border-slate-700 pt-3 space-y-1"
+                  >
+                    <h5 className="font-semibold break-words" dir="auto">
+                      {source.title}
+                    </h5>
+                    {publicSource(source.url) && (
+                      <a
+                        className="block break-all text-sky-300 underline"
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {source.url}
+                      </a>
+                    )}
+                    <p className="text-amber-200">
+                      {source.access === "retrieved"
+                        ? "Source content retrieved · claims still need assessment"
+                        : source.access === "provider_citation_only"
+                          ? "Search-provider citation only · full content not retrieved"
+                          : "Access limited · source content not confirmed"}
+                    </p>
+                    <p>
+                      Retrieved at: {source.retrieved_at ?? "Not recorded"}.
+                      Retrieval time is not the publication or record date.
+                    </p>
+                    {source.excerpt && (
+                      <p className="whitespace-pre-wrap break-words" dir="auto">
+                        {source.excerpt}
+                      </p>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </details>
+          ))}
+        </section>
+      )}
+      {coverageLimits.length > 0 && (
         <div>
           <h4 className="font-semibold">Unresolved research coverage</h4>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-            {review.coverage_gaps.map((gap, index) => (
+            {coverageLimits.map((gap, index) => (
               <li dir="auto" key={index}>
                 {gap}
               </li>

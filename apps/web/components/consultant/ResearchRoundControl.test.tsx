@@ -60,6 +60,65 @@ const researchReview = {
   summary: { discovered: 4, documented: 3, needs_review: 1, excluded: 0 },
   changes: { new_leads: 1, promoted: 0 },
 };
+it.each([
+  [2, "Evidence gaps and public profiles", "public corporate social profiles"],
+  [3, "Focused relationships and evidence", "shared name, contact or website"],
+  [4, "Country official records", "country registries, trade authorities"],
+  [5, "Independent institutional cross-check", "Aggregate trade statistics"],
+])(
+  "MB-UX-QUALITY-001 L11 explains round %s methods before quotation without relabeling a historical approval",
+  async (round, title, scope) => {
+    const fetchMock = vi.fn(async (url: string, _options?: RequestInit) =>
+      url.includes("view=model_choices")
+        ? Response.json({ choices: [] })
+        : Response.json({
+            costs,
+            next_round: round,
+            rounds: [
+              {
+                round_id: "historical-round",
+                round_number: 1,
+                status: "completed",
+                output_available: true,
+                candidate_count: 3,
+                plan: {
+                  ...plan,
+                  title: "Previously approved search",
+                  purpose: "Retain the exact historical research scope.",
+                },
+              },
+            ],
+          }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <ResearchRoundControl
+        runId="scope-run"
+        workflowState="workflow_complete"
+        onStarted={vi.fn()}
+        onPreview={vi.fn()}
+      />,
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: `Optional round ${round} · ${title}`,
+      }),
+    ).toBeVisible();
+    const plannedScope = screen.getByRole("region", {
+      name: `Planned research scope for round ${round}`,
+    });
+    expect(plannedScope).toHaveTextContent(String(scope));
+    expect(plannedScope).toHaveTextContent(
+      "Nothing starts before cost approval",
+    );
+    expect(screen.getByText("Previously approved search")).toBeVisible();
+    expect(
+      screen.getByText("Retain the exact historical research scope."),
+    ).toBeVisible();
+    expect(fetchMock.mock.calls.every((call) => !call[1]?.body)).toBe(true);
+  },
+);
+
 it("MB-UX-QUALITY-001 L09 discloses named technical recovery before approval and clears it when the model changes", async () => {
   const actions: string[] = [];
   const started = vi.fn();
@@ -177,6 +236,11 @@ it.each(["legacy", "demonstration"])(
       await screen.findByRole("button", { name: /Get cost estimate/ }),
     );
     await screen.findByRole("button", { name: /Approve cost estimate/ });
+    expect(
+      screen.queryByRole("region", {
+        name: "Planned research scope for round 3",
+      }),
+    ).toBeNull();
     expect(
       screen.queryByRole("region", {
         name: "Model recovery included in this estimate",

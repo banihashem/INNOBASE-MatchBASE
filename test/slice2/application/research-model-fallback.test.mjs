@@ -129,7 +129,7 @@ test("MB-UX-QUALITY-001 L09 a fresh follow-up quotes one independent same-billin
   );
   assert.ok(plan.rates.every((rate) => rate.billing_mode === "byok"));
   assert.ok(choices.some((rate) => rate.billing_mode === "openrouter_credits"));
-  assert.equal(plan.max_calls, 24);
+  assert.equal(plan.max_calls, 25);
   assert.equal(plan.recovery_call_reserve, 6);
   assert.equal(plan.automatic_recovery_attempts, 3);
   const highRate = plan.rates.find((rate) => rate.model === gpt);
@@ -240,10 +240,11 @@ test("MB-UX-QUALITY-001 L09 round guard binds the named alternative to role engi
     ),
     { code: "MB-409-ROUND-SEARCH-ENGINE" },
   );
-  await assert.rejects(createRoundCallGuard(plan, 23)(web, true), {
-    code: "MB-409-ROUND-ALLOWANCE",
-  });
-  await createRoundCallGuard(plan, 23)(
+  await assert.rejects(
+    createRoundCallGuard(plan, plan.max_calls - 1)(web, true),
+    { code: "MB-409-ROUND-ALLOWANCE" },
+  );
+  await createRoundCallGuard(plan, plan.max_calls - 1)(
     {
       model: gpt,
       messages: [],
@@ -326,4 +327,82 @@ test("MB-UX-QUALITY-001 L09 alternatives cannot transitively expand the approved
     { model: deepseek, messages: [], max_tokens: 1 },
     false,
   );
+});
+
+test("MB-UX-QUALITY-001 L11 new method calls price the research model and its approved alternative without changing earlier quotes", async (t) => {
+  fixture(t);
+  for (const depth of ["simple", "deep"]) {
+    const plans = [];
+    for (const round_number of [2, 3, 4, 5]) {
+      const { plan } = await buildResearchRoundPlan({
+        ...input,
+        depth,
+        round_number,
+      });
+      plans.push(plan);
+      assert.equal(plan.research_strategy, "progressive-evidence.v1");
+      assert.equal(plan.max_calls, round_number < 4 ? 25 : 26);
+      assert.equal(plan.recovery_call_reserve, 6);
+      assert.equal(plan.price_research.max_calls, 4);
+      assert.match(plan.assumptions.join(" "), /additional web calls?/);
+      assert.match(
+        plan.assumptions.join(" "),
+        /Earlier approved plans are not expanded/,
+      );
+      assert.match(plan.assumptions.join(" "), /non-public customs records/);
+    }
+    assert.match(plans[0].title, /social/);
+    assert.match(plans[1].title, /insights/);
+    assert.match(plans[2].title, /official records/);
+    assert.match(plans[3].title, /institutional/);
+    assert.equal(plans[0].estimated_low_usd, plans[1].estimated_low_usd);
+    assert.equal(plans[2].estimated_high_usd, plans[3].estimated_high_usd);
+    const researchRate = plans[0].rates.find((rate) => rate.model === gemini);
+    const fallbackRate = plans[0].rates.find((rate) => rate.model === gpt);
+    const expectedLowIncrement =
+      (18000 * researchRate.input_usd_per_token +
+        4000 * researchRate.output_usd_per_token +
+        researchRate.request_usd) *
+        1.05 +
+      0.007 * 0.25;
+    const expectedHighIncrement =
+      (240000 * fallbackRate.input_usd_per_token +
+        plans[0].max_output_tokens_per_call *
+          fallbackRate.output_usd_per_token +
+        fallbackRate.request_usd) *
+        1.05 +
+      0.007;
+    assert.ok(
+      Math.abs(
+        plans[2].estimated_low_usd -
+          plans[0].estimated_low_usd -
+          expectedLowIncrement,
+      ) < 1e-8,
+      "Added institutional web work is priced at the research model, even when extraction uses a different model",
+    );
+    assert.ok(
+      Math.abs(
+        plans[2].estimated_high_usd -
+          plans[0].estimated_high_usd -
+          expectedHighIncrement,
+      ) < 1e-8,
+      "The high estimate covers the approved higher-rate alternative and added search charge",
+    );
+    const historical = structuredClone(plans[0]);
+    delete historical.research_strategy;
+    historical.max_calls = 24;
+    const original = structuredClone(historical);
+    createRoundCallGuard(historical);
+    await buildResearchRoundPlan({ ...input, depth, round_number: 5 });
+    assert.deepEqual(historical, original);
+  }
+  const { plan: initial } = await buildResearchRoundPlan({
+    ...input,
+    round_number: 1,
+    parent_round_id: null,
+    depth: "simple",
+  });
+  assert.equal(initial.research_strategy, undefined);
+  assert.equal(initial.max_calls, 25);
+  assert.doesNotMatch(initial.assumptions.join(" "), /additional web calls?/);
 });

@@ -1,6 +1,6 @@
 # Progressive Consultant research
 
-Activity: MB-UX-QUALITY-001 L01/L05. Canonical implementation root: `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE`. Product authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`.
+Activity: MB-UX-QUALITY-001 L01/L05/L11. Canonical implementation root: `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE`. Product authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`.
 
 ## Round lifecycle
 
@@ -9,6 +9,18 @@ Initial request fields and submission remain natively disabled until the authori
 The first research round keeps its existing preparation, estimate and approval flow. Every later round, up to round five, accepts an optional buyer question and selected discovery leads. Editing either invalidates the displayed estimate. A fresh estimate prices one AI focus-analysis call together with the research allowance. Saving or editing a question does not invoke a model. Research starts only after cost approval.
 
 The focus planner receives the immutable approved request, all retained lead names and source references, bounded dossier/evidence excerpts, remaining gaps and the buyer follow-up. It creates an English objective, priority lead IDs, source-validation tasks, evidence gaps and scope notes. The raw question is not forwarded to web-search models. The analysis does not establish new supplier facts and cannot change the approved requirements. Unknown lead IDs and oversized immutable context stop before web dispatch; unavoidable oversized context is checked before the planning call. Search requests have their own bounded representation. Complete snapshots are never truncated to fit model context.
+
+## Evidence progression
+
+New follow-up quotes carry `research_strategy: progressive-evidence.v1`. Round two adds a dedicated public corporate social search; round three combines public social observations with focused relationship and evidence questions. Rounds four and five also execute a dedicated country-aware institutional search. Round five challenges prior records using another responsible authority or original document when available. Ordinary follow-up research and price research remain present. Earlier approvals without the strategy retain their original scope and budgets; round-one search remains unchanged.
+
+One additional web call is explicitly priced for rounds two/three, and two for rounds four/five: total allowances are 25 and 26 calls respectively, including the existing six-call recovery reserve. The selected research model and any explicitly priced same-billing alternative apply. Method calls use the same bounded ten-minute research deadline. No new round starts without its own approval.
+
+Completed snapshots include compact `evidence_memory`: all observed entity/source identities, up to 240 literal source-backed facts and 32 relationship hypotheses, with explicit compaction limits. The existing AI focus call can add up to eight source- and entity-referenced insights. These hypotheses have a next question; they never establish company facts or automatically merge entities. Shared sources, locations and contacts are research clues. Retained method references and memory feed both the following focus analysis and the same round's main focused search.
+
+Each supplementary method saves `method_reviews` with its round, observation time, query-scope lead IDs, actual citation references, retrieved excerpts and access limitations. Scope IDs are not source-to-company identity matches. Provider notes are retained in raw completion records; failed method responses are excluded from evidence. A temporary or citation-free supplementary result can produce an explicit incomplete review while the primary supplier pipeline continues. Permission, billing, cancellation, persistence and approval-budget failures stay terminal. No source reference bypasses the existing strict claim extraction and admission rules.
+
+Official investigation separates registered country, operating facility and served market. Registries, licences, filings and public customs records support different facts. Aggregate trade statistics cannot establish a company's shipment or price. Login, CAPTCHA, paywall and unavailable/nonpublic data remain access limitations, not absence of registration or activity. Corporate websites and their own social posts are one originating assertion. New interfaces and English PDFs expose hypotheses, references, changes and limitations separately from assessed supplier dossiers. Current social access checks cannot inherit an old retrieval timestamp as a new review.
 
 ## Focus reliability
 

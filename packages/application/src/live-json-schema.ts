@@ -31,10 +31,10 @@ export function validateJsonSchema(
   schema: JsonSchema,
   path = "response",
 ): void {
-  const fail = () => {
+  const fail = (failurePath = path) => {
     throw new LiveResearchError(
       "MB-422-LIVE-SCHEMA",
-      `Structured response failed validation at ${path}.`,
+      `Structured response failed validation at ${failurePath}.`,
     );
   };
   if (schema.type && !matchesType(value, schema.type)) fail();
@@ -75,11 +75,12 @@ export function validateJsonSchema(
     const record = value as Record<string, unknown>;
     const properties = schema.properties as
       Record<string, JsonSchema> | undefined;
-    if (
-      Array.isArray(schema.required) &&
-      schema.required.some((key) => typeof key !== "string" || !(key in record))
-    )
-      fail();
+    if (Array.isArray(schema.required)) {
+      for (const key of schema.required) {
+        if (typeof key !== "string") fail();
+        else if (!Object.hasOwn(record, key)) fail(`${path}.${key}`);
+      }
+    }
     for (const [key, child] of Object.entries(record)) {
       if (properties?.[key])
         validateJsonSchema(child, properties[key], `${path}.${key}`);

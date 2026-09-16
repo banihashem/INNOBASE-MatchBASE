@@ -239,6 +239,23 @@ function retainedStages() {
   };
 }
 
+function jsonRetainedStages() {
+  const records = new Map();
+  return {
+    records,
+    async load(manifest) {
+      const record = records.get(manifest.operation_key);
+      return record ? JSON.parse(JSON.stringify(record)) : null;
+    },
+    async commit(manifest, result) {
+      records.set(
+        manifest.operation_key,
+        JSON.parse(JSON.stringify({ manifest, result })),
+      );
+    },
+  };
+}
+
 test("MB-ARCH-IMPLEMENT-001 L01 validated extraction resumes without a second provider request", async (t) => {
   const f = fixture(t, { payload: () => validIndex() });
   const store = retainedStages();
@@ -257,6 +274,30 @@ test("MB-ARCH-IMPLEMENT-001 L01 validated extraction resumes without a second pr
   );
   assert.equal(reuse.dispatched, false);
   assert.equal(reuse.cost_usd, undefined);
+});
+
+test("MB-UX-QUALITY-001 L16 extraction reuse survives JSON persistence and changed accounting telemetry", async (t) => {
+  const f = fixture(t, { payload: () => validIndex() });
+  const store = jsonRetainedStages();
+  f.options.stage_store = store;
+  const first = await f.run();
+  Object.assign(f.native, {
+    input_tokens: 9876,
+    output_tokens: 5432,
+    latency_ms: 999999,
+    cost_usd: 123.45,
+    usage_reported: false,
+    cost_reported: false,
+    generation_metadata_attempts: 3,
+  });
+  const resumed = await f.run();
+  assert.deepEqual(resumed, first);
+  assert.equal(f.calls.length, 1);
+  assert.equal(store.records.size, 1);
+  assert.equal(
+    f.events.filter((event) => event.stage === "retained_stage_reuse").length,
+    1,
+  );
 });
 
 test("MB-ARCH-IMPLEMENT-001 L01 source changes beyond context excerpts invalidate saved extraction", async (t) => {

@@ -468,11 +468,14 @@ export async function resumeFailedConsultantResearchExecution(
     const stages = await db.query<{
       completed_models: string[];
       retained_stages: number;
+      legacy_extraction_stages: number;
     }>(
       `SELECT COALESCE(array_agg(DISTINCT result->>'requested_model') FILTER(
          WHERE manifest->>'stage_kind' ~ '^discovery_[a-z0-9_-]+:1:provider_response$'
            AND result->>'requested_model' IS NOT NULL),'{}') AS completed_models,
-       count(*)::integer AS retained_stages
+       count(*)::integer AS retained_stages,
+       count(*) FILTER(WHERE manifest->>'stage_kind' ~ '^discovery_[a-z0-9_-]+:1:extraction$')::integer
+         AS legacy_extraction_stages
        FROM consultant_research_stage WHERE account_id=$1 AND run_id=$2 AND execution_id=$3
          AND expires_at>clock_timestamp()`,
       [accountId, runId, executionId],
@@ -494,6 +497,7 @@ export async function resumeFailedConsultantResearchExecution(
     if (
       attempts.unknown !== 0 ||
       orphanCalls.rows.length ||
+      stages.rows[0]!.legacy_extraction_stages !== 0 ||
       attempts.consumed >= maxCalls ||
       completedModels.length < required ||
       rejectedModels.length !== 1 ||

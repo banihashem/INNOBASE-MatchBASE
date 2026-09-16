@@ -11,7 +11,10 @@ import {
   getOrRestoreWorkflowSession,
   markConsultantWorkflowFailed,
 } from "./consultant-v3-service.js";
-import { retainConsultantIncident } from "./consultant-incident-controller.js";
+import {
+  applyConsultantIncidentRecovery,
+  retainConsultantIncident,
+} from "./consultant-incident-controller.js";
 
 /** The persistent job is shared by the local worker and the HTTP after-response accelerator. */
 export async function runNextConsultantWorkflowJob(
@@ -74,6 +77,7 @@ export async function runNextConsultantWorkflowJob(
     await assertLease();
     await finishConsultantWorkflowJob(db, job);
   } catch (error) {
+    let contained = false;
     try {
       // Containment precedes optional diagnosis and retains the original fault.
       // A provider failure is writable only while this execution owns its lease.
@@ -84,20 +88,25 @@ export async function runNextConsultantWorkflowJob(
           lease_token: job.lease_token!,
         });
         await finishConsultantWorkflowJob(db, job, "workflow-execution-failed");
+        contained = true;
       }
     } finally {
       clearInterval(heartbeat);
-      await retainConsultantIncident(
-        db,
-        job,
-        job.stage,
-        error,
-        leaseLost,
-      ).catch(() => {
-        console.warn(
-          "Research incident persistence unavailable after containment.",
+      try {
+        const incident = await retainConsultantIncident(
+          db,
+          job,
+          job.stage,
+          error,
+          leaseLost,
         );
-      });
+        if (contained && !leaseLost)
+          await applyConsultantIncidentRecovery(db, job, job.stage, incident);
+      } catch {
+        console.warn(
+          "Research incident persistence or recovery decision unavailable after containment.",
+        );
+      }
     }
   } finally {
     clearInterval(heartbeat);

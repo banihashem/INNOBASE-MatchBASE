@@ -47,6 +47,12 @@ export function workflowLabel(state: string, stoppedByUser = false): string {
   return "Research in progress";
 }
 export function phaseLabel(phase: string, loop = 0): string {
+  if (phase === "approval_required")
+    return "Recovery checked · Current cost approval required";
+  if (phase === "provider_outcome_review_required")
+    return "Provider outcome review required";
+  if (phase === "technical_review_required")
+    return "Technical incident review required";
   if (phase === "resuming_saved_stages") return "Resuming saved research steps";
   if (phase.endsWith("_reused")) return "Reusing a saved research step";
   if (phase === "step1_correction") return "Drafting the English correction";

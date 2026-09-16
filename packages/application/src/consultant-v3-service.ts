@@ -32,6 +32,7 @@ import {
   inTransaction,
   type ConnectionPool,
   type ConsultantWorkflowJob,
+  readConsultantProviderRouteRejectionEvents,
 } from "@matchbase/data";
 import {
   type ConsultantResearchOutputV3,
@@ -75,6 +76,7 @@ import {
 import { LiveResearchError } from "./openrouter-model-policy.js";
 import { consultantResearchInput } from "./research-context-preflight.js";
 import { createDurableResearchContext } from "./consultant-execution-context.js";
+import { retainedProviderRouteRejections } from "./retained-provider-route-rejections.js";
 import {
   admitPrivateResearchMemory,
   loadQuotedPrivateMemory,
@@ -1067,11 +1069,20 @@ export async function executeConsultantWorkflowResearch(
       "Review the latest completed research before continuing this round.",
     );
   // A resumed approved execution retains every earlier dispatch in its allowance.
-  const previousAllowance = summarizeResearchExecutionAllowance(
-    (
-      await readConsultantCostEvents(db, session.account_id, session.run_id)
-    ).filter((event) => event.execution_id === session.execution_id),
-  );
+  const executionEvents = (
+    await readConsultantCostEvents(db, session.account_id, session.run_id)
+  ).filter((event) => event.execution_id === session.execution_id);
+  const previousAllowance =
+    summarizeResearchExecutionAllowance(executionEvents);
+  const retainedRouteRejections =
+    options?.executionFence && "connect" in db
+      ? retainedProviderRouteRejections(
+          await readConsultantProviderRouteRejectionEvents(
+            db as ConnectionPool,
+            session,
+          ),
+        )
+      : [];
   if (round.plan.private_memory && !("connect" in db))
     throw new ApplicationFault(
       503,
@@ -1101,6 +1112,9 @@ export async function executeConsultantWorkflowResearch(
     automatic_recovery_attempts: round.plan.automatic_recovery_attempts ?? 1,
     previously_consumed_focus_attempts:
       previousAllowance.consumed_focus_attempts,
+    ...(retainedRouteRejections.length
+      ? { retained_provider_route_rejections: retainedRouteRejections }
+      : {}),
     extraction_batch_size: round.plan.extraction_batch_size ?? 5,
     approved_rates: round.plan.rates,
     ...(parent && (parent.continuation || focusedParentRequired)

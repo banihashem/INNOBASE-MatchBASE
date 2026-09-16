@@ -114,6 +114,19 @@ export interface DualLaneExecutionOptions extends LiveCallOptions {
   readonly continuation?: ResearchContinuation;
   readonly mode?: "live" | "demonstration" | "hybrid";
   readonly source_retriever?: typeof fetchPrimaryEvidenceText;
+  /**
+   * Definitive no-receipt route rejections already recorded in this exact
+   * execution. A durable resume must not resend them or change billing mode.
+   */
+  readonly retained_provider_route_rejections?: readonly RetainedProviderRouteRejection[];
+}
+export interface RetainedProviderRouteRejection {
+  readonly model: string;
+  readonly phase: string;
+  readonly error: string;
+  readonly provider_http_failure: NonNullable<
+    LiveResearchError["provider_http_failure"]
+  >;
 }
 export interface ResearchContinuation {
   evidence_memory?: ResearchEvidenceMemory;
@@ -657,6 +670,30 @@ export async function executeDualLaneResearch(
               ? "discovery_xai"
               : `discovery_${family}`;
   });
+  const retainedRouteRejections = new Map(
+    (options.retained_provider_route_rejections ?? []).map((rejection) => [
+      `${rejection.phase}\u0000${rejection.model}`,
+      rejection,
+    ]),
+  );
+  const callDiscovery = async (
+    model: string,
+    phase: NativeResearchPhase,
+    loop: number,
+    instruction: string,
+  ) => {
+    const retained = retainedRouteRejections.get(`${phase}\u0000${model}`);
+    if (retained)
+      throw new LiveResearchError(
+        "MB-502-LIVE-PROVIDER",
+        retained.error,
+        false,
+        undefined,
+        undefined,
+        retained.provider_http_failure,
+      );
+    return callResearch(model, phase, loop, instruction);
+  };
   if (options.round_plan) {
     const methods = progressiveResearchMethods(options.round_plan);
     if (methods.length && (!focusAnalysis || !options.continuation))
@@ -711,7 +748,7 @@ export async function executeDualLaneResearch(
           ),
         ]
       : discoveryModels.map((model, index) =>
-          callResearch(
+          callDiscovery(
             model,
             discoveryPhases[index]!,
             1,
@@ -782,26 +819,44 @@ export async function executeDualLaneResearch(
     // must not discard a completed multi-model quorum. The rejected request is
     // never retried, substituted or used as evidence; it is disclosed as a
     // coverage gap. Default two-model research still requires both paths.
-    const independentProviderAccessFailure = (
+    const independentProviderRouteRejection = (
       error: unknown,
       index: number,
     ) => {
       if (
         !(error instanceof LiveResearchError) ||
-        error.code !== "MB-502-LIVE-PROVIDER" ||
-        !["authentication", "billing", "permission"].includes(
-          error.provider_http_failure?.category ?? "",
-        )
+        !["MB-502-LIVE-PROVIDER", "MB-403-LIVE-WEB-PERMISSION"].includes(
+          error.code,
+        ) ||
+        !error.provider_http_failure
       )
         return false;
+      const model = discoveryModels[index]!;
+      const phase = discoveryPhases[index]!;
+      const retained = retainedRouteRejections.get(`${phase}\u0000${model}`);
+      if (
+        retained &&
+        retained.provider_http_failure.http_status ===
+          error.provider_http_failure.http_status &&
+        retained.provider_http_failure.category ===
+          error.provider_http_failure.category &&
+        retained.provider_http_failure.request_format ===
+          error.provider_http_failure.request_format
+      )
+        return true;
       return checkpoints.some(
         (checkpoint) =>
-          checkpoint.phase === discoveryPhases[index] &&
+          checkpoint.phase === phase &&
           checkpoint.state === "failed" &&
           checkpoint.dispatched === true &&
           checkpoint.provider_dispatch_rejected === true &&
+          checkpoint.provider_receipt_received === false &&
+          checkpoint.provider_http_failure?.http_status ===
+            error.provider_http_failure?.http_status &&
           checkpoint.provider_http_failure?.category ===
-            error.provider_http_failure?.category,
+            error.provider_http_failure?.category &&
+          checkpoint.provider_http_failure?.request_format ===
+            error.provider_http_failure?.request_format,
       );
     };
     // L10: a validated sibling may still produce useful round-one results.
@@ -827,21 +882,28 @@ export async function executeDualLaneResearch(
                 checkpoint.finish_reason === "length",
             )),
       );
+    const requiredIndependentPaths =
+      discovery.length <= 2
+        ? discovery.length
+        : discovery.length === 3
+          ? 2
+          : discovery.length - 1;
+    const hasProviderRouteRejection = discovery.some(
+      (entry, index) =>
+        entry.status === "rejected" &&
+        independentProviderRouteRejection(entry.reason, index),
+    );
     const recoveryPartialAllowed =
       liveRecoveryAttemptLimit(callback) > 1 &&
       options.round_plan?.round_number === 1 &&
       successful.length > 0 &&
-      (!discovery.some(
-        (entry, index) =>
-          entry.status === "rejected" &&
-          independentProviderAccessFailure(entry.reason, index),
-      ) ||
-        successful.length >= Math.max(2, discovery.length - 1)) &&
+      (!hasProviderRouteRejection ||
+        successful.length >= requiredIndependentPaths) &&
       discovery.every(
         (entry, index) =>
           entry.status === "fulfilled" ||
           independentNativeFailure(entry.reason, index) ||
-          independentProviderAccessFailure(entry.reason, index) ||
+          independentProviderRouteRejection(entry.reason, index) ||
           recoverableExtractionFailure(entry.reason) ||
           (entry.reason instanceof LiveResearchError &&
             [
@@ -864,14 +926,14 @@ export async function executeDualLaneResearch(
         ? response?.native_finish_reason === "RECITATION"
           ? "was stopped by the provider's recitation protection; that response is excluded from evidence and was not retried"
           : "ended with a provider generation error; its incomplete response is excluded from evidence"
-        : independentProviderAccessFailure(entry.reason, index)
+        : independentProviderRouteRejection(entry.reason, index)
           ? `was rejected by its provider for ${
               (entry.reason as LiveResearchError).provider_http_failure!
                 .category
-            }; no response was used, no automatic retry or billing-mode change was attempted, and the route requires operator correction`
+            }; no response was used, no automatic retry or billing-mode change was attempted${retainedRouteRejections.has(`${discoveryPhases[index]}\u0000${discoveryModels[index]}`) ? ", and the saved rejection was not dispatched again" : ""}, and the route requires operator correction`
           : "could not complete within its approved allowance";
       coverageGaps.push(
-        `Partial research coverage: ${response?.requested_model ?? response?.model ?? "An approved search path"} ${failureDescription}. ${successful.length} of ${discovery.length} approved discovery paths completed extraction. Only supported findings are included; independent cross-checking is incomplete. All recorded attempts count toward usage. Additional research requires a new estimate and approval.`,
+        `Partial research coverage: ${response?.requested_model ?? response?.model ?? discoveryModels[index] ?? "An approved search path"} ${failureDescription}. ${successful.length} of ${discovery.length} approved discovery paths completed extraction. Only supported findings are included; independent cross-checking is incomplete. All recorded attempts count toward usage. Additional research requires a new estimate and approval.`,
       );
     }
   }

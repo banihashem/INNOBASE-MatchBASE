@@ -1645,7 +1645,7 @@ test("MB-UX-QUALITY-001 L08 Ultra preserves four completed families without retr
   }
 });
 
-test("MB-UX-QUALITY-001 L14 Ultra preserves four completed families when one provider rejects billing", async () => {
+test("MB-UX-QUALITY-001 L15 Ultra preserves four completed families and skips a retained no-receipt privacy rejection", async () => {
   const extraModels = [
     ["anthropic/claude-sonnet-5", "anthropic", "Anthropic"],
     ["deepseek/deepseek-v4-pro-0813", "ionstream", "Ionstream"],
@@ -1658,8 +1658,13 @@ test("MB-UX-QUALITY-001 L14 Ultra preserves four completed families when one pro
   dispatch = (body) =>
     body.plugins?.length && body.model.startsWith("anthropic/")
       ? Response.json(
-          { error: { code: 402, message: "Insufficient provider credits." } },
-          { status: 402 },
+          {
+            error: {
+              code: 404,
+              message: "Account privacy policy has no compatible endpoint.",
+            },
+          },
+          { status: 404 },
         )
       : respond(discovery());
   globalThis.fetch = async (target, options) => {
@@ -1782,7 +1787,7 @@ test("MB-UX-QUALITY-001 L14 Ultra preserves four completed families when one pro
   assert.equal(result.candidates.length, 1);
   assert.match(
     result.synthesis_summary,
-    /rejected by its provider for billing/,
+    /rejected by its provider for privacy/,
   );
   assert.match(result.synthesis_summary, /no automatic retry/);
   assert.match(result.synthesis_summary, /4 of 5 approved discovery paths/);
@@ -1800,7 +1805,7 @@ test("MB-UX-QUALITY-001 L14 Ultra preserves four completed families when one pro
       event.phase === "discovery_anthropic" && event.state === "failed",
   );
   assert.equal(failed.provider_dispatch_rejected, true);
-  assert.equal(failed.provider_http_failure.category, "billing");
+  assert.equal(failed.provider_http_failure.category, "privacy");
   assert.equal(failed.recovery_scheduled, false);
   assert.equal(failed.provider_receipt_received, false);
   for (const [model] of extraModels.slice(1)) {
@@ -1810,6 +1815,65 @@ test("MB-UX-QUALITY-001 L14 Ultra preserves four completed families when one pro
     assert.equal(actual.is_byok, false);
     assert.equal(actual.cost_usd, 0.01);
   }
+
+  requests = [];
+  reservations = 0;
+  const resumed = await executeDualLaneResearch(intake, {
+    mode: "live",
+    round_plan: {
+      ...partialRound,
+      research_models: researchModels,
+      search_engines: Object.fromEntries(
+        researchModels.map((id) => [id, familyById.has(id) ? "exa" : "native"]),
+      ),
+    },
+    automatic_recovery_attempts: 3,
+    approved_rates: extraModels.map(
+      ([model, provider, provider_display_name]) => ({
+        model,
+        provider,
+        provider_display_name,
+        billing_mode: "openrouter_credits",
+        input_usd_per_token: 0.000001,
+        output_usd_per_token: 0.000002,
+        request_usd: 0,
+        web_search_usd: 0,
+        reasoning: true,
+        source_url: `https://openrouter.ai/api/v1/models/${model}/endpoints`,
+      }),
+    ),
+    retained_provider_route_rejections: [
+      {
+        model: "anthropic/claude-sonnet-5",
+        phase: "discovery_anthropic",
+        error: "Account privacy policy has no compatible endpoint.",
+        provider_http_failure: {
+          http_status: 404,
+          request_format: "text",
+          category: "privacy",
+        },
+      },
+    ],
+    before_call: async () => {
+      assert.ok(
+        ++reservations <= 13,
+        "The retained rejection must not reserve a call",
+      );
+    },
+  });
+  assert.equal(requests.length, 13);
+  assert.equal(reservations, 13);
+  assert.equal(
+    requests.filter(
+      (body) => body.plugins?.length && body.model.startsWith("anthropic/"),
+    ).length,
+    0,
+  );
+  assert.match(
+    resumed.synthesis_summary,
+    /saved rejection was not dispatched again/,
+  );
+  assert.match(resumed.synthesis_summary, /4 of 5 approved discovery paths/);
 });
 
 test("MB-UX-QUALITY-001 L08 refused or unsupported native responses remain terminal despite a completed sibling", async () => {

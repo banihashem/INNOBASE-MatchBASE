@@ -240,6 +240,16 @@ async function mockExperience(page, options = {}) {
         body: "%PDF-1.4\n% Synthetic download fixture; UI transport test only.\n%%EOF\n",
       });
     }
+    if (
+      url.pathname === "/api/v1/consultant/profile-evidence" &&
+      request.method() === "GET"
+    )
+      return reply({
+        observations: [],
+        current_count: 0,
+        expired_count: 0,
+        fresh_discovery_required: true,
+      });
     if (url.pathname === "/api/v1/consultant/research-rounds") {
       if (request.method() === "GET")
         return reply({

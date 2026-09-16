@@ -8,6 +8,9 @@ import {
 } from "../../packages/application/dist/index.js";
 import { LIVE_WORKER_FIXTURE_POLICY } from "./fixtures/live-worker-runtime.mjs";
 
+// Admission-policy fixtures have a fixed validity window; wall-clock passage must not change these cases.
+const withinFixturePolicyWindow = () => new Date("2026-09-01T00:00:00.000Z");
+
 test("server-owned admission requires enabled qualified routes and both verified credential handles", () => {
   const admitted = createServerOwnedResearchAdmission({
     activationAuthorized: true,
@@ -18,6 +21,7 @@ test("server-owned admission requires enabled qualified routes and both verified
       openrouter: true,
     },
     eligibleTiers: ["demo"],
+    now: withinFixturePolicyWindow,
   });
   assert.deepEqual(admitted.decide("demo"), {
     id: "qualified_live_research",
@@ -45,6 +49,7 @@ test("server-owned admission requires enabled qualified routes and both verified
         openrouter: blocked.router,
       },
       eligibleTiers: ["demo"],
+      now: withinFixturePolicyWindow,
     });
     if (blocked.activationAuthorized)
       assert.throws(
@@ -69,6 +74,7 @@ test("server-owned admission requires enabled qualified routes and both verified
       openrouter: true,
     },
     eligibleTiers: ["demo"],
+    now: withinFixturePolicyWindow,
   });
   assert.throws(
     () => environmentMismatch.decide("demo"),
@@ -171,6 +177,7 @@ test("blocked repository policy cannot admit qualified live research", () => {
       openrouter: true,
     },
     eligibleTiers: ["demo"],
+    now: withinFixturePolicyWindow,
   });
   assert.throws(
     () => admission.decide("demo"),

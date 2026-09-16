@@ -50,6 +50,15 @@ function settlesWithin(promise, milliseconds, message) {
   });
 }
 
+// Policy validation uses the immutable fixture's capturedAt. Persisted circuit observations and
+// probe leases must still use real time, matching PostgreSQL clock_timestamp() and actual timers.
+function withLiveCircuitClock(circuit) {
+  return {
+    isRouteAvailable: (routeId) =>
+      circuit.isRouteAvailable(routeId, new Date().toISOString()),
+  };
+}
+
 const policy = {
   schemaVersion: "research-route-policy.v1",
   policyVersion: "slice3-routes.v1",
@@ -2123,7 +2132,7 @@ postgresTest(
       });
       const circuitGatedFailureService = new LiveResearchExecutionService({
         ...serviceOptions,
-        circuit: openCircuit,
+        circuit: withLiveCircuitClock(openCircuit),
         sourceDiscovery: new GeminiServerOwnedSourceDiscovery({
           async send() {
             failedDiscoveryCalls += 1;
@@ -2166,7 +2175,6 @@ postgresTest(
           ...execution,
           executionId: "EXEC-SOURCE-DISCOVERY-CIRCUIT-OPEN",
           runId: circuitOpenRunId,
-          capturedAt: new Date().toISOString(),
         }),
         /circuit is open/iu,
       );
@@ -2230,7 +2238,7 @@ postgresTest(
       const halfOpenFailureService = new LiveResearchExecutionService({
         ...serviceOptions,
         policyId: localCircuitPolicyId,
-        circuit,
+        circuit: withLiveCircuitClock(circuit),
         sourceDiscovery: new GeminiServerOwnedSourceDiscovery({
           async send() {
             failedDiscoveryCalls += 1;
@@ -2262,7 +2270,6 @@ postgresTest(
           policy: localCircuitPolicy,
           executionId: "EXEC-HALF-OPEN-FAILURE",
           runId: halfOpenFailureRunId,
-          capturedAt: new Date().toISOString(),
         }),
         /HTTP 503|source-discovery/iu,
       );
@@ -2472,7 +2479,6 @@ postgresTest(
           ...execution,
           executionId: "EXEC-PROVIDER-FORGED-EXTERNAL",
           runId: forgedVerificationRunId,
-          capturedAt: new Date().toISOString(),
         }),
         /provider output cannot assert externally_verified|output schema validation failed/iu,
       );

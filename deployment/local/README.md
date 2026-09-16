@@ -1,4 +1,4 @@
-# Local Docker runtime — MB-UX-OPS-002 L02
+# Local Docker runtime — MB-UX-OPS-002 L07
 
 This profile runs the Consultant workspace, durable research worker, PostgreSQL18 and read-only PM dashboard on Docker Desktop. It retains local simulator authentication. The existing production Dockerfile and production identity controls are separate. No registry push is required.
 
@@ -14,21 +14,43 @@ This profile runs the Consultant workspace, durable research worker, PostgreSQL1
 
 Build creates a disposable PostgreSQL container on a random loopback port and runs the complete workspace unit command, including database-dependent tests, before sending application source to Docker. It removes only that disposable test container afterward. The Dockerfile repeats unit tests on Linux; its build stage has no database or runtime credentials, so database cases are separately covered by the first gate. Any test failure prevents the final image. No tests are disabled to permit a build. The disposable database contains test data only and accepts trusted local connections; it is never used as the runtime database.
 
-By default the application is at http://localhost:3000. The PM dashboard is at http://localhost:3001 and preserves its snapshot freshness warnings. Host database access is on127.0.0.1:55433; containers use postgres:5432. Dashboard and database ports always bind to loopback; web can opt into a specific private LAN address as described below. Web uses Next development mode intentionally to preserve this project's local test identity policy; it is not a production deployment. Source changes require another validated Build followed by Up. The image contains the locked development workspace and Chromium for Consultant PDF rendering.
+The permanent host address is http://localhost:3000, including after Wi-Fi/DHCP changes or when disconnected from a network. Docker Desktop and the containers must be running. The PM dashboard is at http://localhost:3001 and preserves its snapshot freshness warnings. Host database access is on127.0.0.1:55433; containers use postgres:5432. All Docker host ports bind to loopback. The optional LAN gateway below exposes only the application. Web uses Next development mode intentionally to preserve this project's local test identity policy; it is not a production deployment. Source changes require another validated Build followed by Up. The image contains the locked development workspace and Chromium for Consultant PDF rendering.
 
-## Private LAN access
+## Portable private LAN access
 
-After Build, select a private IPv4 address currently assigned to this computer:
+After Build, start the permanent loopback application and explicitly select the physical adapter allowed to provide LAN access:
 
 ```powershell
-./deployment/local/Manage-LocalDocker.ps1 -Action Up -LanAddress 192.168.168.40
+./deployment/local/Manage-LocalDocker.ps1 -Action Up
+./deployment/local/Manage-LocalDocker.ps1 -Action InstallPortableAccess -InterfaceAlias 'Wi-Fi'
+./deployment/local/Manage-LocalDocker.ps1 -Action AccessStatus
 ```
 
-Use http://192.168.168.40:3000 on both the host and devices on the same network. Consultant test sign-in is `/auth/simulator/start?fixture=consultant`. This replaces localhost web access, so old browser sessions require sign-in on the new origin. The launcher sets both the Docker host binding and MATCHBASE_ORIGIN together; opening a port alone is insufficient for login and mutation origin checks. It rejects public, wildcard and unassigned addresses. It saves the successful non-secret choice in Windows User MATCHBASE_LOCAL_LAN_ADDRESS for subsequent Up commands. If DHCP changes this computer's IP, repeat Up with the current private address. To restore host-only mode, use `-Action Up -LanAddress ''`.
+Continue using localhost on this computer. `AccessStatus` reports the current LAN address for other devices. Consultant test sign-in is `/auth/simulator/start?fixture=consultant`. A LAN IP change creates a different browser origin and requires sign-in again; localhost sessions keep the same origin. Bookmark localhost on the host rather than a DHCP address. A stable LAN hostname/DNS service is not provided by this mechanism.
 
-The host firewall must permit TCP3000 on the selected interface for intended LAN clients. The launcher does not change firewall policies or router forwarding. This is a trusted-LAN test profile with simulator sign-in, not public hosting or production authentication. No other service is exposed by this option. [Docker port binding documentation](https://docs.docker.com/engine/network/port-publishing/).
+Installation creates a current-user, limited-privilege logon task named `MatchBASE-PortableAccess-<user-SID>`. It starts immediately and runs hidden, with no provider/database credentials in its arguments or environment. It stores only adapter GUID/port and transport status under `%LOCALAPPDATA%/MatchBASE/access`. Every fifteen seconds it discovers the selected physical adapter's preferred private IPv4 address. It closes the old listener before binding the new address. Virtual/VPN adapters, public IPs, wildcard bindings and ambiguous multiple private addresses are rejected. Switching from Wi-Fi to a different physical adapter requires selecting that adapter explicitly. No Docker/container restart, research retry, database write or paid call occurs during network movement.
 
-Next development resources admit only the configured origin hostname through allowedDevOrigins in the test/development profile. This is necessary for browser JavaScript, styles and HMR when using the LAN IP; an HTTP200 document alone does not establish browser readiness. Production configuration is unaffected.
+The credential-free gateway binds only the selected LAN address on the configured web port and forwards to `127.0.0.1` on that port. It checks exact Host, same Origin for mutations/WebSockets and cross-site browser metadata, refuses spoofed forwarding headers and absolute request targets, then uses the canonical localhost application origin upstream. Host-only cookies remain host-only. Only exact localhost app redirects are mapped back to the LAN origin. Next's HMR WebSocket is admitted only on its known path with a matching Origin. The application's origin and production policies are unchanged; no public/wildcard origin is admitted. Request bodies are limited to4MiB, responses stream with backpressure, and transport state never includes headers, bodies or credentials.
+
+The firewall must permit the web port only for intended local-subnet clients on this physical adapter. The launcher does not change firewall policies, network trust classifications or router forwarding. This follows an explicitly selected adapter across networks; use it only on trusted LANs. The simulator is not production authentication. Disable portable access before joining an untrusted network:
+
+```powershell
+./deployment/local/Manage-LocalDocker.ps1 -Action RemovePortableAccess
+```
+
+Removing portable access stops/unregisters only its own task and removes its own non-secret configuration/status files. Localhost, Docker containers and saved research remain available. Fixed `-LanAddress` startup is retired; stale `MATCHBASE_LOCAL_LAN_ADDRESS` is ignored and removed after successful `Up`. An occupied or unassigned LAN address is reported without falling back to another interface. If Docker is starting or stopped, the gateway returns502 and recovers when the loopback application returns. Docker Desktop must be configured to start when the user signs in; the gateway does not start Docker or auto-approve research. This is a logged-in Windows workstation profile, not an always-on production service.
+
+If this workstation cannot launch even a minimal task action, select the explicit current-user Startup fallback:
+
+```powershell
+./deployment/local/Manage-LocalDocker.ps1 -Action InstallPortableAccess -InterfaceAlias 'Wi-Fi' -AccessStartupMode StartupShortcut
+```
+
+This removes the same user's MatchBASE task and creates `MatchBASE Portable Access.lnk` in that user's Windows Startup folder. The shortcut invokes the same hidden wrapper with absolute executable/configuration paths and an explicit working directory; installation also starts it immediately. It does not change execution policies, elevation, firewall rules or authentication. A per-configuration named mutex admits one wrapper per interactive session. `RemovePortableAccess` removes either startup mechanism and stops only its exact matching wrapper/supervisor process tree. The wrapper stores only startup stage, process ID, exception type, exit code and timestamp in the non-secret startup status file. A configured shortcut does not prove a completed reboot/login test. Unlike Task Scheduler's bounded retries, this fallback starts at sign-in and does not independently restart a fatal process exit during the session.
+
+A locked or unavailable status file does not stop network discovery: status publication retries on each poll, including when the address has not changed. Its last timestamp can therefore be stale; task state and actual HTTP reachability are separate observations. Shutdown cancels discovery/waiting and closes a candidate that finishes binding after stop was requested. Every supervisor exit releases its listener so a fatal failure cannot leave a running task with permanently stopped discovery.
+
+References: [Docker port bindings](https://docs.docker.com/engine/network/port-publishing/), [Node HTTP and upgrade handling](https://nodejs.org/api/http.html), [Windows task principals](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtaskprincipal).
 
 PostgreSQL data resides in named volume matchbase_local_postgres_data; PDF cache resides in matchbase_local_pdf_cache. Stop/recreate preserves these volumes. Never use down --volumes or remove the database volume for routine maintenance. The old tmpfs test database in compose.yaml is not the persistent local runtime.
 

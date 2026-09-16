@@ -184,7 +184,7 @@ async function extractStructured<T>(
       audit,
     );
   const manifest = createResearchStageManifest({
-    stage_kind: `${phase}:${context.loop}:extraction`,
+    stage_kind: `${phase}:${context.loop}:${validationEvidence === undefined ? "extraction" : "extraction_evidence_v1"}`,
     qualification: "validated_extraction",
     input: { input, validation_evidence: validationEvidence ?? input },
     policy: {
@@ -232,6 +232,34 @@ async function extractStructured<T>(
         manifest.operation_key,
       ),
   });
+}
+
+/**
+ * Bind extraction reuse to the exact native evidence receipt without letting
+ * accounting or transport telemetry invalidate an otherwise identical saved
+ * extraction after a process restart.
+ */
+function retainedNativeEvidenceIdentity(
+  completion: OpenRouterCompletionResult,
+): Record<string, unknown> {
+  return {
+    version: "native-evidence-identity.v1",
+    model: completion.model,
+    requested_model: completion.requested_model ?? completion.model,
+    request_id: completion.request_id ?? null,
+    provider_generation_id: completion.provider_generation_id ?? null,
+    text: completion.text,
+    finish_reason: completion.finish_reason ?? null,
+    native_finish_reason: completion.native_finish_reason ?? null,
+    live_api_invoked: completion.live_api_invoked,
+    citations: (completion.citations ?? []).map((citation) => ({
+      url: citation.url,
+      title: citation.title,
+      content: citation.content ?? null,
+      original_url: citation.original_url ?? null,
+      content_sha256: citation.content_sha256 ?? null,
+    })),
+  };
 }
 
 async function extractStructuredUncached<T>(
@@ -450,7 +478,7 @@ async function extractNativeCandidateScopeOnce(
       };
     },
     () => (indexDiagnostics ? { index_validation: indexDiagnostics } : {}),
-    nativeCompletion,
+    retainedNativeEvidenceIdentity(nativeCompletion),
   );
 }
 
@@ -661,7 +689,7 @@ export async function extractNativeDiscoveryPayload(
           return payload;
         },
         undefined,
-        nativeCompletion,
+        retainedNativeEvidenceIdentity(nativeCompletion),
       );
       return [output];
     } catch (error) {

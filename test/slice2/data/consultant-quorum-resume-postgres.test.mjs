@@ -219,6 +219,48 @@ dbTest(
     assert.equal(retainedEvents.length, 1);
     assert.equal(retainedEvents[0].detail.request_id, rejectedRequestId);
 
+    const legacyManifest = {
+      version: "research-stage.v1",
+      stage_kind: "discovery_gemini_extraction_index:1:extraction",
+      qualification: "validated_extraction",
+      operation_key: "legacy-extraction-operation",
+      input_sha256: hashResearchAuthority("legacy-extraction-input"),
+      policy_sha256: hashResearchAuthority("legacy-extraction-policy"),
+    };
+    const legacyStageId = randomUUID();
+    await db.query(
+      `INSERT INTO consultant_research_stage(stage_id,account_id,user_profile_id,run_id,execution_id,classification_id,
+       job_id,round_id,manifest_sha256,manifest,result,result_sha256,expires_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [
+        legacyStageId,
+        identity.account_id,
+        identity.user_profile_id,
+        identity.run_id,
+        identity.execution_id,
+        identity.classification_id,
+        job.job_id,
+        roundId,
+        hashResearchAuthority(legacyManifest),
+        JSON.stringify(legacyManifest),
+        JSON.stringify({ retained: true }),
+        hashResearchAuthority({ retained: true }),
+        expiresAt,
+      ],
+    );
+    await assert.rejects(
+      resumeFailedConsultantResearchExecution(
+        db,
+        identity.account_id,
+        identity.run_id,
+        identity.execution_id,
+      ),
+      { code: "MB-409-EXECUTION-RESUME" },
+    );
+    await db.query("DELETE FROM consultant_research_stage WHERE stage_id=$1", [
+      legacyStageId,
+    ]);
+
     const dryRun = await resumeFailedConsultantResearchExecution(
       db,
       identity.account_id,

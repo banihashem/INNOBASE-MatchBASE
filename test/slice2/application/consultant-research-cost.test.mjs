@@ -141,7 +141,7 @@ test("MB-UX-QUALITY-001 L07 quoted model roles require selected-endpoint structu
             selected_model: deepseekTextOnly,
           }),
           {
-            code: "MB-422-MODEL-UNAVAILABLE",
+            code: "MB-422-MODEL-CAPABILITY",
           },
         );
       assert.equal(completions, 0);
@@ -806,6 +806,91 @@ test("MB-UX-DEV-004 L04 research suitability excludes coding-only and experiment
   assert.ok(
     researchModelSuitability("x-ai/grok-4.3") >
       researchModelSuitability("x-ai/grok-3"),
+  );
+});
+test("MB-UX-QUALITY-001 L18 excludes an Anthropic BYOK route rejected by the active privacy policy before approval", async (t) => {
+  const anthropic = "anthropic/claude-sonnet-5";
+  const values = {
+    MATCHBASE_OPENROUTER_API_KEY: randomUUID(),
+    MATCHBASE_PROVIDER_ROUTES: JSON.stringify({ anthropic: "anthropic" }),
+    MATCHBASE_PROVIDER_GOOGLE: "google-ai-studio",
+    MATCHBASE_PROVIDER_OPENAI: "openai",
+    MATCHBASE_MODEL_GEMINI: "google/gemini-3.8-flash",
+    MATCHBASE_MODEL_OPENAI: "openai/gpt-5.2",
+    MATCHBASE_MODEL_PREPARATION: "openai/gpt-5.2",
+    MATCHBASE_MODEL_SYNTHESIS: "openai/gpt-5.2",
+  };
+  const previous = Object.fromEntries(
+    Object.keys(values).map((key) => [key, process.env[key]]),
+  );
+  Object.assign(process.env, values);
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  t.mock.method(globalThis, "fetch", async (target) => {
+    const url = String(target);
+    if (url.endsWith("/models/user"))
+      return Response.json({
+        data: [
+          {
+            id: anthropic,
+            supported_parameters: [
+              "max_tokens",
+              "reasoning",
+              "structured_outputs",
+            ],
+            pricing: { prompt: "0.000001", completion: "0.000002" },
+          },
+        ],
+      });
+    if (url.endsWith("/endpoints/zdr"))
+      return Response.json({
+        data: [{ model_id: anthropic, tag: "amazon-bedrock/global" }],
+      });
+    assert.ok(url.endsWith("/endpoints"));
+    return Response.json({
+      data: {
+        endpoints: [
+          {
+            model_id: anthropic,
+            tag: "anthropic",
+            provider_name: "Anthropic",
+            status: 0,
+            supported_parameters: [
+              "max_tokens",
+              "reasoning",
+              "structured_outputs",
+            ],
+            pricing: {
+              prompt: "0.000001",
+              completion: "0.000002",
+              request: "0",
+              web_search: "0.01",
+            },
+          },
+        ],
+      },
+    });
+  });
+  const choices = await researchModelChoices({ for_followup: true });
+  assert.equal(
+    choices.some((rate) => rate.model === anthropic),
+    false,
+  );
+  await assert.rejects(
+    buildResearchRoundPlan({
+      mode: "live",
+      round_number: 3,
+      depth: "deep",
+      selected_model: anthropic,
+      parent_round_id: "completed-round",
+      request_hash: "approved-request",
+      focus_requirements: [],
+    }),
+    { code: "MB-422-MODEL-PRIVACY" },
   );
 });
 test("MB-UX-DEV-004 L04 Ultra quotes search-fit models on ZDR routes and prices hosted Claude Exa", async (t) => {

@@ -306,6 +306,15 @@ export async function currentResearchModelRate(
       "MB-422-MODEL-PRICING",
       "No priced endpoint is available for the configured provider.",
     );
+  if (!credit && model.startsWith("anthropic/") && provider === "anthropic") {
+    const zdr = await getOpenRouterZdrEndpoints();
+    if (!endpoints.some((entry) => zdr.has(`${model}:${entry.tag}`)))
+      throw new ResearchRoundFault(
+        422,
+        "MB-422-MODEL-PRIVACY",
+        "The configured Anthropic BYOK route is incompatible with the active OpenRouter privacy policy. It has been removed from research choices before approval.",
+      );
+  }
   const capabilities = await getOpenRouterModelCapabilities(
     model,
     credit ? provider : undefined,
@@ -488,6 +497,20 @@ export async function buildResearchRoundPlan(input: {
             (c) => c.model === configured.synthesis && c.reasoning,
           ) ?? ordered.find((c) => c.reasoning))
         : cheapest;
+  if (
+    input.mode === "live" &&
+    input.round_number > 1 &&
+    input.selected_model &&
+    !selected
+  ) {
+    const requested = await currentResearchModelRate(input.selected_model);
+    if (requested.structured_outputs !== true)
+      throw new ResearchRoundFault(
+        422,
+        "MB-422-MODEL-CAPABILITY",
+        "The selected follow-up model cannot produce the required structured research output.",
+      );
+  }
   if (input.mode === "live" && (!selected || !cheapest))
     throw new ResearchRoundFault(
       422,
@@ -668,12 +691,10 @@ export async function buildResearchRoundPlan(input: {
   const searchEngines = Object.fromEntries(
     approvedSearchModels.map((model) => [
       model,
-      native
-        ? researchSearchEngineForModel(
-            model,
-            actualRates.find((rate) => rate.model === model)?.provider,
-          )
-        : "exa",
+      researchSearchEngineForModel(
+        model,
+        actualRates.find((rate) => rate.model === model)?.provider,
+      ),
     ]),
   ) as Record<string, "native" | "exa">;
   const priceModel = research[0]!;
@@ -823,7 +844,7 @@ export async function buildResearchRoundPlan(input: {
       ...(modelFallbacks ? { model_fallbacks: modelFallbacks } : {}),
       extraction_model: extraction,
       synthesis_model: synthesis,
-      search_engine: native ? "native" : "exa",
+      search_engine: searchEngines[research[0]!]!,
       search_engines: searchEngines,
       synthesis_selection_reason:
         "Application selection: structured output and reasoning capability, configured synthesis preference, then lower token price. This is not a provider recommendation or a benchmark claim.",
@@ -849,7 +870,7 @@ export async function buildResearchRoundPlan(input: {
       assumptions: [
         ...(fallbackRate
           ? [
-              `Automatic technical recovery may use ${fallbackRate.model} through ${fallbackRate.provider} (${fallbackRate.billing_mode ?? "byok"}) instead of ${selected!.model}, using Exa for web research. The estimate includes six shared recovery calls and at most three total attempts per stage within the total call allowance. The high estimate prices affected stage calls and the recovery reserve at the highest applicable primary or alternative rates. Refusals, safety blocks, authentication, billing, permission, cancellation and approval failures never authorize substitution. No following round starts automatically.`,
+              `Automatic technical recovery may use ${fallbackRate.model} through ${fallbackRate.provider} (${fallbackRate.billing_mode ?? "byok"}) instead of ${selected!.model}, using ${searchEngines[fallbackRate.model]} web research. The estimate includes six shared recovery calls and at most three total attempts per stage within the total call allowance. The high estimate prices affected stage calls and the recovery reserve at the highest applicable primary or alternative rates. Refusals, safety blocks, authentication, billing, permission, cancellation and approval failures never authorize substitution. No following round starts automatically.`,
             ]
           : input.mode === "live" && input.round_number > 1
             ? [
@@ -864,7 +885,7 @@ export async function buildResearchRoundPlan(input: {
             ]
           : []),
         "Dedicated price research includes a seven-day web pass and structured extraction; a thirty-day fallback and extraction are included only when the first pass has no usable sourced recent price. Four calls are reserved, with at most two web searches.",
-        "DeepSeek and later-round Exa search incurs an additional OpenRouter platform search charge (Exa Auto at USD0.007 per request including up to ten results; this plan limits results to eight), independent of BYOK model inference (OpenRouter web-search documentation checked 2026-09-09). Native search follows the explicitly selected model and provider; hosted Anthropic endpoints use priced Exa search. Unsupported endpoints fail rather than silently switching engines.",
+        "DeepSeek and hosted Anthropic endpoints use Exa and incur an additional OpenRouter platform search charge (Exa Auto at USD0.007 per request including up to ten results; this plan limits results to eight), independent of BYOK model inference (OpenRouter web-search documentation checked 2026-09-09). OpenAI, Google, first-party Anthropic and xAI use their native search in every round. Unsupported endpoints fail before approval rather than silently switching engines.",
         "Evidence extraction uses the model named in this estimate; its actual configured rates are included. A more economical research choice does not silently downgrade source attribution to the cheapest model.",
         "Estimate in USD, not a guaranteed maximum or invoice.",
         "Range assumes 4,000 output tokens per call at the low end and the full approved output allowance at the high end; input volume varies.",

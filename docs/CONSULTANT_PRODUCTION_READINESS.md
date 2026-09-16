@@ -10,6 +10,8 @@ The production web image includes the pinned Playwright closure and Chromium for
 
 ## Required qualification
 
+MB-ARCH-IMPLEMENT-001 adds transactional research admission, stage reuse, private memory/renewal, rights controls and isolated optional-capability qualification. These research-stage controls do not resolve the web-side interpretation/correction/quotation boundary described above. Shared evidence and local generation remain separately gated; controlled incident proposals cannot authorize production release. See [architecture controls](https://github.com/banihashem/INNOBASE-MatchBASE/blob/main/docs/ARCHITECTURE_CONTROLS.md).
+
 1. Persist interpretation, correction and quotation commands before returning pending state. Preserve immutable request, profile/account, execution, version and quote-expiry bindings. Quotation must not dispatch paid research.
 2. Demonstrate completion with no OpenRouter key or outbound OpenRouter request in the production web process. Exercise process restart, duplicate commands, lease expiry, cancellation and result ownership with disposable infrastructure and controlled providers first.
 3. Configure explicit Google/OpenAI provider choices and qualified account-specific routes; extra model families require their own funding and routing acceptance. Missing or stale credentials/catalogs/policy fail closed.

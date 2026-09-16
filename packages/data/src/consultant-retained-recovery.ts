@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ConsultantResearchOutputV3 } from "@matchbase/contracts";
 import { inTransaction, type ConnectionPool } from "./database.js";
+import { assertLogicalRequestRunFence } from "./consultant-research-renewal.js";
 import type { ResearchRoundRecord } from "./consultant-research-rounds.js";
 import { saveConsultantOutputV3 } from "./v3-repository.js";
 
@@ -57,6 +58,13 @@ export async function recoverCompletedResearchRound(
         "Saved research is not eligible for local evidence recovery.",
       );
     };
+    // Preserve local-recovery denial before root registration; this read takes no row locks.
+    const owned = await db.query(
+      `SELECT run_id FROM consultant_workflow_session WHERE account_id=$1 AND run_id=$2 AND NOT is_invalidated`,
+      [accountId, runId],
+    );
+    if (!owned.rows.length) return fail();
+    await assertLogicalRequestRunFence(db, accountId, runId);
     const sessions = await db.query(
       `SELECT * FROM consultant_workflow_session WHERE account_id=$1 AND run_id=$2 FOR UPDATE`,
       [accountId, runId],

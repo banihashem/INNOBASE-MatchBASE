@@ -214,6 +214,10 @@ postgresTest(
       );
 
       for (const migration of [
+        "0024_consultant_research_incidents",
+        "0023_public_corpus_controls",
+        "0022_consultant_private_evidence_renewal",
+        "0021_consultant_execution_integrity",
         "0020_consultant_research_rounds",
         "0019_consultant_honest_execution_metadata",
         "0018_consultant_live_execution",

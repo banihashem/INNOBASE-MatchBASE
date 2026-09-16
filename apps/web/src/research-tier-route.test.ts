@@ -30,6 +30,9 @@ const mocks = vi.hoisted(() => {
     resolve: vi.fn(),
     pool: Object.freeze({ synthetic: true }),
     after: vi.fn(),
+    memoryQuote: vi.fn(),
+    memoryLoad: vi.fn(),
+    rights: vi.fn(),
   };
 });
 vi.mock("next/server", () => ({
@@ -50,6 +53,9 @@ vi.mock("@matchbase/application", () => ({
   configuredResearchTierAvailability: mocks.availability,
   researchModelChoices: mocks.modelChoices,
   runNextConsultantWorkflowJob: mocks.worker,
+  quotePrivateResearchMemory: mocks.memoryQuote,
+  loadQuotedPrivateMemory: mocks.memoryLoad,
+  assertConsultantOutputReadRights: mocks.rights,
 }));
 vi.mock("@matchbase/data", () => ({
   ResearchRoundFault: mocks.Fault,
@@ -57,6 +63,11 @@ vi.mock("@matchbase/data", () => ({
   readConsultantCostEvents: mocks.events,
   saveResearchQuote: mocks.save,
   approveResearchQuote: mocks.approve,
+  ExecutionIntegrityFault: mocks.Fault,
+  inTransaction: async (
+    _pool: unknown,
+    callback: (client: unknown) => unknown,
+  ) => callback(mocks.pool),
 }));
 vi.mock("./db-client", () => ({ getAppDatabasePool: () => mocks.pool }));
 vi.mock("./fetch-runtime", () => ({ resolveRequestSession: mocks.resolve }));
@@ -113,6 +124,8 @@ beforeEach(() => {
     plan: { ...input, models: ["synthetic/model"] },
     choices: [],
   }));
+  mocks.memoryQuote.mockImplementation(async (_pool, _session, plan) => plan);
+  mocks.memoryLoad.mockResolvedValue(undefined);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -120,6 +133,122 @@ afterEach(() => {
 });
 
 describe("research tier HTTP approval boundary", () => {
+  it("MB-ARCH-IMPLEMENT-001 L02 withdrawn results retain costs and round history without source content", async () => {
+    mocks.rounds.mockResolvedValue([
+      {
+        round_id: quoteId,
+        round_number: 1,
+        status: "completed",
+        output: { evidence: "WITHDRAWN_CONTENT" },
+      },
+    ]);
+    mocks.rights.mockRejectedValue(
+      new mocks.Fault(
+        409,
+        "MB-409-EVIDENCE-WITHDRAWN",
+        "Source withdrawn. Refresh the research.",
+      ),
+    );
+    const response = await GET(
+      new Request(
+        `http://localhost/api/v1/consultant/research-rounds?run_id=${runId}`,
+      ),
+    );
+    expect(response.status).toBe(200);
+    const value = await response.json();
+    expect(value).toMatchObject({
+      costs: { complete: true },
+      rounds: [{ round_id: quoteId }],
+      research_review: null,
+      evidence_withdrawn: true,
+      output_available: false,
+    });
+    expect(JSON.stringify(value)).not.toContain("WITHDRAWN_CONTENT");
+    expect(mocks.review).not.toHaveBeenCalled();
+    expect(mocks.worker).not.toHaveBeenCalled();
+  });
+  it("MB-ARCH-IMPLEMENT-001 L02 explicitly selected withdrawn output is refused", async () => {
+    mocks.rounds.mockResolvedValue([
+      {
+        round_id: quoteId,
+        round_number: 1,
+        status: "completed",
+        output: { evidence: "WITHDRAWN_CONTENT" },
+      },
+    ]);
+    mocks.rights.mockRejectedValue(
+      new mocks.Fault(409, "MB-409-EVIDENCE-WITHDRAWN", "Source withdrawn."),
+    );
+    const response = await GET(
+      new Request(
+        `http://localhost/api/v1/consultant/research-rounds?run_id=${runId}&round_id=${quoteId}`,
+      ),
+    );
+    expect(response.status).toBe(409);
+    expect(JSON.stringify(await response.json())).not.toContain(
+      "WITHDRAWN_CONTENT",
+    );
+    expect(mocks.review).not.toHaveBeenCalled();
+  });
+  it("MB-ARCH-IMPLEMENT-001 L02 withdrawn parent evidence cannot seed another follow-up quote", async () => {
+    mocks.rounds.mockResolvedValue([
+      {
+        round_id: quoteId,
+        round_number: 1,
+        status: "completed",
+        output: { evidence: "WITHDRAWN_CONTENT" },
+      },
+    ]);
+    mocks.rights.mockRejectedValue(
+      new mocks.Fault(409, "MB-409-EVIDENCE-WITHDRAWN", "Source withdrawn."),
+    );
+    const response = await post({ action: "quote", depth: "simple" });
+    expect(response.status).toBe(409);
+    expect(mocks.plan).not.toHaveBeenCalled();
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.worker).not.toHaveBeenCalled();
+  });
+  it("MB-ARCH-IMPLEMENT-001 L02 binds the exact private memory and root generation before quote consent", async () => {
+    const selection = {
+      version: "private-memory.v1",
+      observation_refs: [{ observation_id: "selected", rights_epoch: 3 }],
+      context_sha256: "context-hash",
+      input_bytes: 1500,
+    };
+    mocks.memoryQuote.mockImplementation(async (_pool, _session, plan) => ({
+      ...plan,
+      private_memory: selection,
+      logical_request_generation: 4,
+    }));
+    const memoryContext = {
+      version: "private-research-context.v1",
+      observations: [{ claim_text: "Historical source clue" }],
+    };
+    mocks.memoryLoad.mockResolvedValue(memoryContext);
+    const response = await post({ action: "quote", depth: "simple" });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      plan: { private_memory: selection, logical_request_generation: 4 },
+    });
+    expect(mocks.save.mock.calls[0]?.[2].private_memory).toEqual(selection);
+    expect(mocks.preflight.mock.calls[0]?.[4]).toBe(memoryContext);
+    expect(mocks.worker).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it("MB-ARCH-IMPLEMENT-001 L02 stale private rights require a fresh quote without saving or dispatch", async () => {
+    mocks.memoryQuote.mockRejectedValue(
+      new mocks.Fault(
+        409,
+        "MB-409-PRIVATE-EVIDENCE",
+        "Source rights changed. Refresh the estimate.",
+      ),
+    );
+    const response = await post({ action: "quote", depth: "simple" });
+    expect(response.status).toBe(409);
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.worker).not.toHaveBeenCalled();
+    expect(mocks.approve).not.toHaveBeenCalled();
+  });
   const readModelChoices = () =>
     GET(
       new Request(
@@ -208,6 +337,7 @@ describe("research tier HTTP approval boundary", () => {
       session,
       expect.objectContaining({ parent_round_id: parent.round_id }),
       parent,
+      undefined,
     );
     expect(mocks.save).not.toHaveBeenCalled();
     expect(mocks.approve).not.toHaveBeenCalled();
@@ -437,7 +567,11 @@ describe("research tier HTTP approval boundary", () => {
         true,
       );
       expect(mocks.authorize).toHaveBeenCalledWith(
-        expect.objectContaining({ context, runId, resourceKind: "run_detail" }),
+        expect.objectContaining({
+          context,
+          runId,
+          resourceKind: "research_history",
+        }),
       );
       expect(mocks.approve).not.toHaveBeenCalled();
       expect(mocks.after).not.toHaveBeenCalled();

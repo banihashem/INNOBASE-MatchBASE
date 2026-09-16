@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApplicationFault } from "@matchbase/application";
-import { POST } from "../app/api/v1/consultant/workflow/route";
+import { GET, POST } from "../app/api/v1/consultant/workflow/route";
+import { ExecutionIntegrityFault } from "@matchbase/data";
 
 const mocks = vi.hoisted(() => ({
   submit: vi.fn(),
@@ -13,6 +14,12 @@ const mocks = vi.hoisted(() => ({
   unsafeGate: vi.fn(),
   authorize: vi.fn(),
   queue: vi.fn(),
+  rights: vi.fn(),
+  drafts: vi.fn(),
+  activity: vi.fn(),
+  expired: vi.fn(),
+  history: vi.fn(),
+  incomplete: vi.fn(),
 }));
 vi.mock("@matchbase/application", async (original) => ({
   ...(await original<Record<string, unknown>>()),
@@ -22,10 +29,16 @@ vi.mock("@matchbase/application", async (original) => ({
   retryConsultantIntakeInterpretation: mocks.retry,
   getOrRestoreWorkflowSession: mocks.restore,
   suggestInterpretationCorrection: mocks.correction,
+  assertConsultantOutputReadRights: mocks.rights,
 }));
 vi.mock("@matchbase/data", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   stopConsultantResearch: mocks.stop,
+  getConsultantDraftSessionByRunId: mocks.drafts,
+  getConsultantWorkflowActivity: mocks.activity,
+  failExpiredConsultantWorkflowJobs: mocks.expired,
+  listConsultantResearchSummaries: mocks.history,
+  listConsultantWorkflowSessions: mocks.incomplete,
 }));
 vi.mock("./db-client", () => ({ getAppDatabasePool: () => mocks.pool }));
 vi.mock("./fetch-runtime", () => ({
@@ -127,6 +140,79 @@ describe("L12 correction preview admission", () => {
 });
 
 describe("L09 stop research admission", () => {
+  it("MB-ARCH-IMPLEMENT-001 L02 F02 the owner can stop active research when its prior output is withdrawn", async () => {
+    mocks.authorize.mockImplementationOnce(async ({ resourceKind }) => {
+      if (resourceKind !== "research_history")
+        throw new ExecutionIntegrityFault(
+          "MB-409-EVIDENCE-WITHDRAWN",
+          "Prior evidence withdrawn.",
+        );
+      return { runId, output: null };
+    });
+    mocks.stop.mockResolvedValueOnce("stopped");
+    const retained = {
+      account_id: "owner-account",
+      user_profile_id: "owner-user",
+      execution_id: draftId,
+      state: "workflow_failed",
+      output: { source: "WITHDRAWN_BYTES" },
+      activity: [{ source: "WITHDRAWN_ACTIVITY" }],
+    };
+    mocks.restore.mockResolvedValueOnce(retained);
+    mocks.rights.mockRejectedValueOnce(
+      new ExecutionIntegrityFault(
+        "MB-409-EVIDENCE-WITHDRAWN",
+        "Prior evidence withdrawn.",
+      ),
+    );
+    const response = await post({
+      action: "stop_research",
+      run_id: runId,
+      execution_id: draftId,
+    });
+    expect(response.status).toBe(200);
+    const value = await response.json();
+    expect(value).toMatchObject({
+      success: true,
+      outcome: "stopped",
+      session: { output: null, revealed_count: 0, evidence_withdrawn: true },
+    });
+    expect(JSON.stringify(value)).not.toMatch(
+      /WITHDRAWN_BYTES|WITHDRAWN_ACTIVITY/,
+    );
+    expect(retained.output).toEqual({ source: "WITHDRAWN_BYTES" });
+    expect(mocks.stop).toHaveBeenCalledWith(
+      mocks.pool,
+      "owner-account",
+      runId,
+      draftId,
+    );
+    expect(mocks.unsafeGate).toHaveBeenCalledOnce();
+    expect(mocks.after).not.toHaveBeenCalled();
+  });
+  it("MB-ARCH-IMPLEMENT-001 L02 F02 failure to read old source rights does not make completed cancellation fail", async () => {
+    mocks.stop.mockResolvedValueOnce("stopped");
+    mocks.restore.mockResolvedValueOnce({
+      account_id: "owner-account",
+      output: { source: "NO_SOURCE_BYTES" },
+      state: "workflow_failed",
+    });
+    mocks.rights.mockRejectedValueOnce(
+      new Error("Database temporarily unavailable"),
+    );
+    const response = await post({
+      action: "stop_research",
+      run_id: runId,
+      execution_id: draftId,
+    });
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).not.toMatch(/NO_SOURCE_BYTES|Database temporarily/);
+    expect(JSON.parse(text)).toMatchObject({
+      outcome: "stopped",
+      session: { output: null },
+    });
+  });
   it("requires an exact valid execution identity", async () => {
     expect(
       (await post({ action: "stop_research", run_id: runId })).status,
@@ -380,7 +466,8 @@ describe("MB-UX-PILOT-001 L01 workflow security admission", () => {
         },
         runId,
         pool: mocks.pool,
-        resourceKind: "run_detail",
+        resourceKind:
+          action === "stop_research" ? "research_history" : "run_detail",
       });
       expect(mocks.restore).not.toHaveBeenCalled();
       expect(mocks.stop).not.toHaveBeenCalled();
@@ -428,4 +515,77 @@ describe("MB-UX-PILOT-001 L01 malformed run identity correction", () => {
       }
     },
   );
+});
+
+describe("MB-ARCH-IMPLEMENT-001 L02 private workflow serving", () => {
+  it("withdrawal suppresses result content and activity without changing the retained workflow", async () => {
+    const session = {
+      account_id: "owner-account",
+      run_id: runId,
+      execution_id: draftId,
+      state: "workflow_complete",
+      revealed_count: 5,
+      output: { source: "WITHDRAWN_CONTENT" },
+    };
+    mocks.authorize.mockResolvedValue({ runId });
+    mocks.restore.mockResolvedValue(session);
+    mocks.drafts.mockResolvedValue(null);
+    mocks.activity.mockResolvedValue([{ payload: "WITHDRAWN_CONTENT" }]);
+    mocks.rights.mockRejectedValueOnce(
+      new ExecutionIntegrityFault(
+        "MB-409-EVIDENCE-WITHDRAWN",
+        "Source material withdrawn. Refresh the research.",
+      ),
+    );
+    const response = await GET(
+      new Request(
+        `http://localhost/api/v1/consultant/workflow?run_id=${runId}`,
+      ),
+    );
+    expect(response.status).toBe(200);
+    const value = await response.json();
+    expect(value.session).toMatchObject({
+      run_id: runId,
+      state: "workflow_complete",
+      output: null,
+      revealed_count: 0,
+      evidence_withdrawn: true,
+    });
+    expect(JSON.stringify(value)).not.toContain("WITHDRAWN_CONTENT");
+    expect(session.output).toEqual({ source: "WITHDRAWN_CONTENT" });
+    expect(mocks.queue).not.toHaveBeenCalled();
+  });
+  it("saved work and incomplete listings pass the authenticated profile into the database query", async () => {
+    mocks.history.mockResolvedValue([]);
+    mocks.incomplete.mockResolvedValue([]);
+    expect(
+      (
+        await GET(
+          new Request(
+            "http://localhost/api/v1/consultant/workflow?history=true",
+          ),
+        )
+      ).status,
+    ).toBe(200);
+    expect(mocks.history).toHaveBeenCalledWith(
+      mocks.pool,
+      "owner-account",
+      "owner-user",
+    );
+    expect(
+      (
+        await GET(
+          new Request(
+            "http://localhost/api/v1/consultant/workflow?incomplete=true",
+          ),
+        )
+      ).status,
+    ).toBe(200);
+    expect(mocks.incomplete).toHaveBeenCalledWith(
+      mocks.pool,
+      "owner-account",
+      20,
+      "owner-user",
+    );
+  });
 });

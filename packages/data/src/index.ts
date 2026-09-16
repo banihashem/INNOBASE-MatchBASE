@@ -23,3 +23,11 @@ export * from "./consultant-retained-recovery.js";
 
 export * from "./consultant-failed-recovery.js";
 export * from "./consultant-focus-recovery.js";
+export * from "./consultant-execution-integrity.js";
+export * from "./consultant-private-evidence.js";
+export * from "./consultant-research-renewal.js";
+export * from "./consultant-output-rights.js";
+export * from "./consultant-private-memory-authority.js";
+export * from "./consultant-research-incidents.js";
+export * from "./consultant-public-corpus.js";
+export * from "./public-corpus-administration.js";

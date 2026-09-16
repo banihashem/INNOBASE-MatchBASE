@@ -1,4 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
+import { assertLogicalRequestFence } from "./consultant-research-renewal.js";
+import { assertQuotedPrivateMemoryAuthority } from "./consultant-private-memory-authority.js";
+import { assertRetainedParentAuthority } from "./consultant-output-rights.js";
 import type {
   ResearchRoundPlan,
   ResearchRoundView,
@@ -90,26 +93,59 @@ export async function saveResearchQuote(
 ) {
   // MB-UX-QUALITY-001 L01: reject invalid ownership before retaining a quote.
   assertRoundNumber(plan.round_number);
-  const id = randomUUID();
-  const result = await db.query(
-    `INSERT INTO consultant_research_round(round_id,account_id,user_profile_id,run_id,classification_id,round_number,plan)
+  const persist = async (client: Queryable) => {
+    const owned = await client.query(
+      `SELECT run_id FROM consultant_workflow_session WHERE account_id=$1 AND user_profile_id=$2 AND run_id=$3
+      AND NOT is_invalidated AND COALESCE(classification->>'classification_id',workflow_metadata->>'classification_id')=$4::text`,
+      [
+        identity.account_id,
+        identity.user_profile_id,
+        identity.run_id,
+        identity.classification_id,
+      ],
+    );
+    if (!owned.rows.length)
+      throw new ResearchRoundFault(404, "MB-404-ROUND", "Research not found.");
+    await assertLogicalRequestFence(
+      client,
+      identity,
+      identity.run_id,
+      plan.logical_request_generation,
+    );
+    await assertRetainedParentAuthority(
+      client,
+      identity,
+      plan as unknown as Record<string, unknown>,
+    );
+    await assertQuotedPrivateMemoryAuthority(
+      client,
+      identity,
+      plan as unknown as Record<string, unknown>,
+    );
+    const id = randomUUID();
+    const result = await client.query(
+      `INSERT INTO consultant_research_round(round_id,account_id,user_profile_id,run_id,classification_id,round_number,plan)
     SELECT $1,$2,$3,$4,$5,$6,$7 FROM consultant_workflow_session s
     WHERE s.account_id=$2 AND s.user_profile_id=$3 AND s.run_id=$4 AND NOT s.is_invalidated
       AND COALESCE(s.classification->>'classification_id',s.workflow_metadata->>'classification_id')=$5::uuid::text
     RETURNING round_id`,
-    [
-      id,
-      identity.account_id,
-      identity.user_profile_id,
-      identity.run_id,
-      identity.classification_id,
-      plan.round_number,
-      JSON.stringify(plan),
-    ],
-  );
-  if (result.rows.length !== 1)
-    throw new ResearchRoundFault(404, "MB-404-ROUND", "Research not found.");
-  return id;
+      [
+        id,
+        identity.account_id,
+        identity.user_profile_id,
+        identity.run_id,
+        identity.classification_id,
+        plan.round_number,
+        JSON.stringify(plan),
+      ],
+    );
+    if (result.rows.length !== 1)
+      throw new ResearchRoundFault(404, "MB-404-ROUND", "Research not found.");
+    return id;
+  };
+  return "connect" in db && !("release" in db)
+    ? inTransaction(db as ConnectionPool, persist)
+    : persist(db);
 }
 
 /** The session lock serializes consent, competing tabs, stop and publication. */
@@ -122,6 +158,19 @@ export async function approveResearchQuote(
   currentHash: string,
 ) {
   return inTransaction(pool, async (db) => {
+    // An ownership denial keeps its existing public contract before the logical-root fence.
+    const owned = await db.query(
+      `SELECT run_id FROM consultant_workflow_session WHERE account_id=$1 AND user_profile_id=$2 AND run_id=$3
+        AND NOT is_invalidated`,
+      [accountId, userId, runId],
+    );
+    if (!owned.rows.length)
+      throw new ResearchRoundFault(404, "MB-404-ROUND", "Research not found.");
+    const root = await assertLogicalRequestFence(
+      db,
+      { account_id: accountId, user_profile_id: userId },
+      runId,
+    );
     const sessions = await db.query(
       `SELECT * FROM consultant_workflow_session WHERE account_id=$1 AND run_id=$2 FOR UPDATE`,
       [accountId, runId],
@@ -143,6 +192,13 @@ export async function approveResearchQuote(
         404,
         "MB-404-ROUND",
         "Research quote not found.",
+      );
+    if (
+      quote.plan.logical_request_generation !== undefined &&
+      quote.plan.logical_request_generation !== root.generation
+    )
+      conflict(
+        "A newer research renewal is available. Review a fresh estimate.",
       );
     if (
       quote.user_profile_id !== userId ||
@@ -169,6 +225,25 @@ export async function approveResearchQuote(
     }
     if (quote.status !== "proposed")
       conflict("This attempt ended. Review a fresh quote before trying again.");
+    await assertRetainedParentAuthority(
+      db,
+      {
+        account_id: accountId,
+        user_profile_id: userId,
+        run_id: runId,
+        classification_id: quote.classification_id,
+      },
+      quote.plan as unknown as Record<string, unknown>,
+    );
+    await assertQuotedPrivateMemoryAuthority(
+      db,
+      {
+        account_id: accountId,
+        user_profile_id: userId,
+        classification_id: quote.classification_id,
+      },
+      quote.plan as unknown as Record<string, unknown>,
+    );
     assertRoundNumber(quote.round_number);
     assertRoundNumber(quote.plan.round_number);
     if (quote.round_number !== quote.plan.round_number)
@@ -368,6 +443,8 @@ export async function recordConsultantProviderCall(
     "requested_provider",
     "actual_provider",
     "dispatched",
+    "provider_receipt_received",
+    "provider_dispatch_rejected",
   ];
   const detail = Object.fromEntries(
     fields

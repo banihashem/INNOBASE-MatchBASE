@@ -545,6 +545,7 @@ export async function listConsultantWorkflowSessions(
   db: Queryable,
   accountId: string,
   limit = 20,
+  userProfileId?: string,
 ): Promise<readonly ConsultantWorkflowSessionRecord[]> {
   const res = await db.query<{
     session_id: string;
@@ -568,10 +569,10 @@ export async function listConsultantWorkflowSessions(
     updated_at: Date;
   }>(
     `SELECT * FROM consultant_workflow_session
-     WHERE account_id = $1
+     WHERE account_id = $1 AND ($3::uuid IS NULL OR user_profile_id=$3)
      ORDER BY updated_at DESC
      LIMIT $2;`,
-    [accountId, limit],
+    [accountId, limit, userProfileId ?? null],
   );
 
   const parseJson = <T>(val: unknown): T =>

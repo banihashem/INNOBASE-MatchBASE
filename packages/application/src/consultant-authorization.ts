@@ -3,6 +3,8 @@ import {
   inTransaction,
   type ConnectionPool,
   type ConsultantWorkflowSessionRecord,
+  assertResearchOutputRights,
+  type Queryable,
 } from "@matchbase/data";
 import {
   GOLDEN_SCENARIO_V3_01,
@@ -37,6 +39,22 @@ const GOLDEN_SCENARIO_MAP: Record<string, ConsultantResearchOutputV3> = {
 };
 
 const GOLDEN_RUN_IDS = new Set(Object.keys(GOLDEN_SCENARIO_MAP));
+
+/** Archived observations may be old, but explicit source withdrawal still blocks serving them. */
+export async function assertConsultantOutputReadRights(
+  db: Queryable,
+  accountId: string,
+  output: ConsultantResearchOutputV3,
+): Promise<void> {
+  if (output.research_mode === "fixture") return;
+  await assertResearchOutputRights(db, {
+    account_id: accountId,
+    user_profile_id: output.user_profile_id,
+    run_id: output.research_run_id,
+    execution_id: output.execution_id,
+    classification_id: output.classification_id,
+  });
+}
 
 export async function assertConsultantWorkspaceAuthorized(
   pool: ConnectionPool,
@@ -104,28 +122,39 @@ export async function authorizeConsultantRunResourceRead(options: {
   status: 200;
   runId: string;
   output: ConsultantResearchOutputV3;
+  owner_account_id?: string;
+  owner_user_profile_id?: string;
   session?: ConsultantWorkflowSessionRecord;
 }>;
 export async function authorizeConsultantRunResourceRead(options: {
   context: RequestContext;
   runId: string;
   pool: ConnectionPool;
-  resourceKind: "run_detail";
+  resourceKind: "run_detail" | "research_history";
 }): Promise<{
   status: 200;
   runId: string;
   output?: ConsultantResearchOutputV3 | null;
+  owner_account_id?: string;
+  owner_user_profile_id?: string;
   session?: ConsultantWorkflowSessionRecord;
 }>;
 export async function authorizeConsultantRunResourceRead(options: {
   context: RequestContext;
   runId: string;
   pool: ConnectionPool;
-  resourceKind?: "report_pdf" | "report_json" | "run_result" | "run_detail";
+  resourceKind?:
+    | "report_pdf"
+    | "report_json"
+    | "run_result"
+    | "run_detail"
+    | "research_history";
 }): Promise<{
   status: 200;
   runId: string;
   output?: ConsultantResearchOutputV3 | null;
+  owner_account_id?: string;
+  owner_user_profile_id?: string;
   session?: ConsultantWorkflowSessionRecord;
 }> {
   const { context, runId, pool, resourceKind = "report_pdf" } = options;
@@ -280,11 +309,25 @@ export async function authorizeConsultantRunResourceRead(options: {
           { run_id: effectiveRunId },
         );
       }
+      if (resourceKind === "research_history")
+        return {
+          status: 200,
+          runId: effectiveRunId,
+          output: null,
+          owner_account_id: memorySession.account_id,
+          owner_user_profile_id: memorySession.user_profile_id,
+        };
       if (memorySession.output) {
+        await assertConsultantOutputReadRights(
+          pool,
+          memorySession.account_id,
+          memorySession.output,
+        );
         return {
           status: 200,
           runId: effectiveRunId,
           output: memorySession.output,
+          owner_account_id: memorySession.account_id,
         };
       }
       if (resourceKind === "run_detail") {
@@ -303,7 +346,7 @@ export async function authorizeConsultantRunResourceRead(options: {
       return {
         status: 200,
         runId: effectiveRunId,
-        output: goldenFallback,
+        output: resourceKind === "research_history" ? null : goldenFallback,
       };
     }
 
@@ -360,6 +403,15 @@ export async function authorizeConsultantRunResourceRead(options: {
       { invalidation_reason: invalidationReason, run_id: effectiveRunId },
     );
   }
+
+  if (resourceKind === "research_history")
+    return {
+      status: 200,
+      runId: effectiveRunId,
+      output: null,
+      owner_account_id: row.output_account_id ?? row.session_account_id!,
+      owner_user_profile_id: row.output_user_profile_id ?? row.user_profile_id!,
+    };
 
   // Parse output
   let output: ConsultantResearchOutputV3 | undefined;
@@ -432,10 +484,16 @@ export async function authorizeConsultantRunResourceRead(options: {
     );
   }
 
+  await assertConsultantOutputReadRights(
+    pool,
+    row.output_account_id ?? row.session_account_id!,
+    output,
+  );
   return {
     status: 200,
     runId: effectiveRunId,
     output,
+    owner_account_id: row.output_account_id ?? row.session_account_id!,
     ...(session ? { session } : {}),
   };
 }

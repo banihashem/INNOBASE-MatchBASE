@@ -45,6 +45,7 @@ export async function preflightResearchRoundContext(
   session: WorkflowSession,
   plan: ResearchRoundPlan,
   parent: ResearchRoundRecord | undefined,
+  memoryContext?: DualLaneExecutionInput["private_memory_context"],
 ): Promise<void> {
   if (session.mode === "demonstration" || !plan.focus_analysis_required) return;
   if (
@@ -63,7 +64,10 @@ export async function preflightResearchRoundContext(
       "MB-409-FOCUS-STALE",
       "Review the latest completed research before requesting a new estimate.",
     );
-  const input = consultantResearchInput(session);
+  const input = {
+    ...consultantResearchInput(session),
+    ...(memoryContext ? { private_memory_context: memoryContext } : {}),
+  };
   const prior = await hydrateResearchContinuation(db, parent);
   const known = new Set(
     (prior.indexed_leads ?? []).map((lead) => lead.lead_id),

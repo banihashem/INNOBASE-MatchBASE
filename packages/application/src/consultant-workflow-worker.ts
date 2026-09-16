@@ -11,6 +11,7 @@ import {
   getOrRestoreWorkflowSession,
   markConsultantWorkflowFailed,
 } from "./consultant-v3-service.js";
+import { retainConsultantIncident } from "./consultant-incident-controller.js";
 
 /** The persistent job is shared by the local worker and the HTTP after-response accelerator. */
 export async function runNextConsultantWorkflowJob(
@@ -61,21 +62,42 @@ export async function runNextConsultantWorkflowJob(
         db,
         assertLease,
         cancellation.signal,
+        { job_id: job.job_id, lease_token: job.lease_token! },
       );
     else
       await executeConsultantWorkflowResearch(db, job.run_id, {
         mode: job.mode,
         assertLease,
         signal: cancellation.signal,
+        executionFence: { job_id: job.job_id, lease_token: job.lease_token! },
       });
     await assertLease();
     await finishConsultantWorkflowJob(db, job);
   } catch (error) {
-    // A provider failure is writable only while this execution still owns its lease.
-    await assertLease().catch(() => {});
-    if (!leaseLost) {
-      await markConsultantWorkflowFailed(db, job.run_id, job.stage, error);
-      await finishConsultantWorkflowJob(db, job, "workflow-execution-failed");
+    try {
+      // Containment precedes optional diagnosis and retains the original fault.
+      // A provider failure is writable only while this execution owns its lease.
+      await assertLease().catch(() => {});
+      if (!leaseLost) {
+        await markConsultantWorkflowFailed(db, job.run_id, job.stage, error, {
+          job_id: job.job_id,
+          lease_token: job.lease_token!,
+        });
+        await finishConsultantWorkflowJob(db, job, "workflow-execution-failed");
+      }
+    } finally {
+      clearInterval(heartbeat);
+      await retainConsultantIncident(
+        db,
+        job,
+        job.stage,
+        error,
+        leaseLost,
+      ).catch(() => {
+        console.warn(
+          "Research incident persistence unavailable after containment.",
+        );
+      });
     }
   } finally {
     clearInterval(heartbeat);

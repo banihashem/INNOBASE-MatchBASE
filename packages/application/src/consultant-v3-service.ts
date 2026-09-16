@@ -5,6 +5,7 @@ import {
   listResearchRounds,
   completeResearchRound,
   recordConsultantProviderCall,
+  recordResearchAttemptReceipt,
   readConsultantCostEvents,
   summarizeResearchExecutionAllowance,
   saveConsultantOutputV3,
@@ -19,6 +20,15 @@ import {
   appendConsultantWorkflowEvent,
   enqueueConsultantWorkflowJob,
   lockActiveConsultantExecution,
+  assertExecutionFence,
+  assertResearchPublicationAuthority,
+  assertCompletedResearchPublicationAuthority,
+  hashResearchAuthority,
+  assertEvidenceUseManifest,
+  capturePrivateResearchEvidence,
+  registerEvidenceDerivative,
+  retainResearchParentDependency,
+  type ExecutionFence,
   inTransaction,
   type ConnectionPool,
   type ConsultantWorkflowJob,
@@ -64,6 +74,11 @@ import {
 } from "./live-preparation.js";
 import { LiveResearchError } from "./openrouter-model-policy.js";
 import { consultantResearchInput } from "./research-context-preflight.js";
+import { createDurableResearchContext } from "./consultant-execution-context.js";
+import {
+  admitPrivateResearchMemory,
+  loadQuotedPrivateMemory,
+} from "./consultant-private-memory.js";
 
 export type ConsultantExecutionMode = "live" | "demonstration" | "hybrid";
 export interface ConsultantWorkflowProgress {
@@ -766,11 +781,16 @@ export async function generateApprovedConsultantPreparation(
   db?: Queryable,
   assertLease?: () => Promise<void>,
   signal?: AbortSignal,
+  executionFence?: ExecutionFence,
 ): Promise<WorkflowSession> {
-  const session = activeSessions.get(runId);
-  if (!session?.approved_request_revision || !session.classification)
+  const cachedSession = activeSessions.get(runId);
+  if (
+    !cachedSession?.approved_request_revision ||
+    !cachedSession.classification
+  )
     throw new Error("An approved request is required.");
-  const approvedRevision = session.approved_request_revision;
+  const session = executionFence ? { ...cachedSession } : cachedSession;
+  const approvedRevision = cachedSession.approved_request_revision;
   const executionId = session.execution_id;
   const sourceHash = (current = session) =>
     crypto
@@ -823,7 +843,12 @@ export async function generateApprovedConsultantPreparation(
   session.state = "prep_step2_advisory_generating";
   session.error = undefined;
   session.retry_action = "prepare";
-  const checkpoint = createWorkflowCheckpoint(session, db, assertLease);
+  const checkpoint = createWorkflowCheckpoint(
+    session,
+    db,
+    assertLease,
+    executionFence,
+  );
   await checkpoint({
     phase: "advisory",
     loop: 0,
@@ -850,7 +875,7 @@ export async function generateApprovedConsultantPreparation(
   session.advisory_source_hash = approvedSourceHash;
   session.step2_advisory = advisory;
   session.state = "prep_step3_prompt_synthesizing";
-  if (db) await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
+  if (db) await persistOwnedWorkflowSession(db, session, executionFence);
 
   // Generate Step 3 prompt using the approved revision (F01: human edit propagates downstream!)
   const promptResult = await gateway.generateDeepResearchPrompt(
@@ -879,9 +904,10 @@ export async function generateApprovedConsultantPreparation(
   });
 
   if (db) {
-    await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
+    await persistOwnedWorkflowSession(db, session, executionFence);
   }
 
+  activeSessions.set(runId, session);
   return session;
 }
 
@@ -977,6 +1003,7 @@ export async function executeConsultantWorkflowResearch(
     mode?: ConsultantExecutionMode;
     assertLease?: () => Promise<void>;
     signal?: AbortSignal;
+    executionFence?: ExecutionFence;
   },
 ): Promise<ConsultantResearchOutputV3> {
   options?.signal?.throwIfAborted();
@@ -1045,7 +1072,31 @@ export async function executeConsultantWorkflowResearch(
       await readConsultantCostEvents(db, session.account_id, session.run_id)
     ).filter((event) => event.execution_id === session.execution_id),
   );
+  if (round.plan.private_memory && !("connect" in db))
+    throw new ApplicationFault(
+      503,
+      "memory-storage-required",
+      "MB-503-MEMORY-STORAGE",
+      "Private research context requires transactional storage. No research has started.",
+    );
+  const memoryUse =
+    "connect" in db
+      ? await admitPrivateResearchMemory(
+          db as ConnectionPool,
+          session,
+          round.plan,
+        )
+      : undefined;
   const roundOptions = {
+    ...(options?.executionFence && "connect" in db
+      ? createDurableResearchContext(
+          db as ConnectionPool,
+          session,
+          options.executionFence,
+          round,
+          memoryUse?.manifest_id,
+        )
+      : {}),
     round_plan: round.plan,
     automatic_recovery_attempts: round.plan.automatic_recovery_attempts ?? 1,
     previously_consumed_focus_attempts:
@@ -1058,6 +1109,7 @@ export async function executeConsultantWorkflowResearch(
     before_call: createRoundCallGuard(
       round.plan,
       previousAllowance.consumed_provider_calls,
+      { atomic_admission: Boolean(options?.executionFence && "connect" in db) },
     ),
     max_output_tokens: round.plan.max_output_tokens_per_call,
     max_input_bytes: round.plan.max_input_tokens_per_call,
@@ -1073,6 +1125,7 @@ export async function executeConsultantWorkflowResearch(
     session,
     db,
     options?.assertLease,
+    options?.executionFence,
   );
   await checkpoint({
     phase: "discovery",
@@ -1084,7 +1137,10 @@ export async function executeConsultantWorkflowResearch(
   // Dispatch Dual Lane Research
   session.state = "lane_gemini_running";
   const dualResult = await executeDualLaneResearch(
-    consultantResearchInput(session),
+    {
+      ...consultantResearchInput(session),
+      ...(memoryUse ? { private_memory_context: memoryUse.context } : {}),
+    },
     {
       mode,
       ...roundOptions,
@@ -1141,6 +1197,15 @@ export async function executeConsultantWorkflowResearch(
       : {}),
     limitations_and_disclosures: [
       ...output.limitations_and_disclosures,
+      ...(round.plan.private_memory
+        ? [
+            {
+              title: "Private research memory",
+              description: `${round.plan.private_memory.observation_refs.length} source-bound historical observations from this profile informed the search. ${round.plan.private_memory.needs_refresh_count} observations requiring refresh and ${round.plan.private_memory.excluded_by_budget_count} observations outside the input allowance were excluded. Fresh discovery and current source verification were required; prior buyer quantities, fit assessments and rankings were not adopted.`,
+              severity: "info" as const,
+            },
+          ]
+        : []),
       {
         title: `Recorded cost through research round ${round.round_number}`,
         description: `USD ${costSummary.recorded_total_usd.toFixed(6)} recorded across this request: preparation USD ${costSummary.preparation_usd.toFixed(6)}, research attempts USD ${costSummary.research_usd.toFixed(6)}. OpenRouter USD ${costSummary.openrouter_charge_usd.toFixed(6)}; BYOK upstream USD ${costSummary.byok_upstream_usd.toFixed(6)}. ${costSummary.unpriced_calls} calls have incomplete accounting. ${costSummary.disclosure}`,
@@ -1197,13 +1262,24 @@ export async function executeConsultantWorkflowResearch(
 
   // Persist the complete output and all suppliers atomically, independent of reveal pagination.
   const persist = async (client: Queryable) => {
-    if (options?.assertLease) {
+    if (options?.executionFence) {
+      await assertResearchPublicationAuthority(
+        client,
+        session,
+        options.executionFence,
+        hashResearchAuthority(round.plan),
+      );
+    } else if (options?.assertLease) {
       await lockActiveConsultantExecution(
         client,
         session.account_id,
         session.run_id,
         session.execution_id,
       );
+    }
+    if (memoryUse) {
+      await assertEvidenceUseManifest(client, session, memoryUse.manifest_id);
+      await loadQuotedPrivateMemory(client, session, round.plan);
     }
     await completeResearchRound(
       client,
@@ -1212,11 +1288,37 @@ export async function executeConsultantWorkflowResearch(
       output,
       dualResult.continuation,
     );
+    await retainResearchParentDependency(
+      client,
+      session,
+      round.plan as unknown as Record<string, unknown>,
+    );
     await saveConsultantOutputV3(client, {
       account_id: session.account_id,
       output,
     });
+    if (memoryUse) {
+      await registerEvidenceDerivative(client, session, memoryUse.manifest_id, {
+        kind: "research_round",
+        reference: round.round_id,
+      });
+      await registerEvidenceDerivative(client, session, memoryUse.manifest_id, {
+        kind: "research_output",
+        reference: session.run_id,
+      });
+    }
+    if (mode === "live")
+      await capturePrivateResearchEvidence(client, session, output);
     await saveConsultantWorkflowSession(client, mapSessionToRecord(session));
+    // Source locks can wait past the lease or approval deadline. Recheck at the transaction boundary.
+    if (options?.executionFence)
+      await assertCompletedResearchPublicationAuthority(
+        client,
+        session,
+        options.executionFence,
+        hashResearchAuthority(round.plan),
+      );
+    else if (options?.assertLease) await options.assertLease();
   };
   if ("connect" in db) await inTransaction(db as ConnectionPool, persist);
   else await persist(db);
@@ -1260,12 +1362,16 @@ function createWorkflowCheckpoint(
   session: WorkflowSession,
   db?: Queryable,
   assertLease?: () => Promise<void>,
+  executionFence?: ExecutionFence,
 ) {
   let pending = Promise.resolve();
   return (event: any): Promise<void> => {
     // Do not let a rejected lease/progress promise discard late provider accounting.
     const accounting = db
-      ? recordConsultantProviderCall(db, session, event)
+      ? Promise.all([
+          recordConsultantProviderCall(db, session, event),
+          recordResearchAttemptReceipt(db, session, event),
+        ])
       : Promise.resolve();
     pending = pending.then(async () => {
       await accounting;
@@ -1317,7 +1423,9 @@ function createWorkflowCheckpoint(
       session.last_checkpoint = `${phase}:${loop}`;
       if (db) {
         const persist = async (client: Queryable) => {
-          if (assertLease)
+          if (executionFence)
+            await assertExecutionFence(client, session, executionFence);
+          else if (assertLease)
             await lockActiveConsultantExecution(
               client,
               session.account_id,
@@ -1397,9 +1505,11 @@ export async function markConsultantWorkflowFailed(
   runId: string,
   stage: "prepare" | "research",
   error: unknown,
+  executionFence?: ExecutionFence,
 ): Promise<void> {
-  const session = activeSessions.get(runId);
-  if (!session) return;
+  const cachedSession = activeSessions.get(runId);
+  if (!cachedSession) return;
+  const session = { ...cachedSession };
   const code =
     error && typeof error === "object" && "code" in error
       ? String(error.code).slice(0, 100)
@@ -1421,6 +1531,31 @@ export async function markConsultantWorkflowFailed(
     updated_at: new Date().toISOString(),
   };
   session.last_checkpoint = "workflow_failed";
-  await appendConsultantWorkflowEvent(db, session, "failed", { stage, code });
-  await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
+  const persist = async (client: Queryable) => {
+    if (executionFence)
+      await assertExecutionFence(client, session, executionFence);
+    await appendConsultantWorkflowEvent(client, session, "failed", {
+      stage,
+      code,
+    });
+    await saveConsultantWorkflowSession(client, mapSessionToRecord(session));
+  };
+  if ("connect" in db) await inTransaction(db as ConnectionPool, persist);
+  else await persist(db);
+  activeSessions.set(runId, session);
+}
+
+async function persistOwnedWorkflowSession(
+  db: Queryable,
+  session: WorkflowSession,
+  executionFence?: ExecutionFence,
+): Promise<void> {
+  const persist = async (client: Queryable) => {
+    if (executionFence)
+      await assertExecutionFence(client, session, executionFence);
+    await saveConsultantWorkflowSession(client, mapSessionToRecord(session));
+  };
+  if ("connect" in db) await inTransaction(db as ConnectionPool, persist);
+  else await persist(db);
+  activeSessions.set(session.run_id, session);
 }

@@ -1,0 +1,37 @@
+{
+  "version": "local-evaluation-contract.v1.1",
+  "activity": "MB-ARCH-IMPLEMENT-001-L03",
+  "purpose": "Synthetic engineering feasibility, not product qualification",
+  "frozen_before_model_runs": true,
+  "development_fixture_count": 4,
+  "development_input_revision": 2,
+  "input_correction": "Removed the answer-specific price hint from the development question after independent review; expected answers and critical-error rules are unchanged. Earlier model records remain contaminated diagnostic inputs, not unbiased extraction or held-out acceptance evidence.",
+  "calibration_fixture_count": 4,
+  "sampling_unit": "one source/entity/question case",
+  "cluster_split": ["source family", "target entity", "request lineage"],
+  "hard_rejection": [
+    "unsupported assertion",
+    "wrong entity",
+    "lost negation",
+    "invented date",
+    "incorrect commercial unit",
+    "rights or profile scope mismatch"
+  ],
+  "model_judge": false,
+  "held_out_acceptance": {
+    "status": "not_created_or_opened",
+    "authority": "independent product and quality owner",
+    "requires": [
+      "unseen clustered corpus",
+      "protected slice coverage",
+      "absolute correctness and evidence recall floors",
+      "paired cloud baseline",
+      "uncertainty analysis",
+      "whole pipeline cost and latency",
+      "source-backed human semantic adjudication"
+    ],
+    "optimizer_may_relax_gates": false
+  },
+  "activation": "blocked",
+  "economic_gate": "No saving is established without measured local energy, validation, cloud escalation, maintenance and paired outcome costs."
+}

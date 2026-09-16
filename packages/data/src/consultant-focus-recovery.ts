@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { inTransaction, type ConnectionPool } from "./database.js";
+import { assertLogicalRequestFence } from "./consultant-research-renewal.js";
 import {
   ResearchRoundFault,
   readConsultantCostEvents,
@@ -72,6 +73,24 @@ export async function recoverApprovedFocusStage(
   options: { execute?: boolean; expected_snapshot_hash?: string } = {},
 ) {
   return inTransaction(pool, async (db) => {
+    // Read ownership first without changing the root-first lock order or recovery contract.
+    const owned = await db.query(
+      `SELECT run_id FROM consultant_workflow_session WHERE account_id=$1 AND user_profile_id=$2 AND run_id=$3
+        AND execution_id=$4 AND NOT is_invalidated
+        AND COALESCE(classification->>'classification_id',workflow_metadata->>'classification_id')=$5::text`,
+      [
+        identity.account_id,
+        identity.user_profile_id,
+        identity.run_id,
+        identity.execution_id,
+        identity.classification_id,
+      ],
+    );
+    if (!owned.rows.length)
+      reject(
+        "The stopped execution does not match the supplied owner and current request.",
+      );
+    await assertLogicalRequestFence(db, identity, identity.run_id);
     const sessions = await db.query<ConsultantWorkflowSessionRecord>(
       `SELECT * FROM consultant_workflow_session WHERE account_id=$1 AND run_id=$2 FOR UPDATE`,
       [identity.account_id, identity.run_id],

@@ -1,0 +1,70 @@
+[
+  {
+    "id": "cal-negated-site",
+    "split": "calibration",
+    "cluster_id": "synthetic-cal-elm",
+    "profile_id": "synthetic-profile-b",
+    "rights_epoch": 2,
+    "target_entity": "Elm Test Foods / Jebel Ali site",
+    "question": "Does the certificate establish current halal certification for the Jebel Ali site? Return certified only if established.",
+    "as_of": "2026-09-16",
+    "source": {
+      "text": "Elm Test Foods' certificate covers its Sharjah site only. The Jebel Ali site is explicitly excluded from the scope. No certificate issue date is stated."
+    },
+    "expected": {
+      "status": "not_established",
+      "value": null,
+      "source_date": null
+    }
+  },
+  {
+    "id": "cal-service-price",
+    "split": "calibration",
+    "cluster_id": "synthetic-cal-fjord",
+    "profile_id": "synthetic-profile-b",
+    "rights_epoch": 2,
+    "target_entity": "Fjord Test Freight",
+    "question": "What is the stated freight rate for a 40-foot container published within 7 days? Return the rate including unit and excluded fees.",
+    "as_of": "2026-09-16",
+    "source": {
+      "text": "Fjord Test Freight indicative offer dated 2026-09-12: USD 2,400 per 40-foot container, excluding destination handling fees. No 20-foot rate is published."
+    },
+    "expected": {
+      "status": "observed",
+      "value": "USD 2,400 per 40-foot container, excluding destination handling fees",
+      "source_date": "2026-09-12"
+    }
+  },
+  {
+    "id": "cal-country-not-phone",
+    "split": "calibration",
+    "cluster_id": "synthetic-cal-grove",
+    "profile_id": "synthetic-profile-b",
+    "rights_epoch": 2,
+    "target_entity": "Grove Test Machines",
+    "question": "What is the manufacturing country?",
+    "as_of": "2026-09-16",
+    "source": {
+      "text": "Grove Test Machines has a UK sales telephone number and a London sales office. The manufacturing site and country are not disclosed."
+    },
+    "expected": {
+      "status": "not_established",
+      "value": null,
+      "source_date": null
+    }
+  },
+  {
+    "id": "cal-persian-address",
+    "split": "calibration",
+    "cluster_id": "synthetic-cal-harbor",
+    "profile_id": "synthetic-profile-b",
+    "rights_epoch": 2,
+    "target_entity": "Harbor Test Trading",
+    "question": "What is the headquarters country? Return the English country name.",
+    "as_of": "2026-09-16",
+    "source": {
+      "text": "Harbor Test Trading: \u062f\u0641\u062a\u0631 \u0645\u0631\u06a9\u0632\u06cc \u0634\u0631\u06a9\u062a \u062f\u0631 \u0645\u0633\u0642\u0637\u060c \u0639\u0645\u0627\u0646 \u0627\u0633\u062a."
+    },
+    "expected": { "status": "observed", "value": "Oman", "source_date": null }
+  }
+]

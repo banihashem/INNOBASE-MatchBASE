@@ -12,6 +12,7 @@ import {
   revealMoreCandidates,
   getWorkflowSession,
   getOrRestoreWorkflowSession,
+  assertConsultantOutputReadRights,
 } from "@matchbase/application";
 import {
   listConsultantWorkflowSessions,
@@ -25,6 +26,7 @@ import {
   getConsultantWorkflowActivity,
   listConsultantResearchSummaries,
   stopConsultantResearch,
+  ExecutionIntegrityFault,
 } from "@matchbase/data";
 import { suggestInterpretationCorrection } from "@matchbase/application";
 import { validateStep1RequirementFidelity } from "@matchbase/contracts";
@@ -106,7 +108,8 @@ export async function POST(req: Request): Promise<NextResponse> {
         context,
         runId: body.run_id,
         pool,
-        resourceKind: "run_detail",
+        resourceKind:
+          action === "stop_research" ? "research_history" : "run_detail",
       });
     }
 
@@ -471,7 +474,41 @@ export async function POST(req: Request): Promise<NextResponse> {
         context.accountId,
         runId,
       );
-      return NextResponse.json({ success: true, outcome, session });
+      let visibleSession = session;
+      if (session?.output) {
+        try {
+          await assertConsultantOutputReadRights(
+            pool,
+            context.accountId,
+            session.output,
+          );
+        } catch (error) {
+          const withdrawn =
+            error instanceof ExecutionIntegrityFault &&
+            error.code === "MB-409-EVIDENCE-WITHDRAWN";
+          // Cancellation has succeeded. A result-read failure must neither undo it nor expose source material.
+          visibleSession = { ...session, output: null, revealed_count: 0 };
+          return NextResponse.json({
+            success: true,
+            outcome,
+            session: {
+              ...visibleSession,
+              activity: undefined,
+              ...(withdrawn
+                ? { evidence_withdrawn: true, error: error.message }
+                : {
+                    error:
+                      "Research is stopped. Saved results are temporarily unavailable.",
+                  }),
+            },
+          });
+        }
+      }
+      return NextResponse.json({
+        success: true,
+        outcome,
+        session: visibleSession,
+      });
     }
 
     // Action: Execute Research
@@ -704,6 +741,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     const items = await listConsultantResearchSummaries(
       pool,
       context.accountId,
+      context.userId,
     );
     return NextResponse.json({ success: true, items });
   }
@@ -748,12 +786,13 @@ export async function GET(req: Request): Promise<NextResponse> {
     return NextResponse.json({ success: true, draft: primaryDraft, drafts });
   }
 
-  // List incomplete workflow sessions for account (excluding invalidated sessions)
+  // List incomplete workflow sessions for this profile (excluding invalidated sessions).
   if (listIncomplete === "true") {
     const allSessions = await listConsultantWorkflowSessions(
       pool,
       context.accountId,
       20,
+      context.userId,
     );
     const sessions = allSessions.filter(
       (s) => !s.is_invalidated && s.current_state !== "invalidated",
@@ -771,11 +810,11 @@ export async function GET(req: Request): Promise<NextResponse> {
   // Authorize run read access
   try {
     await failExpiredConsultantWorkflowJobs(pool);
-    const authorized = await authorizeConsultantRunResourceRead({
+    let authorized = await authorizeConsultantRunResourceRead({
       context,
       runId,
       pool,
-      resourceKind: "run_detail",
+      resourceKind: "research_history",
     });
 
     // Lookup linked draft session
@@ -792,6 +831,23 @@ export async function GET(req: Request): Promise<NextResponse> {
       authorized.runId,
     );
     if (session) {
+      let evidenceWithdrawn: string | undefined;
+      if (session.output) {
+        try {
+          await assertConsultantOutputReadRights(
+            pool,
+            session.account_id,
+            session.output,
+          );
+        } catch (error) {
+          if (
+            !(error instanceof ExecutionIntegrityFault) ||
+            error.code !== "MB-409-EVIDENCE-WITHDRAWN"
+          )
+            throw error;
+          evidenceWithdrawn = error.message;
+        }
+      }
       if (draft) {
         (session as any).draft_id = draft.draft_id;
         (session as any).draft_version = draft.draft_version;
@@ -804,11 +860,27 @@ export async function GET(req: Request): Promise<NextResponse> {
       );
       return NextResponse.json({
         success: true,
-        session: { ...session, activity },
+        session: {
+          ...session,
+          ...(evidenceWithdrawn
+            ? {
+                output: null,
+                revealed_count: 0,
+                evidence_withdrawn: true,
+                error: evidenceWithdrawn,
+              }
+            : { activity }),
+        },
         draft,
       });
     }
 
+    authorized = await authorizeConsultantRunResourceRead({
+      context,
+      runId: authorized.runId,
+      pool,
+      resourceKind: "run_result",
+    });
     // Output is authorized and present
     if (authorized.output) {
       return NextResponse.json({

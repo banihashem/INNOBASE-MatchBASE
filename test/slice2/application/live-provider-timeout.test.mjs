@@ -622,6 +622,30 @@ test("MB-UX-LIVE-001 L04 invalid timeout overrides are rejected before a provide
     await callOpenRouterCompletion({ ...request, timeout_ms });
   assert.equal(fixture.calls.length, 2);
 });
+test("MB-ARCH-IMPLEMENT-001 L01 invalid native timeout cannot consult stage memory or dispatch", async (t) => {
+  const fixture = providerFixture(t);
+  const events = [];
+  await assert.rejects(
+    runLiveCompletion(
+      { ...request, timeout_ms: Number.NaN },
+      { phase: "discovery_openai", loop: 1, require_web: true },
+      {
+        on_checkpoint: (event) => events.push(event),
+        before_call: () => assert.fail("Invalid timeout cannot reserve a call"),
+        stage_store: {
+          load: () => assert.fail("Invalid timeout cannot reuse a result"),
+          commit: () => assert.fail("Invalid timeout cannot retain a result"),
+        },
+      },
+    ),
+    (error) => error.code === "MB-422-LIVE-TIMEOUT",
+  );
+  assert.equal(events.length, 1);
+  assert.equal(events[0].state, "failed");
+  assert.equal(events[0].dispatched, false);
+  assert.equal(fixture.calls.length, 0);
+});
+
 test("MB-UX-LIVE-001 L07 retains finish and reasoning counts when provider exhausts output budget", async (t) => {
   providerFixture(t, (body) => {
     const response = completedResponse(body);

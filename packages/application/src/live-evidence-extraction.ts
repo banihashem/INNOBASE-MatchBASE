@@ -4,6 +4,8 @@ import {
   selectApprovedStructuredRecovery,
   waitForLiveRecovery,
   withLiveStageBudget,
+  reportRetainedStageReuse,
+  validateRetainedCompletion,
   type LiveCallOptions,
   type LiveResearchCheckpoint,
   type OpenRouterCompletionResult,
@@ -32,6 +34,10 @@ import {
 } from "./research-source-context.js";
 import { randomUUID } from "node:crypto";
 import { normalizeResearchGaps } from "./research-gap-normalizer.js";
+import {
+  createResearchStageManifest,
+  executeResearchStage,
+} from "./research-stage-executor.js";
 
 // Only recover output/transport defects. Authorization, BYOK, cancellation and
 // persistence failures must never be converted into a partial success.
@@ -150,6 +156,85 @@ function acquireBatchSlot(signal: AbortSignal): Promise<() => void> {
   });
 }
 async function extractStructured<T>(
+  model: string,
+  phase: string,
+  context: ExtractionContext,
+  system: string,
+  input: Record<string, unknown>,
+  schemaName: string,
+  schema: JsonSchema,
+  maxTokens: number,
+  options: LiveCallOptions,
+  validate: (payload: T) => T,
+  audit?: () => Pick<LiveResearchCheckpoint, "index_validation">,
+  validationEvidence?: unknown,
+): Promise<{ result: OpenRouterCompletionResult; parsed: T }> {
+  const execute = () =>
+    extractStructuredUncached(
+      model,
+      phase,
+      context,
+      system,
+      input,
+      schemaName,
+      schema,
+      maxTokens,
+      options,
+      validate,
+      audit,
+    );
+  const manifest = createResearchStageManifest({
+    stage_kind: `${phase}:${context.loop}:extraction`,
+    qualification: "validated_extraction",
+    input: { input, validation_evidence: validationEvidence ?? input },
+    policy: {
+      extractor_version: "native-extraction.v1",
+      validator_version: "native-schema-and-scope.v1",
+      system,
+      schemaName,
+      schema,
+      model,
+      maxTokens,
+      approved_rates: options.approved_rates,
+      approved_model_fallbacks: options.approved_model_fallbacks,
+      max_input_bytes: options.max_input_bytes,
+      max_output_tokens: options.max_output_tokens,
+      reasoning_effort: "low",
+    },
+  });
+  options = { ...options, attempt_group_key: manifest.operation_key };
+  if (!options.stage_store) return execute();
+  return executeResearchStage({
+    manifest,
+    store: options.stage_store,
+    ...(options.signal ? { signal: options.signal } : {}),
+    execute,
+    validate: (value) => {
+      const retained = value as { result: unknown; parsed: unknown } | null;
+      if (!retained || typeof retained !== "object")
+        throw Object.assign(new Error("Saved extraction stage is invalid."), {
+          code: "MB-409-STAGE-INTEGRITY",
+        });
+      return {
+        result: validateRetainedCompletion(retained.result),
+        parsed: validate(
+          parseLiveJson<T>(JSON.stringify(retained.parsed), schema),
+        ),
+      };
+    },
+    on_reuse: () =>
+      reportRetainedStageReuse(
+        options,
+        phase,
+        context.loop,
+        context.max_loops,
+        model,
+        manifest.operation_key,
+      ),
+  });
+}
+
+async function extractStructuredUncached<T>(
   model: string,
   phase: string,
   context: ExtractionContext,
@@ -365,6 +450,7 @@ async function extractNativeCandidateScopeOnce(
       };
     },
     () => (indexDiagnostics ? { index_validation: indexDiagnostics } : {}),
+    nativeCompletion,
   );
 }
 
@@ -574,6 +660,8 @@ export async function extractNativeDiscoveryPayload(
             );
           return payload;
         },
+        undefined,
+        nativeCompletion,
       );
       return [output];
     } catch (error) {

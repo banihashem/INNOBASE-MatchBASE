@@ -19,6 +19,10 @@ import {
   waitForLiveRecovery,
   liveRecoveryAttemptLimit,
   withLiveStageBudget,
+  validateRetainedCompletion,
+  reportRetainedStageReuse,
+  researchCompletionInput,
+  safePublicEvidenceUrl,
   LiveResearchError,
   type OpenRouterCompletionResult,
   type LiveCallOptions,
@@ -82,8 +86,19 @@ import {
   buildMethodReview,
   executeProgressiveMethod,
 } from "./progressive-method-research.js";
+import {
+  createResearchStageManifest,
+  executeResearchStage,
+  researchStageHash,
+} from "./research-stage-executor.js";
 
 export interface DualLaneExecutionInput {
+  /** Source-bound private hints; never inserted directly into current evidence or roster. */
+  readonly private_memory_context?: {
+    readonly version: "private-research-context.v1";
+    readonly instruction: string;
+    readonly observations: readonly unknown[];
+  };
   readonly product_requirement: string;
   readonly technical_compliance: string;
   readonly order_profile: string;
@@ -303,6 +318,7 @@ export async function executeDualLaneResearch(
     calls.push(planned.result);
   }
   const refreshedSources = new Set<string>();
+  const sourceObservedAt = new Map<string, string>();
   const retrieveCitedSources = async (
     completion: OpenRouterCompletionResult,
     loop: number,
@@ -350,9 +366,48 @@ export async function executeDualLaneResearch(
               evidence_urls: [url],
             };
             await callback.on_checkpoint?.(event);
-            const actual = await (
-              options.source_retriever ?? fetchPrimaryEvidenceText
-            )(url).catch(() => null);
+            const receipt = await executeResearchStage({
+              manifest: createResearchStageManifest({
+                stage_kind: "source_retrieval_receipt",
+                qualification: "received_unvalidated",
+                input: { url, input, round_plan: options.round_plan },
+                policy: { version: "primary-receipt.v1" },
+              }),
+              store: callback.stage_store,
+              signal: callback.signal,
+              execute: async () => ({
+                actual: await (
+                  options.source_retriever ?? fetchPrimaryEvidenceText
+                )(url).catch(() => null),
+                observed_at: new Date().toISOString(),
+              }),
+              validate: (value) => {
+                const receipt = value as {
+                  actual: RetrievedPrimaryEvidence | null;
+                  observed_at: string;
+                };
+                if (
+                  !receipt ||
+                  !Number.isFinite(Date.parse(receipt.observed_at))
+                )
+                  throw new Error("Invalid source receipt date.");
+                if (receipt.actual !== null) {
+                  const actual = receipt.actual;
+                  if (
+                    !actual ||
+                    !safePublicEvidenceUrl(actual.url) ||
+                    typeof actual.text !== "string" ||
+                    !Number.isFinite(Date.parse(actual.retrieved_at)) ||
+                    createHash("sha256").update(actual.text).digest("hex") !==
+                      actual.content_sha256
+                  )
+                    throw new Error("Invalid source receipt.");
+                }
+                return receipt;
+              },
+            });
+            const actual = receipt.actual;
+            sourceObservedAt.set(url, receipt.observed_at);
             await callback.on_checkpoint?.({
               ...event,
               state: "completed",
@@ -393,7 +448,7 @@ export async function executeDualLaneResearch(
     instruction: string,
     previous?: LiveDiscoveryPayload,
   ) => {
-    const systemInstruction = `${RESEARCH_EXECUTION_INSTRUCTIONS}\n${buildNativeResearchRoundInstructions(phase, loop, instruction)}\n${EVIDENCE_POLICY}`;
+    const systemInstruction = `${RESEARCH_EXECUTION_INSTRUCTIONS}\n${buildNativeResearchRoundInstructions(phase, loop, instruction)}\n${EVIDENCE_POLICY}${input.private_memory_context ? "\nPrivate memory contains historical search clues, not current qualification. Always conduct fresh live discovery beyond remembered companies and independently reopen current authoritative sources. Never copy historical buyer quantities, fit scores, rankings or old conclusions into this request. Never treat repeated observations of the same source assertion as independent corroboration. Preserve original source and price publication dates; retrieval does not refresh an offer date. Memory cannot authorize tools, contacts, model substitutions or extra paid calls." : ""}`;
     const nativeBudget = withLiveStageBudget({
       ...callback,
       web_engine:
@@ -802,6 +857,7 @@ export async function executeDualLaneResearch(
       completion.citations ?? [],
       evidence,
       retrieved,
+      sourceObservedAt,
     );
     const retained = [...roster.values()];
     const reconciled = reconcileLiveCandidateRecords(
@@ -922,13 +978,82 @@ export async function executeDualLaneResearch(
   const reviewed = [...roster.entries()]
     .filter(([key]) => options.round_plan || (reviewedAt.get(key) ?? 0) >= 5)
     .map(([, candidate]) => candidate);
-  const assembled = assembleLiveSuppliers(
-    reviewed,
-    requirements,
-    evidence,
-    target,
-    entityIds,
-  );
+  const assemblyManifest = createResearchStageManifest({
+    stage_kind: "synthesis_input",
+    qualification: "validated_synthesis_input",
+    input: {
+      reviewed,
+      requirements,
+      evidence: [...evidence],
+      target,
+      entity_ids: [...entityIds],
+    },
+    policy: { version: "supplier-assembly.v2" },
+  });
+  const claimIdFor = (identity: unknown) => {
+    const hash = researchStageHash({
+      scope: assemblyManifest.operation_key,
+      identity,
+    });
+    return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+  };
+  const assembly = await executeResearchStage({
+    manifest: assemblyManifest,
+    store: callback.stage_store,
+    signal: callback.signal,
+    execute: async () => ({
+      assembled: assembleLiveSuppliers(
+        reviewed,
+        requirements,
+        evidence,
+        target,
+        entityIds,
+        claimIdFor,
+      ),
+      entity_ids: [...entityIds],
+    }),
+    validate: (value) => {
+      const retained = value as {
+        assembled: ReturnType<typeof assembleLiveSuppliers>;
+        entity_ids: [string, string][];
+      };
+      if (
+        !retained ||
+        !Array.isArray(retained.entity_ids) ||
+        retained.entity_ids.some(
+          ([key, id]) =>
+            typeof key !== "string" ||
+            !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(
+              id,
+            ),
+        )
+      )
+        throw new Error("Invalid retained entity identities.");
+      const identities = new Map(retained.entity_ids);
+      for (const [key, id] of entityIds)
+        if (identities.get(key) !== id)
+          throw new Error("Retained entity identity changed.");
+      const rebuilt = assembleLiveSuppliers(
+        reviewed,
+        requirements,
+        evidence,
+        target,
+        identities,
+        claimIdFor,
+      );
+      if (
+        researchStageHash(rebuilt) !== researchStageHash(retained.assembled) ||
+        researchStageHash([...identities]) !==
+          researchStageHash(retained.entity_ids)
+      )
+        throw new Error(
+          "Retained synthesis inputs failed evidence revalidation.",
+        );
+      return retained;
+    },
+  });
+  for (const [key, id] of assembly.entity_ids) entityIds.set(key, id);
+  const assembled = assembly.assembled;
   const notReviewed = [...roster.entries()]
     .filter(([key]) => !options.round_plan && (reviewedAt.get(key) ?? 0) < 5)
     .map(([, candidate]) => ({
@@ -959,149 +1084,222 @@ export async function executeDualLaneResearch(
       contradiction_claim_ids: string[];
     }[];
   };
-  let synthesis!: Synthesis;
-  let synthesisResult!: OpenRouterCompletionResult;
-  const synthesisAttempts = liveRecoveryAttemptLimit(callback);
-  const synthesisBudget = withLiveStageBudget(callback);
-  for (let attempt = 1; ; attempt++) {
-    try {
-      synthesisResult = await runLiveCompletion(
-        {
-          model: models.synthesis,
-          messages: buildResearchSynthesisMessages(
-            {
-              approved_request: input,
-              mandatory_requirements: requirements,
-              candidates: assembled.candidates,
-              claims: assembled.claims,
-              sources: assembled.evidence_sources,
-              excluded_candidates: [
-                ...assembled.excluded_candidates,
-                ...notReviewed,
-              ],
-              verification_loops_completed: loops,
-              stop_reason: stopReason,
-              coverage_gaps: coverageGaps,
-            },
-            callback.max_input_bytes ??
-              options.round_plan?.max_input_tokens_per_call,
-          ),
-          response_format: {
-            type: "json_schema",
-            json_schema: {
-              name: "matchbase_live_synthesis",
-              strict: true,
-              schema: synthesisSchema,
-            },
-          },
-          max_tokens: 16000,
-        },
-        { phase: "synthesis", loop: 1 },
-        synthesisBudget.options,
-      );
-      calls.push(synthesisResult);
-      synthesis = parseLiveJson<Synthesis>(
-        synthesisResult.text,
-        synthesisSchema,
-      );
-      const candidateIds = new Set(
-        assembled.candidates.map((candidate) => candidate.candidate_id),
-      );
-      const rankedIds = new Set(
-        synthesis.ranked_candidates.map((candidate) => candidate.candidate_id),
-      );
-      const claimIds = new Set(assembled.claims.map((claim) => claim.claim_id));
-      if (
-        synthesis.ranked_candidates.length !== candidateIds.size ||
-        rankedIds.size !== candidateIds.size ||
-        [...rankedIds].some((id) => !candidateIds.has(id)) ||
-        synthesis.ranked_candidates.some((candidate) =>
-          candidate.contradiction_claim_ids.some((id) => !claimIds.has(id)),
-        )
-      ) {
-        throw new LiveResearchError(
-          "MB-422-LIVE-SYNTHESIS",
-          "Synthesis attempted to add, omit, duplicate or reference unsupported candidate/claim identifiers.",
-        );
-      }
-      break;
-    } catch (error) {
-      if (
-        error instanceof LiveResearchError &&
-        error.audited_response &&
-        !calls.some(
-          (call) => call.request_id === error.audited_response!.request_id,
-        )
+  const synthesisRequest = {
+    model: models.synthesis,
+    messages: buildResearchSynthesisMessages(
+      {
+        approved_request: input,
+        mandatory_requirements: requirements,
+        candidates: assembled.candidates,
+        claims: assembled.claims,
+        sources: assembled.evidence_sources,
+        excluded_candidates: [...assembled.excluded_candidates, ...notReviewed],
+        verification_loops_completed: loops,
+        stop_reason: stopReason,
+        coverage_gaps: coverageGaps,
+      },
+      callback.max_input_bytes ?? options.round_plan?.max_input_tokens_per_call,
+    ),
+    response_format: {
+      type: "json_schema" as const,
+      json_schema: {
+        name: "matchbase_live_synthesis",
+        strict: true as const,
+        schema: synthesisSchema,
+      },
+    },
+    max_tokens: 16000,
+  };
+  const synthesisManifest = createResearchStageManifest({
+    stage_kind: "synthesis",
+    qualification: "validated_synthesis",
+    input: {
+      request: researchCompletionInput(synthesisRequest),
+      assembly: assemblyManifest,
+      full_evidence: [...evidence],
+      round_plan: options.round_plan,
+    },
+    policy: {
+      version: "synthesis.v2",
+      schema: synthesisSchema,
+      reasoning: callback.reasoning_effort,
+      rates: callback.approved_rates,
+    },
+  });
+  const validateSynthesis = (synthesis: Synthesis) => {
+    const candidateIds = new Set(
+      assembled.candidates.map((candidate) => candidate.candidate_id),
+    );
+    const rankedIds = new Set(
+      synthesis.ranked_candidates.map((candidate) => candidate.candidate_id),
+    );
+    const claimIds = new Set(assembled.claims.map((claim) => claim.claim_id));
+    if (
+      synthesis.ranked_candidates.length !== candidateIds.size ||
+      rankedIds.size !== candidateIds.size ||
+      [...rankedIds].some((id) => !candidateIds.has(id)) ||
+      synthesis.ranked_candidates.some((candidate) =>
+        candidate.contradiction_claim_ids.some((id) => !claimIds.has(id)),
       )
-        calls.push(error.audited_response);
-      if (
-        error instanceof LiveResearchError &&
-        ["MB-422-LIVE-SCHEMA", "MB-422-LIVE-SYNTHESIS"].includes(error.code) &&
-        synthesisResult?.request_id
-      ) {
-        const recorded = checkpoints.findLast(
-          (event) =>
-            event.request_id === synthesisResult.request_id &&
-            event.state === "completed",
+    )
+      throw new LiveResearchError(
+        "MB-422-LIVE-SYNTHESIS",
+        "Synthesis attempted to add, omit, duplicate or reference unsupported candidate/claim identifiers.",
+      );
+    return synthesis;
+  };
+  const runSynthesis = async () => {
+    let synthesis!: Synthesis;
+    let synthesisResult!: OpenRouterCompletionResult;
+    const synthesisAttempts = liveRecoveryAttemptLimit(callback);
+    const synthesisBudget = withLiveStageBudget({
+      ...callback,
+      attempt_group_key: synthesisManifest.operation_key,
+    });
+    for (let attempt = 1; ; attempt++) {
+      try {
+        synthesisResult = await runLiveCompletion(
+          synthesisRequest,
+          { phase: "synthesis", loop: 1 },
+          synthesisBudget.options,
         );
-        if (recorded)
-          await callback.on_checkpoint?.({
-            ...recorded,
-            state: "failed",
-            error: error.code,
-            message:
-              "Comparative synthesis failed validation; preserving supplier evidence while recovering this stage.",
-          });
-      }
-      const recoverable =
-        recoverableExtractionFailure(error) ||
-        (error instanceof LiveResearchError &&
-          error.code === "MB-422-LIVE-SYNTHESIS");
-      if (callback.signal?.aborted) throw error;
-      if (
-        recoverable &&
-        !(error instanceof LiveResearchError && error.retryable) &&
-        attempt < synthesisAttempts &&
-        synthesisBudget.remaining() > 0
-      ) {
-        await waitForLiveRecovery(callback, attempt);
-        continue;
-      }
-      const allowanceEnded =
-        error instanceof LiveResearchError &&
-        ["MB-409-ROUND-ALLOWANCE", "MB-409-STAGE-ALLOWANCE"].includes(
-          error.code,
+        calls.push(synthesisResult);
+        synthesis = parseLiveJson<Synthesis>(
+          synthesisResult.text,
+          synthesisSchema,
         );
-      if (synthesisAttempts <= 1 || (!recoverable && !allowanceEnded))
-        throw error;
-      const notice =
-        "Comparative AI synthesis could not be completed within the approved recovery allowance. These saved supplier profiles retain validated source evidence and deterministic compatibility ranking; AI comparison is incomplete.";
-      coverageGaps.push(notice);
-      synthesis = {
-        summary: notice,
-        ranked_candidates: assembled.candidates.map((candidate) => ({
-          candidate_id: candidate.candidate_id,
-          comparison_reasoning:
-            "Ranked by recorded evidence compatibility; comparative AI analysis is unavailable.",
-          remaining_validation: [],
-          recommended_next_action: candidate.assessment.recommended_next_action,
-          contradiction_claim_ids: [],
-        })),
-      };
-      synthesisResult = {
-        model: "local-evidence-ranking",
-        text: notice,
-        input_tokens: 0,
-        output_tokens: 0,
-        cost_usd: 0,
-        latency_ms: 0,
-        live_api_invoked: false,
-        usage_reported: true,
-        cost_reported: true,
-      };
-      break;
+        validateSynthesis(synthesis);
+        return { synthesis, result: synthesisResult };
+      } catch (error) {
+        if (
+          error instanceof LiveResearchError &&
+          error.audited_response &&
+          !calls.some(
+            (call) => call.request_id === error.audited_response!.request_id,
+          )
+        )
+          calls.push(error.audited_response);
+        if (
+          error instanceof LiveResearchError &&
+          ["MB-422-LIVE-SCHEMA", "MB-422-LIVE-SYNTHESIS"].includes(
+            error.code,
+          ) &&
+          synthesisResult?.request_id
+        ) {
+          const recorded = checkpoints.findLast(
+            (event) =>
+              event.request_id === synthesisResult.request_id &&
+              event.state === "completed",
+          );
+          if (recorded)
+            await callback.on_checkpoint?.({
+              ...recorded,
+              state: "failed",
+              error: error.code,
+              message:
+                "Comparative synthesis failed validation; preserving supplier evidence while recovering this stage.",
+            });
+        }
+        const recoverable =
+          recoverableExtractionFailure(error) ||
+          (error instanceof LiveResearchError &&
+            error.code === "MB-422-LIVE-SYNTHESIS");
+        if (callback.signal?.aborted) throw error;
+        if (
+          recoverable &&
+          !(error instanceof LiveResearchError && error.retryable) &&
+          attempt < synthesisAttempts &&
+          synthesisBudget.remaining() > 0
+        ) {
+          await waitForLiveRecovery(callback, attempt);
+          continue;
+        }
+        const allowanceEnded =
+          error instanceof LiveResearchError &&
+          ["MB-409-ROUND-ALLOWANCE", "MB-409-STAGE-ALLOWANCE"].includes(
+            error.code,
+          );
+        if (synthesisAttempts <= 1 || (!recoverable && !allowanceEnded))
+          throw error;
+        const notice =
+          "Comparative AI synthesis could not be completed within the approved recovery allowance. These saved supplier profiles retain validated source evidence and deterministic compatibility ranking; AI comparison is incomplete.";
+        synthesis = {
+          summary: notice,
+          ranked_candidates: assembled.candidates.map((candidate) => ({
+            candidate_id: candidate.candidate_id,
+            comparison_reasoning:
+              "Ranked by recorded evidence compatibility; comparative AI analysis is unavailable.",
+            remaining_validation: [],
+            recommended_next_action:
+              candidate.assessment.recommended_next_action,
+            contradiction_claim_ids: [],
+          })),
+        };
+        synthesisResult = {
+          model: "local-evidence-ranking",
+          text: notice,
+          input_tokens: 0,
+          output_tokens: 0,
+          cost_usd: 0,
+          latency_ms: 0,
+          live_api_invoked: false,
+          usage_reported: true,
+          cost_reported: true,
+        };
+        return { synthesis, result: synthesisResult, notice };
+      }
     }
-  }
+  };
+  const retainedSynthesis = await executeResearchStage({
+    manifest: synthesisManifest,
+    store: callback.stage_store,
+    signal: callback.signal,
+    execute: runSynthesis,
+    validate: (value) => {
+      const retained = value as Awaited<ReturnType<typeof runSynthesis>>;
+      const result = validateRetainedCompletion(retained.result);
+      const synthesis = validateSynthesis(
+        parseLiveJson<Synthesis>(
+          result.live_api_invoked
+            ? result.text
+            : JSON.stringify(retained.synthesis),
+          synthesisSchema,
+        ),
+      );
+      if (
+        researchStageHash(synthesis) !== researchStageHash(retained.synthesis)
+      )
+        throw new Error(
+          "Retained synthesis differs from its validated response.",
+        );
+      if (
+        !result.live_api_invoked &&
+        (result.model !== "local-evidence-ranking" ||
+          retained.notice !== result.text ||
+          synthesis.summary !== retained.notice)
+      )
+        throw new Error("Invalid retained local ranking.");
+      return {
+        synthesis,
+        result,
+        ...(retained.notice ? { notice: retained.notice } : {}),
+      };
+    },
+    on_reuse: () =>
+      reportRetainedStageReuse(
+        callback,
+        "synthesis",
+        1,
+        1,
+        models.synthesis,
+        synthesisManifest.operation_key,
+      ),
+  });
+  const synthesis = retainedSynthesis.synthesis;
+  const synthesisResult = retainedSynthesis.result;
+  if (retainedSynthesis.notice) coverageGaps.push(retainedSynthesis.notice);
+  if (!calls.some((call) => call.request_id === synthesisResult.request_id))
+    calls.push(synthesisResult);
   const rankedCandidates = synthesis.ranked_candidates.map((item, index) => {
     const candidate = assembled.candidates.find(
       (entry) => entry.candidate_id === item.candidate_id,

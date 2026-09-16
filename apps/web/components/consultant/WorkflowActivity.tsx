@@ -308,9 +308,11 @@ export function WorkflowActivity({
                   : "Review the editable text below to continue. Research waits for your approval."
                 : ready
                   ? "Review the available supplier and price findings, including any gaps. Download the report from the results section."
-                  : initialInterpretation
-                    ? "Your saved request is being interpreted in English. Keep this page open until the interpretation is ready for review."
-                    : "The server is processing your saved request. You can leave this page and return from Dashboard; reopening it does not start another research execution."}
+                  : progress?.phase === "resuming_saved_stages"
+                    ? "The worker was interrupted and is resuming this approved execution. Eligible saved steps are reused; any remaining model calls stay within the original allowance."
+                    : initialInterpretation
+                      ? "Your saved request is being interpreted in English. Keep this page open until the interpretation is ready for review."
+                      : "The server is processing your saved request. You can leave this page and return from Dashboard; reopening it does not start another research execution."}
         </p>
         {active && !connectionError && progress?.message && (
           <p

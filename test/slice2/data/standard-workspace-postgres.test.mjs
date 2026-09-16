@@ -225,7 +225,7 @@ postgresTest(
       await installFoundationOnly(pool);
       const foundationCatalog = await catalogSnapshot(pool);
       assert.deepEqual(await getMigrationStatus(pool), {
-        latestMigrationId: "0020_consultant_research_rounds",
+        latestMigrationId: "0024_consultant_research_incidents",
         appliedMigrationIds: ["0001_slice_1_foundation"],
         pendingMigrationIds: [
           "0002_slice_2_standard_workspace",
@@ -247,6 +247,10 @@ postgresTest(
           "0018_consultant_live_execution",
           "0019_consultant_honest_execution_metadata",
           "0020_consultant_research_rounds",
+          "0021_consultant_execution_integrity",
+          "0022_consultant_private_evidence_renewal",
+          "0023_public_corpus_controls",
+          "0024_consultant_research_incidents",
         ],
         unknownMigrationIds: [],
         ready: false,
@@ -685,6 +689,10 @@ postgresTest(
       );
 
       for (const migration of [
+        "0024_consultant_research_incidents",
+        "0023_public_corpus_controls",
+        "0022_consultant_private_evidence_renewal",
+        "0021_consultant_execution_integrity",
         "0020_consultant_research_rounds",
         "0019_consultant_honest_execution_metadata",
         "0018_consultant_live_execution",

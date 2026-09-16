@@ -35,6 +35,7 @@ export * from "./synthesis-engine.js";
 export * from "./consultant-v3-service.js";
 export * from "./preparation-gateway.js";
 export * from "./consultant-research-cost.js";
+export * from "./consultant-private-memory.js";
 export * from "./interpretation-correction.js";
 export { getResearchRoundReview } from "./research-review.js";
 export { preflightResearchRoundContext } from "./research-context-preflight.js";

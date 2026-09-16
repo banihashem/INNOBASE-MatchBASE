@@ -778,6 +778,32 @@ export async function executeDualLaneResearch(
         )
       );
     };
+    // A definitive provider-side access rejection for one independent path
+    // must not discard a completed multi-model quorum. The rejected request is
+    // never retried, substituted or used as evidence; it is disclosed as a
+    // coverage gap. Default two-model research still requires both paths.
+    const independentProviderAccessFailure = (
+      error: unknown,
+      index: number,
+    ) => {
+      if (
+        !(error instanceof LiveResearchError) ||
+        error.code !== "MB-502-LIVE-PROVIDER" ||
+        !["authentication", "billing", "permission"].includes(
+          error.provider_http_failure?.category ?? "",
+        )
+      )
+        return false;
+      return checkpoints.some(
+        (checkpoint) =>
+          checkpoint.phase === discoveryPhases[index] &&
+          checkpoint.state === "failed" &&
+          checkpoint.dispatched === true &&
+          checkpoint.provider_dispatch_rejected === true &&
+          checkpoint.provider_http_failure?.category ===
+            error.provider_http_failure?.category,
+      );
+    };
     // L10: a validated sibling may still produce useful round-one results.
     // Only native-discovery output exhaustion is recoverable here. Extraction,
     // validation, consent, cancellation and persistence failures stay terminal.
@@ -805,10 +831,17 @@ export async function executeDualLaneResearch(
       liveRecoveryAttemptLimit(callback) > 1 &&
       options.round_plan?.round_number === 1 &&
       successful.length > 0 &&
+      (!discovery.some(
+        (entry, index) =>
+          entry.status === "rejected" &&
+          independentProviderAccessFailure(entry.reason, index),
+      ) ||
+        successful.length >= Math.max(2, discovery.length - 1)) &&
       discovery.every(
         (entry, index) =>
           entry.status === "fulfilled" ||
           independentNativeFailure(entry.reason, index) ||
+          independentProviderAccessFailure(entry.reason, index) ||
           recoverableExtractionFailure(entry.reason) ||
           (entry.reason instanceof LiveResearchError &&
             [
@@ -831,7 +864,12 @@ export async function executeDualLaneResearch(
         ? response?.native_finish_reason === "RECITATION"
           ? "was stopped by the provider's recitation protection; that response is excluded from evidence and was not retried"
           : "ended with a provider generation error; its incomplete response is excluded from evidence"
-        : "could not complete within its approved allowance";
+        : independentProviderAccessFailure(entry.reason, index)
+          ? `was rejected by its provider for ${
+              (entry.reason as LiveResearchError).provider_http_failure!
+                .category
+            }; no response was used, no automatic retry or billing-mode change was attempted, and the route requires operator correction`
+          : "could not complete within its approved allowance";
       coverageGaps.push(
         `Partial research coverage: ${response?.requested_model ?? response?.model ?? "An approved search path"} ${failureDescription}. ${successful.length} of ${discovery.length} approved discovery paths completed extraction. Only supported findings are included; independent cross-checking is incomplete. All recorded attempts count toward usage. Additional research requires a new estimate and approval.`,
       );

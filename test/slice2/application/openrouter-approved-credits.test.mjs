@@ -453,12 +453,16 @@ test("MB-UX-DEV-004 L04 a catalog-declared offline approved endpoint fails befor
   assert.equal(posts.length, 0);
 });
 test("MB-UX-DEV-004 L04 transient catalog health does not silently replace a fixed BYOK route", async () => {
+  setupFamily("anthropic/claude-sonnet-5", "anthropic", "Anthropic");
   process.env.MATCHBASE_PROVIDER_ANTHROPIC = "anthropic";
   endpointStatus = -2;
   body.openrouter_metadata.is_byok = true;
   body.usage.cost_details = { upstream_inference_cost: 0.01 };
   const result = await callOpenRouterCompletion(request());
   assert.equal(result.is_byok, true);
+  assert.equal(result.model, "anthropic/claude-sonnet-5");
   assert.deepEqual(posts[0].provider.only, ["anthropic"]);
+  assert.equal(posts[0].provider.allow_fallbacks, false);
+  assert.equal(posts[0].model, "anthropic/claude-sonnet-5");
   assert.equal(posts.length, 1);
 });

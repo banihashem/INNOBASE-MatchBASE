@@ -1930,7 +1930,7 @@ async function runLiveCompletionAttempt(
         !auditedResponse &&
         Boolean(
           safeError.provider_http_failure &&
-          [400, 401, 403, 404, 422, 429].includes(
+          [400, 401, 402, 403, 404, 422, 429].includes(
             safeError.provider_http_failure.http_status,
           ),
         ),

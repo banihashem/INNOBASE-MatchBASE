@@ -669,6 +669,12 @@ test("MB-UX-DEV-004 L02 tiers preserve all required families, price engines and 
     ...input,
     research_tier: "ultra",
   });
+  const anthropicByokRate = ultra.rates.find((rate) =>
+    rate.model.startsWith("anthropic/"),
+  );
+  assert.equal(anthropicByokRate.model, "anthropic/claude-sonnet-5");
+  assert.equal(anthropicByokRate.provider, "anthropic");
+  assert.equal(anthropicByokRate.billing_mode, "byok");
   assert.equal(standard.research_tier, "default");
   assert.equal(standard.research_models.length, 2);
   assert.equal(advanced.research_models.length, 3);

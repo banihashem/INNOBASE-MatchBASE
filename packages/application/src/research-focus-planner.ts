@@ -13,6 +13,8 @@ import {
   selectApprovedStructuredRecovery,
   withLiveStageBudget,
   waitForLiveRecovery,
+  validateRetainedCompletion,
+  reportRetainedStageReuse,
   type LiveCallOptions,
   type LiveResearchCheckpoint,
 } from "./openrouter-model-policy.js";
@@ -22,6 +24,11 @@ import {
   buildResearchEvidenceMemory,
   validateResearchFocusInsights,
 } from "./research-evidence-memory.js";
+import {
+  createResearchStageManifest,
+  executeResearchStage,
+  researchStageHash,
+} from "./research-stage-executor.js";
 
 const text = { type: "string", minLength: 1, maxLength: 500 } as const;
 const list = {
@@ -307,6 +314,89 @@ export function buildFocusedWebContext(
 
 /** Raw follow-up is consumed here, never forwarded as the web-search instruction. */
 export async function planResearchFocus(
+  input: DualLaneExecutionInput,
+  plan: ResearchRoundPlan,
+  prior: ResearchContinuation,
+  options: LiveCallOptions,
+  webDetails: FocusedWebDetails = {},
+  previouslyConsumedAttempts = 0,
+) {
+  const schema =
+    plan.research_strategy === "progressive-evidence.v1"
+      ? PROGRESSIVE_RESEARCH_FOCUS_SCHEMA
+      : RESEARCH_FOCUS_SCHEMA;
+  const manifest = createResearchStageManifest({
+    stage_kind: "research_focus_analysis",
+    qualification: "validated_focus",
+    input: { input, plan, prior, webDetails },
+    policy: {
+      version: "focus.v2",
+      schema,
+      reasoning: options.reasoning_effort,
+      rates: options.approved_rates,
+      max_input_bytes: options.max_input_bytes,
+    },
+  });
+  return executeResearchStage({
+    manifest,
+    store: options.stage_store,
+    signal: options.signal,
+    execute: () =>
+      planResearchFocusUncached(
+        input,
+        plan,
+        prior,
+        { ...options, attempt_group_key: manifest.operation_key },
+        webDetails,
+        previouslyConsumedAttempts,
+      ),
+    validate: (value) => {
+      if (!value || typeof value !== "object")
+        throw new Error("Invalid retained focus.");
+      const retained = value as Awaited<
+        ReturnType<typeof planResearchFocusUncached>
+      >;
+      const result = validateRetainedCompletion(retained.result);
+      const analysis = parseLiveJson<ResearchFocusAnalysis>(
+        result.text,
+        schema,
+      );
+      const known = new Set(
+        (prior.indexed_leads ?? []).map((lead) => lead.lead_id),
+      );
+      const selected = plan.follow_up?.lead_ids ?? [];
+      if (
+        [...selected, ...analysis.priority_lead_ids].some(
+          (id) => !known.has(id),
+        )
+      )
+        throw new Error("Invalid retained focus membership.");
+      if (plan.research_strategy === "progressive-evidence.v1")
+        analysis.insights = validateResearchFocusInsights(
+          analysis.insights ?? [],
+          prior,
+        );
+      analysis.priority_lead_ids = [
+        ...new Set([...selected, ...analysis.priority_lead_ids]),
+      ];
+      if (researchStageHash(analysis) !== researchStageHash(retained.analysis))
+        throw new Error("Retained focus differs from its validated response.");
+      buildFocusedWebContext(input, plan, prior, undefined, webDetails);
+      return { analysis, result };
+    },
+    on_reuse: () =>
+      reportRetainedStageReuse(
+        options,
+        "research_focus_analysis",
+        plan.round_number,
+        5,
+        plan.extraction_model,
+        manifest.operation_key,
+      ),
+  });
+}
+
+async function planResearchFocusUncached(
   input: DualLaneExecutionInput,
   plan: ResearchRoundPlan,
   prior: ResearchContinuation,

@@ -17,6 +17,22 @@ import {
 } from "../../../packages/application/dist/live-json-schema.js";
 
 const originalFetch = globalThis.fetch;
+function durableResearchStore(onCommit = () => {}) {
+  const records = new Map();
+  return {
+    records,
+    async load(manifest) {
+      return structuredClone(records.get(manifest.operation_key) ?? null);
+    },
+    async commit(manifest, result) {
+      records.set(
+        manifest.operation_key,
+        structuredClone({ manifest, result }),
+      );
+      await onCommit(manifest, result);
+    },
+  };
+}
 const executeDualLaneResearch = (input, options = {}) =>
   executeResearch(input, { source_retriever: async () => null, ...options });
 const originalKey = process.env.MATCHBASE_OPENROUTER_API_KEY;
@@ -1852,5 +1868,182 @@ test("MB-UX-LIVE-001 L10 extraction output exhaustion remains terminal even with
         r.response_format?.json_schema?.name === "matchbase_live_synthesis",
     ),
     false,
+  );
+});
+
+test("MB-ARCH-IMPLEMENT-001 L01 restart after synthesis commit reuses exact sources, entities, claims and paid result", async () => {
+  let interrupt = true;
+  let retrievals = 0;
+  const store = durableResearchStore((manifest) => {
+    if (manifest.qualification === "validated_synthesis" && interrupt) {
+      interrupt = false;
+      throw new Error("Worker stopped after durable synthesis commit");
+    }
+  });
+  const options = {
+    mode: "live",
+    round_plan: partialRound,
+    stage_store: store,
+    source_retriever: async (sourceUrl) => {
+      retrievals++;
+      return {
+        url: sourceUrl,
+        text: quote,
+        content_sha256: createHash("sha256").update(quote).digest("hex"),
+        retrieved_at: "2026-09-16T08:30:00.000Z",
+      };
+    },
+  };
+  await assert.rejects(
+    executeDualLaneResearch(intake, options),
+    /Worker stopped after durable synthesis commit/,
+  );
+  const count = requests.length;
+  const assembly = [...store.records.values()].find(
+    (record) => record.manifest.qualification === "validated_synthesis_input",
+  ).result;
+  const saved = [...store.records.values()].find(
+    (record) => record.manifest.qualification === "validated_synthesis",
+  ).result;
+  const result = await executeDualLaneResearch(intake, options);
+  assert.equal(
+    requests.length,
+    count,
+    "Restart must not dispatch another provider request",
+  );
+  assert.equal(
+    retrievals,
+    1,
+    "Original retrieval receipt is reused without refreshing its date",
+  );
+  assert.deepEqual(result.claims, assembly.assembled.claims);
+  assert.deepEqual(
+    result.evidence_sources,
+    assembly.assembled.evidence_sources,
+  );
+  assert.deepEqual(
+    result.candidates.map((entry) => entry.supplier_entity_id),
+    assembly.assembled.candidates.map((entry) => entry.supplier_entity_id),
+  );
+  assert.deepEqual(result.synthesis_result, saved.result);
+  assert.equal(
+    result.evidence_sources[0].retrieved_at,
+    "2026-09-16T08:30:00.000Z",
+  );
+  assert.ok(
+    result.total_cost_usd > 0,
+    "Original usage remains recorded on reuse",
+  );
+  assert.equal(
+    result.checkpoints.filter((event) => event.phase === "synthesis_reused")
+      .length,
+    1,
+  );
+});
+
+test("MB-ARCH-IMPLEMENT-001 L01 native-only source observation dates remain stable across synthesis reuse", async () => {
+  const store = durableResearchStore();
+  const options = {
+    mode: "live",
+    round_plan: partialRound,
+    stage_store: store,
+  };
+  const first = await executeDualLaneResearch(intake, options);
+  const count = requests.length;
+  const resumed = await executeDualLaneResearch(intake, options);
+  assert.equal(requests.length, count);
+  assert.deepEqual(resumed.claims, first.claims);
+  assert.deepEqual(resumed.evidence_sources, first.evidence_sources);
+  assert.deepEqual(resumed.candidates, first.candidates);
+  assert.equal(resumed.total_cost_usd, first.total_cost_usd);
+});
+
+test("MB-ARCH-IMPLEMENT-001 L01 retained synthesis unknown claim cannot trigger paid repair", async () => {
+  const store = durableResearchStore();
+  const options = {
+    mode: "live",
+    round_plan: partialRound,
+    stage_store: store,
+  };
+  await executeDualLaneResearch(intake, options);
+  const count = requests.length;
+  const retained = [...store.records.values()].find(
+    (record) => record.manifest.qualification === "validated_synthesis",
+  ).result;
+  const synthesis = JSON.parse(retained.result.text);
+  synthesis.ranked_candidates[0].contradiction_claim_ids = [randomUUID()];
+  retained.result.text = JSON.stringify(synthesis);
+  retained.synthesis = synthesis;
+  await assert.rejects(executeDualLaneResearch(intake, options), {
+    code: "MB-409-STAGE-INTEGRITY",
+  });
+  assert.equal(requests.length, count);
+});
+
+test("MB-ARCH-IMPLEMENT-001 L01 corrupt retained source receipt fails before another provider dispatch", async () => {
+  const store = durableResearchStore();
+  const options = {
+    mode: "live",
+    round_plan: partialRound,
+    stage_store: store,
+  };
+  await executeDualLaneResearch(intake, options);
+  const count = requests.length;
+  const receipt = [...store.records.values()].find(
+    (record) => record.manifest.stage_kind === "source_retrieval_receipt",
+  ).result;
+  receipt.observed_at = "invalid-date";
+  await assert.rejects(executeDualLaneResearch(intake, options), {
+    code: "MB-409-STAGE-INTEGRITY",
+  });
+  assert.equal(requests.length, count);
+});
+
+test("MB-ARCH-IMPLEMENT-001 L02 private memory guides fresh discovery without inheriting a roster or qualification", async () => {
+  const memory = {
+    version: "private-research-context.v1",
+    instruction: "Fresh source verification is required.",
+    observations: [
+      {
+        observation_id: randomUUID(),
+        claim_kind: "identity",
+        claim_text: "Historical Company appeared in an earlier catalogue.",
+        source: {
+          source_url: "https://historical.example/catalog",
+          published_at: "2026-08-15T00:00:00.000Z",
+          retrieved_at: "2026-09-15T00:00:00.000Z",
+        },
+      },
+    ],
+  };
+  const result = await executeDualLaneResearch(
+    { ...intake, private_memory_context: memory },
+    { mode: "live", round_plan: partialRound },
+  );
+  const native = requests.filter((body) => body.plugins?.length);
+  assert.equal(
+    native.length,
+    2,
+    "Both approved live discovery lanes still run",
+  );
+  for (const request of native) {
+    const context = JSON.parse(request.messages[1].content);
+    assert.deepEqual(context.approved_request.private_memory_context, memory);
+    assert.deepEqual(context.current_roster, []);
+    assert.match(
+      request.messages[0].content,
+      /fresh live discovery beyond remembered companies/,
+    );
+  }
+  assert.ok(result.candidates.length > 0);
+  assert.ok(
+    result.candidates.every(
+      (candidate) => candidate.legal_name !== "Historical Company",
+    ),
+  );
+  assert.ok(
+    result.evidence_sources.every(
+      (source) => source.source_url !== "https://historical.example/catalog",
+    ),
   );
 });

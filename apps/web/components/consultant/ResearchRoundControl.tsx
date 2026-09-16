@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { ResearchReviewPanel } from "./ResearchReviewPanel";
+import { ResearchHistoryPanel } from "./ResearchHistoryPanel";
 import type {
   ConsultantResearchOutputV3,
   ResearchCostSummary,
@@ -1029,6 +1030,7 @@ export function ResearchRoundControl({
           </ul>
         </details>
       )}
+      <ResearchHistoryPanel key={runId} runId={runId} active={active} />
       {notice && (
         <p role="status" className="text-sky-200">
           {notice}

@@ -60,4 +60,4 @@ jobs:
           MATCHBASE_ORIGIN: http://127.0.0.1:3010
           MATCHBASE_DIGEST_KEY: ci-synthetic-digest-material-not-a-secret
       - run: pnpm dependency:audit
-      - run: node --test deployment/local/*.test.mjs
+      - run: node --test deployment/local/*.test.mjs test/local-model/*.test.mjs test/incident-repair/*.test.mjs

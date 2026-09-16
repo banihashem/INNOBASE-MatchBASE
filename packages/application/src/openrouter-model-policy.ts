@@ -1,12 +1,18 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { ResearchModelRate } from "@matchbase/contracts";
-import { ResearchRoundFault } from "@matchbase/data";
+import { ExecutionIntegrityFault, ResearchRoundFault } from "@matchbase/data";
 import { Agent } from "undici";
 import {
   classifyProviderHttpFailure,
   type ProviderHttpFailure,
 } from "./provider-http-failure.js";
 import { fetchPrimaryEvidenceText } from "./live-source-fetch.js";
+import {
+  createResearchStageManifest,
+  executeResearchStage,
+  researchStageHash,
+  type ResearchStageStore,
+} from "./research-stage-executor.js";
 import {
   classifyResponseFailure,
   normalizedNativeFinishReason,
@@ -97,6 +103,10 @@ export interface OpenRouterModelCapabilities {
   readonly endpoint_prices?: readonly Record<string, unknown>[];
 }
 export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
+  /** An actual completion envelope was received, independently of accounting completeness. */
+  readonly provider_receipt_received?: boolean;
+  /** A confirmed narrow HTTP rejection; never inferred from an unknown transport failure. */
+  readonly provider_dispatch_rejected?: boolean;
   readonly provider_http_failure?: ProviderHttpFailure;
   readonly recovery_message?: string;
   readonly recovery_original_model?: string;
@@ -197,10 +207,30 @@ export interface LiveCallOptions {
     request: OpenRouterCompletionParams,
     web: boolean,
   ) => Promise<void>;
+  /** Atomic durable admission follows the existing policy guard, before dispatch. */
+  readonly admit_call?: (
+    request: OpenRouterCompletionParams,
+    web: boolean,
+    admission: ResearchCallAdmission,
+  ) => Promise<void>;
+  /** Store is bound to the current execution, approval and fence by the service. */
+  readonly stage_store?: ResearchStageStore;
+  /** Internal original-stage identity, retained across format/model repair attempts. */
+  readonly attempt_group_key?: string;
   readonly on_checkpoint?: (
     checkpoint: LiveResearchCheckpoint,
   ) => void | Promise<void>;
   readonly signal?: AbortSignal;
+}
+export interface ResearchCallAdmission {
+  readonly request_id: string;
+  readonly operation_key: string;
+  readonly stage_key: string;
+  readonly phase: string;
+  readonly effective_request_sha256: string;
+  readonly request_input_bytes: number;
+  readonly max_output_tokens: number;
+  readonly is_synthesis: boolean;
 }
 function byokCheckpointFields(
   result: OpenRouterCompletionResult,
@@ -1332,11 +1362,171 @@ export function selectApprovedStructuredRecovery(
   return { original_model: model, next_model: alternative };
 }
 
+/** Excludes transport handles and attempt identity; includes all effective model inputs. */
+export function researchCompletionInput(request: OpenRouterCompletionParams) {
+  return {
+    model: request.model,
+    messages: request.messages,
+    plugins: request.plugins,
+    response_format: request.response_format,
+    max_tokens: request.max_tokens ?? 12000,
+    reasoning: request.reasoning,
+    approved_rate: request.approved_rate,
+    timeout_ms: request.timeout_ms,
+  };
+}
+
+export function validateRetainedCompletion(
+  value: unknown,
+): OpenRouterCompletionResult {
+  const result = value as OpenRouterCompletionResult | null;
+  if (
+    !result ||
+    typeof result !== "object" ||
+    typeof result.model !== "string" ||
+    !result.model ||
+    typeof result.text !== "string" ||
+    typeof result.live_api_invoked !== "boolean" ||
+    ![
+      result.input_tokens,
+      result.output_tokens,
+      result.latency_ms,
+      result.cost_usd,
+    ].every((number) => Number.isFinite(number) && number >= 0) ||
+    (result.citations !== undefined &&
+      (!Array.isArray(result.citations) ||
+        result.citations.some(
+          (citation) =>
+            !citation ||
+            typeof citation.url !== "string" ||
+            !safePublicEvidenceUrl(citation.url) ||
+            typeof citation.title !== "string" ||
+            (citation.content !== undefined &&
+              typeof citation.content !== "string"),
+        )))
+  )
+    throw Object.assign(
+      new Error(
+        "Saved provider receipt is invalid; no replacement request was sent.",
+      ),
+      {
+        code: "MB-409-STAGE-INTEGRITY",
+      },
+    );
+  return result;
+}
+
 export async function runLiveCompletion(
   request: Omit<OpenRouterCompletionParams, "reasoning">,
   context: LiveCompletionContext,
   options: LiveCallOptions = {},
 ): Promise<OpenRouterCompletionResult> {
+  if (request.timeout_ms !== undefined) {
+    try {
+      validateCompletionTimeout(request.timeout_ms);
+    } catch {
+      // Preserve the typed pre-dispatch failure and its checkpoint before hashing
+      // an invalid value or consulting a previously committed provider stage.
+      return runLiveCompletionAttempt(request, context, options);
+    }
+  }
+  // Native research is retained losslessly, but remains unvalidated evidence.
+  // Every downstream citation, extraction and supplier validator still runs.
+  if (!options.stage_store || !context.require_web)
+    return runLiveCompletionWithRecovery(request, context, options);
+  const {
+    signal: requestSignal,
+    request_id: attemptId,
+    ...stableRequest
+  } = request;
+  void attemptId;
+  const signals = [requestSignal, options.signal].filter(
+    (signal): signal is AbortSignal => signal !== undefined,
+  );
+  const signal = signals.length ? AbortSignal.any(signals) : undefined;
+  const manifest = createResearchStageManifest({
+    stage_kind: `${context.phase}:${context.loop}:provider_response`,
+    qualification: "received_unvalidated",
+    input: researchCompletionInput(stableRequest),
+    policy: {
+      adapter_version: "openrouter-receipt.v1",
+      context,
+      approved_rates: options.approved_rates,
+      approved_model_fallbacks: options.approved_model_fallbacks,
+      approved_search_engines: options.approved_search_engines,
+      max_input_bytes: options.max_input_bytes,
+      max_output_tokens: options.max_output_tokens,
+      reasoning_effort: options.reasoning_effort,
+      web_engine: options.web_engine,
+    },
+  });
+  return executeResearchStage({
+    manifest,
+    store: options.stage_store,
+    ...(signal ? { signal } : {}),
+    execute: () => runLiveCompletionWithRecovery(request, context, options),
+    validate: validateRetainedCompletion,
+    on_reuse: () =>
+      reportRetainedStageReuse(
+        options,
+        context.phase,
+        context.loop,
+        context.max_loops ?? 1,
+        request.model,
+        manifest.operation_key,
+      ),
+  });
+}
+
+/** A reuse event carries no new provider cost or provider receipt identity. */
+export async function reportRetainedStageReuse(
+  options: LiveCallOptions,
+  phase: string,
+  loop: number,
+  maxLoops: number,
+  model: string,
+  operationKey: string,
+): Promise<void> {
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  await options.on_checkpoint?.({
+    checkpoint_id: id,
+    request_id: id,
+    phase: `${phase}_reused`,
+    stage: "retained_stage_reuse",
+    loop,
+    max_loops: maxLoops,
+    message:
+      "Continuing from a saved stage. No new provider request was sent for this step.",
+    state: "completed",
+    dispatched: false,
+    requested_model: model,
+    model,
+    request_hash: operationKey,
+    started_at: now,
+    completed_at: now,
+    native_web: false,
+    reasoning_effort: "unsupported",
+    evidence_urls: [],
+  });
+}
+
+async function runLiveCompletionWithRecovery(
+  request: Omit<OpenRouterCompletionParams, "reasoning">,
+  context: LiveCompletionContext,
+  options: LiveCallOptions = {},
+): Promise<OpenRouterCompletionResult> {
+  options = {
+    ...options,
+    attempt_group_key:
+      options.attempt_group_key ??
+      researchStageHash({
+        version: "provider-stage.v1",
+        phase: context.phase,
+        loop: context.loop,
+        original_request: researchCompletionInput(request),
+      }),
+  };
   const signals = [request.signal, options.signal].filter(
     (s): s is AbortSignal => s !== undefined,
   );
@@ -1479,6 +1669,8 @@ async function runLiveCompletionAttempt(
   let auditedResponse: OpenRouterCompletionResult | undefined;
   let checkpoint: LiveResearchCheckpoint = {
     dispatched: false,
+    provider_receipt_received: false,
+    provider_dispatch_rejected: false,
     checkpoint_id: checkpointId,
     request_id: checkpointId,
     phase: context.phase,
@@ -1570,29 +1762,10 @@ async function runLiveCompletionAttempt(
       byok_verification_source: "unverified",
       generation_metadata_attempts: 0,
     };
-    await options.before_call?.(
-      context.require_web
-        ? {
-            ...request,
-            plugins: [
-              {
-                id: "web",
-                engine: options.web_engine ?? "native",
-                ...(options.web_engine === "exa"
-                  ? { max_results: 8, mode: "auto" as const }
-                  : {}),
-              },
-            ],
-          }
-        : request,
-      Boolean(context.require_web),
-    );
-    checkpoint = { ...checkpoint, dispatched: true };
-    await options.on_checkpoint?.(checkpoint);
     const callerSignals = [request.signal, options.signal].filter(
       (signal): signal is AbortSignal => signal !== undefined,
     );
-    let result = await callOpenRouterCompletion({
+    const effectiveRequest: OpenRouterCompletionParams = {
       ...request,
       request_id: checkpointId,
       ...(approvedRate ? { approved_rate: approvedRate } : {}),
@@ -1621,7 +1794,35 @@ async function runLiveCompletionAttempt(
       ...(callerSignals.length
         ? { signal: AbortSignal.any(callerSignals) }
         : {}),
+    };
+    effectiveRequest.signal?.throwIfAborted();
+    await options.before_call?.(effectiveRequest, Boolean(context.require_web));
+    const effectiveHash = researchStageHash(
+      researchCompletionInput(effectiveRequest),
+    );
+    await options.admit_call?.(effectiveRequest, Boolean(context.require_web), {
+      request_id: checkpointId,
+      operation_key: researchStageHash({
+        phase: context.phase,
+        loop: context.loop,
+        effective_request_sha256: effectiveHash,
+      }),
+      stage_key: options.attempt_group_key!,
+      phase: context.phase,
+      effective_request_sha256: effectiveHash,
+      request_input_bytes:
+        Buffer.byteLength(JSON.stringify(effectiveRequest.messages), "utf8") +
+        512,
+      max_output_tokens: effectiveRequest.max_tokens ?? 12000,
+      is_synthesis:
+        effectiveRequest.response_format?.type === "json_schema" &&
+        effectiveRequest.response_format.json_schema.name ===
+          "matchbase_live_synthesis",
     });
+    checkpoint = { ...checkpoint, dispatched: true };
+    await options.on_checkpoint?.(checkpoint);
+    effectiveRequest.signal?.throwIfAborted();
+    let result = await callOpenRouterCompletion(effectiveRequest);
     auditedResponse = result;
     if (
       context.require_web &&
@@ -1674,6 +1875,8 @@ async function runLiveCompletionAttempt(
       ...checkpoint,
       state: "completed",
       message: `${context.phase} provider response received.`,
+      provider_receipt_received: true,
+      provider_dispatch_rejected: false,
       actual_model: result.model,
       model: result.model,
       ...(result.provider_generation_id
@@ -1712,6 +1915,7 @@ async function runLiveCompletionAttempt(
       error instanceof LiveResearchError
         ? error
         : error instanceof OpenRouterByokError ||
+            error instanceof ExecutionIntegrityFault ||
             error instanceof ResearchRoundFault
           ? new LiveResearchError(error.code, error.message)
           : new LiveResearchError(
@@ -1721,6 +1925,15 @@ async function runLiveCompletionAttempt(
     await options.on_checkpoint?.({
       ...checkpoint,
       state: "failed",
+      provider_receipt_received: Boolean(auditedResponse),
+      provider_dispatch_rejected:
+        !auditedResponse &&
+        Boolean(
+          safeError.provider_http_failure &&
+          [400, 401, 403, 404, 422, 429].includes(
+            safeError.provider_http_failure.http_status,
+          ),
+        ),
       recovery_scheduled: transientCompletionFailure(safeError),
       message: `${context.phase} request failed.`,
       completed_at: new Date().toISOString(),

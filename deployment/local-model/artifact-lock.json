@@ -1,0 +1,35 @@
+{
+  "version": "local-model-artifacts.v1",
+  "image": "ollama/ollama@sha256:8eb6c4d16138c8320f2598f03e01b3549f6ed2e41fe6ac16329a5a921b314914",
+  "runtime_version": "0.34.1",
+  "platform": "linux/amd64",
+  "model": "qwen3.5:4b",
+  "model_manifest_sha256": "2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd",
+  "model_blob_sha256": "81fb60c7daa80fc1123380b98970b320ae233409f0f71a72ed7b9b0d62f40490",
+  "artifact_blobs_sha256": [
+    "de9fed2251b37295b763727a59ca35cf5cfe5c7379bc3e2104b2ce3c145aa887",
+    "81fb60c7daa80fc1123380b98970b320ae233409f0f71a72ed7b9b0d62f40490",
+    "7339fa418c9ad3e8e12e74ad0fd26a9cc4be8703f9c110728a992b193be85cb2",
+    "9371364b27a52acac9d87f88bd93c9db1174d8d6ec57f6888925cdc1788871ff"
+  ],
+  "quantization": "Q4_K_M",
+  "license": "Apache-2.0",
+  "template_sha256": "b507b9c2f6ca642bffcd06665ea7c91f235fd32daeefdf875a0f938db05fb315",
+  "qualification_runner_image": "node:24.14.0-bookworm-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8",
+  "parameters": {
+    "num_ctx": 4096,
+    "num_predict": 512,
+    "temperature": 0,
+    "seed": 42
+  },
+  "thinking": false,
+  "incumbent": {
+    "model": "docker.io/ai/gemma3:latest",
+    "artifact_sha256": "a353a8898c9d63b83254ad34ff8f3711d94e06dd412f1278c0ff0d9af27426f2",
+    "backend_sha256": "af91915118080289204195878144aab44d70ba3aac4d188949d87177ad59bb16",
+    "quantization": "MOSTLY_Q4_K_M",
+    "license": "Gemma",
+    "qualification": "incumbent-comparator-only"
+  },
+  "production_activation": "blocked-pending-independent-quality-and-economic-qualification"
+}

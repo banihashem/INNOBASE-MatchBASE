@@ -80,6 +80,7 @@ export default function ConsultantWorkflowPage() {
   const [step3Prompt, setStep3Prompt] = useState<string>("");
   const [advisoryContext, setAdvisoryContext] = useState<any>(null);
   const [output, setOutput] = useState<ConsultantResearchOutputV3 | null>(null);
+  const [evidenceWithdrawn, setEvidenceWithdrawn] = useState(false);
   const [researchFocusRequest, setResearchFocusRequest] = useState(0);
   const [revealedCount, setRevealedCount] = useState<number>(5);
   const [selectedSupplier, setSelectedSupplier] =
@@ -190,6 +191,12 @@ export default function ConsultantWorkflowPage() {
       setActivity([]);
     }
     setConnectionError(null);
+    setEvidenceWithdrawn(session.evidence_withdrawn === true);
+    if (session.evidence_withdrawn === true) {
+      setOutput(null);
+      setSelectedSupplier(null);
+      setIsModalOpen(false);
+    }
     if (Array.isArray(session.activity)) setActivity(session.activity);
     if (typeof session.draft_version === "number")
       updateDraftVersion(session.draft_version);
@@ -2352,6 +2359,23 @@ export default function ConsultantWorkflowPage() {
                   />
                 )}
               {workflowFeedback}
+              {evidenceWithdrawn && (
+                <div
+                  role="status"
+                  className="rounded-xl border border-amber-700 bg-amber-950/30 p-5 text-amber-100"
+                >
+                  <h3 className="font-semibold">
+                    Saved evidence needs renewal
+                  </h3>
+                  <p className="mt-2 text-sm">
+                    Some source material can no longer be used, so its findings
+                    and report are unavailable. Your request, approvals,
+                    research history and costs are retained. Open Research
+                    history &amp; saved evidence below to refresh this research
+                    with a new cost approval.
+                  </p>
+                </div>
+              )}
               {runId && (
                 <ResearchRoundControl
                   key={runId}
@@ -2389,11 +2413,14 @@ export default function ConsultantWorkflowPage() {
                   )}
                 </ResearchRoundControl>
               )}
-              {!output && !workflowProgress && !workflowError && (
-                <p role="status" className="text-slate-300">
-                  Review the cost estimate above to start one research round.
-                </p>
-              )}
+              {!output &&
+                !workflowProgress &&
+                !workflowError &&
+                !evidenceWithdrawn && (
+                  <p role="status" className="text-slate-300">
+                    Review the cost estimate above to start one research round.
+                  </p>
+                )}
               {output?.public_social_checks && (
                 <details className="rounded-lg border border-slate-600 p-4">
                   <summary className="cursor-pointer font-semibold">

@@ -12,6 +12,9 @@ import {
   configuredResearchTierAvailability,
   researchModelChoices,
   runNextConsultantWorkflowJob,
+  quotePrivateResearchMemory,
+  loadQuotedPrivateMemory,
+  assertConsultantOutputReadRights,
 } from "@matchbase/application";
 import {
   ResearchRoundFault,
@@ -19,6 +22,8 @@ import {
   readConsultantCostEvents,
   saveResearchQuote,
   approveResearchQuote,
+  ExecutionIntegrityFault,
+  inTransaction,
 } from "@matchbase/data";
 import { getAppDatabasePool } from "../../../../../src/db-client";
 import { resolveRequestSession } from "../../../../../src/fetch-runtime";
@@ -38,7 +43,7 @@ async function access(req: Request, runId: string, unsafe = false) {
     context,
     runId,
     pool,
-    resourceKind: "run_detail",
+    resourceKind: "research_history",
   });
   const session = await getOrRestoreWorkflowSession(
     pool,
@@ -57,7 +62,9 @@ async function access(req: Request, runId: string, unsafe = false) {
 }
 function failure(error: unknown) {
   const known =
-    error instanceof ResearchRoundFault || error instanceof ApplicationFault;
+    error instanceof ResearchRoundFault ||
+    error instanceof ApplicationFault ||
+    error instanceof ExecutionIntegrityFault;
   return NextResponse.json(
     {
       error: known
@@ -93,6 +100,12 @@ export async function GET(req: Request) {
       ? rounds.find((r) => r.round_id === selected)
       : undefined;
     const output = selectedRound?.output;
+    if (output)
+      await assertConsultantOutputReadRights(
+        pool,
+        context.accountId,
+        output as unknown as import("@matchbase/contracts").ConsultantResearchOutputV3,
+      );
     if (selected && !output)
       throw new ResearchRoundFault(
         404,
@@ -103,9 +116,26 @@ export async function GET(req: Request) {
     const latest = [...completed].sort(
       (a, b) => b.round_number - a.round_number,
     )[0];
-    const latestReview = latest
-      ? await getResearchRoundReview(pool, latest)
-      : null;
+    let latestReview = null;
+    let evidenceWithdrawn: string | undefined;
+    if (latest) {
+      try {
+        if (latest.output)
+          await assertConsultantOutputReadRights(
+            pool,
+            context.accountId,
+            latest.output as unknown as import("@matchbase/contracts").ConsultantResearchOutputV3,
+          );
+        latestReview = await getResearchRoundReview(pool, latest);
+      } catch (error) {
+        if (
+          !(error instanceof ExecutionIntegrityFault) ||
+          error.code !== "MB-409-EVIDENCE-WITHDRAWN"
+        )
+          throw error;
+        evidenceWithdrawn = error.message;
+      }
+    }
     const selectedReview =
       selectedRound && output
         ? selectedRound.round_id === latest?.round_id
@@ -124,7 +154,11 @@ export async function GET(req: Request) {
         }) => view,
       ),
       next_round: Math.max(0, ...completed.map((r) => r.round_number)) + 1,
+      output_available: Boolean(latest?.output) && !evidenceWithdrawn,
       research_review: latestReview,
+      ...(evidenceWithdrawn
+        ? { evidence_withdrawn: true, evidence_notice: evidenceWithdrawn }
+        : {}),
       ...(session.mode === "demonstration"
         ? {}
         : { research_tiers: configuredResearchTierAvailability() }),
@@ -204,6 +238,12 @@ export async function POST(req: Request) {
         "MB-409-ROUND-ACTIVE",
         "A round is already active.",
       );
+    if (parent?.output)
+      await assertConsultantOutputReadRights(
+        pool,
+        context.accountId,
+        parent.output as unknown as import("@matchbase/contracts").ConsultantResearchOutputV3,
+      );
     const gaps = parent?.continuation?.remaining_gaps;
     let followUp: { question: string; lead_ids: string[] } | undefined;
     if (body.follow_up !== undefined) {
@@ -246,7 +286,7 @@ export async function POST(req: Request) {
         lead_ids: [...new Set(focus.lead_ids as string[])],
       };
     }
-    const { plan, choices } = await buildResearchRoundPlan({
+    const { plan: unboundPlan, choices } = await buildResearchRoundPlan({
       round_number: (parent?.round_number ?? 0) + 1,
       depth: body.depth,
       research_tier: body.research_tier ?? "default",
@@ -261,7 +301,19 @@ export async function POST(req: Request) {
         : [...(session.step3_deep_prompt?.discovery_criteria ?? [])],
       mode: session.mode === "demonstration" ? "demonstration" : "live",
     });
-    await preflightResearchRoundContext(pool, session, plan, parent);
+    const plan = await quotePrivateResearchMemory(pool, session, unboundPlan);
+    const memoryContext = plan.private_memory
+      ? await inTransaction(pool, (client) =>
+          loadQuotedPrivateMemory(client, session, plan),
+        )
+      : undefined;
+    await preflightResearchRoundContext(
+      pool,
+      session,
+      plan,
+      parent,
+      memoryContext,
+    );
     const quoteId = await saveResearchQuote(pool, session, plan);
     return NextResponse.json({ quote_id: quoteId, plan, choices });
   } catch (error) {

@@ -12,6 +12,9 @@ const launcher = readFileSync(
   new URL("./Manage-LocalDocker.ps1", import.meta.url),
   "utf8",
 );
+const launcherPath = fileURLToPath(
+  new URL("./Manage-LocalDocker.ps1", import.meta.url),
+);
 const isolatedEnvironment = Object.fromEntries(
   Object.entries(process.env).filter(([name]) =>
     /^(PATH|PATHEXT|SYSTEMROOT|WINDIR|PROGRAMFILES|PROGRAMFILES\(X86\)|TEMP|TMP)$/i.test(
@@ -55,6 +58,38 @@ function evaluateHelper(source) {
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout.replace(/^\uFEFF/, ""));
 }
+
+test(
+  "MB-UX-OPS-002 L07 portable task selects one valid executable when PATH exposes multiple Node installations",
+  {
+    skip:
+      process.platform === "win32" && shell
+        ? false
+        : "Windows Node executable resolution is qualified on the host",
+  },
+  () => {
+    const result = evaluateHelper(`
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile('${launcherPath.replaceAll("'", "''")}', [ref]$null, [ref]$null)
+    $definition = $ast.Find({ param($item) $item -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $item.Name -eq 'Resolve-PortableNodePath' }, $true)
+    if (-not $definition) { throw 'Node resolver function missing' }
+    . ([scriptblock]::Create($definition.Extent.Text))
+    $first = (Get-Command node.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+    $selected = @(Resolve-PortableNodePath -Commands @([pscustomobject]@{ Source = $first }, [pscustomobject]@{ Source = 'C:\\nonexistent-secondary-node\\node.exe' }))
+    $relativeRejected = $false
+    try { Resolve-PortableNodePath -Commands @([pscustomobject]@{ Source = 'node.exe' }) | Out-Null } catch { $relativeRejected = $true }
+    $missingRejected = $false
+    try { Resolve-PortableNodePath -Commands @([pscustomobject]@{ Source = 'C:\\nonexistent-primary-node\\node.exe' }) | Out-Null } catch { $missingRejected = $true }
+    @{ selected = @($selected); expected = [System.IO.Path]::GetFullPath($first); relativeRejected = $relativeRejected; missingRejected = $missingRejected } | ConvertTo-Json -Compress
+  `);
+    assert.deepEqual(result.selected, [result.expected]);
+    assert.equal(result.relativeRejected, true);
+    assert.equal(result.missingRejected, true);
+    assert.match(
+      launcher,
+      /\$nodePath = Resolve-PortableNodePath -Commands @\(Get-Command node\.exe/,
+    );
+  },
+);
 
 test("MB-UX-QUALITY-001 L07 the launcher uses the shared import and test isolation boundaries", () => {
   assert.match(

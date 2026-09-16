@@ -1,0 +1,53 @@
+{
+  "version": "local-retrieval-evaluation.v1",
+  "activity": "MB-ARCH-IMPLEMENT-001-L03",
+  "activation": "disabled",
+  "reference": [
+    "exact eligible source-bound reuse",
+    "profile-scoped lexical retrieval"
+  ],
+  "reference_authority": "PostgreSQL evidence, identity, rights and use manifests; a ranking score cannot grant admission",
+  "before_ranking": [
+    "authenticated profile scope",
+    "source rights epoch",
+    "resolved or explicitly unresolved entity identity",
+    "classification compatibility",
+    "claim-specific freshness"
+  ],
+  "mandatory_retention": [
+    "exact registration identifier and jurisdiction matches",
+    "explicitly selected supplier references",
+    "negations and contradictions",
+    "competent-source revocations",
+    "original context around decisive source passages",
+    "unknown and disputed evidence labels"
+  ],
+  "candidate_requirements": [
+    "pinned model and tokenizer artifacts",
+    "pinned pooling and normalization",
+    "model-specific query/document task instructions",
+    "verified score direction and batching semantics",
+    "bounded input with no silent truncation",
+    "private/public index separation",
+    "derivative source and rights invalidation manifests"
+  ],
+  "evaluation": {
+    "separate_from_generator": true,
+    "protected_slices": [
+      "Persian and English",
+      "goods and services",
+      "rare entities",
+      "new entrants",
+      "wrong legal entity or site",
+      "dated price scope",
+      "contradictory and copied assertions",
+      "expired or withdrawn rights"
+    ],
+    "reject_any_dropped_critical_evidence": true,
+    "ranking_cannot_filter_mandatory_evidence": true,
+    "requires_independent_unseen_clustered_acceptance": true,
+    "requires_paired_recall_latency_and_whole_pipeline_cost": true,
+    "numeric_quality_concession": null
+  },
+  "current_disposition": "No embedding or reranker model has been admitted or invoked. Existing exact and lexical reference remains authoritative; a chat generation endpoint is not retrieval qualification."
+}

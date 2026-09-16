@@ -47,6 +47,8 @@ export function workflowLabel(state: string, stoppedByUser = false): string {
   return "Research in progress";
 }
 export function phaseLabel(phase: string, loop = 0): string {
+  if (phase === "resuming_saved_stages") return "Resuming saved research steps";
+  if (phase.endsWith("_reused")) return "Reusing a saved research step";
   if (phase === "step1_correction") return "Drafting the English correction";
   if (phase === "step1_correction_validation")
     return "Checking correction requirements";

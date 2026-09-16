@@ -3,6 +3,38 @@ import { afterEach, expect, it, vi } from "vitest";
 import { WorkflowActivity } from "./WorkflowActivity";
 
 afterEach(() => vi.useRealTimers());
+it.each(["discovery_openai_reused", "discovery_gemini_extraction_reused"])(
+  "MB-ARCH-IMPLEMENT-001 L01 labels the emitted saved-stage event %s",
+  (phase) => {
+    render(
+      <WorkflowActivity state="research_dispatching" progress={{ phase }} />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "Reusing a saved research step" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: /Searching for suppliers/ }),
+    ).not.toBeInTheDocument();
+  },
+);
+it("MB-ARCH-IMPLEMENT-001 L01 explains saved-stage resumption without claiming new approval or a completion percentage", () => {
+  render(
+    <WorkflowActivity
+      state="research_dispatching"
+      progress={{ phase: "resuming_saved_stages" }}
+    />,
+  );
+  expect(
+    screen.getByRole("heading", { name: "Resuming saved research steps" }),
+  ).toBeVisible();
+  expect(
+    screen.getByText(
+      /remaining model calls stay within the original allowance/,
+    ),
+  ).toBeVisible();
+  expect(screen.getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
+  expect(screen.queryByText("Results saved")).toBeNull();
+});
 const started = {
   phase: "discovery_gemini",
   loop: 1,

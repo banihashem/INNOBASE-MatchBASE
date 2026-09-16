@@ -794,6 +794,15 @@ export async function buildResearchRoundPlan(input: {
     choices,
     plan: {
       version: "research-round.v1",
+      ...(input.mode === "live"
+        ? {
+            execution_recovery: {
+              version: "durable.v1" as const,
+              max_resumes: 2,
+              valid_for_ms: 86400000,
+            },
+          }
+        : {}),
       ...(input.round_number > 1
         ? {
             research_strategy: researchStrategy!,
@@ -861,6 +870,7 @@ export async function buildResearchRoundPlan(input: {
         "Range assumes 4,000 output tokens per call at the low end and the full approved output allowance at the high end; input volume varies.",
         "Native search can issue multiple billable queries. Search allowance is an estimate; platform BYOK fee allowance is conservatively 5%.",
         "One approval authorizes this round only, including up to three attempts per recoverable stage and six shared recovery calls within the total call allowance. No following round starts automatically.",
+        "This estimate authorizes up to two automatic resumptions of this same execution within 24 hours of approval, using its remaining call allowance and saved stages. Cancellation, expired authority and unresolved provider dispatch outcomes prevent automatic resumption. Resumption does not add calls, authorize a new round, change billing modes or silently replay a request whose outcome is unknown.",
         "Two suppliers are extracted per dossier batch. The estimate includes the six-call recovery reserve at the highest approved token and search rates; actual usage may be lower. Saved successful stages are reused when possible.",
         "Each model billing mode is frozen in this estimate. Google/OpenAI and explicitly configured BYOK routes remain strict BYOK. Additional families without a configured BYOK route use the named zero-data-retention OpenRouter-credit endpoint only after you approve this estimate. No failed BYOK call falls back to credits.",
         "Model listing does not prove provider-key health or sufficient balance. Actual route, billing mode and usage are checked on every response.",
@@ -874,6 +884,7 @@ export async function buildResearchRoundPlan(input: {
 export function createRoundCallGuard(
   plan: ResearchRoundPlan,
   previouslyConsumedCalls = 0,
+  options: { atomic_admission?: boolean } = {},
 ) {
   progressiveResearchMethods(plan);
   const primaryModels = new Set([
@@ -977,7 +988,7 @@ export function createRoundCallGuard(
       (plan.automatic_recovery_attempts ?? 1) > 1 && !synthesis;
     const callLimit = plan.max_calls - Number(reserveSynthesis);
     const exhausted =
-      calls >= callLimit
+      !options.atomic_admission && calls >= callLimit
         ? reserveSynthesis
           ? `The research call allowance is exhausted; the final approved call is reserved for result synthesis.`
           : `The approved allowance of ${plan.max_calls} provider calls is exhausted.`
@@ -992,6 +1003,8 @@ export function createRoundCallGuard(
         "MB-409-ROUND-ALLOWANCE",
         `${exhausted} No provider request was sent. Review a fresh estimate before further work.`,
       );
-    calls++;
+    // Durable admission owns the shared call count when enabled. All route,
+    // model, engine, token and byte gates above still apply on every attempt.
+    if (!options.atomic_admission) calls++;
   };
 }

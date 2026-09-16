@@ -558,6 +558,7 @@ export function ingestLiveEvidence(
   citations: readonly OpenRouterCitation[],
   evidence: Map<string, LiveEvidenceRecord>,
   retrieved: ReadonlyMap<string, RetrievedPrimaryEvidence | null> = new Map(),
+  observedAt: ReadonlyMap<string, string> = new Map(),
 ): void {
   const native = new Map(citations.map((citation) => [citation.url, citation]));
   for (const citation of citations) {
@@ -619,7 +620,10 @@ export function ingestLiveEvidence(
           previous?.source.source_type,
           entry.source_type,
         ),
-        retrieved_at: actual?.retrieved_at ?? new Date().toISOString(),
+        retrieved_at:
+          actual?.retrieved_at ??
+          observedAt.get(citation.url) ??
+          new Date().toISOString(),
         freshness_status: "current",
         verification_status: "externally_verified",
         excerpt_summary: publishedExcerptSummary(verifiedExcerpts),
@@ -849,6 +853,7 @@ export function assembleLiveSuppliers(
   evidence: Map<string, LiveEvidenceRecord>,
   limit: number,
   entityIds = new Map<string, string>(),
+  claimIdFor?: (identity: unknown) => string,
 ) {
   const candidates: SupplierEntityV3[] = [];
   const claims: ClaimV3[] = [];
@@ -887,7 +892,18 @@ export function assembleLiveSuppliers(
     ): string[] => {
       const sources = proofSources(proof, evidence);
       if (!sources.length) return [];
-      const claimId = randomUUID();
+      const claimId =
+        claimIdFor?.({
+          entityId,
+          text,
+          proof,
+          type,
+          field,
+          status,
+          normalizedValue,
+          source_ids: sources.map((source) => source.evidence_id),
+          ordinal: claims.length,
+        }) ?? randomUUID();
       for (const source of sources)
         sourceClaims.set(source.evidence_id, [
           ...(sourceClaims.get(source.evidence_id) ?? []),

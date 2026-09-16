@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { extractNativeCandidateScope } from "../../../packages/application/dist/live-evidence-extraction.js";
-import { LiveResearchError } from "../../../packages/application/dist/openrouter-model-policy.js";
+import {
+  LiveResearchError,
+  researchCompletionInput,
+  runLiveCompletion,
+} from "../../../packages/application/dist/openrouter-model-policy.js";
+import { researchStageHash } from "../../../packages/application/dist/research-stage-executor.js";
 import {
   objectSchema,
   parseLiveJson,
@@ -217,6 +222,208 @@ const messageText = (request) =>
   request.messages.map((message) => message.content).join("\n");
 const dispatchedEvents = (f) =>
   f.events.filter((event) => event.dispatched && event.state !== "started");
+
+function retainedStages() {
+  const records = new Map();
+  return {
+    records,
+    async load(manifest) {
+      return records.get(manifest.operation_key) ?? null;
+    },
+    async commit(manifest, result) {
+      records.set(
+        manifest.operation_key,
+        structuredClone({ manifest, result }),
+      );
+    },
+  };
+}
+
+test("MB-ARCH-IMPLEMENT-001 L01 validated extraction resumes without a second provider request", async (t) => {
+  const f = fixture(t, { payload: () => validIndex() });
+  const store = retainedStages();
+  f.options.stage_store = store;
+  const first = await f.run();
+  const resumed = await f.run();
+  assert.deepEqual(resumed, first);
+  assert.equal(f.calls.length, 1);
+  assert.equal(store.records.size, 1);
+  assert.equal(
+    [...store.records.values()][0].manifest.qualification,
+    "validated_extraction",
+  );
+  const reuse = f.events.find(
+    (event) => event.stage === "retained_stage_reuse",
+  );
+  assert.equal(reuse.dispatched, false);
+  assert.equal(reuse.cost_usd, undefined);
+});
+
+test("MB-ARCH-IMPLEMENT-001 L01 source changes beyond context excerpts invalidate saved extraction", async (t) => {
+  const f = fixture(t, { payload: () => validIndex() });
+  f.options.stage_store = retainedStages();
+  f.native.citations[0].content += " ".repeat(6500) + "Original terminal fact";
+  await f.run();
+  f.native.citations[0].content += " corrected";
+  await f.run();
+  assert.equal(f.calls.length, 2);
+});
+
+test("MB-ARCH-IMPLEMENT-001 L01 a corrupted saved extraction stops without replaying paid work", async (t) => {
+  const f = fixture(t, { payload: () => validIndex() });
+  const store = retainedStages();
+  f.options.stage_store = store;
+  await f.run();
+  const record = [...store.records.values()][0];
+  delete record.result.parsed.evidence_exhausted;
+  await assert.rejects(f.run(), { code: "MB-409-STAGE-INTEGRITY" });
+  assert.equal(f.calls.length, 1);
+});
+
+test("MB-ARCH-IMPLEMENT-001 L01 admission receives exact effective requests and stable repair identity", async (t) => {
+  const f = fixture(t);
+  const admitted = [];
+  f.options.admit_call = async (request, web, admission) => {
+    assert.equal(web, false);
+    assert.equal(admission.request_id, request.request_id);
+    assert.equal(
+      admission.effective_request_sha256,
+      researchStageHash(researchCompletionInput(request)),
+    );
+    assert.deepEqual(request.reasoning, { effort: "low", exclude: true });
+    admitted.push(admission);
+  };
+  await f.run();
+  assert.equal(admitted.length, 2);
+  assert.equal(admitted[0].stage_key, admitted[1].stage_key);
+  assert.notEqual(admitted[0].operation_key, admitted[1].operation_key);
+  assert.notEqual(admitted[0].request_id, admitted[1].request_id);
+});
+
+test("MB-ARCH-IMPLEMENT-001 L01 rejected atomic admission never dispatches", async (t) => {
+  const f = fixture(t, { payload: () => validIndex() });
+  f.options.admit_call = async () => {
+    throw new LiveResearchError(
+      "MB-409-ROUND-ALLOWANCE",
+      "No authority remains.",
+    );
+  };
+  await assert.rejects(f.run(), { code: "MB-409-ROUND-ALLOWANCE" });
+  assert.equal(f.calls.length, 0);
+  assert.equal(
+    f.events.some((event) => event.dispatched),
+    false,
+  );
+});
+
+test("MB-ARCH-IMPLEMENT-001 L01 a received invalid JSON response is distinguished from an unknown dispatch", async (t) => {
+  const f = fixture(t, { attempts: 1, payload: () => invalidIndex() });
+  await assert.rejects(f.run(), { code: "MB-422-LIVE-SCHEMA" });
+  const failed = f.events.find(
+    (event) => event.dispatched && event.state === "failed",
+  );
+  assert.equal(failed.provider_receipt_received, true);
+  assert.equal(failed.provider_dispatch_rejected, false);
+});
+
+test("MB-ARCH-IMPLEMENT-001 L01 transport errors cannot fabricate a receipt using cost or generation fields", async (t) => {
+  const f = fixture(t, {
+    attempts: 1,
+    payload: () => {
+      throw Object.assign(new Error("Transport unavailable"), {
+        cost_usd: 1,
+        provider_generation_id: "not-a-receipt",
+      });
+    },
+  });
+  await assert.rejects(f.run(), { code: "MB-503-LIVE-TRANSPORT" });
+  const failed = f.events.find(
+    (event) => event.dispatched && event.state === "failed",
+  );
+  assert.equal(failed.provider_receipt_received, false);
+  assert.equal(failed.provider_dispatch_rejected, false);
+});
+
+for (const status of [400, 429, 408, 500]) {
+  test(`MB-ARCH-IMPLEMENT-001 L01 HTTP ${status} preserves explicit dispatch certainty`, async (t) => {
+    const f = fixture(t, {
+      attempts: 1,
+      payload: () =>
+        Response.json(
+          { error: { code: status, message: "Request failed." } },
+          { status },
+        ),
+    });
+    await assert.rejects(f.run(), { code: "MB-502-LIVE-PROVIDER" });
+    const failed = f.events.find(
+      (event) => event.dispatched && event.state === "failed",
+    );
+    assert.equal(failed.provider_receipt_received, false);
+    assert.equal(
+      failed.provider_dispatch_rejected,
+      [400, 429].includes(status),
+    );
+  });
+}
+
+test("MB-ARCH-IMPLEMENT-001 L01 a web receipt remains full and unvalidated across restart", async (t) => {
+  const longText = quote + " x".repeat(110000);
+  const f = fixture(t, {
+    payload: () =>
+      Response.json({
+        id: "gen-retained-native-receipt",
+        model: primary,
+        provider: "Anthropic",
+        openrouter_metadata: {
+          is_byok: false,
+          endpoints: {
+            available: [
+              { selected: true, model: primary, provider: "Anthropic" },
+            ],
+          },
+        },
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: longText,
+              annotations: [
+                {
+                  type: "url_citation",
+                  url_citation: {
+                    url: sourceUrl,
+                    title: company,
+                    content: quote,
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        usage: { prompt_tokens: 100, completion_tokens: 500, cost: 0.03 },
+      }),
+  });
+  const store = retainedStages();
+  const options = { ...f.options, stage_store: store, web_engine: "exa" };
+  const run = () =>
+    runLiveCompletion(
+      {
+        model: primary,
+        messages: [{ role: "user", content: "Find evidence." }],
+      },
+      { phase: "discovery", loop: 1, require_web: true },
+      options,
+    );
+  const first = await run();
+  const resumed = await run();
+  assert.equal(resumed.text.length, longText.length);
+  assert.deepEqual(resumed, first);
+  assert.equal(f.calls.length, 1);
+  assert.equal(
+    [...store.records.values()][0].manifest.qualification,
+    "received_unvalidated",
+  );
+});
 
 function assertExtractionOnly(f) {
   assert.ok(f.calls.length > 0);

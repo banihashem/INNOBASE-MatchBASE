@@ -1,0 +1,1 @@
+DROP TABLE consultant_research_incident;

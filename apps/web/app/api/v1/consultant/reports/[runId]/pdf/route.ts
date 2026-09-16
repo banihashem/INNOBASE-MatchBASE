@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import {
   ApplicationFault,
   authorizeConsultantRunResourceRead,
+  assertConsultantOutputReadRights,
 } from "@matchbase/application";
 import { parseConsultantResearchOutputV3 } from "@matchbase/contracts";
 import {
   getResearchRoundForExecution,
   savePdfReportLedger,
+  ExecutionIntegrityFault,
 } from "@matchbase/data";
 import {
   generateConsultantPdfArtifact,
@@ -114,7 +116,7 @@ async function handlePdfRequest(
         context: requestContext,
         runId,
         pool,
-        resourceKind: "report_pdf",
+        resourceKind: "research_history",
       });
     } catch (authzError) {
       if (authzError instanceof ApplicationFault) {
@@ -131,26 +133,59 @@ async function handlePdfRequest(
     }
 
     const { runId: effectiveRunId } = authorized;
-    let output = authorized.output;
+    const ownerAccountId =
+      authorized.owner_account_id ?? requestContext.accountId;
+    const ownerProfileId =
+      authorized.owner_user_profile_id ?? requestContext.userId;
+    let output;
     const execution = new URL(req.url).searchParams.get("execution_id");
-    if (execution && execution !== output.execution_id) {
-      if (!/^[0-9a-f-]{36}$/i.test(execution))
+    if (execution) {
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          execution,
+        )
+      )
         return NextResponse.json(
           { error: "Invalid execution ID." },
           { status: 400, headers },
         );
       const saved = await getResearchRoundForExecution(
         pool,
-        requestContext.accountId,
+        ownerAccountId,
         execution,
       );
-      if (!saved?.output || saved.run_id !== effectiveRunId)
+      if (
+        !saved?.output ||
+        saved.run_id !== effectiveRunId ||
+        saved.account_id !== ownerAccountId ||
+        saved.user_profile_id !== ownerProfileId ||
+        saved.execution_id !== execution
+      )
         return NextResponse.json(
           { error: "Saved round report not found." },
           { status: 404, headers },
         );
       output = parseConsultantResearchOutputV3(saved.output);
+      if (
+        output.research_run_id !== effectiveRunId ||
+        output.execution_id !== execution ||
+        output.user_profile_id !== ownerProfileId ||
+        output.classification_id !== saved.classification_id
+      )
+        return NextResponse.json(
+          { error: "Saved round report not found." },
+          { status: 404, headers },
+        );
+    } else {
+      const current = await authorizeConsultantRunResourceRead({
+        context: requestContext,
+        runId: effectiveRunId,
+        pool,
+        resourceKind: "report_pdf",
+      });
+      output = current.output;
     }
+    await assertConsultantOutputReadRights(pool, ownerAccountId, output);
 
     // Dynamic filename based on scenario report artifact or product
     const filename =
@@ -190,10 +225,11 @@ async function handlePdfRequest(
       );
     }
 
+    await assertConsultantOutputReadRights(pool, ownerAccountId, output);
     // Persist to database ledger (best-effort)
     try {
       await savePdfReportLedger(pool, {
-        account_id: requestContext.accountId,
+        account_id: ownerAccountId,
         run_id: effectiveRunId,
         output_id: output.research_run_id,
         filename,
@@ -203,6 +239,7 @@ async function handlePdfRequest(
     } catch (e) {
       console.warn("Could not save to pdf ledger:", e);
     }
+    await assertConsultantOutputReadRights(pool, ownerAccountId, output);
 
     const totalLength = pdfBuffer.length;
     headers.set("Content-Type", "application/pdf");
@@ -242,6 +279,14 @@ async function handlePdfRequest(
       headers,
     });
   } catch (err) {
+    if (
+      err instanceof ExecutionIntegrityFault ||
+      err instanceof ApplicationFault
+    )
+      return NextResponse.json(
+        { error: err.message, code: err.code, status: err.status },
+        { status: err.status, headers },
+      );
     console.error("Error serving PDF:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },

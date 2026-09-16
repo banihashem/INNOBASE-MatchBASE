@@ -17,6 +17,26 @@ export interface ResearchModelRate {
   source_url: string;
 }
 export interface ResearchRoundPlan {
+  /** MB-ARCH-IMPLEMENT-001 L02: consent pins current logical-request ownership. */
+  logical_request_generation?: number;
+  /** Private observations are search context, never inherited current supplier qualification. */
+  private_memory?: {
+    version: "private-memory.v1";
+    observation_refs: {
+      observation_id: string;
+      observation_version: string;
+      rights_epoch: number;
+      source_version_id: string;
+      entity_version_id: string | null;
+    }[];
+    context_sha256: string;
+    input_bytes: number;
+    eligible_count: number;
+    needs_refresh_count: number;
+    excluded_by_budget_count: number;
+    selected_at: string;
+    valid_until: string;
+  };
   /** Newly quoted research methods; absent preserves historical approval scope. */
   research_strategy?: "progressive-evidence.v1";
   /** Included in this quote's call and cost allowance; never executed while editing. */
@@ -50,6 +70,12 @@ export interface ResearchRoundPlan {
   candidate_limit_per_search: number;
   /** Total attempts per recoverable stage; absent on legacy approvals. */
   automatic_recovery_attempts?: number;
+  /** Fresh approval only: bounded same-execution recovery; never expands paid call allowance. */
+  execution_recovery?: {
+    version: "durable.v1";
+    max_resumes: number;
+    valid_for_ms: number;
+  };
   /** Bounded dossier batch size priced in this approval. */
   extraction_batch_size?: number;
   /** Shared additional provider calls already included in max_calls and estimate. */

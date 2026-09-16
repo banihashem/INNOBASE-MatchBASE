@@ -47,6 +47,70 @@ function row(overrides = {}) {
 }
 const hidden = { status: 404, code: "MB-404-RUN" };
 
+test("MB-ARCH-IMPLEMENT-001 L02 metadata history remains readable after source withdrawal", async () => {
+  let rightsReads = 0;
+  const result = await read(
+    row({
+      document_payload: { ...GOLDEN_SCENARIO_V3_01, research_mode: "live" },
+    }),
+    {
+      resourceKind: "research_history",
+      pool: {
+        async query(sql) {
+          if (sql.includes("consultant_private_output_provenance")) {
+            rightsReads++;
+            return { rows: [{ denied: true }] };
+          }
+          return { rows: [row()] };
+        },
+      },
+    },
+  );
+  assert.equal(result.status, 200);
+  assert.equal(result.output, null);
+  assert.equal(result.owner_account_id, context.accountId);
+  assert.equal(result.owner_user_profile_id, context.userId);
+  assert.equal(result.session, undefined);
+  assert.equal(rightsReads, 0);
+});
+
+test("MB-ARCH-IMPLEMENT-001 L02 F02 metadata cancellation authority remains profile isolated", async () => {
+  await assert.rejects(
+    read(row({ output_user_profile_id: "another-profile" }), {
+      resourceKind: "research_history",
+    }),
+    hidden,
+  );
+});
+
+test("MB-ARCH-IMPLEMENT-001 L02 actual output read checks its original execution and rejects withdrawn evidence", async () => {
+  const output = { ...GOLDEN_SCENARIO_V3_01, research_mode: "hybrid" };
+  let checkedIdentity;
+  await assert.rejects(
+    read(row({ document_payload: output }), {
+      resourceKind: "report_pdf",
+      pool: {
+        async query(sql, params) {
+          if (sql.includes("WITH RECURSIVE dependencies")) return { rows: [] };
+          if (sql.includes("consultant_private_output_provenance")) {
+            checkedIdentity = params;
+            return { rows: [{ denied: true }] };
+          }
+          return { rows: [row({ document_payload: output })] };
+        },
+      },
+    }),
+    { status: 409, code: "MB-409-EVIDENCE-WITHDRAWN" },
+  );
+  assert.deepEqual(checkedIdentity, [
+    context.accountId,
+    output.user_profile_id,
+    output.research_run_id,
+    output.execution_id,
+    output.classification_id,
+  ]);
+});
+
 test("MB-UX-PILOT-001 L01 historical output without a workflow session remains readable by its profile", async () => {
   assert.equal((await read(row())).status, 200);
 });

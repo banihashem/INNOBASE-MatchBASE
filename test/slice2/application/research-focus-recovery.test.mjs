@@ -50,6 +50,74 @@ const valid = () => ({
   scope_notes: ["Order quantity remains unknown"],
 });
 
+function durableFocusStore() {
+  const records = new Map();
+  return {
+    records,
+    async load(manifest) {
+      return structuredClone(records.get(manifest.operation_key) ?? null);
+    },
+    async commit(manifest, result) {
+      records.set(
+        manifest.operation_key,
+        structuredClone({ manifest, result }),
+      );
+    },
+  };
+}
+
+test("MB-ARCH-IMPLEMENT-001 L01 third-attempt focus success survives restart without dispatch", async (t) => {
+  const f = fixture(t, [{ content: "invalid" }, { content: "invalid" }, {}]);
+  const store = durableFocusStore();
+  f.options.stage_store = store;
+  const first = await planResearchFocus(input, plan, prior, f.options);
+  const reused = await planResearchFocus(input, plan, prior, f.options, {}, 3);
+  assert.deepEqual(reused, first);
+  assert.equal(f.requests.length, 3);
+  assert.equal(f.guards.length, 3);
+  assert.equal(store.records.size, 1);
+  assert.equal(f.checkpoints.at(-1).phase, "research_focus_analysis_reused");
+  assert.equal(f.checkpoints.at(-1).dispatched, false);
+  assert.equal(reused.result.cost_usd, first.result.cost_usd);
+  assert.deepEqual(reused.analysis.priority_lead_ids, [
+    ...plan.follow_up.lead_ids,
+    leads[35].lead_id,
+  ]);
+});
+
+test("MB-ARCH-IMPLEMENT-001 L01 focus cache membership corruption never causes paid repair", async (t) => {
+  const f = fixture(t, [{}]);
+  const store = durableFocusStore();
+  f.options.stage_store = store;
+  await planResearchFocus(input, plan, prior, f.options);
+  const retained = [...store.records.values()][0];
+  const analysis = JSON.parse(retained.result.result.text);
+  analysis.priority_lead_ids = ["unknown-lead"];
+  retained.result.result.text = JSON.stringify(analysis);
+  retained.result.analysis = analysis;
+  await assert.rejects(planResearchFocus(input, plan, prior, f.options), {
+    code: "MB-409-STAGE-INTEGRITY",
+  });
+  assert.equal(f.requests.length, 1);
+});
+
+test("MB-ARCH-IMPLEMENT-001 L01 focus checkpoint persistence failure is terminal", async (t) => {
+  const f = fixture(t, [{}]);
+  f.options.stage_store = {
+    async load() {
+      return null;
+    },
+    async commit() {
+      throw new Error("focus checkpoint unavailable");
+    },
+  };
+  await assert.rejects(
+    planResearchFocus(input, plan, prior, f.options),
+    /focus checkpoint unavailable/,
+  );
+  assert.equal(f.requests.length, 1);
+});
+
 function fixture(t, responses) {
   const keys = {
     MATCHBASE_OPENROUTER_API_KEY: randomUUID(),

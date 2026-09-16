@@ -43,6 +43,13 @@ function fixture(t) {
     mode: "live",
     status: "running",
   };
+  const logicalRoot = {
+    logical_request_root_id: randomUUID(),
+    generation: 0,
+    run_generation: 0,
+    renewal_ordinal: 0,
+    latest_run_id: identity.run_id,
+  };
   const session = {
     ...identity,
     session_id: randomUUID(),
@@ -84,7 +91,19 @@ function fixture(t) {
     costEvents: [],
     costReads: 0,
     releaseImmediately: false,
+    unexpectedSql: [],
+    boundaryFailures: [],
   };
+  t.after(() =>
+    assert.deepEqual(
+      state.unexpectedSql,
+      [],
+      "Every SQL boundary must be explicitly modeled.",
+    ),
+  );
+  t.after(() => {
+    if (state.boundaryFailures.length) throw state.boundaryFailures[0];
+  });
   const timer = { unref() {} };
   t.mock.method(globalThis, "setInterval", (callback, delay) => {
     assert.equal(delay, 20_000);
@@ -100,98 +119,245 @@ function fixture(t) {
   // controlled SQL and HTTP boundaries. No database or provider connection is opened.
   const db = {
     async query(sql, params = []) {
-      if (
-        sql.includes(
-          "SELECT execution_id,phase,detail FROM consultant_provider_call",
+      try {
+        const normalized = sql.replace(/\s+/gu, " ").trim();
+        if (
+          normalized.startsWith(
+            "UPDATE consultant_research_attempt SET receipt=CASE",
+          )
+        ) {
+          assert.ok(
+            normalized.endsWith(
+              "WHERE request_id=$1 AND account_id=$2 AND user_profile_id=$3 AND run_id=$4 AND execution_id=$5 AND classification_id=$6",
+            ),
+          );
+          assert.equal(params.length, 10);
+          assert.equal(typeof params[0], "string");
+          assert.deepEqual(params.slice(1, 6), [
+            identity.account_id,
+            identity.user_profile_id,
+            identity.run_id,
+            identity.execution_id,
+            identity.classification_id,
+          ]);
+          assert.ok(
+            [
+              "dispatch_intent",
+              "completed",
+              "failed",
+              "not_dispatched",
+            ].includes(params[6]),
+          );
+          assert.ok(
+            ["unknown", "received", "rejected", "not_dispatched"].includes(
+              params[9],
+            ),
+          );
+          assert.equal(typeof JSON.parse(params[7]).model, "string");
+          // This Queryable fixture has no atomic admission row; a late receipt is a no-op,
+          // independent from publication and the lease-protected progress writes below.
+          return { rows: [] };
+        }
+        if (
+          normalized === "SELECT pg_advisory_xact_lock(hashtextextended($1,0))"
+        ) {
+          assert.deepEqual(params, [
+            `${identity.account_id}:${identity.user_profile_id}:${identity.run_id}`,
+          ]);
+          return { rows: [] };
+        }
+        if (
+          normalized.startsWith(
+            "SELECT run_id FROM consultant_workflow_session WHERE account_id=$1 AND user_profile_id=$2 AND run_id=$3",
+          )
+        ) {
+          const scoped = [
+            identity.account_id,
+            identity.user_profile_id,
+            identity.run_id,
+          ];
+          if (normalized.includes("AND execution_id=$4")) {
+            assert.equal(
+              normalized,
+              "SELECT run_id FROM consultant_workflow_session WHERE account_id=$1 AND user_profile_id=$2 AND run_id=$3 AND execution_id=$4 AND COALESCE(classification->>'classification_id',workflow_metadata->>'classification_id')=$5::text AND NOT is_invalidated",
+            );
+            assert.deepEqual(params, [
+              ...scoped,
+              identity.execution_id,
+              identity.classification_id,
+            ]);
+          } else {
+            assert.equal(
+              normalized,
+              "SELECT run_id FROM consultant_workflow_session WHERE account_id=$1 AND user_profile_id=$2 AND run_id=$3 AND NOT is_invalidated",
+            );
+            assert.deepEqual(params, scoped);
+          }
+          return {
+            rows: state.renew === "valid" ? [{ run_id: identity.run_id }] : [],
+          };
+        }
+        if (
+          normalized ===
+          "SELECT logical_request_root_id FROM consultant_research_lineage WHERE account_id=$1 AND user_profile_id=$2 AND run_id=$3"
+        ) {
+          assert.deepEqual(params, [
+            identity.account_id,
+            identity.user_profile_id,
+            identity.run_id,
+          ]);
+          return {
+            rows: [
+              { logical_request_root_id: logicalRoot.logical_request_root_id },
+            ],
+          };
+        }
+        if (
+          normalized.startsWith(
+            "SELECT r.logical_request_root_id,r.generation,r.latest_run_id,",
+          )
+        ) {
+          assert.equal(
+            normalized,
+            "SELECT r.logical_request_root_id,r.generation,r.latest_run_id, l.root_generation AS run_generation,l.renewal_ordinal FROM consultant_logical_request r JOIN consultant_research_lineage l ON l.logical_request_root_id=r.logical_request_root_id AND l.account_id=r.account_id AND l.user_profile_id=r.user_profile_id WHERE l.account_id=$1 AND l.user_profile_id=$2 AND l.run_id=$3 FOR UPDATE OF r",
+          );
+          assert.deepEqual(params, [
+            identity.account_id,
+            identity.user_profile_id,
+            identity.run_id,
+          ]);
+          return { rows: [logicalRoot] };
+        }
+        if (
+          normalized.startsWith(
+            "SELECT job_id FROM consultant_workflow_job WHERE job_id=$1 AND lease_token=$2",
+          )
+        ) {
+          if (normalized.includes("AND account_id=$3")) {
+            assert.equal(
+              normalized,
+              "SELECT job_id FROM consultant_workflow_job WHERE job_id=$1 AND lease_token=$2 AND account_id=$3 AND run_id=$4 AND execution_id=$5 AND user_profile_id=$6 AND classification_id=$7 AND status='running' AND lease_until>clock_timestamp() FOR UPDATE",
+            );
+            assert.deepEqual(params, [
+              job.job_id,
+              job.lease_token,
+              identity.account_id,
+              identity.run_id,
+              identity.execution_id,
+              identity.user_profile_id,
+              identity.classification_id,
+            ]);
+          } else {
+            assert.equal(
+              normalized,
+              "SELECT job_id FROM consultant_workflow_job WHERE job_id=$1 AND lease_token=$2 AND status='running' AND lease_until>clock_timestamp()",
+            );
+            assert.deepEqual(params, [job.job_id, job.lease_token]);
+          }
+          return {
+            rows: state.renew === "valid" ? [{ job_id: job.job_id }] : [],
+          };
+        }
+        if (
+          sql.includes(
+            "SELECT execution_id,phase,detail FROM consultant_provider_call",
+          )
+        ) {
+          assert.deepEqual(params, [identity.account_id, identity.run_id]);
+          state.costReads++;
+          return { rows: structuredClone(state.costEvents) };
+        }
+        if (
+          sql.includes("FROM consultant_output_v3") ||
+          sql.startsWith("UPDATE consultant_research_round") ||
+          sql.includes("INSERT INTO consultant_provider_call")
         )
-      ) {
-        assert.deepEqual(params, [identity.account_id, identity.run_id]);
-        state.costReads++;
-        return { rows: structuredClone(state.costEvents) };
-      }
-      if (
-        sql.includes("FROM consultant_output_v3") ||
-        sql.startsWith("UPDATE consultant_research_round") ||
-        sql.includes("INSERT INTO consultant_provider_call")
-      )
-        return { rows: [] };
-      if (sql.includes("FROM consultant_research_round"))
-        return {
-          rows: [
-            {
-              round_id: randomUUID(),
-              status: "approved",
-              round_number: 1,
-              plan: {
+          return { rows: [] };
+        if (sql.includes("FROM consultant_research_round"))
+          return {
+            rows: [
+              {
+                round_id: randomUUID(),
+                status: "approved",
                 round_number: 1,
-                depth: "simple",
-                mode: "live",
-                parent_round_id: null,
-                purpose: "Fixture research",
-                research_models: ["google/gemini-3.8-flash", "openai/gpt-5.2"],
-                extraction_model: "openai/gpt-5.2",
-                synthesis_model: "openai/gpt-5.2",
-                search_engine: "native",
-                max_calls: 9,
-                max_input_tokens_per_call: 240000,
-                max_output_tokens_per_call: 12000,
-                candidate_limit_per_search: 10,
-                rates: [
-                  {
-                    model: "google/gemini-3.8-flash",
-                    provider: "google-ai-studio",
-                    input_usd_per_token: 1,
-                    output_usd_per_token: 1,
-                    request_usd: 1,
-                  },
-                  {
-                    model: "openai/gpt-5.2",
-                    provider: "openai",
-                    input_usd_per_token: 1,
-                    output_usd_per_token: 1,
-                    request_usd: 1,
-                  },
-                ],
+                plan: {
+                  round_number: 1,
+                  depth: "simple",
+                  mode: "live",
+                  parent_round_id: null,
+                  purpose: "Fixture research",
+                  research_models: [
+                    "google/gemini-3.8-flash",
+                    "openai/gpt-5.2",
+                  ],
+                  extraction_model: "openai/gpt-5.2",
+                  synthesis_model: "openai/gpt-5.2",
+                  search_engine: "native",
+                  max_calls: 9,
+                  max_input_tokens_per_call: 240000,
+                  max_output_tokens_per_call: 12000,
+                  candidate_limit_per_search: 10,
+                  rates: [
+                    {
+                      model: "google/gemini-3.8-flash",
+                      provider: "google-ai-studio",
+                      input_usd_per_token: 1,
+                      output_usd_per_token: 1,
+                      request_usd: 1,
+                    },
+                    {
+                      model: "openai/gpt-5.2",
+                      provider: "openai",
+                      input_usd_per_token: 1,
+                      output_usd_per_token: 1,
+                      request_usd: 1,
+                    },
+                  ],
+                },
               },
-            },
-          ],
-        };
-      if (sql.startsWith("WITH expired AS")) return { rows: [] };
-      if (sql.includes("SET status='running', lease_token"))
-        return { rows: [job] };
-      if (sql.includes("SET lease_until=")) {
-        state.renewals += 1;
-        if (state.renew === "error")
-          throw new Error("Synthetic lease database error");
-        return {
-          rows: state.renew === "valid" ? [{ job_id: job.job_id }] : [],
-        };
+            ],
+          };
+        if (sql.startsWith("WITH expired AS")) return { rows: [] };
+        if (sql.includes("SET status='running', lease_token"))
+          return { rows: [job] };
+        if (sql.includes("SET lease_until=")) {
+          state.renewals += 1;
+          if (state.renew === "error")
+            throw new Error("Synthetic lease database error");
+          return {
+            rows: state.renew === "valid" ? [{ job_id: job.job_id }] : [],
+          };
+        }
+        if (sql.startsWith("SELECT * FROM consultant_workflow_session"))
+          return { rows: [session] };
+        if (
+          sql.includes("FROM consultant_workflow_session") &&
+          sql.includes("FOR UPDATE")
+        )
+          return { rows: [session] };
+        if (sql.includes("SET status=$3, error_code=$4")) {
+          state.finished.push(params);
+          return { rows: [] };
+        }
+        if (sql.includes("INSERT INTO consultant_workflow_event")) {
+          state.writes.push({ type: "event", phase: params[5] });
+          return { rows: [] };
+        }
+        if (sql.includes("INSERT INTO consultant_workflow_session")) {
+          state.writes.push({
+            type: "session",
+            state: params[4],
+            last_checkpoint: params[14],
+            metadata: JSON.parse(params[17]),
+          });
+          return { rows: [] };
+        }
+        state.unexpectedSql.push(sql);
+        assert.fail(`Unexpected SQL boundary: ${sql.slice(0, 90)}`);
+      } catch (error) {
+        if (error?.code === "ERR_ASSERTION") state.boundaryFailures.push(error);
+        throw error;
       }
-      if (sql.startsWith("SELECT * FROM consultant_workflow_session"))
-        return { rows: [session] };
-      if (
-        sql.includes("FROM consultant_workflow_session") &&
-        sql.includes("FOR UPDATE")
-      )
-        return { rows: [session] };
-      if (sql.includes("SET status=$3, error_code=$4")) {
-        state.finished.push(params);
-        return { rows: [] };
-      }
-      if (sql.includes("INSERT INTO consultant_workflow_event")) {
-        state.writes.push({ type: "event", phase: params[5] });
-        return { rows: [] };
-      }
-      if (sql.includes("INSERT INTO consultant_workflow_session")) {
-        state.writes.push({
-          type: "session",
-          state: params[4],
-          last_checkpoint: params[14],
-          metadata: JSON.parse(params[17]),
-        });
-        return { rows: [] };
-      }
-      assert.fail(`Unexpected SQL boundary: ${sql.slice(0, 90)}`);
     },
   };
   t.mock.method(globalThis, "fetch", async (target, options) => {

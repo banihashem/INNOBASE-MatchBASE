@@ -1,9 +1,11 @@
 # MB-UX-OPS-002 L02. All secret values are supplied in memory to Compose secrets.
 [CmdletBinding()]
 param(
-    [ValidateSet('Build', 'Up', 'Stop', 'Status', 'Backup')][string]$Action = 'Status',
+    [ValidateSet('Build', 'Up', 'Stop', 'Status', 'Backup', 'InstallPortableAccess', 'RemovePortableAccess', 'AccessStatus')][string]$Action = 'Status',
     [ValidateRange(1024,65535)][int]$WebPort = 3000,
-    [string]$LanAddress = [Environment]::GetEnvironmentVariable('MATCHBASE_LOCAL_LAN_ADDRESS', 'User'),
+    [string]$LanAddress = '',
+    [string]$InterfaceAlias = '',
+    [ValidateSet('ScheduledTask', 'StartupShortcut')][string]$AccessStartupMode = 'ScheduledTask',
     [string[]]$Services = @('postgres', 'web', 'worker', 'dashboard')
 )
 $ErrorActionPreference = 'Stop'
@@ -11,6 +13,19 @@ $appRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 . (Join-Path $PSScriptRoot 'LocalRuntimeEnvironment.ps1')
 function Assert-NativeSuccess([string]$Operation) {
     if ($LASTEXITCODE -ne 0) { throw "$Operation failed. No further operation was performed." }
+}
+function Resolve-PortableNodePath {
+    param([Parameter(Mandatory)][object[]]$Commands)
+    $selected = @($Commands | Select-Object -First 1)
+    if ($selected.Count -ne 1 -or $selected[0].Source -isnot [string] -or
+        -not [System.IO.Path]::IsPathRooted($selected[0].Source)) {
+        throw 'Portable access requires one absolute Node executable path.'
+    }
+    $path = [System.IO.Path]::GetFullPath($selected[0].Source)
+    if ([System.IO.Path]::GetFileName($path) -ine 'node.exe' -or -not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw 'Portable access Node executable is missing or invalid.'
+    }
+    return $path
 }
 function Get-LocalDatabaseContainer {
     $container = & docker ps -q --filter 'label=com.docker.compose.project=matchbase-local' --filter 'label=com.docker.compose.service=postgres'
@@ -30,6 +45,78 @@ function Assert-LocalQueueIdle {
 Push-Location $appRoot
 try {
     if (@($Services | Where-Object { $_ -notin @('postgres','web','worker','dashboard') }).Count -gt 0) { throw 'Unknown local service.' }
+    # MB-UX-OPS-002 L07: transport maintenance never reads application credentials.
+    $accessRoot = Join-Path $env:LOCALAPPDATA 'MatchBASE/access'
+    $accessConfig = Join-Path $accessRoot 'portable-access.json'
+    $accessTask = 'MatchBASE-PortableAccess-' + [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $accessShortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'MatchBASE Portable Access.lnk'
+    if ($Action -eq 'AccessStatus') {
+        Write-Output "Permanent host URL: http://localhost:$WebPort"
+        if (Test-Path -LiteralPath "$accessConfig.status.json") { Get-Content -LiteralPath "$accessConfig.status.json" }
+        if (Test-Path -LiteralPath "$accessConfig.startup.json") { Get-Content -LiteralPath "$accessConfig.startup.json" }
+        Get-ScheduledTask -TaskName $accessTask -ErrorAction SilentlyContinue | Select-Object TaskName, State
+        Write-Output "Current-user startup shortcut installed: $(Test-Path -LiteralPath $accessShortcut)"
+        return
+    }
+    if ($Action -eq 'RemovePortableAccess') {
+        $existing = Get-ScheduledTask -TaskName $accessTask -ErrorAction SilentlyContinue
+        if ($existing) { Stop-ScheduledTask -TaskName $accessTask; Unregister-ScheduledTask -TaskName $accessTask -Confirm:$false }
+        if (Test-Path -LiteralPath $accessShortcut) { Remove-Item -LiteralPath $accessShortcut }
+        # Shortcut mode has no task-owned process tree. Stop only the exact wrapper
+        # configured by this launcher and its direct, exact Node supervisor child.
+        $wrapperPath = Join-Path $PSScriptRoot 'Start-PortableAccess.ps1'
+        $wrappers = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'powershell.exe' -and $_.CommandLine -like ('*"' + $wrapperPath + '"*') -and $_.CommandLine -like ('*"' + $accessConfig + '"*') })
+        foreach ($wrapperProcess in $wrappers) {
+            $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($wrapperProcess.ProcessId)" | Where-Object { $_.Name -eq 'node.exe' -and $_.CommandLine -like ('*' + (Join-Path $PSScriptRoot 'portable-access.mjs') + '*') -and $_.CommandLine -like ('*' + $accessConfig + '*') })
+            foreach ($child in $children) { Stop-Process -Id $child.ProcessId -ErrorAction SilentlyContinue }
+            Stop-Process -Id $wrapperProcess.ProcessId -ErrorAction SilentlyContinue
+        }
+        foreach ($path in @($accessConfig, "$accessConfig.status.json", "$accessConfig.status.json.tmp", "$accessConfig.startup.json")) {
+            if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path }
+        }
+        Write-Output "LAN access removed. Host access remains http://localhost:$WebPort"
+        return
+    }
+    if ($Action -eq 'InstallPortableAccess') {
+        if (-not $InterfaceAlias) { throw 'Select the physical adapter explicitly with -InterfaceAlias (for example Wi-Fi).' }
+        $adapter = @(Get-NetAdapter -Physical | Where-Object { $_.Name -eq $InterfaceAlias })
+        if ($adapter.Count -ne 1) { throw 'Select exactly one physical network adapter. VPN and virtual adapters are not supported.' }
+        $nodePath = Resolve-PortableNodePath -Commands @(Get-Command node.exe -CommandType Application -ErrorAction Stop)
+        New-Item -ItemType Directory -Path $accessRoot -Force | Out-Null
+        $existing = Get-ScheduledTask -TaskName $accessTask -ErrorAction SilentlyContinue
+        if ($existing) { Stop-ScheduledTask -TaskName $accessTask }
+        @{ version = 1; interfaceGuid = ([guid]$adapter[0].InterfaceGuid).ToString(); port = $WebPort } | ConvertTo-Json -Compress | Set-Content -LiteralPath $accessConfig -Encoding ascii
+        $account = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $wrapper = Join-Path $PSScriptRoot 'Start-PortableAccess.ps1'
+        $arguments = '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -File "' + $wrapper + '" -NodePath "' + $nodePath + '" -ConfigPath "' + $accessConfig + '"'
+        if ($AccessStartupMode -eq 'StartupShortcut') {
+            if ($existing) { Unregister-ScheduledTask -TaskName $accessTask -Confirm:$false }
+            $shortcutDirectory = [Environment]::GetFolderPath('Startup')
+            New-Item -ItemType Directory -Path $shortcutDirectory -Force | Out-Null
+            $shell = New-Object -ComObject WScript.Shell
+            $shortcut = $shell.CreateShortcut($accessShortcut)
+            $shortcut.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+            $shortcut.Arguments = $arguments
+            $shortcut.WorkingDirectory = $appRoot
+            $shortcut.WindowStyle = 7
+            $shortcut.Description = 'MatchBASE current-user portable LAN access. No application credentials.'
+            $shortcut.Save()
+            $started = Start-Process -FilePath $shortcut.TargetPath -ArgumentList $arguments -WorkingDirectory $appRoot -WindowStyle Hidden -PassThru
+            Write-Output "Portable access configured in current-user Startup. Wrapper process: $($started.Id). Permanent host URL: http://localhost:$WebPort"
+            Write-Output 'This workstation fallback does not require Task Scheduler. Check AccessStatus and actual HTTP reachability; reboot qualification remains separate.'
+            return
+        }
+        if (Test-Path -LiteralPath $accessShortcut) { Remove-Item -LiteralPath $accessShortcut }
+        $taskAction = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument $arguments -WorkingDirectory $appRoot
+        $trigger = New-ScheduledTaskTrigger -AtLogOn -User $account
+        $principal = New-ScheduledTaskPrincipal -UserId $account -LogonType Interactive -RunLevel Limited
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+        Register-ScheduledTask -TaskName $accessTask -Action $taskAction -Trigger $trigger -Principal $principal -Settings $settings -Description 'MatchBASE local simulator LAN gateway for the explicitly selected physical adapter. No research or provider credentials.' -Force | Out-Null
+        Start-ScheduledTask -TaskName $accessTask
+        Write-Output "Portable access enabled for $InterfaceAlias. Permanent host URL: http://localhost:$WebPort"
+        Write-Output 'LAN access follows this physical adapter only. It requires a trusted LAN and the existing scoped firewall policy. No firewall policy was changed.'
+        return
+    }
     # Maintenance must remain available even when an inference credential is absent.
     if ($Action -eq 'Status') {
         & docker ps -a --filter 'label=com.docker.compose.project=matchbase-local' --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
@@ -101,21 +188,9 @@ try {
         Assert-NativeSuccess 'Docker image build and Linux unit gate'
         return
     }
-    # LAN access is an explicit, persistent choice; never bind every host interface.
-    $bindAddress = '127.0.0.1'
-    $originHost = 'localhost'
+    # Permanent loopback survives DHCP/network changes without container recreation.
     if ($LanAddress) {
-        $parsedAddress = $null
-        if (-not [System.Net.IPAddress]::TryParse($LanAddress, [ref]$parsedAddress) -or
-            $parsedAddress.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork -or
-            $parsedAddress.ToString() -ne $LanAddress) { throw 'LAN address must be a canonical private IPv4 address.' }
-        $octets = $parsedAddress.GetAddressBytes()
-        $privateAddress = $octets[0] -eq 10 -or ($octets[0] -eq 172 -and $octets[1] -ge 16 -and $octets[1] -le 31) -or ($octets[0] -eq 192 -and $octets[1] -eq 168)
-        if (-not $privateAddress) { throw 'Only private LAN addresses are supported.' }
-        $assignedAddress = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -eq $LanAddress -and $_.AddressState -eq 'Preferred' }
-        if (-not $assignedAddress) { throw 'LAN address is not assigned to this computer. Select its current private IPv4 address.' }
-        $bindAddress = $LanAddress
-        $originHost = $LanAddress
+        throw 'Fixed LAN bindings are retired. Use Up without LanAddress, then InstallPortableAccess with an explicit physical InterfaceAlias.'
     }
     $runtime = Get-LocalRuntimeEnvironment
     if (-not $runtime.MATCHBASE_DATABASE_URL -or -not $runtime.MATCHBASE_DIGEST_KEY -or -not $runtime.MATCHBASE_OPENROUTER_API_KEY) {
@@ -130,16 +205,13 @@ try {
     $runtime.MATCHBASE_ENVIRONMENT = 'test'
     $runtime.MATCHBASE_OIDC_SIMULATOR = 'true'
     $runtime.MATCHBASE_SYNTHETIC_FIXTURE = 'true'
-    $runtime.MATCHBASE_ORIGIN = "http://${originHost}:$WebPort"
+    $runtime.MATCHBASE_ORIGIN = "http://localhost:$WebPort"
     $env:MATCHBASE_LOCAL_RUNTIME_CONFIG = $runtime | ConvertTo-Json -Compress
     $env:MATCHBASE_LOCAL_WEB_PORT = [string]$WebPort
-    $env:MATCHBASE_LOCAL_WEB_BIND_ADDRESS = $bindAddress
     Assert-LocalQueueIdle
     & docker compose -f compose.local.yaml up -d --no-build --wait --wait-timeout 180 @Services
     Assert-NativeSuccess 'Local Compose startup'
-    if ($PSBoundParameters.ContainsKey('LanAddress')) {
-        [Environment]::SetEnvironmentVariable('MATCHBASE_LOCAL_LAN_ADDRESS', $LanAddress, 'User')
-    }
+    [Environment]::SetEnvironmentVariable('MATCHBASE_LOCAL_LAN_ADDRESS', $null, 'User')
     Write-Output "Application URL: $($runtime.MATCHBASE_ORIGIN)"
 } finally {
     Remove-Item Env:MATCHBASE_LOCAL_RUNTIME_CONFIG -ErrorAction SilentlyContinue

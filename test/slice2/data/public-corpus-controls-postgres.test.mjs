@@ -22,6 +22,12 @@ const anchor = process.env.MATCHBASE_DISPOSABLE_TEST_DATABASE_URL;
 const dbTest = anchor ? test : test.skip;
 const date = (days = 0) => new Date(Date.now() + days * 86400000).toISOString();
 const classification = { scheme: "HS", code: "281520", version: "2022" };
+function withSyntheticUserInfo(url) {
+  const value = new URL(url);
+  value.username = "synthetic-fixture";
+  value.password = "synthetic-fixture";
+  return value.href;
+}
 
 test("public nominations retain only the origin and never authorize acquisition", () => {
   assert.deepEqual(
@@ -35,7 +41,7 @@ test("public nominations retain only the origin and never authorize acquisition"
     },
   );
   for (const url of [
-    "https://user:secret@supplier.com/a",
+    withSyntheticUserInfo("https://supplier.com/a"),
     "http://supplier.com",
     "https://127.0.0.1",
     "https://supplier.local",
@@ -223,7 +229,7 @@ dbTest(
           "https://supplier..com/catalogue",
           "https://supplier.com:443/catalogue",
           "https://supplier.com:5000/catalogue",
-          "https://user:password@supplier.com/catalogue",
+          withSyntheticUserInfo("https://supplier.com/catalogue"),
           "https://supplier.com/catalogue#private",
         ])
           await assert.rejects(

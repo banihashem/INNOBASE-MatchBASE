@@ -13,6 +13,7 @@ import { researchLeadKey } from "../../../packages/application/dist/research-rev
 
 const model = "openai/gpt-5.2";
 const gemini = "google/gemini-3.8-flash";
+const anthropic = "anthropic/claude-sonnet-5";
 const input = {
   product_requirement: "Industrial pumps",
   technical_compliance: "ISO9001 or applicable equivalent",
@@ -75,6 +76,7 @@ function fixture(t, responses, selectedModel = model) {
     MATCHBASE_OPENROUTER_API_KEY: randomUUID(),
     MATCHBASE_PROVIDER_OPENAI: "openai",
     MATCHBASE_PROVIDER_GOOGLE: "google-ai-studio",
+    MATCHBASE_PROVIDER_ANTHROPIC: "anthropic",
   };
   const old = Object.fromEntries(
     Object.keys(keys).map((key) => [key, process.env[key]]),
@@ -105,11 +107,19 @@ function fixture(t, responses, selectedModel = model) {
             {
               tag: targetUrl.includes("google/")
                 ? "google-ai-studio"
-                : "openai",
+                : targetUrl.includes("anthropic/")
+                  ? "anthropic"
+                  : "openai",
               provider_name: targetUrl.includes("google/")
                 ? "Google AI Studio"
-                : "OpenAI",
-              model_id: targetUrl.includes("google/") ? selectedModel : model,
+                : targetUrl.includes("anthropic/")
+                  ? "Anthropic"
+                  : "OpenAI",
+              model_id:
+                targetUrl.includes("google/") ||
+                targetUrl.includes("anthropic/")
+                  ? selectedModel
+                  : model,
               supported_parameters: parameters,
             },
           ],
@@ -320,6 +330,110 @@ test("MB-UX-QUALITY-001 L12 explicit schema rejection switches focus to the appr
   assert.equal(recovered.recovery_next_model, model);
   assert.equal(recovered.recovery_attempt, 1);
   assert.equal(f.checkpoints.at(-1).recovery_attempt, 2);
+});
+
+test("MB-UX-QUALITY-001 L17 Anthropic privacy-route rejection switches focus to the approved BYOK alternative", async (t) => {
+  const rejected = Response.json(
+    {
+      error: {
+        code: 404,
+        message:
+          "No endpoints found matching the requested zero data retention privacy policy.",
+        metadata: { provider_name: "Anthropic", is_byok: false },
+      },
+    },
+    { status: 404 },
+  );
+  const f = fixture(t, [rejected, valid()], anthropic);
+  const result = await planResearchFocus(
+    input,
+    { ...plan, round_number: 3, extraction_model: anthropic },
+    prior,
+    {
+      ...f.options,
+      approved_rates: [
+        {
+          model: anthropic,
+          provider: "anthropic",
+          billing_mode: "byok",
+          structured_outputs: true,
+          reasoning: true,
+        },
+        {
+          model,
+          provider: "openai",
+          billing_mode: "byok",
+          structured_outputs: true,
+          reasoning: true,
+        },
+      ],
+      approved_model_fallbacks: { [anthropic]: [model] },
+      approved_search_engines: { [anthropic]: "exa", [model]: "exa" },
+    },
+  );
+  assert.deepEqual(
+    f.requests.map((request) => request.model),
+    [anthropic, model],
+  );
+  assert.ok(
+    f.requests.every((request) => request.provider.allow_fallbacks === false),
+  );
+  assert.equal(result.result.model, model);
+  const failed = f.checkpoints.find((event) => event.state === "failed");
+  assert.equal(failed.provider_http_failure.category, "privacy");
+  assert.equal(failed.provider_dispatch_rejected, true);
+  assert.equal(failed.provider_receipt_received, false);
+  assert.equal(failed.recovery_scheduled, true);
+  assert.equal(failed.recovery_next_model, model);
+  assert.equal(f.checkpoints.at(-1).recovery_attempt, 2);
+});
+
+test("MB-UX-QUALITY-001 L17 durable focus resume skips the retained rejected Anthropic route", async (t) => {
+  const f = fixture(t, [valid()], anthropic);
+  const result = await planResearchFocus(
+    input,
+    { ...plan, round_number: 3, extraction_model: anthropic },
+    prior,
+    {
+      ...f.options,
+      approved_rates: [
+        {
+          model: anthropic,
+          provider: "anthropic",
+          billing_mode: "byok",
+          structured_outputs: true,
+          reasoning: true,
+        },
+        {
+          model,
+          provider: "openai",
+          billing_mode: "byok",
+          structured_outputs: true,
+          reasoning: true,
+        },
+      ],
+      approved_model_fallbacks: { [anthropic]: [model] },
+      approved_search_engines: { [anthropic]: "exa", [model]: "exa" },
+    },
+    {},
+    1,
+    {
+      model: anthropic,
+      phase: "research_focus_analysis",
+      error: "The Anthropic privacy route was rejected.",
+      provider_http_failure: {
+        http_status: 404,
+        request_format: "json_schema",
+        category: "privacy",
+      },
+    },
+  );
+  assert.deepEqual(
+    f.requests.map((request) => request.model),
+    [model],
+  );
+  assert.equal(result.result.model, model);
+  assert.equal(f.checkpoints[0].recovery_attempt, 2);
 });
 
 test("MB-UX-QUALITY-001 L12 unknown HTTP400 remains terminal and does not misreport an exhausted allowance", async (t) => {

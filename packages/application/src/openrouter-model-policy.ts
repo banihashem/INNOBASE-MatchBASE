@@ -182,6 +182,12 @@ export interface LiveResearchCheckpoint extends Partial<OpenRouterByokAudit> {
     readonly content_excerpt?: string;
   }[];
 }
+export interface DefinitiveProviderRouteRejection {
+  readonly model: string;
+  readonly phase: string;
+  readonly error: string;
+  readonly provider_http_failure: ProviderHttpFailure;
+}
 export interface LiveCallOptions {
   /** Total attempts, including the initial call; only approved plans enable retries. */
   readonly automatic_recovery_attempts?: number;
@@ -1362,6 +1368,102 @@ export function selectApprovedStructuredRecovery(
   return { original_model: model, next_model: alternative };
 }
 
+const providerRouteRecoveryCategories = new Set<
+  ProviderHttpFailure["category"]
+>([
+  "privacy",
+  "endpoint_unavailable",
+  "unsupported_parameters",
+  "web_unavailable",
+]);
+
+/**
+ * Moves a stage to its one explicitly approved, same-billing alternative after
+ * a definitive provider-route rejection. A response receipt, ambiguous
+ * transport outcome, content refusal, context limit or unknown failure can
+ * never authorize substitution.
+ */
+export function selectApprovedRouteRecovery(
+  model: string,
+  checkpoint: LiveResearchCheckpoint,
+  options: LiveCallOptions,
+): { original_model: string; next_model: string } | undefined {
+  const stage = options.stage_recovery_state;
+  if (
+    checkpoint.state !== "failed" ||
+    checkpoint.requested_model !== model ||
+    checkpoint.dispatched !== true ||
+    checkpoint.provider_dispatch_rejected !== true ||
+    checkpoint.provider_receipt_received !== false ||
+    !checkpoint.provider_http_failure ||
+    !providerRouteRecoveryCategories.has(
+      checkpoint.provider_http_failure.category,
+    ) ||
+    !options.before_call ||
+    !stage ||
+    options.signal?.aborted
+  )
+    return undefined;
+  const remaining = stage.remaining();
+  if (
+    !Number.isInteger(remaining) ||
+    remaining <= 0 ||
+    remaining >= stage.attempt_limit ||
+    [...stage.replacements.values()].includes(model)
+  )
+    return undefined;
+  const alternative = approvedRecoveryModel(
+    model,
+    model,
+    {
+      phase: checkpoint.phase,
+      loop: checkpoint.loop,
+      reasoning_effort: options.reasoning_effort ?? "high",
+      require_web: checkpoint.native_web === true,
+    },
+    options,
+  );
+  const current = stage.replacements.get(model);
+  if (!alternative || current) return undefined;
+  stage.replacements.set(model, alternative);
+  return { original_model: model, next_model: alternative };
+}
+
+/** Restore an already validated no-receipt rejection without redispatching it. */
+export function selectApprovedRetainedRouteRecovery(
+  model: string,
+  rejection: DefinitiveProviderRouteRejection,
+  options: LiveCallOptions,
+): { original_model: string; next_model: string } | undefined {
+  const stage = options.stage_recovery_state;
+  if (
+    rejection.model !== model ||
+    !providerRouteRecoveryCategories.has(
+      rejection.provider_http_failure.category,
+    ) ||
+    !options.before_call ||
+    !stage ||
+    stage.remaining() <= 0 ||
+    stage.replacements.size > 0 ||
+    options.signal?.aborted
+  )
+    return undefined;
+  const alternative = approvedRecoveryModel(
+    model,
+    model,
+    {
+      phase: rejection.phase,
+      loop: 0,
+      reasoning_effort: options.reasoning_effort ?? "high",
+      require_web: false,
+    },
+    options,
+  );
+  if (!alternative) return undefined;
+  stage.replacements.set(model, alternative);
+  return { original_model: model, next_model: alternative };
+}
+
 /** Excludes transport handles and attempt identity; includes all effective model inputs. */
 export function researchCompletionInput(request: OpenRouterCompletionParams) {
   return {
@@ -1537,7 +1639,7 @@ async function runLiveCompletionWithRecovery(
   for (let attempt = 1; ; attempt++) {
     signal?.throwIfAborted();
     const currentModel = model;
-    let structuredRecoverySelected:
+    let approvedRecoverySelected:
       { original_model: string; next_model: string } | undefined;
     const replacementEngine = options.approved_search_engines?.[currentModel];
     try {
@@ -1559,7 +1661,7 @@ async function runLiveCompletionWithRecovery(
               checkpoint.provider_http_failure?.category ===
                 "schema_compatibility"
             )
-              structuredRecoverySelected = selectApprovedStructuredRecovery(
+              approvedRecoverySelected = selectApprovedStructuredRecovery(
                 currentModel,
                 new LiveResearchError(
                   "MB-502-LIVE-PROVIDER",
@@ -1571,13 +1673,25 @@ async function runLiveCompletionWithRecovery(
                 ),
                 options,
               );
+            if (
+              attempts > 1 &&
+              attempt < attempts &&
+              !approvedRecoverySelected &&
+              checkpoint.state === "failed" &&
+              (stage ? stage.remaining() > 0 : attempt < attempts)
+            )
+              approvedRecoverySelected = selectApprovedRouteRecovery(
+                request.model,
+                checkpoint,
+                options,
+              );
             const hasNext = Boolean(
-              (checkpoint.recovery_scheduled || structuredRecoverySelected) &&
+              (checkpoint.recovery_scheduled || approvedRecoverySelected) &&
               !signal?.aborted &&
               (stage ? stage.remaining() > 0 : attempt < attempts),
             );
             const alternative =
-              structuredRecoverySelected?.next_model ??
+              approvedRecoverySelected?.next_model ??
               (hasNext
                 ? approvedRecoveryModel(
                     request.model,
@@ -1623,15 +1737,13 @@ async function runLiveCompletionWithRecovery(
     } catch (error) {
       // An outer owner (focus planning) deliberately sets attempts=1 and calls
       // this selector itself. Preserve its single shared accounting boundary.
-      const schemaReplacement = structuredRecoverySelected;
+      const approvedReplacement = approvedRecoverySelected;
       if (
-        schemaReplacement &&
+        approvedReplacement &&
         error instanceof LiveResearchError &&
-        error.code === "MB-502-LIVE-PROVIDER" &&
-        error.provider_http_failure?.category === "schema_compatibility" &&
         !signal?.aborted
       ) {
-        model = schemaReplacement.next_model;
+        model = approvedReplacement.next_model;
         await waitForLiveRecovery(signal ? { signal } : {}, attempt);
         continue;
       }

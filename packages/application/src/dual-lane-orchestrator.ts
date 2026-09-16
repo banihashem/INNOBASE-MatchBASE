@@ -24,6 +24,7 @@ import {
   researchCompletionInput,
   safePublicEvidenceUrl,
   LiveResearchError,
+  type DefinitiveProviderRouteRejection,
   type OpenRouterCompletionResult,
   type LiveCallOptions,
   type LiveResearchCheckpoint,
@@ -120,14 +121,7 @@ export interface DualLaneExecutionOptions extends LiveCallOptions {
    */
   readonly retained_provider_route_rejections?: readonly RetainedProviderRouteRejection[];
 }
-export interface RetainedProviderRouteRejection {
-  readonly model: string;
-  readonly phase: string;
-  readonly error: string;
-  readonly provider_http_failure: NonNullable<
-    LiveResearchError["provider_http_failure"]
-  >;
-}
+export type RetainedProviderRouteRejection = DefinitiveProviderRouteRejection;
 export interface ResearchContinuation {
   evidence_memory?: ResearchEvidenceMemory;
   method_reviews?: ResearchMethodReview[];
@@ -326,6 +320,11 @@ export async function executeDualLaneResearch(
       callback,
       buildFocusedResearchInstructions(options.round_plan),
       options.previously_consumed_focus_attempts,
+      options.retained_provider_route_rejections?.find(
+        (rejection) =>
+          rejection.phase === "research_focus_analysis" &&
+          rejection.model === options.round_plan?.extraction_model,
+      ),
     );
     focusAnalysis = planned.analysis;
     calls.push(planned.result);

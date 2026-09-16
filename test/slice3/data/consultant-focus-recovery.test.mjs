@@ -6,6 +6,7 @@ import {
   createPool,
   enqueueConsultantWorkflowJob,
   migrateUp,
+  readConsultantProviderRouteRejectionEvents,
   recordConsultantProviderCall,
   recoverApprovedFocusStage,
   saveConsultantWorkflowSession,
@@ -99,6 +100,10 @@ async function fixture(t) {
     try {
       await db.query(
         "DELETE FROM consultant_workflow_event WHERE account_id=$1",
+        [identity.account_id],
+      );
+      await db.query(
+        "DELETE FROM consultant_research_attempt WHERE account_id=$1",
         [identity.account_id],
       );
       await db.query(
@@ -344,6 +349,128 @@ dbTest(
     assert.equal(after.consultant_workflow_job.length, 1);
     assert.equal(after.consultant_workflow_job[0].record.job_id, f.job.job_id);
     assert.equal(after.consultant_workflow_job[0].record.status, "queued");
+  },
+);
+
+dbTest(
+  "MB-UX-QUALITY-001 L17 focus recovery retains a privacy rejection and the approved same-billing alternative",
+  async (t) => {
+    const f = await fixture(t);
+    const saved = await f.db.query(
+      "SELECT plan FROM consultant_research_round WHERE round_id=$1",
+      [f.identity.round_id],
+    );
+    const plan = saved.rows[0].plan;
+    const primary = plan.extraction_model;
+    const alternative = "google/test-focus-alternative";
+    plan.model_fallbacks = { [primary]: [alternative] };
+    plan.rates = [
+      {
+        model: primary,
+        provider: "openai",
+        billing_mode: "byok",
+        structured_outputs: true,
+        reasoning: true,
+      },
+      {
+        model: alternative,
+        provider: "google-ai-studio",
+        billing_mode: "byok",
+        structured_outputs: true,
+        reasoning: true,
+      },
+    ];
+    await f.db.query(
+      "UPDATE consultant_research_round SET plan=$2 WHERE round_id=$1",
+      [f.identity.round_id, JSON.stringify(plan)],
+    );
+    const failure = {
+      requested_model: primary,
+      model: primary,
+      state: "failed",
+      dispatched: true,
+      provider_dispatch_rejected: true,
+      provider_receipt_received: false,
+      provider_http_failure: {
+        http_status: 404,
+        request_format: "json_schema",
+        category: "privacy",
+      },
+      error: "MB-502-LIVE-PROVIDER",
+    };
+    await f.db.query(
+      `UPDATE consultant_workflow_event SET detail=detail || $2::jsonb
+       WHERE account_id=$1 AND phase='research_focus_analysis'`,
+      [f.identity.account_id, JSON.stringify(failure)],
+    );
+    await f.db.query(
+      `UPDATE consultant_workflow_event SET detail=detail || '{"code":"MB-502-LIVE-PROVIDER"}'::jsonb
+       WHERE account_id=$1 AND phase='failed'`,
+      [f.identity.account_id],
+    );
+    await f.db.query(
+      `UPDATE consultant_provider_call SET detail=detail || $2::jsonb
+       WHERE account_id=$1 AND phase='research_focus_analysis'`,
+      [f.identity.account_id, JSON.stringify(failure)],
+    );
+    const failedFocusEvent = (
+      await f.db.query(
+        `SELECT detail->>'request_id' AS request_id
+         FROM consultant_workflow_event
+         WHERE account_id=$1 AND phase='research_focus_analysis'
+         ORDER BY event_id DESC LIMIT 1`,
+        [f.identity.account_id],
+      )
+    ).rows[0];
+    await f.db.query(
+      `INSERT INTO consultant_research_attempt(request_id,account_id,user_profile_id,run_id,execution_id,classification_id,
+       job_id,lease_token,round_id,operation_key,stage_key,phase,model,input_sha256,approval_sha256,outcome,provider_outcome,receipt)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'research_focus_analysis',$12,$13,$14,'failed','rejected',$15)`,
+      [
+        failedFocusEvent.request_id,
+        f.identity.account_id,
+        f.identity.user_profile_id,
+        f.identity.run_id,
+        f.identity.execution_id,
+        f.identity.classification_id,
+        f.job.job_id,
+        randomUUID(),
+        f.identity.round_id,
+        "focus-route-regression",
+        createHash("sha256").update("focus-stage").digest("hex"),
+        primary,
+        createHash("sha256").update("focus-input").digest("hex"),
+        createHash("sha256").update(JSON.stringify(plan)).digest("hex"),
+        JSON.stringify(failure),
+      ],
+    );
+    const retained = await readConsultantProviderRouteRejectionEvents(
+      f.db,
+      f.identity,
+    );
+    assert.equal(retained.length, 1);
+    assert.equal(retained[0].phase, "research_focus_analysis");
+    assert.equal(retained[0].detail.requested_model, primary);
+    assert.equal(retained[0].detail.provider_http_failure.category, "privacy");
+    const review = await recoverApprovedFocusStage(f.db, f.identity);
+    assert.equal(review.executed, false);
+    assert.equal(review.recovery_kind, "approved_focus_provider_route");
+    assert.equal(review.approved_replacement_model, alternative);
+    assert.equal(review.consumed_focus_attempts, 1);
+    await recoverApprovedFocusStage(f.db, f.identity, {
+      execute: true,
+      expected_snapshot_hash: review.snapshot_hash,
+    });
+    const after = await f.snapshot();
+    assert.equal(after.consultant_workflow_job[0].record.status, "queued");
+    const recovery = after.consultant_workflow_event.find(
+      (row) => row.record.phase === "research_focus_recovery",
+    ).record;
+    assert.equal(
+      recovery.detail.recovery_kind,
+      "approved_focus_provider_route",
+    );
+    assert.equal(recovery.detail.approved_replacement_model, alternative);
   },
 );
 

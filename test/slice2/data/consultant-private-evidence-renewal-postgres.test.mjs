@@ -38,6 +38,7 @@ import {
   retrievePrivateEvidence,
   saveConsultantWorkflowSession,
   saveProductClassification,
+  searchPrivateEvidenceProfile,
   savePrivateNegativeCheck,
   saveResearchQuote,
   validatePrivateEvidenceSelection,
@@ -47,6 +48,29 @@ import {
 const database = process.env.MATCHBASE_CONSULTANT_TEST_DATABASE_URL;
 const dbTest = database ? test : test.skip;
 const ago = (days) => new Date(Date.now() - days * 86400000).toISOString();
+
+dbTest("official CPC and ISIC service classifications persist", async (t) => {
+  const s = await fixture(t);
+  for (const [scheme, code, label] of [
+    ["CPC", "67910", "Freight transport agency services"],
+    ["ISIC", "5229", "Other transportation support activities"],
+  ])
+    await saveProductClassification(s.pool, s.identity.account_id, {
+      ...s.classification,
+      classification_id: randomUUID(),
+      scheme,
+      code,
+      label,
+    });
+  const saved = await s.pool.query(
+    "SELECT scheme,code FROM product_classification WHERE account_id=$1 ORDER BY scheme",
+    [s.identity.account_id],
+  );
+  assert.deepEqual(saved.rows, [
+    { scheme: "CPC", code: "67910" },
+    { scheme: "ISIC", code: "5229" },
+  ]);
+});
 
 async function fixture(t) {
   const pool = createPool({ connectionString: database, max: 10 });
@@ -831,6 +855,23 @@ dbTest(
     );
     assert.equal(others.length, 1);
     assert.equal(others[0].run_id, foreignRun);
+  },
+);
+
+dbTest(
+  "profile-wide evidence search does not invent a category relationship",
+  async (t) => {
+    const s = await fixture(t);
+    await s.capture(s.output());
+    const library = await searchPrivateEvidenceProfile(s.pool, {
+      account_id: s.identity.account_id,
+      user_profile_id: s.identity.user_profile_id,
+    });
+    assert.ok(library.observations.length > 0);
+    assert.equal(
+      Object.hasOwn(library.observations[0], "category_match"),
+      false,
+    );
   },
 );
 

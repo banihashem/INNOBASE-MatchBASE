@@ -37,6 +37,16 @@ export interface ResearchRoundPlan {
     selected_at: string;
     valid_until: string;
   };
+  /** Independently released public observations, isolated from private profiles. */
+  public_memory?: {
+    version: "public-memory.v1";
+    observation_refs: { observation_id: string; rights_epoch: number }[];
+    context_sha256: string;
+    input_bytes: number;
+    eligible_count: number;
+    selected_at: string;
+    valid_until: string;
+  };
   /** Newly quoted research methods; absent preserves historical approval scope. */
   research_strategy?: "progressive-evidence.v1";
   /** Included in this quote's call and cost allowance; never executed while editing. */

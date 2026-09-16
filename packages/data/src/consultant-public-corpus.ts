@@ -119,6 +119,28 @@ export async function lookupReleasedPublicEvidence(
   return result.rows;
 }
 
+export async function qualifiedPublicCorpusReaderReady(
+  db: Queryable,
+  identity: { account_id: string; user_profile_id: string },
+): Promise<boolean> {
+  const result = await db.query<{ ready: boolean }>(
+    "SELECT matchbase_public.reader_ready($1,$2) AS ready",
+    [identity.account_id, identity.user_profile_id],
+  );
+  return result.rows[0]?.ready === true;
+}
+
+export async function loadReleasedPublicEvidenceReferences(
+  db: Queryable,
+  refs: PublicEvidenceReference[],
+) {
+  const result = await db.query(
+    "SELECT * FROM matchbase_public.lookup_refs($1::jsonb)",
+    [JSON.stringify(refs)],
+  );
+  return result.rows;
+}
+
 /** Call inside the consuming publication transaction so dependency locks last through publication. */
 export async function registerPublicEvidenceDerivative(
   db: Queryable,

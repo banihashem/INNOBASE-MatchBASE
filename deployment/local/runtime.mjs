@@ -3,10 +3,23 @@ import { createServer } from "node:http";
 import { loadLocalConfig } from "./config.mjs";
 
 const kind = process.argv[2];
-if (!["web", "worker", "dashboard"].includes(kind))
+if (!["web", "worker", "dashboard", "migrate"].includes(kind))
   throw new Error("Unknown local runtime component.");
 if (kind !== "dashboard") await loadLocalConfig();
-if (kind === "worker") {
+if (kind === "migrate") {
+  const { backfillPrivateEvidenceCategoryScopes, createPool, migrateUp } =
+    await import("../../packages/data/dist/index.js");
+  const pool = createPool({
+    connectionString: process.env.MATCHBASE_DATABASE_URL,
+    max: 2,
+  });
+  try {
+    await migrateUp(pool);
+    await backfillPrivateEvidenceCategoryScopes(pool);
+  } finally {
+    await pool.end();
+  }
+} else if (kind === "worker") {
   const { createPool } = await import("../../packages/data/dist/index.js");
   const healthPool = createPool({
     connectionString: process.env.MATCHBASE_DATABASE_URL,

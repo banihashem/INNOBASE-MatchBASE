@@ -1,8 +1,10 @@
 # Public corpus controls
 
-Activity: MB-ARCH-IMPLEMENT-001 L04. This is a backend control boundary, not an activated shared product feature.
+Activity: MB-ARCH-IMPLEMENT-001 L06. This is the shared public-evidence control and product retrieval boundary.
 
-`publicCorpusReadiness()` always returns `shared_access_enabled: false` until a verified application identity adapter and its production role binding are separately qualified. The Consultant simulator, a non-bypass role check, successful fixtures, and an environment switch cannot satisfy that requirement. No product route currently invokes acquisition, release, or shared lookup. These controls make no web request or paid model call.
+`publicCorpusReadiness()` remains the conservative legacy deployment check. Product retrieval uses `qualifiedPublicCorpusReaderReady()` through a separate `MATCHBASE_PUBLIC_READER_DATABASE_URL`. The connection must authenticate as a LOGIN role bound to the exact account/profile and inheriting only the reader capability. The ordinary application database principal cannot substitute for it. A local simulator binding qualifies local behavior only; it is not production identity evidence.
+
+The research quotation path checks released, current public observations only for an official HS, CPC or ISIC classification. Selected observations, rights epochs, serialized context hash, byte count and expiry are fixed in the approved quote. The worker reopens them through the same profile-bound reader before dispatch and registers a public use manifest. They enter model input only as search clues and require fresh source discovery and verification. Empty lookup adds no model input or cost. Private evidence is never copied or automatically promoted into this corpus.
 
 ## Acquisition and release
 
@@ -22,6 +24,8 @@ Migration 0023 creates a revoked dedicated schema and forced row-level security.
 
 Administrative identity binding maps an authenticated PostgreSQL session principal to one account/profile/capability. Functions check `SESSION_USER`, not caller-set request variables or `SET ROLE`. Superuser, bypass-RLS, role-administration, public-schema-owner membership and private-observation readers are rejected. Principal bindings must come from verified identity infrastructure; test fixture bindings do not establish real authentication. Do not give application principals membership in the owner role. The owner has no login and no private-table grants. Security-definer functions use a fixed `pg_catalog` search path and schema-qualified objects.
 
+`bindPublicCorpusReader()` validates an externally created LOGIN role before binding it. `scripts/provision-public-reader.mjs` is the explicit operator entrypoint. Passwords and database URLs come from runtime environment variables and must never be committed. The local launcher transports the reader URL through the existing runtime secret file and rewrites only its database host for the Compose network.
+
 ## Rights, derivatives and restore
 
 Publication must register or recheck dependencies inside the same transaction as the consuming output write. Source epochs and share locks fence concurrent withdrawal. Withdrawal invalidates every observation for the affected source, blocks reacquisition, replaces claim text with a withdrawal marker, invalidates registered use/report/cache/index/summary derivatives and records immutable, gap-free tombstones. Retrieval and export checks reject stale epochs and other profiles' manifests. No private vector/shared training is included. External derivative bytes require their storage adapter to honor invalidation and remove inaccessible bytes; this backend does not promise to delete files already downloaded by users.
@@ -32,4 +36,4 @@ Before serving any restored corpus, call `beginPublicCorpusRestore()`, obtain th
 
 ## Qualification
 
-The isolated PostgreSQL suite exercises real role grants and session identities, forced RLS after an accidental SELECT grant, private table denial, self-grant/owner-role denial, catalogue-only authority, separate release, profile-specific derivative access, lock contention, source-wide withdrawal/reacquisition denial, and restore replay. It uses supplied fixtures without network acquisition. Production identity, public content licensing, catalogue scheduling/timing privacy, derivative storage deletion, retrieval quality and lifecycle economics remain separate release gates.
+The isolated PostgreSQL suite exercises real role grants and session identities, exact profile readiness, reference revalidation, forced RLS after an accidental SELECT grant, private table denial, self-grant/owner-role denial, catalogue-only authority, separate release, profile-specific derivative access, lock contention, source-wide withdrawal/reacquisition denial, and restore replay. It uses supplied fixtures without network acquisition. Production identity, public content licensing, catalogue scheduling/timing privacy, derivative storage deletion, retrieval quality and lifecycle economics remain separate release gates.

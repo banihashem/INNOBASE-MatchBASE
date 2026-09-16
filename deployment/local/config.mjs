@@ -14,6 +14,7 @@ export function validateLocalConfig(config) {
     throw new Error("Local runtime configuration must be an object.");
   const allowed = new Set([
     "MATCHBASE_DATABASE_URL",
+    "MATCHBASE_PUBLIC_READER_DATABASE_URL",
     "DATABASE_URL",
     "MATCHBASE_DIGEST_KEY",
     "MATCHBASE_OPENROUTER_API_KEY",
@@ -68,6 +69,22 @@ export function validateLocalConfig(config) {
     throw new Error("Local runtime must use its dedicated Compose database.");
   if (config.DATABASE_URL !== config.MATCHBASE_DATABASE_URL)
     throw new Error("Database aliases must match.");
+  if (config.MATCHBASE_PUBLIC_READER_DATABASE_URL) {
+    const reader = new URL(config.MATCHBASE_PUBLIC_READER_DATABASE_URL);
+    if (
+      !["postgres:", "postgresql:"].includes(reader.protocol) ||
+      reader.hostname !== "postgres" ||
+      reader.port !== "5432" ||
+      reader.pathname !== "/matchbase_slice1" ||
+      !reader.username ||
+      !reader.password ||
+      config.MATCHBASE_PUBLIC_READER_DATABASE_URL ===
+        config.MATCHBASE_DATABASE_URL
+    )
+      throw new Error(
+        "The public evidence reader must use a distinct credential in the dedicated Compose database.",
+      );
+  }
   if (Buffer.byteLength(config.MATCHBASE_DIGEST_KEY ?? "") < 32)
     throw new Error("Runtime digest key is missing or invalid.");
   return config;

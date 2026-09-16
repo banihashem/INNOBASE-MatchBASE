@@ -6,7 +6,7 @@ param(
     [string]$LanAddress = '',
     [string]$InterfaceAlias = '',
     [ValidateSet('ScheduledTask', 'StartupShortcut')][string]$AccessStartupMode = 'ScheduledTask',
-    [string[]]$Services = @('postgres', 'web', 'worker', 'dashboard')
+    [string[]]$Services = @('postgres', 'migrate', 'web', 'worker', 'dashboard')
 )
 $ErrorActionPreference = 'Stop'
 $appRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -44,7 +44,7 @@ function Assert-LocalQueueIdle {
 }
 Push-Location $appRoot
 try {
-    if (@($Services | Where-Object { $_ -notin @('postgres','web','worker','dashboard') }).Count -gt 0) { throw 'Unknown local service.' }
+    if (@($Services | Where-Object { $_ -notin @('postgres','migrate','web','worker','dashboard') }).Count -gt 0) { throw 'Unknown local service.' }
     # MB-UX-OPS-002 L07: transport maintenance never reads application credentials.
     $accessRoot = Join-Path $env:LOCALAPPDATA 'MatchBASE/access'
     $accessConfig = Join-Path $accessRoot 'portable-access.json'
@@ -202,6 +202,11 @@ try {
     $env:MATCHBASE_LOCAL_DATABASE_PASSWORD = [uri]::UnescapeDataString($parts[1])
     $runtime.MATCHBASE_DATABASE_URL = "postgresql://$($dbUri.UserInfo)@postgres:5432/matchbase_slice1"
     $runtime.DATABASE_URL = $runtime.MATCHBASE_DATABASE_URL
+    if ($runtime.MATCHBASE_PUBLIC_READER_DATABASE_URL) {
+        $publicReaderUri = [uri]$runtime.MATCHBASE_PUBLIC_READER_DATABASE_URL
+        if ($publicReaderUri.AbsolutePath -ne '/matchbase_slice1') { throw 'Unexpected public reader database identity.' }
+        $runtime.MATCHBASE_PUBLIC_READER_DATABASE_URL = "postgresql://$($publicReaderUri.UserInfo)@postgres:5432/matchbase_slice1"
+    }
     $runtime.MATCHBASE_ENVIRONMENT = 'test'
     $runtime.MATCHBASE_OIDC_SIMULATOR = 'true'
     $runtime.MATCHBASE_SYNTHETIC_FIXTURE = 'true'

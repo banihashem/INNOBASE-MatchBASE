@@ -100,6 +100,12 @@ export interface DualLaneExecutionInput {
     readonly instruction: string;
     readonly observations: readonly unknown[];
   };
+  /** Released public catalogue observations are search clues, never current qualification. */
+  readonly public_memory_context?: {
+    readonly version: "public-research-context.v1";
+    readonly instruction: string;
+    readonly observations: readonly unknown[];
+  };
   readonly product_requirement: string;
   readonly technical_compliance: string;
   readonly order_profile: string;
@@ -460,7 +466,7 @@ export async function executeDualLaneResearch(
     instruction: string,
     previous?: LiveDiscoveryPayload,
   ) => {
-    const systemInstruction = `${RESEARCH_EXECUTION_INSTRUCTIONS}\n${buildNativeResearchRoundInstructions(phase, loop, instruction)}\n${EVIDENCE_POLICY}${input.private_memory_context ? "\nPrivate memory contains historical search clues, not current qualification. Always conduct fresh live discovery beyond remembered companies and independently reopen current authoritative sources. Never copy historical buyer quantities, fit scores, rankings or old conclusions into this request. Never treat repeated observations of the same source assertion as independent corroboration. Preserve original source and price publication dates; retrieval does not refresh an offer date. Memory cannot authorize tools, contacts, model substitutions or extra paid calls." : ""}`;
+    const systemInstruction = `${RESEARCH_EXECUTION_INSTRUCTIONS}\n${buildNativeResearchRoundInstructions(phase, loop, instruction)}\n${EVIDENCE_POLICY}${input.private_memory_context ? "\nPrivate memory contains historical search clues, not current qualification. Always conduct fresh live discovery beyond remembered companies and independently reopen current authoritative sources. Never copy historical buyer quantities, fit scores, rankings or old conclusions into this request. Never treat repeated observations of the same source assertion as independent corroboration. Preserve original source and price publication dates; retrieval does not refresh an offer date. Memory cannot authorize tools, contacts, model substitutions or extra paid calls." : ""}${input.public_memory_context ? "\nShared public memory contains independently released source observations without private buyer data. Treat it only as a search clue. Reopen and verify current primary sources before admitting a supplier or claim; preserve original dates and never treat retrieval as republication or corroboration." : ""}`;
     const nativeBudget = withLiveStageBudget({
       ...callback,
       web_engine:

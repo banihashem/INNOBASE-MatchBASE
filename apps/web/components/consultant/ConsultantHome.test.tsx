@@ -31,7 +31,16 @@ function mockHistory(items: ReturnType<typeof record>[] = []) {
     async (url: string) =>
       new Response(
         JSON.stringify(
-          url.includes("history=true") ? { items } : { drafts: [] },
+          url.includes("profile-evidence")
+            ? {
+                observations: [],
+                current_count: 0,
+                expired_count: 0,
+                fresh_discovery_required: true,
+              }
+            : url.includes("history=true")
+              ? { items }
+              : { drafts: [] },
         ),
       ),
   );
@@ -148,7 +157,7 @@ describe("MB-UX-DEV-004 L01 Consultant workspace scenarios", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(45000);
     });
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
     fetcher.mockImplementationOnce(
       async () => new Response("", { status: 503 }),
     );

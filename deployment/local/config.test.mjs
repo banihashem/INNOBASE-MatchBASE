@@ -60,6 +60,30 @@ test("MB-UX-OPS-002 L01 local containers reject production identity or external 
     assert.throws(() => validateLocalConfig({ ...fixture, ...override }));
 });
 
+test("MB-ARCH-IMPLEMENT-001 L06 admits only a distinct local public reader credential", () => {
+  const reader =
+    "postgresql://matchbase_public_reader:not-a-secret-fixture@postgres:5432/matchbase_slice1";
+  assert.deepEqual(
+    validateLocalConfig({
+      ...fixture,
+      MATCHBASE_PUBLIC_READER_DATABASE_URL: reader,
+    }).MATCHBASE_PUBLIC_READER_DATABASE_URL,
+    reader,
+  );
+  for (const value of [
+    fixture.MATCHBASE_DATABASE_URL,
+    "postgresql://reader:not-a-secret-fixture@external.invalid:5432/matchbase_slice1",
+    "postgresql://reader:not-a-secret-fixture@postgres:5432/other",
+    "postgresql://reader@postgres:5432/matchbase_slice1",
+  ])
+    assert.throws(() =>
+      validateLocalConfig({
+        ...fixture,
+        MATCHBASE_PUBLIC_READER_DATABASE_URL: value,
+      }),
+    );
+});
+
 test("MB-UX-OPS-002 L02 LAN origins allow private IPv4 but reject public and malformed origins", () => {
   for (const host of [
     "127.0.0.1",

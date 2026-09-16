@@ -15,8 +15,13 @@ import {
   beginPublicCorpusRestore,
   reconcilePublicCorpusTombstones,
   publicCorpusReadiness,
+  qualifiedPublicCorpusReaderReady,
+  loadReleasedPublicEvidenceReferences,
 } from "../../../packages/data/dist/consultant-public-corpus.js";
-import { provisionPublicCorpusRoles } from "../../../packages/data/dist/public-corpus-administration.js";
+import {
+  provisionPublicCorpusRoles,
+  reconcilePublicCorpusRoles,
+} from "../../../packages/data/dist/public-corpus-administration.js";
 
 const anchor = process.env.MATCHBASE_DISPOSABLE_TEST_DATABASE_URL;
 const dbTest = anchor ? test : test.skip;
@@ -104,18 +109,19 @@ dbTest(
     const accounts = [randomUUID(), randomUUID()];
     async function actor(name, capability, accountIndex = 0) {
       const role = `${prefix}_${name}`;
+      const profile = randomUUID();
       createdRoles.push(role);
       await db.query(
         `CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS INHERIT IN ROLE ${roles[capability]}`,
       );
       await db.query(
         "INSERT INTO matchbase_public.principal VALUES($1,$2,$3,$4,'qualification-fixture-binding',true)",
-        [role, accounts[accountIndex], randomUUID(), capability],
+        [role, accounts[accountIndex], profile, capability],
       );
       const c = await db.connect();
       clients.push(c);
       await c.query(`SET SESSION AUTHORIZATION ${role}`);
-      return { client: c, role };
+      return { client: c, role, profile, account: accounts[accountIndex] };
     }
     const acquirer = await actor("acq", "acquirer");
     const releaser = await actor("rel", "releaser");
@@ -142,6 +148,20 @@ dbTest(
     };
 
     await t.test(
+      "capability reconciliation is idempotent and owns every upgraded function",
+      async () => {
+        assert.deepEqual(await reconcilePublicCorpusRoles(db, prefix), roles);
+        const owners = await db.query(
+          `SELECT DISTINCT r.rolname AS owner FROM pg_proc p
+           JOIN pg_namespace n ON n.oid=p.pronamespace
+           JOIN pg_roles r ON r.oid=p.proowner
+           WHERE n.nspname='matchbase_public'`,
+        );
+        assert.deepEqual(owners.rows, [{ owner: roles.owner }]);
+      },
+    );
+
+    await t.test(
       "default runtime is disabled and unqualified DB owners cannot impersonate public readers",
       async () => {
         assert.deepEqual(await publicCorpusReadiness(db), {
@@ -156,6 +176,20 @@ dbTest(
         await assert.rejects(query(db), /not authorized/);
         await assert.rejects(query(first.client), /tombstone reconciliation/);
         await reconcilePublicCorpusTombstones(releaser.client, 0, []);
+        assert.equal(
+          await qualifiedPublicCorpusReaderReady(first.client, {
+            account_id: first.account,
+            user_profile_id: first.profile,
+          }),
+          true,
+        );
+        assert.equal(
+          await qualifiedPublicCorpusReaderReady(first.client, {
+            account_id: first.account,
+            user_profile_id: second.profile,
+          }),
+          false,
+        );
       },
     );
     await t.test(
@@ -327,6 +361,11 @@ dbTest(
         );
         const rows = await query(first.client);
         assert.equal(rows.length, 1);
+        assert.equal(
+          (await loadReleasedPublicEvidenceReferences(first.client, [ref]))
+            .length,
+          1,
+        );
         assert.equal(rows[0].claim_text, evidence.claim_text);
         for (const key of [
           "account_id",

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import {
   createPool,
@@ -98,9 +99,17 @@ postgresTest(
       assert.deepEqual(after.rows, before.rows);
     } finally {
       await isolated?.end();
-      await control.query(
-        `DROP DATABASE IF EXISTS ${databaseName} WITH (FORCE)`,
-      );
+      let connections = 1;
+      for (let attempt = 0; attempt < 80 && connections > 0; attempt += 1) {
+        const active = await control.query(
+          "SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=$1",
+          [databaseName],
+        );
+        connections = active.rows[0].count;
+        if (connections > 0) await delay(25);
+      }
+      assert.equal(connections, 0, "Owned annotation database must drain");
+      await control.query(`DROP DATABASE IF EXISTS ${databaseName}`);
       await control.end();
     }
   },

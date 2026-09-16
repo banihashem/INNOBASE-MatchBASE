@@ -214,6 +214,9 @@ postgresTest(
       );
 
       for (const migration of [
+        "0027_service_classification_and_public_role_upgrade",
+        "0026_public_corpus_reader_identity",
+        "0025_private_evidence_category_scopes",
         "0024_consultant_research_incidents",
         "0023_public_corpus_controls",
         "0022_consultant_private_evidence_renewal",

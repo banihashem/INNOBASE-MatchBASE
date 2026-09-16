@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => {
     after: vi.fn(),
     memoryQuote: vi.fn(),
     memoryLoad: vi.fn(),
+    publicMemoryQuote: vi.fn(),
+    publicMemoryLoad: vi.fn(),
     rights: vi.fn(),
   };
 });
@@ -55,6 +57,8 @@ vi.mock("@matchbase/application", () => ({
   runNextConsultantWorkflowJob: mocks.worker,
   quotePrivateResearchMemory: mocks.memoryQuote,
   loadQuotedPrivateMemory: mocks.memoryLoad,
+  quotePublicResearchMemory: mocks.publicMemoryQuote,
+  loadQuotedPublicMemory: mocks.publicMemoryLoad,
   assertConsultantOutputReadRights: mocks.rights,
 }));
 vi.mock("@matchbase/data", () => ({
@@ -126,6 +130,8 @@ beforeEach(() => {
   }));
   mocks.memoryQuote.mockImplementation(async (_pool, _session, plan) => plan);
   mocks.memoryLoad.mockResolvedValue(undefined);
+  mocks.publicMemoryQuote.mockImplementation(async (_session, plan) => plan);
+  mocks.publicMemoryLoad.mockResolvedValue(undefined);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -337,6 +343,7 @@ describe("research tier HTTP approval boundary", () => {
       session,
       expect.objectContaining({ parent_round_id: parent.round_id }),
       parent,
+      undefined,
       undefined,
     );
     expect(mocks.save).not.toHaveBeenCalled();

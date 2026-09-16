@@ -34,6 +34,12 @@ services:
       retries: 30
     security_opt: ["no-new-privileges:true"]
 
+  migrate:
+    <<: *runtime
+    command: [migrate]
+    restart: "no"
+    healthcheck: { disable: true }
+
   web:
     <<: *runtime
     build:
@@ -44,6 +50,11 @@ services:
     ports: ["127.0.0.1:${MATCHBASE_LOCAL_WEB_PORT:-3000}:3000"]
     volumes: ["pdf_cache:/workspace/apps/web/.artifacts"]
     shm_size: 512mb
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: [CMD, node, deployment/local/health.mjs, web]
       interval: 10s
@@ -54,6 +65,11 @@ services:
   worker:
     <<: *runtime
     command: [worker]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: [CMD, node, deployment/local/health.mjs, worker]
       interval: 10s

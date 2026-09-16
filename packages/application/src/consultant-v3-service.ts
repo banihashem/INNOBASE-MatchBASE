@@ -81,6 +81,7 @@ import {
   admitPrivateResearchMemory,
   loadQuotedPrivateMemory,
 } from "./consultant-private-memory.js";
+import { withQuotedPublicMemory } from "./consultant-public-memory.js";
 
 export type ConsultantExecutionMode = "live" | "demonstration" | "hybrid";
 export interface ConsultantWorkflowProgress {
@@ -1150,17 +1151,25 @@ export async function executeConsultantWorkflowResearch(
 
   // Dispatch Dual Lane Research
   session.state = "lane_gemini_running";
-  const dualResult = await executeDualLaneResearch(
-    {
-      ...consultantResearchInput(session),
-      ...(memoryUse ? { private_memory_context: memoryUse.context } : {}),
-    },
-    {
-      mode,
-      ...roundOptions,
-      on_checkpoint: checkpoint,
-      ...(options?.signal ? { signal: options.signal } : {}),
-    },
+  const dualResult = await withQuotedPublicMemory(
+    session,
+    round.plan,
+    (publicMemoryContext) =>
+      executeDualLaneResearch(
+        {
+          ...consultantResearchInput(session),
+          ...(memoryUse ? { private_memory_context: memoryUse.context } : {}),
+          ...(publicMemoryContext
+            ? { public_memory_context: publicMemoryContext }
+            : {}),
+        },
+        {
+          mode,
+          ...roundOptions,
+          on_checkpoint: checkpoint,
+          ...(options?.signal ? { signal: options.signal } : {}),
+        },
+      ),
   );
   options?.signal?.throwIfAborted();
 
@@ -1216,6 +1225,15 @@ export async function executeConsultantWorkflowResearch(
             {
               title: "Private research memory",
               description: `${round.plan.private_memory.observation_refs.length} source-bound historical observations from this profile informed the search. ${round.plan.private_memory.needs_refresh_count} observations requiring refresh and ${round.plan.private_memory.excluded_by_budget_count} observations outside the input allowance were excluded. Fresh discovery and current source verification were required; prior buyer quantities, fit assessments and rankings were not adopted.`,
+              severity: "info" as const,
+            },
+          ]
+        : []),
+      ...(round.plan.public_memory
+        ? [
+            {
+              title: "Shared public evidence memory",
+              description: `${round.plan.public_memory.observation_refs.length} independently acquired and released public observations informed search discovery. They contained no private buyer profile, request, ranking or fit data and required fresh source verification before any current finding was admitted.`,
               severity: "info" as const,
             },
           ]

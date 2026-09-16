@@ -149,6 +149,96 @@ it("MB-UX-SIMPLIFY-001 L01 places saved findings before research detail and open
   expect(input).toHaveValue("Keep this buyer question");
   expect(posts).toEqual([]);
 });
+it("MB-UX-QUALITY-001 L19 restores a current persisted recovery estimate after reload without creating another quote", async () => {
+  const posts: Record<string, unknown>[] = [];
+  const recoveryPlan = {
+    ...plan,
+    round_number: 2,
+    depth: "deep",
+    research_tier: "default",
+    research_models: ["openai/gpt-5.2"],
+    extraction_model: "openai/gpt-5.2",
+    synthesis_model: "openai/gpt-5.2",
+    follow_up: {
+      question: "Verify the saved route evidence",
+      lead_ids: ["lead-a"],
+    },
+    rates: [
+      {
+        model: "openai/gpt-5.2",
+        provider: "openai",
+        billing_mode: "byok",
+        input_usd_per_token: 0.000001,
+        output_usd_per_token: 0.000002,
+        request_usd: 0,
+        web_search_usd: 0,
+        reasoning: true,
+        structured_outputs: true,
+        source_url: "https://openrouter.ai/models/openai/gpt-5.2",
+      },
+    ],
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, options?: RequestInit) => {
+      if (options?.body) {
+        posts.push(JSON.parse(String(options.body)));
+        return Response.json({ success: true }, { status: 202 });
+      }
+      if (url.includes("view=model_choices"))
+        return Response.json({ choices: recoveryPlan.rates });
+      return Response.json({
+        costs,
+        next_round: 2,
+        rounds: [
+          {
+            round_id: "completed-round",
+            round_number: 1,
+            status: "completed",
+            candidate_count: 3,
+            output_available: true,
+            plan,
+          },
+          {
+            round_id: "persisted-recovery-quote",
+            round_number: 2,
+            status: "proposed",
+            candidate_count: null,
+            output_available: false,
+            plan: recoveryPlan,
+          },
+        ],
+        research_review: researchReview,
+      });
+    }),
+  );
+  render(
+    <ResearchRoundControl
+      runId="run-with-recovery"
+      workflowState="workflow_failed"
+      hasResults
+      onStarted={vi.fn()}
+      onPreview={vi.fn()}
+    />,
+  );
+  expect(
+    await screen.findByText(/Restored the current saved estimate/),
+  ).toBeVisible();
+  expect(screen.getByRole("textbox", { name: /Follow-up focus/ })).toHaveValue(
+    "Verify the saved route evidence",
+  );
+  expect(
+    screen.getByRole("checkbox", {
+      name: "Include Unfinished logistics in follow-up focus",
+    }),
+  ).toBeChecked();
+  expect(
+    screen.getByRole("button", {
+      name: /Approve cost estimate & start round 2/,
+    }),
+  ).toBeInTheDocument();
+  expect(posts).toEqual([]);
+});
 it("MB-UX-SIMPLIFY-001 L01 appends a cited question without losing focus text and invalidates the estimate", async () => {
   const posts = simplifyFixture();
   render(

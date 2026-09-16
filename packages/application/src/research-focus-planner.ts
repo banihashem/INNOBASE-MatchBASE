@@ -10,11 +10,14 @@ import {
   runLiveCompletion,
   LiveResearchError,
   liveRecoveryAttemptLimit,
+  selectApprovedRetainedRouteRecovery,
+  selectApprovedRouteRecovery,
   selectApprovedStructuredRecovery,
   withLiveStageBudget,
   waitForLiveRecovery,
   validateRetainedCompletion,
   reportRetainedStageReuse,
+  type DefinitiveProviderRouteRejection,
   type LiveCallOptions,
   type LiveResearchCheckpoint,
 } from "./openrouter-model-policy.js";
@@ -320,6 +323,7 @@ export async function planResearchFocus(
   options: LiveCallOptions,
   webDetails: FocusedWebDetails = {},
   previouslyConsumedAttempts = 0,
+  retainedRouteRejection?: DefinitiveProviderRouteRejection,
 ) {
   const schema =
     plan.research_strategy === "progressive-evidence.v1"
@@ -328,7 +332,7 @@ export async function planResearchFocus(
   const manifest = createResearchStageManifest({
     stage_kind: "research_focus_analysis",
     qualification: "validated_focus",
-    input: { input, plan, prior, webDetails },
+    input: { input, plan, prior, webDetails, retainedRouteRejection },
     policy: {
       version: "focus.v2",
       schema,
@@ -349,6 +353,7 @@ export async function planResearchFocus(
         { ...options, attempt_group_key: manifest.operation_key },
         webDetails,
         previouslyConsumedAttempts,
+        retainedRouteRejection,
       ),
     validate: (value) => {
       if (!value || typeof value !== "object")
@@ -403,6 +408,7 @@ async function planResearchFocusUncached(
   options: LiveCallOptions,
   webDetails: FocusedWebDetails = {},
   previouslyConsumedAttempts = 0,
+  retainedRouteRejection?: DefinitiveProviderRouteRejection,
 ) {
   const limit = liveRecoveryAttemptLimit(options);
   if (
@@ -440,6 +446,18 @@ async function planResearchFocusUncached(
     ...options,
     automatic_recovery_attempts: limit - previouslyConsumedAttempts,
   });
+  if (
+    retainedRouteRejection &&
+    !selectApprovedRetainedRouteRecovery(
+      plan.extraction_model,
+      retainedRouteRejection,
+      budget.options,
+    )
+  )
+    throw new LiveResearchError(
+      "MB-409-STAGE-ALLOWANCE",
+      "The retained provider-route rejection does not match an approved same-billing focus alternative. Saved findings are retained.",
+    );
   let feedback = "";
   for (let attempt = previouslyConsumedAttempts + 1; ; attempt++) {
     options.signal?.throwIfAborted();
@@ -554,11 +572,18 @@ async function planResearchFocusUncached(
         ].includes(error.code);
       const alternative =
         !guardFailure && attempt < limit && budget.remaining() > 0
-          ? selectApprovedStructuredRecovery(
+          ? (selectApprovedStructuredRecovery(
               plan.extraction_model,
               error,
               budget.options,
-            )
+            ) ??
+            (terminalCheckpoint
+              ? selectApprovedRouteRecovery(
+                  plan.extraction_model,
+                  terminalCheckpoint,
+                  budget.options,
+                )
+              : undefined))
           : undefined;
       const recover =
         !guardFailure &&
@@ -579,7 +604,7 @@ async function planResearchFocusUncached(
             ? {
                 recovery_original_model: alternative.original_model,
                 recovery_next_model: alternative.next_model,
-                recovery_message: `Continuing focused planning with the approved alternative ${alternative.next_model} after a structured-output validation or compatibility failure. Saved findings and the round allowance are retained.`,
+                recovery_message: `Continuing focused planning with the approved alternative ${alternative.next_model} after a definitive provider-route or structured-output failure. Saved findings and the round allowance are retained.`,
               }
             : {}),
           message: recover

@@ -4,6 +4,7 @@ import type { WorkspaceSession } from "../standard/types";
 import { ConsultantWorkspace } from "./ConsultantWorkspace";
 import { ConsultantShell } from "./ConsultantShell";
 import { workflowLabel } from "./workflow-status";
+import { ProfileEvidenceLibrary } from "./ProfileEvidenceLibrary";
 
 type Research = {
   run_id: string;
@@ -425,6 +426,7 @@ export function ConsultantHome({
               <a href="/?view=reports">Browse supplier reports</a>
             </div>
           </section>
+          <ProfileEvidenceLibrary />
         </div>
       ) : (
         <>

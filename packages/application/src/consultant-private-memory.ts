@@ -46,6 +46,12 @@ export function privateResearchMemoryScope(session: WorkflowSession) {
       scheme: session.classification.scheme,
       code: session.classification.code,
       version: session.classification.version,
+      ...(session.classification.label
+        ? { label: session.classification.label }
+        : {}),
+      ...(session.classification.description
+        ? { description: session.classification.description }
+        : {}),
       ...(session.classification.jurisdiction
         ? { jurisdiction: session.classification.jurisdiction }
         : {}),

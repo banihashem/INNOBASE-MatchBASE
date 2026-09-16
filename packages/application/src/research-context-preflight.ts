@@ -46,6 +46,7 @@ export async function preflightResearchRoundContext(
   plan: ResearchRoundPlan,
   parent: ResearchRoundRecord | undefined,
   memoryContext?: DualLaneExecutionInput["private_memory_context"],
+  publicMemoryContext?: DualLaneExecutionInput["public_memory_context"],
 ): Promise<void> {
   if (session.mode === "demonstration" || !plan.focus_analysis_required) return;
   if (
@@ -67,6 +68,9 @@ export async function preflightResearchRoundContext(
   const input = {
     ...consultantResearchInput(session),
     ...(memoryContext ? { private_memory_context: memoryContext } : {}),
+    ...(publicMemoryContext
+      ? { public_memory_context: publicMemoryContext }
+      : {}),
   };
   const prior = await hydrateResearchContinuation(db, parent);
   const known = new Set(

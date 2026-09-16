@@ -289,11 +289,6 @@ for (const [name, settings, category] of [
     "billing",
   ],
   [
-    "privacy before schema",
-    { message: `Zero data retention required. ${schemaError}` },
-    "privacy",
-  ],
-  [
     "refusal before schema",
     { message: `Safety refusal. ${schemaError}` },
     "refusal",

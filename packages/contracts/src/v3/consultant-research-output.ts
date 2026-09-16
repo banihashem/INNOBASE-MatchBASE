@@ -18,7 +18,14 @@ export const CONSULTANT_RESEARCH_OUTPUT_V3_SCHEMA_VERSION =
 export const CONSULTANT_RESEARCH_OUTPUT_V3_VERSION = 1 as const;
 
 export type ClassificationScheme =
-  "HS" | "GS1_GPC" | "UNSPSC" | "ECLASS" | "ETIM" | "CUSTOM_MATCHBASE";
+  | "HS"
+  | "CPC"
+  | "ISIC"
+  | "GS1_GPC"
+  | "UNSPSC"
+  | "ECLASS"
+  | "ETIM"
+  | "CUSTOM_MATCHBASE";
 
 export interface ProductClassificationRecord {
   readonly classification_id: string; // UUID

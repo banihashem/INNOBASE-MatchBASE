@@ -106,6 +106,7 @@ export function ResearchRoundControl({
   const [notice, setNotice] = useState("");
   const focusPanel = useRef<HTMLDetailsElement>(null);
   const focusInput = useRef<HTMLTextAreaElement>(null);
+  const restoredQuoteForRun = useRef<string | null>(null);
   useEffect(() => {
     if (!focusRequest || !focusPanel.current) return;
     focusPanel.current.open = true;
@@ -120,6 +121,7 @@ export function ResearchRoundControl({
     setHistoricalReview(null);
     setChoices([]);
     setModel("");
+    restoredQuoteForRun.current = null;
   }, [runId]);
   const modelChoicesEnabled =
     Boolean(overview) && overview!.next_round >= 2 && overview!.next_round <= 5;
@@ -320,6 +322,39 @@ export function ResearchRoundControl({
   const currentRound = completed.length
     ? Math.max(...completed.map((r) => r.round_number))
     : 0;
+  useEffect(() => {
+    if (!overview || quote || restoredQuoteForRun.current === runId || active)
+      return;
+    restoredQuoteForRun.current = runId;
+    const pending = [...overview.rounds]
+      .reverse()
+      .find(
+        (round) =>
+          round.status === "proposed" &&
+          round.round_number === overview.next_round &&
+          Number.isFinite(Date.parse(round.plan.expires_at)) &&
+          Date.parse(round.plan.expires_at) > Date.now(),
+      );
+    if (!pending) return;
+    setQuote({
+      quote_id: pending.round_id,
+      plan: pending.plan,
+      choices: pending.plan.rates,
+    });
+    setChoices((existing) => (existing.length ? existing : pending.plan.rates));
+    setDepth(pending.plan.depth);
+    setResearchTier(pending.plan.research_tier ?? "default");
+    setQuestion(pending.plan.follow_up?.question ?? "");
+    setLeadIds(pending.plan.follow_up?.lead_ids ?? []);
+    setModel(
+      pending.plan.round_number > 1
+        ? (pending.plan.research_models[0] ?? "")
+        : "",
+    );
+    setNotice(
+      "Restored the current saved estimate. Review its routes, cost and expiry before approval.",
+    );
+  }, [active, overview, quote, runId]);
   const expired = quote
     ? new Date(quote.plan.expires_at).getTime() <= Date.now()
     : false;

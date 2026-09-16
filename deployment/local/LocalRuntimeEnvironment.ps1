@@ -9,6 +9,7 @@ function Get-LocalRuntimeEnvironment {
     $runtime = @{}
     $names = @(
         'MATCHBASE_DATABASE_URL',
+        'MATCHBASE_PUBLIC_READER_DATABASE_URL',
         'MATCHBASE_DIGEST_KEY',
         'MATCHBASE_OPENROUTER_API_KEY',
         'MATCHBASE_PROVIDER_GOOGLE',

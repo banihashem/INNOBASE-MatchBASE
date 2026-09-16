@@ -62,6 +62,13 @@ function reject(message: string): never {
   throw new ResearchRoundFault(409, "MB-409-FOCUS-RECOVERY", message);
 }
 
+const recoverableFocusRouteCategories = new Set([
+  "privacy",
+  "endpoint_unavailable",
+  "unsupported_parameters",
+  "web_unavailable",
+]);
+
 /**
  * Operator-only recovery of a truncated focus analysis before downstream research.
  * Dry-run is the default. Execute requires the snapshot hash from a reviewed dry-run.
@@ -218,8 +225,54 @@ export async function recoverApprovedFocusStage(
     const lastFailure = events.rows
       .filter((event) => event.phase === "failed")
       .at(-1);
+    const lastFocusFailure = events.rows
+      .filter(
+        (event) =>
+          event.phase === "research_focus_analysis" &&
+          event.detail.state === "failed",
+      )
+      .at(-1);
+    const approvedAlternatives =
+      round.plan.model_fallbacks?.[round.plan.extraction_model] ?? [];
+    const approvedAlternative =
+      approvedAlternatives.length === 1 ? approvedAlternatives[0] : undefined;
+    const primaryRate = round.plan.rates.find(
+      (rate) => rate.model === round.plan.extraction_model,
+    );
+    const alternativeRate = round.plan.rates.find(
+      (rate) => rate.model === approvedAlternative,
+    );
+    const routeFailure =
+      lastFailure?.detail.code === "MB-502-LIVE-PROVIDER" &&
+      lastFocusFailure?.detail.requested_model ===
+        round.plan.extraction_model &&
+      lastFocusFailure.detail.dispatched === true &&
+      lastFocusFailure.detail.provider_dispatch_rejected === true &&
+      lastFocusFailure.detail.provider_receipt_received === false &&
+      typeof lastFocusFailure.detail.provider_http_failure === "object" &&
+      lastFocusFailure.detail.provider_http_failure !== null &&
+      recoverableFocusRouteCategories.has(
+        String(
+          (
+            lastFocusFailure.detail.provider_http_failure as Record<
+              string,
+              unknown
+            >
+          ).category,
+        ),
+      ) &&
+      typeof approvedAlternative === "string" &&
+      approvedAlternative !== round.plan.extraction_model &&
+      primaryRate !== undefined &&
+      alternativeRate !== undefined &&
+      (primaryRate.billing_mode ?? "byok") ===
+        (alternativeRate.billing_mode ?? "byok") &&
+      alternativeRate.structured_outputs === true &&
+      (round.plan.depth !== "deep" || alternativeRate.reasoning === true);
+    const outputLimitFailure =
+      lastFailure?.detail.code === "MB-422-LIVE-OUTPUT-LIMIT";
     if (
-      lastFailure?.detail.code !== "MB-422-LIVE-OUTPUT-LIMIT" ||
+      (!outputLimitFailure && !routeFailure) ||
       lastFailure.detail.stage !== "research" ||
       events.rows.some(
         (event) =>
@@ -235,7 +288,7 @@ export async function recoverApprovedFocusStage(
       )
     )
       reject(
-        "The retained failure is not an isolated focus-analysis output limit.",
+        "The retained failure is not an isolated recoverable focus-analysis failure.",
       );
     const calls = (
       await readConsultantCostEvents(db, identity.account_id, identity.run_id)
@@ -310,6 +363,12 @@ export async function recoverApprovedFocusStage(
         round.plan.max_calls - allowance.consumed_provider_calls,
       max_output_tokens_per_call: round.plan.max_output_tokens_per_call,
       job_id: job.job_id,
+      recovery_kind: routeFailure
+        ? "approved_focus_provider_route"
+        : "approved_focus_output_limit",
+      ...(routeFailure && approvedAlternative
+        ? { approved_replacement_model: approvedAlternative }
+        : {}),
     };
     if (!options.execute) return result;
     if (options.expected_snapshot_hash !== snapshotHash)
@@ -324,7 +383,6 @@ export async function recoverApprovedFocusStage(
       {
         ...result,
         activity: "MB-UX-QUALITY-001 L05",
-        recovery_kind: "approved_focus_output_limit",
         previous_job: job.retained_record,
         previous_status: {
           current_state: session.current_state,
@@ -335,8 +393,9 @@ export async function recoverApprovedFocusStage(
         approvals_hash: hash(session.approvals),
         approval_changed: false,
         inference_dispatched_by_recovery: false,
-        message:
-          "Requeued the same approved execution with prior dispatches and focus attempts deducted. No new round or approval was created.",
+        message: routeFailure
+          ? `Requeued the same approved execution with the rejected provider route retained. The next focus attempt uses the already approved ${approvedAlternative} alternative without redispatching the rejected route.`
+          : "Requeued the same approved execution with prior dispatches and focus attempts deducted. No new round or approval was created.",
       },
     );
     await db.query(

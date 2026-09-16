@@ -122,7 +122,7 @@ test("MB-UX-QUALITY-001 L09 a fresh follow-up quotes one independent same-billin
   assert.equal(plan.extraction_model, gemini);
   assert.equal(plan.synthesis_model, gemini);
   assert.deepEqual(plan.model_fallbacks, { [gemini]: [gpt] });
-  assert.equal(plan.search_engines[gpt], "exa");
+  assert.equal(plan.search_engines[gpt], "native");
   assert.deepEqual(
     plan.rates.map((rate) => rate.model),
     [gemini, gpt],
@@ -221,7 +221,7 @@ test("MB-UX-QUALITY-001 L09 round guard binds the named alternative to role engi
     model: gpt,
     messages: [],
     max_tokens: 1,
-    plugins: [{ id: "web", engine: "exa", max_results: 8 }],
+    plugins: [{ id: "web", engine: "native", max_results: 8 }],
   };
   await createRoundCallGuard(plan)(web, true);
   await createRoundCallGuard(plan)(
@@ -235,7 +235,7 @@ test("MB-UX-QUALITY-001 L09 round guard binds the named alternative to role engi
   });
   await assert.rejects(
     createRoundCallGuard(plan)(
-      { ...web, plugins: [{ id: "web", engine: "native" }] },
+      { ...web, plugins: [{ id: "web", engine: "exa" }] },
       true,
     ),
     { code: "MB-409-ROUND-SEARCH-ENGINE" },
@@ -364,14 +364,14 @@ test("MB-UX-QUALITY-001 L11 new method calls price the research model and its ap
         4000 * researchRate.output_usd_per_token +
         researchRate.request_usd) *
         1.05 +
-      0.007 * 0.25;
+      0.1 * 0.25;
     const expectedHighIncrement =
       (240000 * fallbackRate.input_usd_per_token +
         plans[0].max_output_tokens_per_call *
           fallbackRate.output_usd_per_token +
         fallbackRate.request_usd) *
         1.05 +
-      0.007;
+      0.1;
     assert.ok(
       Math.abs(
         plans[2].estimated_low_usd -

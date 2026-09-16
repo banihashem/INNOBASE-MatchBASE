@@ -13,7 +13,9 @@ import {
   researchModelChoices,
   runNextConsultantWorkflowJob,
   quotePrivateResearchMemory,
+  quotePublicResearchMemory,
   loadQuotedPrivateMemory,
+  loadQuotedPublicMemory,
   assertConsultantOutputReadRights,
 } from "@matchbase/application";
 import {
@@ -301,11 +303,19 @@ export async function POST(req: Request) {
         : [...(session.step3_deep_prompt?.discovery_criteria ?? [])],
       mode: session.mode === "demonstration" ? "demonstration" : "live",
     });
-    const plan = await quotePrivateResearchMemory(pool, session, unboundPlan);
+    const privatePlan = await quotePrivateResearchMemory(
+      pool,
+      session,
+      unboundPlan,
+    );
+    const plan = await quotePublicResearchMemory(session, privatePlan);
     const memoryContext = plan.private_memory
       ? await inTransaction(pool, (client) =>
           loadQuotedPrivateMemory(client, session, plan),
         )
+      : undefined;
+    const publicMemoryContext = plan.public_memory
+      ? await loadQuotedPublicMemory(session, plan)
       : undefined;
     await preflightResearchRoundContext(
       pool,
@@ -313,6 +323,7 @@ export async function POST(req: Request) {
       plan,
       parent,
       memoryContext,
+      publicMemoryContext,
     );
     const quoteId = await saveResearchQuote(pool, session, plan);
     return NextResponse.json({ quote_id: quoteId, plan, choices });

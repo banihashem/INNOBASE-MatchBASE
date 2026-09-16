@@ -25,6 +25,7 @@
     "verify:consultant-output-v2:db": "pnpm --filter @matchbase/contracts build && pnpm --filter @matchbase/application build && node scripts/verify-consultant-output-v2-db.mjs",
     "seed:consultant-output-v3": "pnpm --filter @matchbase/contracts build && pnpm --filter @matchbase/application build && node scripts/seed-consultant-output-v3.mjs",
     "verify:consultant-output-v3:db": "pnpm --filter @matchbase/contracts build && pnpm --filter @matchbase/application build && node scripts/verify-consultant-output-v3-db.mjs",
+    "provision:public-reader": "pnpm --filter @matchbase/data build && node scripts/provision-public-reader.mjs",
     "verify:consultant-v3:golden": "pnpm --filter @matchbase/contracts build && pnpm --filter @matchbase/application build && pnpm --filter @matchbase/reporting build && node scripts/verify-consultant-v3-golden.mjs",
     "test:consultant-v3:openrouter": "pnpm --filter @matchbase/contracts build && pnpm --filter @matchbase/application build && node scripts/test-consultant-v3-openrouter.mjs",
     "test:consultant-v3:access": "node scripts/test-consultant-v3-access.mjs",

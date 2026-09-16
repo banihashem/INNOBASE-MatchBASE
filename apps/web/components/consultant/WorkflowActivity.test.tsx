@@ -35,6 +35,37 @@ it("MB-ARCH-IMPLEMENT-001 L01 explains saved-stage resumption without claiming n
   expect(screen.getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
   expect(screen.queryByText("Results saved")).toBeNull();
 });
+it.each([
+  [
+    "approval_required",
+    "Recovery checked · approval required",
+    /previous approval.*current cost estimate/is,
+  ],
+  [
+    "provider_outcome_review_required",
+    "Provider outcome needs review",
+    /prevent duplicate cost/i,
+  ],
+  [
+    "technical_review_required",
+    "Technical review required",
+    /does not match an authorized automatic recovery playbook/i,
+  ],
+])(
+  "MB-UX-QUALITY-001 L19 exposes the durable incident decision %s",
+  (phase, heading, explanation) => {
+    render(
+      <WorkflowActivity
+        state="workflow_failed"
+        retryAction="research"
+        progress={{ phase }}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: heading })).toBeVisible();
+    expect(screen.getByText(explanation)).toBeVisible();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+  },
+);
 const started = {
   phase: "discovery_gemini",
   loop: 1,

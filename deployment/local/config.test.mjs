@@ -11,6 +11,18 @@ const fixture = {
   MATCHBASE_DIGEST_KEY: "synthetic-local-test-material-32-bytes",
 };
 
+function publicReaderFixtureUrl({
+  username = "matchbase_public_reader",
+  password = "not-a-secret-fixture",
+  host = "postgres",
+  database = "matchbase_slice1",
+} = {}) {
+  const url = new URL(`postgresql://${host}:5432/${database}`);
+  url.username = username;
+  if (password) url.password = password;
+  return url.toString();
+}
+
 test("MB-UX-QUALITY-001 L07 all five provider families and supported model overrides reach the local runtime", () => {
   const overrides = {
     MATCHBASE_PROVIDER_GOOGLE: "google-ai-studio",
@@ -58,6 +70,29 @@ test("MB-UX-OPS-002 L01 local containers reject production identity or external 
     { MATCHBASE_DIGEST_KEY: "short" },
   ])
     assert.throws(() => validateLocalConfig({ ...fixture, ...override }));
+});
+
+test("MB-ARCH-IMPLEMENT-001 L06 admits only a distinct local public reader credential", () => {
+  const reader = publicReaderFixtureUrl();
+  assert.deepEqual(
+    validateLocalConfig({
+      ...fixture,
+      MATCHBASE_PUBLIC_READER_DATABASE_URL: reader,
+    }).MATCHBASE_PUBLIC_READER_DATABASE_URL,
+    reader,
+  );
+  for (const value of [
+    fixture.MATCHBASE_DATABASE_URL,
+    publicReaderFixtureUrl({ username: "reader", host: "external.invalid" }),
+    publicReaderFixtureUrl({ username: "reader", database: "other" }),
+    publicReaderFixtureUrl({ username: "reader", password: "" }),
+  ])
+    assert.throws(() =>
+      validateLocalConfig({
+        ...fixture,
+        MATCHBASE_PUBLIC_READER_DATABASE_URL: value,
+      }),
+    );
 });
 
 test("MB-UX-OPS-002 L02 LAN origins allow private IPv4 but reject public and malformed origins", () => {

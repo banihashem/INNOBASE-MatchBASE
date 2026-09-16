@@ -1,6 +1,6 @@
 # Local Docker runtime — MB-UX-OPS-002 L07
 
-This profile runs the Consultant workspace, durable research worker, PostgreSQL18 and read-only PM dashboard on Docker Desktop. It retains local simulator authentication. The existing production Dockerfile and production identity controls are separate. No registry push is required.
+This profile runs the Consultant workspace, schema migrator, durable research worker, PostgreSQL18 and read-only PM dashboard on Docker Desktop. It retains local simulator authentication. The existing production Dockerfile and production identity controls are separate. No registry push is required.
 
 ## Commands (PowerShell, repository root)
 
@@ -12,7 +12,7 @@ This profile runs the Consultant workspace, durable research worker, PostgreSQL1
 ./deployment/local/Manage-LocalDocker.ps1 -Action Stop
 ```
 
-Build creates a disposable PostgreSQL container on a random loopback port and runs the complete workspace unit command, including database-dependent tests, before sending application source to Docker. It removes only that disposable test container afterward. The Dockerfile repeats unit tests on Linux; its build stage has no database or runtime credentials, so database cases are separately covered by the first gate. Any test failure prevents the final image. No tests are disabled to permit a build. The disposable database contains test data only and accepts trusted local connections; it is never used as the runtime database.
+Build creates a disposable PostgreSQL container on a random loopback port and runs the complete workspace unit command, including database-dependent tests, before sending application source to Docker. It removes only that disposable test container afterward. The Dockerfile repeats unit tests on Linux; its build stage has no database or runtime credentials, so database cases are separately covered by the first gate. Any test failure prevents the final image. No tests are disabled to permit a build. The disposable database contains test data only and accepts trusted local connections; it is never used as the runtime database. `Up` runs the one-shot `migrate` service and the web and worker wait for successful schema migration and additive private-category backfill.
 
 The permanent host address is http://localhost:3000, including after Wi-Fi/DHCP changes or when disconnected from a network. Docker Desktop and the containers must be running. The PM dashboard is at http://localhost:3001 and preserves its snapshot freshness warnings. Host database access is on127.0.0.1:55433; containers use postgres:5432. All Docker host ports bind to loopback. The optional LAN gateway below exposes only the application. Web uses Next development mode intentionally to preserve this project's local test identity policy; it is not a production deployment. Source changes require another validated Build followed by Up. The image contains the locked development workspace and Chromium for Consultant PDF rendering.
 
@@ -55,6 +55,10 @@ References: [Docker port bindings](https://docs.docker.com/engine/network/port-p
 PostgreSQL data resides in named volume matchbase_local_postgres_data; PDF cache resides in matchbase_local_pdf_cache. Stop/recreate preserves these volumes. Never use down --volumes or remove the database volume for routine maintenance. The old tmpfs test database in compose.yaml is not the persistent local runtime.
 
 Secrets are read from the Windows User environment by the launcher, passed to Compose as environment-sourced secrets, and read from /run/secrets at runtime. Keys are not image layers, build arguments, checked-in configuration, or launcher command arguments. Docker administrators can access local container secrets; this is not an encrypted external secret manager. The dashboard receives no runtime secrets.
+
+The optional shared public-evidence reader uses `MATCHBASE_PUBLIC_READER_DATABASE_URL`. Its PostgreSQL LOGIN role must be non-superuser, non-bypass, unable to read private observations and bound to the exact Consultant account/profile through `bindPublicCorpusReader()`. Provision it with `pnpm run provision:public-reader` after setting the documented server-only inputs. This local binding does not qualify production identity. Public acquisition and release remain separate operator capabilities; private research output is never promoted automatically.
+
+Provisioning requires `MATCHBASE_DATABASE_URL`, `MATCHBASE_PUBLIC_READER_ROLE`, `MATCHBASE_PUBLIC_READER_DATABASE_PASSWORD`, `MATCHBASE_PUBLIC_READER_ACCOUNT_ID`, `MATCHBASE_PUBLIC_READER_PROFILE_ID` and `MATCHBASE_PUBLIC_READER_IDENTITY_REFERENCE` in the operator process. Persist only `MATCHBASE_PUBLIC_READER_DATABASE_URL` in the Windows User environment for runtime use. The role password must be a generated 32–128 character URL-safe value. The provisioning command reports status without printing the password or connection URL.
 
 ### Consultant model and provider settings (MB-UX-QUALITY-001 L07)
 

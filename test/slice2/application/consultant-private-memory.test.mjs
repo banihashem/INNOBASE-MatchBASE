@@ -67,6 +67,7 @@ const rawRow = (item) => ({
   eligible_until: new Date(item.eligible_until),
   entity_id: null,
   category_key: privateEvidenceCategoryKey(session.classification),
+  category_scope_keys: [privateEvidenceCategoryKey(session.classification)],
 });
 const evidenceDb = (rows, expected = session) => ({
   async query(sql, params) {

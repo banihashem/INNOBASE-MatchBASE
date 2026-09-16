@@ -59,3 +59,36 @@ test("MB-UX-QUALITY-001 L15 retains only the latest definitive no-receipt route 
     [],
   );
 });
+
+test("MB-UX-QUALITY-001 L17 retains an exact no-receipt focus privacy rejection", () => {
+  const failure = {
+    http_status: 404,
+    request_format: "json_schema",
+    category: "privacy",
+  };
+  assert.deepEqual(
+    retainedProviderRouteRejections([
+      {
+        phase: "research_focus_analysis",
+        detail: {
+          requested_model: "anthropic/claude-sonnet-5",
+          model: "anthropic/claude-sonnet-5",
+          state: "failed",
+          dispatched: true,
+          provider_dispatch_rejected: true,
+          provider_receipt_received: false,
+          provider_http_failure: failure,
+          error: "Provider rejected the request.",
+        },
+      },
+    ]),
+    [
+      {
+        model: "anthropic/claude-sonnet-5",
+        phase: "research_focus_analysis",
+        error: "Provider rejected the request.",
+        provider_http_failure: failure,
+      },
+    ],
+  );
+});

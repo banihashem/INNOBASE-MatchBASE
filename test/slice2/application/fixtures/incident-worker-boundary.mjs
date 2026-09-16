@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import {
   recordResearchIncident,
+  safeResearchIncidentCode,
   withBoundedResearchIncidentStore,
 } from "../../../../packages/data/dist/consultant-research-incidents.js";
 
@@ -39,8 +40,16 @@ mock.module("../../../../packages/data/dist/index.js", {
     finishConsultantWorkflowJob: async () => {
       state.finished++;
     },
+    appendConsultantWorkflowEvent: async () => {},
+    inTransaction: async (_pool, work) => work(db),
     renewConsultantWorkflowJobLease: async () => true,
     recordResearchIncident,
+    safeResearchIncidentCode,
+    resumeFailedConsultantResearchExecution: async () => {
+      throw Object.assign(new Error("Not eligible"), {
+        code: "MB-409-EXECUTION-RESUME",
+      });
+    },
     withBoundedResearchIncidentStore,
   },
 });

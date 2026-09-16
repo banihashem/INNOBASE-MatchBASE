@@ -15,6 +15,7 @@ import {
 } from "./consultant-execution-integrity.js";
 import type { ConsultantWorkflowIdentity } from "./consultant-workflow-jobs.js";
 import type { PrivateResearchScope } from "./consultant-research-renewal.js";
+import { privateEvidenceCategoryScopeKeys } from "./consultant-category-scopes.js";
 
 export type PrivateEvidencePurpose =
   "discovery" | "identity" | "pricing" | "compliance";
@@ -48,6 +49,8 @@ export interface PrivateEvidenceObservation extends PrivateEvidenceReference {
   } | null;
   eligible_until: string;
   recency: "under_7_days" | "under_30_days" | "current";
+  category_match?: "exact" | "related";
+  classification?: Record<string, unknown> | null;
 }
 function refuse(message: string): never {
   throw new ExecutionIntegrityFault("MB-409-PRIVATE-EVIDENCE", message);
@@ -64,12 +67,7 @@ export function privateEvidenceCategoryKey(classification: {
   version: string;
   jurisdiction?: string;
 }): string {
-  return hashResearchAuthority({
-    scheme: classification.scheme,
-    code: classification.code,
-    version: classification.version,
-    jurisdiction: classification.jurisdiction,
-  });
+  return privateEvidenceCategoryScopeKeys(classification)[0]!;
 }
 function date(value: unknown): string | null {
   if (
@@ -351,6 +349,10 @@ export async function capturePrivateResearchEvidence(
     });
   }
   let count = 0;
+  const categoryKey = privateEvidenceCategoryKey(output.primary_classification);
+  const categoryScopeKeys = privateEvidenceCategoryScopeKeys(
+    output.primary_classification,
+  );
   const save = async (
     origin: string,
     kind: string,
@@ -365,9 +367,9 @@ export async function capturePrivateResearchEvidence(
     if (!source) return;
     const entity = supplierId ? entities.get(supplierId) : undefined;
     const result = await client.query(
-      `INSERT INTO consultant_private_observation(observation_id,account_id,user_profile_id,run_id,execution_id,classification_id,category_key,
+      `INSERT INTO consultant_private_observation(observation_id,account_id,user_profile_id,run_id,execution_id,classification_id,category_key,category_scope_keys,
       origin_key,entity_id,entity_version_id,observation_version,source_version_id,claim_kind,claim_text,payload,price_date,valid_until)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       ON CONFLICT(account_id,user_profile_id,execution_id,origin_key,source_version_id) DO NOTHING RETURNING observation_id`,
       [
         randomUUID(),
@@ -376,7 +378,8 @@ export async function capturePrivateResearchEvidence(
         identity.run_id,
         identity.execution_id,
         identity.classification_id,
-        privateEvidenceCategoryKey(output.primary_classification),
+        categoryKey,
+        categoryScopeKeys,
         origin,
         entity?.entity_id ?? null,
         entity?.entity_version_id ?? null,
@@ -488,6 +491,10 @@ function observation(row: Record<string, any>): PrivateEvidenceObservation {
       : null,
     eligible_until: row.eligible_until.toISOString(),
     recency: row.recency,
+    ...(row.category_match === "exact" || row.category_match === "related"
+      ? { category_match: row.category_match }
+      : {}),
+    classification: row.classification ?? null,
   };
 }
 
@@ -512,28 +519,104 @@ export async function retrievePrivateEvidence(
   const params = [
     request.account_id,
     request.user_profile_id,
+    privateEvidenceCategoryScopeKeys(request.classification),
     privateEvidenceCategoryKey(request.classification),
     query,
     request.purpose,
     limit,
   ];
-  const scope = `o.account_id=$1 AND o.user_profile_id=$2 AND s.account_id=$1 AND s.user_profile_id=$2 AND o.category_key=$3
-    AND ($5='discovery' OR o.claim_kind=$5) AND ($4='' OR to_tsvector('simple',o.claim_text) @@ plainto_tsquery('simple',$4)
-      OR lower(e.registry_number)=lower($4))`;
+  const scope = `o.account_id=$1 AND o.user_profile_id=$2 AND s.account_id=$1 AND s.user_profile_id=$2 AND $4::text IS NOT NULL AND o.category_scope_keys && $3::text[]
+    AND ($6='discovery' OR o.claim_kind=$6) AND ($5='' OR to_tsvector('simple',o.claim_text) @@ plainto_tsquery('simple',$5)
+      OR lower(e.registry_number)=lower($5))`;
   const rows = await db.query(
-    `SELECT ${projection} ${joins} WHERE ${scope} AND ${eligibleFilter}
-    ORDER BY CASE WHEN lower(e.registry_number)=lower($4) THEN 0 ELSE 1 END,
+    `SELECT ${projection},CASE WHEN o.category_key=$4 THEN 'exact' ELSE 'related' END AS category_match ${joins} WHERE ${scope} AND ${eligibleFilter}
+    ORDER BY CASE WHEN o.category_key=$4 THEN 0 ELSE 1 END,CASE WHEN lower(e.registry_number)=lower($5) THEN 0 ELSE 1 END,
       CASE WHEN o.claim_kind='pricing' AND o.price_date>clock_timestamp()-interval '7 days' THEN 0 ELSE 1 END,
-      ts_rank_cd(to_tsvector('simple',o.claim_text),plainto_tsquery('simple',$4)) DESC,o.created_at DESC,o.observation_id LIMIT $6`,
+      ts_rank_cd(to_tsvector('simple',o.claim_text),plainto_tsquery('simple',$5)) DESC,o.created_at DESC,o.observation_id LIMIT $7`,
     params,
   );
   const stale = await db.query<{ count: number }>(
     `SELECT count(*)::integer AS count ${joins} WHERE ${scope} AND NOT (${eligibleFilter})`,
-    params.slice(0, 5),
+    params.slice(0, 6),
   );
   return {
     observations: rows.rows.map(observation),
     needs_refresh_count: stale.rows[0]?.count ?? 0,
+    fresh_discovery_required: true as const,
+  };
+}
+
+/** Read-only profile library search. It never dispatches research or records evidence use. */
+export async function searchPrivateEvidenceProfile(
+  db: Queryable,
+  scope: PrivateResearchScope,
+  request: {
+    query?: string;
+    classification?: {
+      scheme: string;
+      code: string;
+      version: string;
+      jurisdiction?: string;
+      label?: string;
+      description?: string;
+    };
+    status?: "current" | "expired" | "all";
+    limit?: number;
+  } = {},
+) {
+  const query = (request.query ?? "").trim().slice(0, 4000);
+  const status = request.status ?? "current";
+  if (!["current", "expired", "all"].includes(status))
+    refuse("Private evidence status filter is invalid.");
+  const limit = Math.max(1, Math.min(100, Math.floor(request.limit ?? 30)));
+  const scopes = request.classification
+    ? privateEvidenceCategoryScopeKeys(request.classification)
+    : null;
+  const exact = request.classification
+    ? privateEvidenceCategoryKey(request.classification)
+    : null;
+  const base = `o.account_id=$1 AND o.user_profile_id=$2 AND s.account_id=$1 AND s.user_profile_id=$2
+    AND ($3::text[] IS NULL OR o.category_scope_keys && $3::text[])
+    AND ($5='' OR to_tsvector('simple',o.claim_text) @@ plainto_tsquery('simple',$5)
+      OR lower(COALESCE(e.registry_number,''))=lower($5)
+      OR lower(v.payload->>'publisher') LIKE '%'||lower($5)||'%')`;
+  const statusSql =
+    status === "current"
+      ? `AND ${eligibleFilter}`
+      : status === "expired"
+        ? `AND NOT (${eligibleFilter})`
+        : "";
+  const params = [
+    scope.account_id,
+    scope.user_profile_id,
+    scopes,
+    exact,
+    query,
+    limit,
+  ];
+  const rows = await db.query(
+    `SELECT ${projection},CASE WHEN $4::text IS NULL THEN NULL WHEN o.category_key=$4::text THEN 'exact' ELSE 'related' END AS category_match,
+      (SELECT ws.classification FROM consultant_workflow_session ws WHERE ws.account_id=o.account_id
+        AND ws.user_profile_id=o.user_profile_id AND ws.classification->>'classification_id'=o.classification_id::text
+        ORDER BY ws.updated_at DESC LIMIT 1) AS classification
+    ${joins} WHERE ${base} ${statusSql}
+    ORDER BY CASE WHEN $4::text IS NOT NULL AND o.category_key=$4::text THEN 0 ELSE 1 END,
+      CASE WHEN (${eligibility})>clock_timestamp() THEN 0 ELSE 1 END,o.created_at DESC,o.observation_id LIMIT $6`,
+    params,
+  );
+  const counts = await db.query<{
+    current_count: number;
+    expired_count: number;
+  }>(
+    `SELECT count(*) FILTER(WHERE ${eligibleFilter})::integer AS current_count,
+      count(*) FILTER(WHERE NOT (${eligibleFilter}))::integer AS expired_count
+    ${joins} WHERE ${base.replaceAll("$5", "$4")}`,
+    [scope.account_id, scope.user_profile_id, scopes, query],
+  );
+  return {
+    observations: rows.rows.map(observation),
+    current_count: counts.rows[0]?.current_count ?? 0,
+    expired_count: counts.rows[0]?.expired_count ?? 0,
     fresh_discovery_required: true as const,
   };
 }
@@ -568,7 +651,7 @@ export async function validatePrivateEvidenceSelection(
     !classification.version
   )
     refuse("The current classification assignment could not be verified.");
-  const category = privateEvidenceCategoryKey(classification);
+  const categoryScopes = privateEvidenceCategoryScopeKeys(classification);
   const ids = refs.map((r) => r.observation_id);
   await client.query(
     `SELECT s.source_id ${joins} WHERE o.account_id=$1 AND o.user_profile_id=$2 AND s.account_id=$1 AND s.user_profile_id=$2
@@ -581,7 +664,15 @@ export async function validatePrivateEvidenceSelection(
     [scope.account_id, scope.user_profile_id, ids, purpose],
   );
   const found = rows.rows.map(observation);
-  if (rows.rows.some((row) => row.category_key !== category))
+  if (
+    rows.rows.some(
+      (row) =>
+        !Array.isArray(row.category_scope_keys) ||
+        !row.category_scope_keys.some((key: string) =>
+          categoryScopes.includes(key),
+        ),
+    )
+  )
     refuse(
       "The saved observations belong to another product or service classification.",
     );

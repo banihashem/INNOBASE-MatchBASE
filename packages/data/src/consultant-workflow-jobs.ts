@@ -302,8 +302,9 @@ export async function readConsultantProviderRouteRejectionEvents(
      WHERE e.account_id=$1 AND e.user_profile_id=$2 AND e.run_id=$3
        AND e.execution_id=$4 AND e.classification_id=$5
        AND a.outcome='failed' AND a.provider_outcome='rejected'
-       AND e.phase=('discovery_' || CASE split_part(a.model,'/',1)
-         WHEN 'google' THEN 'gemini' WHEN 'x-ai' THEN 'xai' ELSE split_part(a.model,'/',1) END)
+       AND (e.phase='research_focus_analysis' OR
+         e.phase=('discovery_' || CASE split_part(a.model,'/',1)
+           WHEN 'google' THEN 'gemini' WHEN 'x-ai' THEN 'xai' ELSE split_part(a.model,'/',1) END))
        AND e.detail->>'state'='failed' AND e.detail->>'dispatched'='true'
        AND e.detail->>'provider_dispatch_rejected'='true'
        AND e.detail->>'provider_receipt_received'='false'

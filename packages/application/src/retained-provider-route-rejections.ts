@@ -1,5 +1,5 @@
 import type { ProviderHttpFailure } from "./provider-http-failure.js";
-import type { RetainedProviderRouteRejection } from "./dual-lane-orchestrator.js";
+import type { DefinitiveProviderRouteRejection } from "./openrouter-model-policy.js";
 
 export interface ProviderRouteCheckpointEvent {
   readonly phase: string;
@@ -43,14 +43,21 @@ function expectedDiscoveryPhase(model: string): string {
   return `discovery_${family === "google" ? "gemini" : family === "x-ai" ? "xai" : family}`;
 }
 
+function expectedProviderPhase(phase: string, model: string): boolean {
+  return (
+    phase === expectedDiscoveryPhase(model) ||
+    phase === "research_focus_analysis"
+  );
+}
+
 /**
  * Derive only definitive no-receipt route rejections from ordered checkpoints.
  * A later completion for the exact phase/model clears an older rejection.
  */
 export function retainedProviderRouteRejections(
   events: readonly ProviderRouteCheckpointEvent[],
-): RetainedProviderRouteRejection[] {
-  const retained = new Map<string, RetainedProviderRouteRejection>();
+): DefinitiveProviderRouteRejection[] {
+  const retained = new Map<string, DefinitiveProviderRouteRejection>();
   for (const event of events) {
     const detail = event.detail;
     const model =
@@ -59,7 +66,7 @@ export function retainedProviderRouteRejections(
         : typeof detail.model === "string"
           ? detail.model
           : null;
-    if (!model || event.phase !== expectedDiscoveryPhase(model)) continue;
+    if (!model || !expectedProviderPhase(event.phase, model)) continue;
     const key = `${event.phase}\u0000${model}`;
     if (detail.state === "completed") {
       retained.delete(key);

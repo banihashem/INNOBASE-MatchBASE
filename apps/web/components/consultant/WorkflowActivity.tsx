@@ -39,12 +39,22 @@ export function WorkflowActivity({
         : "Research stopped";
   const failed = state === "workflow_failed";
   const stoppedByUser = failed && progress?.phase === "user_cancelled";
-  const recoveryCopy =
-    retryAction === "research"
-      ? "Your saved request and approvals are retained. No research is running. A new execution requires a fresh cost estimate and your approval. Completed round results are retained."
-      : retryAction === "prepare"
-        ? "Your approved interpretation is saved. No research is running. A manual retry starts preparation again and may repeat paid work; automatic recovery within an active attempt retains completed topics. Your research plan still needs approval."
-        : "Your saved request is retained. No research is running. Retry repeats the failed interpretation or preparation step.";
+  const approvalRequired = failed && progress?.phase === "approval_required";
+  const outcomeReviewRequired =
+    failed && progress?.phase === "provider_outcome_review_required";
+  const technicalReviewRequired =
+    failed && progress?.phase === "technical_review_required";
+  const recoveryCopy = approvalRequired
+    ? "Automatic recovery checked the saved stages, provider outcome and approved allowance. This execution cannot continue safely under the previous approval. Review a current cost estimate below; completed round results remain available."
+    : outcomeReviewRequired
+      ? "The provider dispatch outcome is uncertain. Automatic replay is blocked to prevent duplicate cost. Saved findings and accounting evidence remain available for review."
+      : technicalReviewRequired
+        ? "The incident was contained and recorded, but it does not match an authorized automatic recovery playbook. No provider request was repeated."
+        : retryAction === "research"
+          ? "Your saved request and approvals are retained. No research is running. A new execution requires a fresh cost estimate and your approval. Completed round results are retained."
+          : retryAction === "prepare"
+            ? "Your approved interpretation is saved. No research is running. A manual retry starts preparation again and may repeat paid work; automatic recovery within an active attempt retains completed topics. Your research plan still needs approval."
+            : "Your saved request is retained. No research is running. Retry repeats the failed interpretation or preparation step.";
   const ready = resultReady(state);
   const awaiting =
     state.includes("awaiting_approval") ||
@@ -92,7 +102,13 @@ export function WorkflowActivity({
     : failed
       ? stoppedByUser
         ? "Stopped by you"
-        : failureLabel
+        : approvalRequired
+          ? "Recovery checked · approval required"
+          : outcomeReviewRequired
+            ? "Provider outcome needs review"
+            : technicalReviewRequired
+              ? "Technical review required"
+              : failureLabel
       : awaiting
         ? workflowLabel(state)
         : ready

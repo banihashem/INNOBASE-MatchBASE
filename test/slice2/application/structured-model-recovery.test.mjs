@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   LiveResearchError,
+  selectApprovedRouteRecovery,
   selectApprovedStructuredRecovery,
   withLiveStageBudget,
 } from "../../../packages/application/dist/openrouter-model-policy.js";
@@ -12,6 +13,30 @@ const alternate = "deepseek/deepseek-v4-pro";
 const other = "openai/gpt-5.2";
 const malformed = () =>
   new LiveResearchError("MB-422-LIVE-SCHEMA", "Invalid JSON schema.");
+const routeCheckpoint = (category, changes = {}) => ({
+  checkpoint_id: "checkpoint-id",
+  request_id: "request-id",
+  phase: "research_focus_analysis",
+  stage: "research_focus_analysis",
+  loop: 3,
+  max_loops: 5,
+  message: "Provider route rejected.",
+  state: "failed",
+  requested_model: primary,
+  model: primary,
+  request_hash: "request-hash",
+  started_at: "2026-09-16T00:00:00.000Z",
+  evidence_urls: [],
+  dispatched: true,
+  provider_dispatch_rejected: true,
+  provider_receipt_received: false,
+  provider_http_failure: {
+    http_status: category === "billing" ? 402 : 404,
+    request_format: "json_schema",
+    category,
+  },
+  ...changes,
+});
 const runtimeName = (name) =>
   /^(?:MATCHBASE_|OPENROUTER_|DATABASE_URL$|PG(?:HOST|PORT|USER|PASSWORD|DATABASE|SERVICE|SERVICEFILE|PASSFILE|OPTIONS)$|OPENAI_API_KEY$|GOOGLE_API_KEY$|GEMINI_API_KEY$)/.test(
     name,
@@ -105,6 +130,58 @@ for (const code of ["MB-422-LIVE-SCHEMA", "MB-422-LIVE-JSON"]) {
       }),
       before,
     );
+  });
+}
+
+for (const category of [
+  "privacy",
+  "endpoint_unavailable",
+  "unsupported_parameters",
+  "web_unavailable",
+]) {
+  test(`MB-UX-QUALITY-001 L17 definitive ${category} route rejection selects only the approved alternative`, async (t) => {
+    const f = fixture(t);
+    await f.consume();
+    assert.deepEqual(
+      selectApprovedRouteRecovery(
+        primary,
+        routeCheckpoint(category),
+        f.options,
+      ),
+      { original_model: primary, next_model: alternate },
+    );
+    assert.equal(f.remaining(), 2);
+    assert.equal(f.guarded(), 1);
+  });
+}
+
+for (const [label, checkpoint] of [
+  [
+    "a provider receipt",
+    routeCheckpoint("privacy", { provider_receipt_received: true }),
+  ],
+  [
+    "an ambiguous dispatch",
+    routeCheckpoint("privacy", { provider_dispatch_rejected: false }),
+  ],
+  ["a model mismatch", routeCheckpoint("privacy", { requested_model: other })],
+  ["a content refusal", routeCheckpoint("refusal")],
+  ["an authentication failure", routeCheckpoint("authentication")],
+  ["a billing failure", routeCheckpoint("billing")],
+  ["a permission failure", routeCheckpoint("permission")],
+  ["a context limit", routeCheckpoint("context_limit")],
+  ["an unknown failure", routeCheckpoint("unknown")],
+  ["a rate limit", routeCheckpoint("rate_limit")],
+  ["schema compatibility", routeCheckpoint("schema_compatibility")],
+]) {
+  test(`MB-UX-QUALITY-001 L17 route recovery rejects ${label}`, async (t) => {
+    const f = fixture(t);
+    await f.consume();
+    assert.equal(
+      selectApprovedRouteRecovery(primary, checkpoint, f.options),
+      undefined,
+    );
+    assert.equal(f.options.stage_recovery_state.replacements.size, 0);
   });
 }
 

@@ -404,15 +404,24 @@ runtime, and runs as UID/GID 10001. Build from the repository root:
 ```powershell
 $routePolicyPath = 'config/slice3/research-route-policy.staging.v4.json'
 $routePolicySha256 = (Get-FileHash -LiteralPath $routePolicyPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$productVersion = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+$sourceRevision = (& git rev-parse HEAD).Trim()
+$sourceState = if ([string]::IsNullOrWhiteSpace((& git status --porcelain=v1 --untracked-files=all | Out-String))) { 'clean' } else { 'dirty' }
 docker build --pull --target web-runtime `
   --build-arg DEPLOYMENT_ENVIRONMENT=staging `
   --build-arg ROUTE_POLICY_PATH=$routePolicyPath `
   --build-arg ROUTE_POLICY_SHA256=$routePolicySha256 `
+  --build-arg MATCHBASE_PRODUCT_VERSION=$productVersion `
+  --build-arg MATCHBASE_SOURCE_REVISION=$sourceRevision `
+  --build-arg MATCHBASE_SOURCE_STATE=$sourceState `
   --tag staging-web .
 docker build --pull --target worker-runtime `
   --build-arg DEPLOYMENT_ENVIRONMENT=staging `
   --build-arg ROUTE_POLICY_PATH=$routePolicyPath `
   --build-arg ROUTE_POLICY_SHA256=$routePolicySha256 `
+  --build-arg MATCHBASE_PRODUCT_VERSION=$productVersion `
+  --build-arg MATCHBASE_SOURCE_REVISION=$sourceRevision `
+  --build-arg MATCHBASE_SOURCE_STATE=$sourceState `
   --tag "staging-worker-$($routePolicySha256.Substring(0, 16))" .
 ```
 

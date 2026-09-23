@@ -3,6 +3,10 @@
 ARG NODE_IMAGE=node:24.14.0-bookworm-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8
 ARG VERAPDF_IMAGE=verapdf/cli:v1.30.1@sha256:20202b4bcc2410a25db1f637c7b461a2e0dda1d97dd8a6df658286b30d56c842
 ARG DEBIAN_SNAPSHOT=20260831T000000Z
+ARG MATCHBASE_PRODUCT_VERSION=unknown
+ARG MATCHBASE_SOURCE_REPOSITORY=https://github.com/banihashem/INNOBASE-MatchBASE
+ARG MATCHBASE_SOURCE_REVISION=unknown
+ARG MATCHBASE_SOURCE_STATE=unknown
 
 FROM ${VERAPDF_IMAGE} AS verapdf-toolchain
 
@@ -110,6 +114,19 @@ RUN node /opt/playwright-runtime/node_modules/playwright/cli.js install --with-d
 
 FROM web-pdf-runtime AS web-runtime
 ARG DEPLOYMENT_ENVIRONMENT
+ARG MATCHBASE_PRODUCT_VERSION
+ARG MATCHBASE_SOURCE_REPOSITORY
+ARG MATCHBASE_SOURCE_REVISION
+ARG MATCHBASE_SOURCE_STATE
+RUN test -n "$MATCHBASE_PRODUCT_VERSION" && test "$MATCHBASE_PRODUCT_VERSION" != unknown \
+    && test -n "$MATCHBASE_SOURCE_REVISION" && test "$MATCHBASE_SOURCE_REVISION" != unknown \
+    && test -n "$MATCHBASE_SOURCE_STATE" && test "$MATCHBASE_SOURCE_STATE" != unknown \
+    || { echo "Image source identity is incomplete." >&2; exit 1; }
+LABEL org.opencontainers.image.title="MatchBASE Consultant web runtime" \
+      org.opencontainers.image.source="${MATCHBASE_SOURCE_REPOSITORY}" \
+      org.opencontainers.image.version="${MATCHBASE_PRODUCT_VERSION}" \
+      org.opencontainers.image.revision="${MATCHBASE_SOURCE_REVISION}" \
+      com.innobase.matchbase.source-state="${MATCHBASE_SOURCE_STATE}"
 COPY --from=builder /workspace/deployment/gcp/Assert-ProductionImageEnvironment.mjs /tmp/Assert-ProductionImageEnvironment.mjs
 RUN node /tmp/Assert-ProductionImageEnvironment.mjs "$DEPLOYMENT_ENVIRONMENT" \
     && rm /tmp/Assert-ProductionImageEnvironment.mjs
@@ -135,6 +152,19 @@ ENTRYPOINT ["/app/runtime-entrypoint.sh"]
 CMD ["node", "server.js"]
 
 FROM pdf-runtime AS worker-runtime
+ARG MATCHBASE_PRODUCT_VERSION
+ARG MATCHBASE_SOURCE_REPOSITORY
+ARG MATCHBASE_SOURCE_REVISION
+ARG MATCHBASE_SOURCE_STATE
+RUN test -n "$MATCHBASE_PRODUCT_VERSION" && test "$MATCHBASE_PRODUCT_VERSION" != unknown \
+    && test -n "$MATCHBASE_SOURCE_REVISION" && test "$MATCHBASE_SOURCE_REVISION" != unknown \
+    && test -n "$MATCHBASE_SOURCE_STATE" && test "$MATCHBASE_SOURCE_STATE" != unknown \
+    || { echo "Image source identity is incomplete." >&2; exit 1; }
+LABEL org.opencontainers.image.title="MatchBASE Consultant worker runtime" \
+      org.opencontainers.image.source="${MATCHBASE_SOURCE_REPOSITORY}" \
+      org.opencontainers.image.version="${MATCHBASE_PRODUCT_VERSION}" \
+      org.opencontainers.image.revision="${MATCHBASE_SOURCE_REVISION}" \
+      com.innobase.matchbase.source-state="${MATCHBASE_SOURCE_STATE}"
 ENV NODE_ENV=production
 WORKDIR /app
 RUN groupadd --gid 10001 matchbase \

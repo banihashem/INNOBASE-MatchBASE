@@ -13,6 +13,12 @@ steps:
       - ROUTE_POLICY_PATH=config/slice3/research-route-policy.staging.v4.json
       - --build-arg
       - ROUTE_POLICY_SHA256=${_ROUTE_POLICY_SHA256}
+      - --build-arg
+      - MATCHBASE_PRODUCT_VERSION=${_PRODUCT_VERSION}
+      - --build-arg
+      - MATCHBASE_SOURCE_REVISION=${_CANDIDATE_COMMIT}
+      - --build-arg
+      - MATCHBASE_SOURCE_STATE=clean
       - --tag
       - me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-web:${_CANDIDATE_COMMIT}
       - .
@@ -30,6 +36,12 @@ steps:
       - ROUTE_POLICY_PATH=config/slice3/research-route-policy.staging.v4.json
       - --build-arg
       - ROUTE_POLICY_SHA256=${_ROUTE_POLICY_SHA256}
+      - --build-arg
+      - MATCHBASE_PRODUCT_VERSION=${_PRODUCT_VERSION}
+      - --build-arg
+      - MATCHBASE_SOURCE_REVISION=${_CANDIDATE_COMMIT}
+      - --build-arg
+      - MATCHBASE_SOURCE_STATE=clean
       - --tag
       - me-central1-docker.pkg.dev/innobase-matchbase-stg/matchbase/staging-worker-${_ROUTE_POLICY_ID}:${_CANDIDATE_COMMIT}
       - .
@@ -41,5 +53,6 @@ options:
   requestedVerifyOption: VERIFIED
 substitutions:
   _CANDIDATE_COMMIT: unset
+  _PRODUCT_VERSION: unset
   _ROUTE_POLICY_SHA256: unset
   _ROUTE_POLICY_ID: unset

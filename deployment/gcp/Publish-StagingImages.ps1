@@ -24,6 +24,8 @@ $buildRecordParser = Join-Path $repoRoot "scripts/lib/staging-build-record.mjs"
 $preflightParser = Join-Path $repoRoot "scripts/lib/staging-build-preflight.mjs"
 $policySha = (Get-FileHash -LiteralPath $policyPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $policyId = $policySha.Substring(0, 16)
+$productVersion = ((& git -C $repoRoot show "$CandidateCommit`:package.json" | Out-String | ConvertFrom-Json).version)
+if ($productVersion -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') { throw "Candidate product version is invalid." }
 if ($policySha -cne "0c95528d528d7237c90d7bde792d5700e41878cf7f6f0a12b52d5ff4edb4ee02") { throw "Tracked qualified Staging route-policy SHA-256 changed; update the governed build contract and tests first." }
 if ((& git -C $repoRoot rev-parse HEAD).Trim() -cne $CandidateCommit) { throw "Candidate commit must equal HEAD." }
 if (-not [string]::IsNullOrWhiteSpace((& git -C $repoRoot status --porcelain=v1 --untracked-files=all | Out-String))) { throw "Image publication requires a clean tracked and untracked worktree." }
@@ -84,7 +86,7 @@ try {
 
 $webTag = "$region-docker.pkg.dev/$project/$repository/staging-web:$CandidateCommit"
 $workerTag = "$region-docker.pkg.dev/$project/$repository/staging-worker-$policyId`:$CandidateCommit"
-$arguments = @("builds", "submit", $sourceRepository, "--revision=$CandidateCommit", "--config=$configPath", "--project=$project", "--region=$region", "--service-account=projects/$project/serviceAccounts/$BuildServiceAccount", "--substitutions=_CANDIDATE_COMMIT=$CandidateCommit,_ROUTE_POLICY_SHA256=$policySha,_ROUTE_POLICY_ID=$policyId", "--quiet")
+$arguments = @("builds", "submit", $sourceRepository, "--revision=$CandidateCommit", "--config=$configPath", "--project=$project", "--region=$region", "--service-account=projects/$project/serviceAccounts/$BuildServiceAccount", "--substitutions=_CANDIDATE_COMMIT=$CandidateCommit,_PRODUCT_VERSION=$productVersion,_ROUTE_POLICY_SHA256=$policySha,_ROUTE_POLICY_ID=$policyId", "--quiet")
 if (-not $Apply) { Write-GcloudPlan -Arguments $arguments; return }
 Assert-ApplyConfirmation -Apply $true -ExpectedProjectId $project -ConfirmProjectId $ConfirmProjectId
 Invoke-Gcloud -Arguments $arguments | Out-Null

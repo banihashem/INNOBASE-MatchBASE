@@ -184,7 +184,17 @@ try {
             }
             & docker rm -f $unitContainer | Out-Null
         }
-        & docker build --file Dockerfile.local --target local-runtime --tag matchbase-local:current .
+        $sourceRevision = (& git rev-parse HEAD).Trim()
+        Assert-NativeSuccess 'Source revision lookup'
+        $sourceState = if (& git status --porcelain) { 'dirty' } else { 'clean' }
+        Assert-NativeSuccess 'Source state lookup'
+        $productVersion = (Get-Content -LiteralPath (Join-Path $appRoot 'package.json') -Raw | ConvertFrom-Json).version
+        & docker build --file Dockerfile.local --target local-runtime `
+            --build-arg "MATCHBASE_PRODUCT_VERSION=$productVersion" `
+            --build-arg 'MATCHBASE_SOURCE_REPOSITORY=https://github.com/banihashem/INNOBASE-MatchBASE' `
+            --build-arg "MATCHBASE_SOURCE_REVISION=$sourceRevision" `
+            --build-arg "MATCHBASE_SOURCE_STATE=$sourceState" `
+            --tag matchbase-local:current .
         Assert-NativeSuccess 'Docker image build and Linux unit gate'
         return
     }

@@ -24,6 +24,8 @@ Review the complete diff and newly reachable commit history for private material
 
 The root `package.json` version is the product release version; internal private workspace package versions are independent compatibility metadata. Releases use matching `v<version>` immutable tags. A prerelease suffix denotes a qualification candidate, not production acceptance. Commit SHA identifies source; Docker digest identifies runtime. Record both in the local entrypoint.
 
+Every runtime image records the product version, source repository, source revision and source-tree state as OCI labels. A `dirty` local image is test evidence for that working tree and must not be represented as an immutable release candidate.
+
 Create a release from the checked merged commit, with sanitized changes, tests, migration/rollback implications and known limitations. Keep prior tags and recovery branches. A GitHub release does not deploy the application. Release notes must not contain customer inputs, research payloads, account/run identifiers, keys or internal reports.
 
 ## Operate and maintain

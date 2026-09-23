@@ -28,6 +28,15 @@ RUN node --test deployment/local/*.test.mjs
 RUN pnpm --filter @matchbase/dashboard build
 
 FROM tested AS local-runtime
+ARG MATCHBASE_PRODUCT_VERSION=unknown
+ARG MATCHBASE_SOURCE_REPOSITORY=https://github.com/banihashem/INNOBASE-MatchBASE
+ARG MATCHBASE_SOURCE_REVISION=unknown
+ARG MATCHBASE_SOURCE_STATE=unknown
+LABEL org.opencontainers.image.title="MatchBASE local Consultant runtime" \
+      org.opencontainers.image.source="${MATCHBASE_SOURCE_REPOSITORY}" \
+      org.opencontainers.image.version="${MATCHBASE_PRODUCT_VERSION}" \
+      org.opencontainers.image.revision="${MATCHBASE_SOURCE_REVISION}" \
+      com.innobase.matchbase.source-state="${MATCHBASE_SOURCE_STATE}"
 ENV NODE_ENV=development
 RUN mkdir -p apps/web/.artifacts apps/web/.next apps/dashboard/node_modules/.vite-temp /tmp/matchbase \
     && chown -R node:node apps/web apps/dashboard/node_modules/.vite-temp /tmp/matchbase

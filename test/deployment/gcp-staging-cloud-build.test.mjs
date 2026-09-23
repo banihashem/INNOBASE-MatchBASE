@@ -50,6 +50,9 @@ test("governed Staging Cloud Build binds exact Git material, images and provenan
   );
   assert.doesNotMatch(config, /docker\s+push|\n\s+- push\s*$/imu);
   assert.match(publisher, /status --porcelain=v1 --untracked-files=all/u);
+  assert.match(publisher, /show "\$CandidateCommit`:package\.json"/u);
+  assert.match(publisher, /_PRODUCT_VERSION=\$productVersion/u);
+  assert.match(config, /_PRODUCT_VERSION: unset/u);
   assert.match(publisher, /ls-remote origin refs\/heads\/main/u);
   assert.match(
     publisher,

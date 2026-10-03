@@ -92,7 +92,10 @@ test("Consultant saves search dimensions across reload without starting research
       panel.getByRole("heading", { name: "Search dimensions" }),
     ).toBeVisible();
     await expect(
-      panel.getByLabel("Ocean freight and forwarding"),
+      panel.getByRole("checkbox", {
+        name: "Ocean freight and forwarding",
+        exact: true,
+      }),
     ).toBeChecked();
     await panel.getByText("Review dimensions and add priorities").click();
     const backup = panel

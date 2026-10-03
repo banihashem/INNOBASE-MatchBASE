@@ -8,7 +8,10 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ConsultantWorkflowPage from "../../app/consultant/workflow/page";
-import { GOLDEN_SCENARIO_V3_01 } from "@matchbase/contracts";
+import {
+  GOLDEN_SCENARIO_V3_01,
+  createSearchDimensionConfiguration,
+} from "@matchbase/contracts";
 import { SupplierDossierModal } from "./SupplierDossierModal";
 import { InterpretationApprovalStep } from "./InterpretationApprovalStep";
 
@@ -801,6 +804,93 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
     expect(requests.filter((item) => item.action === "approve")).toHaveLength(
       1,
     );
+  });
+
+  it("MB-SEARCH-DIMENSIONS-002 L01 saves selected scope before approving the research plan", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/consultant/workflow?run_id=run-dimensions",
+    );
+    let session: any = {
+      run_id: "run-dimensions",
+      state: "prep_step3_prompt_awaiting_approval",
+      mode: "live",
+      intake: {
+        product_requirement: "Ocean freight",
+        technical_compliance: "Verified provider",
+        order_profile: "One container",
+      },
+      step1_interpretation: {
+        english_translation: "Ocean freight",
+        fidelity_validation: { valid: true },
+      },
+      step3_deep_prompt: {
+        prompt_text: "Find ocean freight providers",
+        is_approved: false,
+      },
+      search_dimensions: createSearchDimensionConfiguration({
+        profile_ids: ["core", "logistics.ocean"],
+      }),
+      search_dimension_revision: "revision-one",
+      search_dimensions_editable: true,
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, options?: RequestInit) => {
+        if (
+          String(url).startsWith("/api/v1/consultant/research-rounds") &&
+          !options?.body
+        )
+          return response(roundOverview);
+        if (url === "/api/v1/me")
+          return response({
+            tier: "consultant",
+            user_id: "user",
+            account_id: "account",
+          });
+        if (!options?.method) return response({ session });
+        const body = JSON.parse(String(options.body));
+        requests.push(body);
+        if (body.action === "save_search_dimensions") {
+          session = {
+            ...session,
+            search_dimensions: body.configuration,
+            search_dimension_revision: "revision-two",
+          };
+          return response({ success: true, session });
+        }
+        if (body.action === "approve_step3")
+          return response({ success: true, session });
+        throw new Error(`Unexpected action: ${body.action}`);
+      }),
+    );
+    render(<ConsultantWorkflowPage />);
+    await screen.findByLabelText("Editable research plan");
+    fireEvent.click(screen.getByRole("tab", { name: "Review & prepare" }));
+    fireEvent.click(screen.getByText("Review dimensions and add priorities"));
+    const row = screen
+      .getByText("Backup routing")
+      .closest(".search-dimensions-row")!;
+    fireEvent.click(within(row as HTMLElement).getByRole("checkbox"));
+    const approve = screen.getByRole("button", {
+      name: /Approve plan & review cost/,
+    });
+    expect(approve).toBeDisabled();
+    expect(requests).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Save dimensions" }));
+    await waitFor(() => expect(approve).toBeEnabled());
+    fireEvent.click(approve);
+    await waitFor(() =>
+      expect(requests.map((request) => request.action)).toEqual([
+        "save_search_dimensions",
+        "approve_step3",
+      ]),
+    );
+    expect(requests[0]).toMatchObject({ expected_revision: "revision-one" });
+    expect(requests[1]).toMatchObject({
+      search_dimension_revision: "revision-two",
+    });
   });
 
   it("retains a failed submitted run and retries interpretation only on explicit request", async () => {

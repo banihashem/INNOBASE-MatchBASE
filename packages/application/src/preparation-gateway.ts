@@ -64,6 +64,7 @@ export interface Step3PromptResult {
 }
 
 export interface ApprovedRequestRevision {
+  readonly search_dimension_plan?: import("@matchbase/contracts").SearchDimensionPlan;
   readonly revision_id: string;
   readonly english_translation: string;
   readonly product_category: string;

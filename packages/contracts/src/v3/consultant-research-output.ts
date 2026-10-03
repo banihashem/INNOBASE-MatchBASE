@@ -12,6 +12,14 @@ import type { ApprovedRequestSnapshotV3 } from "./approved-request.js";
 import type { ResearchReview } from "./research-review.js";
 import { validateResearchReview } from "./research-review.js";
 import { verifyApprovedRequestSnapshotV3 } from "./approved-request.js";
+import { contractSha256Hex } from "../sha256.js";
+import {
+  evaluateSearchDimensionPlan,
+  verifySearchDimensionPlan,
+  type SearchDimensionAssessment,
+  type SearchDimensionObservation,
+  type SearchDimensionPlan,
+} from "./search-dimensions.js";
 
 export const CONSULTANT_RESEARCH_OUTPUT_V3_SCHEMA_VERSION =
   "consultant-research-output.v3" as const;
@@ -326,6 +334,9 @@ export interface ResearchPriceSearchV3 {
   readonly limitations: readonly string[];
 }
 export interface ConsultantResearchOutputV3 extends FourIdTrace {
+  readonly search_dimension_plan?: SearchDimensionPlan;
+  readonly search_dimension_assessments?: readonly SearchDimensionAssessment[];
+  readonly search_dimension_observations?: readonly SearchDimensionObservation[];
   readonly research_review?: ResearchReview;
   readonly price_research?: ResearchPriceSearchV3;
   readonly public_social_checks?: readonly PublicSocialCheckV3[];
@@ -743,5 +754,281 @@ export function parseConsultantResearchOutputV3(
   if (root.research_review !== undefined)
     validateResearchReview(root.research_review);
 
+  if (
+    [
+      root.search_dimension_plan,
+      root.search_dimension_assessments,
+      root.search_dimension_observations,
+    ].some((entry) => entry !== undefined)
+  ) {
+    if (!verifySearchDimensionPlan(root.search_dimension_plan))
+      throw new Error("Invalid pinned search dimension output plan.");
+    const expected = projectSearchDimensionOutput(
+      root.search_dimension_plan,
+      root as unknown as ConsultantResearchOutputV3,
+    );
+    if (
+      dimensionCanonical(root.search_dimension_assessments) !==
+        dimensionCanonical(expected.search_dimension_assessments) ||
+      dimensionCanonical(root.search_dimension_observations) !==
+        dimensionCanonical(expected.search_dimension_observations)
+    )
+      throw new Error(
+        "Search dimension output differs from admitted source evidence or pinned assessment lineage.",
+      );
+  }
+
   return root as unknown as ConsultantResearchOutputV3;
+}
+
+export interface SearchDimensionOutputFields {
+  search_dimension_plan: SearchDimensionPlan;
+  search_dimension_assessments: SearchDimensionAssessment[];
+  search_dimension_observations: SearchDimensionObservation[];
+}
+
+function dimensionCanonical(value: unknown): string {
+  if (Array.isArray(value))
+    return `[${value.map(dimensionCanonical).join(",")}]`;
+  if (value !== null && typeof value === "object")
+    return `{${Object.entries(value)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(
+        ([key, entry]) => `${JSON.stringify(key)}:${dimensionCanonical(entry)}`,
+      )
+      .join(",")}}`;
+  return JSON.stringify(value) ?? "undefined";
+}
+const dimensionLiteral = (value: string): string =>
+  value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase();
+function sourceHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      ["http:", "https:"].includes(url.protocol) &&
+      !url.username &&
+      !url.password
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * MB-SEARCH-DIMENSIONS-002 L01: a deterministic admission adapter shared by publication
+ * and parsing. Canonical paths are research clues, not exhaustive capability sets.
+ * Arbitrary search_dimensions.* or specifications.* labels cannot prove predicates.
+ */
+export function projectSearchDimensionOutput(
+  plan: SearchDimensionPlan,
+  output: ConsultantResearchOutputV3,
+): SearchDimensionOutputFields {
+  if (
+    !verifySearchDimensionPlan(plan) ||
+    plan.owner_scope.user_profile_id !== output.user_profile_id ||
+    plan.primary_classification_id !== output.classification_id ||
+    output.primary_classification.classification_id !== output.classification_id
+  )
+    throw new Error(
+      "Search dimension output owner or primary classification mismatch.",
+    );
+  const now = Date.parse(output.generated_at);
+  if (!Number.isFinite(now))
+    throw new Error("Invalid search dimension output time.");
+  if (
+    new Set(output.claims.map((claim) => claim.claim_id)).size !==
+      output.claims.length ||
+    new Set(output.evidence_sources.map((source) => source.evidence_id))
+      .size !== output.evidence_sources.length
+  )
+    throw new Error("Ambiguous search dimension claim or source identity.");
+  const trace: FourIdTrace = {
+    user_profile_id: output.user_profile_id,
+    research_run_id: output.research_run_id,
+    execution_id: output.execution_id,
+    classification_id: output.classification_id,
+  };
+  const sources = new Map(
+    output.evidence_sources.map((source) => [source.evidence_id, source]),
+  );
+  const observations: SearchDimensionObservation[] = [];
+  const admittedSource = (claim: ClaimV3, source: EvidenceSourceV3): boolean =>
+    claim.status === "externally_verified" &&
+    ["corroborated", "single_source"].includes(claim.conflict_status) &&
+    source.source_type !== "synthetic_fixture" &&
+    source.freshness_status === "current" &&
+    ["externally_verified", "supplier_claimed"].includes(
+      source.verification_status,
+    ) &&
+    source.supports_claim_ids.includes(claim.claim_id) &&
+    !source.contradicts_claim_ids.includes(claim.claim_id) &&
+    sourceHttpUrl(source.source_url) &&
+    Boolean(source.source_id) &&
+    Number.isFinite(Date.parse(source.retrieved_at)) &&
+    Date.parse(source.retrieved_at) <= now &&
+    (!source.published_at ||
+      (Number.isFinite(Date.parse(source.published_at)) &&
+        Date.parse(source.published_at) <= now)) &&
+    typeof source.excerpt_summary === "string" &&
+    source.excerpt_summary.trim().length > 0 &&
+    typeof claim.normalized_value === "string" &&
+    Boolean(claim.normalized_value.trim()) &&
+    dimensionLiteral(source.excerpt_summary).includes(
+      dimensionLiteral(claim.normalized_value),
+    );
+  const contactPaths = new Set([
+    "contacts.sales_email",
+    "contacts.export_email",
+    "contacts.general_email",
+    "contacts.phone",
+  ]);
+  for (const supplier of output.supplier_candidates) {
+    if (
+      output.research_mode === "fixture" ||
+      supplier.entity_basis === "synthetic_fixture" ||
+      supplier.evidence_basis === "illustrative_fixture"
+    )
+      continue;
+    const claims = output.claims.filter(
+      (claim) => claim.supplier_entity_id === supplier.supplier_entity_id,
+    );
+    for (const entry of plan.dimensions) {
+      const { selection, definition } = entry;
+      // These legacy facts do not identify a lot, shipment or contextual assignment.
+      if (
+        !selection.active ||
+        selection.operator !== "research" ||
+        selection.scope.lot_id !== "default" ||
+        selection.scope.subject_id !== "request" ||
+        selection.scope.context_assignment_id
+      )
+        continue;
+      let added = 0;
+      for (const claim of claims) {
+        const field = claim.field_path ?? "";
+        const contact =
+          ["core.contact", "logistics.commercial_contact"].includes(
+            definition.id,
+          ) && contactPaths.has(field);
+        const location =
+          definition.id === "core.location" && field === "headquarters_address";
+        const price =
+          definition.id === "core.price" &&
+          ["commercial.price_min", "commercial.price_max"].includes(field);
+        if (
+          (!contact && !location && !price) ||
+          typeof claim.normalized_value !== "string"
+        )
+          continue;
+        const value = claim.normalized_value;
+        if (
+          contact &&
+          field.endsWith("_email") &&
+          !/^[^\s<>()[\]@]+@[^\s<>()[\]@]+\.[^\s<>()[\]@]+$/u.test(value)
+        )
+          continue;
+        for (const evidenceId of claim.evidence_ids) {
+          const source = sources.get(evidenceId);
+          if (!source || !admittedSource(claim, source) || added >= 20)
+            continue;
+          let publishedAt = source.published_at;
+          let validUntil: string | undefined;
+          if (price) {
+            const sameSource = (path: string) =>
+              claims.find(
+                (item) =>
+                  item.field_path === path &&
+                  item.evidence_ids.includes(evidenceId) &&
+                  admittedSource(item, source),
+              );
+            const date = sameSource("commercial.price_date");
+            const currency = sameSource("commercial.currency");
+            const unit = sameSource("commercial.unit");
+            const literalDate = String(date?.normalized_value ?? "");
+            const published = /^\d{4}-\d{2}-\d{2}$/u.test(literalDate)
+              ? Date.parse(`${literalDate}T00:00:00.000Z`)
+              : NaN;
+            const amount =
+              field === "commercial.price_min"
+                ? supplier.commercial.price_min
+                : supplier.commercial.price_max;
+            if (
+              !/^\d+(?:\.\d+)?$/u.test(value) ||
+              Number(value) !== amount ||
+              !date ||
+              !currency ||
+              !unit ||
+              claim.claim_type !== "pricing" ||
+              supplier.commercial.price_date !== literalDate ||
+              supplier.commercial.currency !== currency.normalized_value ||
+              supplier.commercial.unit !== unit.normalized_value ||
+              !Number.isFinite(published) ||
+              new Date(published).toISOString().slice(0, 10) !== literalDate ||
+              published > now ||
+              now - published >= 30 * 86400000 ||
+              !/\b(?:updated|published|as of|dated|price date|quotation date|quoted on|effective from)\b/iu.test(
+                source.excerpt_summary,
+              )
+            )
+              continue;
+            if (supplier.commercial.price_validity) {
+              const validity = sameSource("commercial.price_validity");
+              const literalValidity = String(validity?.normalized_value ?? "");
+              if (
+                !/^\d{4}-\d{2}-\d{2}$/u.test(literalValidity) ||
+                supplier.commercial.price_validity !== literalValidity
+              )
+                continue;
+              const expires = Date.parse(`${literalValidity}T23:59:59.999Z`);
+              if (
+                !Number.isFinite(expires) ||
+                expires <= now ||
+                new Date(expires).toISOString().slice(0, 10) !== literalValidity
+              )
+                continue;
+              validUntil = new Date(expires).toISOString();
+            }
+            publishedAt = new Date(published).toISOString();
+          }
+          observations.push({
+            observation_id: `dimension-${contractSha256Hex(JSON.stringify([plan.plan_hash, supplier.supplier_entity_id, selection.selection_id, claim.claim_id, evidenceId])).slice(0, 40)}`,
+            selection_id: selection.selection_id,
+            dimension_id: definition.id,
+            definition_revision: definition.revision,
+            trace: structuredClone(trace),
+            entity_id: supplier.supplier_entity_id,
+            scope: structuredClone(selection.scope),
+            value,
+            source: {
+              source_id: source.source_id,
+              uri: source.source_url,
+              literal_excerpt: source.excerpt_summary,
+              retrieved_at: source.retrieved_at,
+              ...(publishedAt ? { published_at: publishedAt } : {}),
+              ...(validUntil ? { valid_until: validUntil } : {}),
+            },
+          });
+          added += 1;
+        }
+      }
+    }
+  }
+  return {
+    search_dimension_plan: structuredClone(plan),
+    search_dimension_observations: observations,
+    search_dimension_assessments: output.supplier_candidates.map((supplier) =>
+      evaluateSearchDimensionPlan(plan, observations, {
+        trace,
+        entity_id: supplier.supplier_entity_id,
+        now: output.generated_at,
+        admitted_observation_ids: observations
+          .filter(
+            (observation) =>
+              observation.entity_id === supplier.supplier_entity_id,
+          )
+          .map((observation) => observation.observation_id),
+      }),
+    ),
+  };
 }

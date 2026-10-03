@@ -626,6 +626,17 @@ export async function executeDualLaneResearch(
         loop,
         max_loops: phase === "verification" ? 15 : 1,
         mandatory_criteria: requirements,
+        ...(input.deep_prompt.includes(
+          "\n\nAPPROVED SEARCH DIMENSION MANIFEST\n",
+        )
+          ? {
+              search_dimension_instructions: input.deep_prompt.slice(
+                input.deep_prompt.lastIndexOf(
+                  "\n\nAPPROVED SEARCH DIMENSION MANIFEST\n",
+                ) + 2,
+              ),
+            }
+          : {}),
         candidate_limit: options.round_plan?.candidate_limit_per_search,
         on_index: (index) => {
           indexedLeads = collectResearchLeads(

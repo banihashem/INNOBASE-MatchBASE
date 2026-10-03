@@ -10,6 +10,7 @@ import {
   type SupplierEntityV3,
 } from "@matchbase/contracts";
 import { renderResearchReview } from "./research-review-report.js";
+import { renderSearchDimensionAssessment } from "./dimension-report.js";
 
 /** Detect untranslated scripts without treating accented legal names or units as a translation. */
 const hasUntranslatedScript = (text: string): boolean =>
@@ -70,6 +71,14 @@ const display = (value: unknown): string =>
         ? value.map(esc).join("; ")
         : "Not recorded"
       : esc(value);
+function reportClaimText(
+  claim: import("@matchbase/contracts").ClaimV3,
+): string {
+  return claim.field_path?.startsWith("search_dimensions.") &&
+    hasUntranslatedScript(claim.claim_text)
+    ? "Original-language dimension source claim retained at the linked source; English interpretation unavailable. Semantic assessment remains unresolved."
+    : claim.claim_text;
+}
 const link = (url: string | undefined | null, label?: string): string =>
   url && /^https?:\/\//i.test(url)
     ? `<a href="${esc(url)}">${esc(label || url)}</a>`
@@ -106,10 +115,16 @@ export function generateConsultantLandscapeHtml(
   output: ConsultantResearchOutputV3,
 ): string {
   if (
-    output.claims.some((claim) =>
-      hasUntranslatedScript(
-        JSON.stringify([claim.claim_text, claim.normalized_value, claim.unit]),
-      ),
+    output.claims.some(
+      (claim) =>
+        !claim.field_path?.startsWith("search_dimensions.") &&
+        hasUntranslatedScript(
+          JSON.stringify([
+            claim.claim_text,
+            claim.normalized_value,
+            claim.unit,
+          ]),
+        ),
     )
   )
     throw new ConsultantReportLanguageError();
@@ -388,6 +403,15 @@ export function generateConsultantLandscapeHtml(
       output.claims,
       output.evidence_sources,
     );
+    const dimensionAssessment = output.search_dimension_assessments?.find(
+      (assessment) => assessment.entity_id === s.supplier_entity_id,
+    );
+    if (dimensionAssessment)
+      section(
+        `${s.legal_name} - Search Dimension Coverage`,
+        renderSearchDimensionAssessment(dimensionAssessment),
+        `dimensions-${index}`,
+      );
     section(
       `${s.legal_name} - Verification Dossier`,
       `<h2>Buyer requirement reference</h2><p>${approved ? `Approved revision ${esc(approved.revision_id)} / SHA-256 ${esc(approved.content_hash)}. Assessments below must be read against the complete approved request.` : "Approved request lineage is unavailable; current buyer compliance cannot be inferred."}</p>${alternatives.length ? `<h2>Other recorded values</h2><p>Linked evidence retains additional values beyond the profile summary. Source dates, sites or product variants may differ; multiple observations do not by themselves establish a contradiction.</p><table><thead><tr><th>Field</th><th>Recorded value</th><th>Evidence</th></tr></thead><tbody>${alternatives.flatMap((field) => field.observations.map((observation) => `<tr><td>${esc(field.label)}</td><td>${esc(observation.value)}</td><td>${refs(observation.evidence_ids)}</td></tr>`)).join("")}</tbody></table>` : ""}<h2>Mandatory constraint results</h2>${s.assessment.mandatory_constraint_results.length ? `<table><thead><tr><th>Constraint</th><th>Recorded result</th><th>Evidence</th></tr></thead><tbody>${s.assessment.mandatory_constraint_results.map((r) => `<tr><td>${esc(r.constraint)}</td><td>${demo ? "Illustrative / not evaluated for this request" : r.satisfied ? "Recorded as satisfied - inspect evidence" : "Not established / validation required"}</td><td>${refs(r.evidence_ids)}</td></tr>`).join("")}</tbody></table>` : "<p>No constraint-level result is recorded.</p>"}<div class="columns"><div><h2>Certificates and compliance scope</h2>${
@@ -425,7 +449,7 @@ export function generateConsultantLandscapeHtml(
                 .map(([key, val]) => [key.replaceAll("_", " "), val] as const),
             )
           : "<p>Unknown / not evidenced.</p>"
-      }<p>${refs(s.packaging_and_logistics?.logistics_evidence_ids)}</p><h2>Dimension scores</h2>${rows(Object.entries(s.assessment.dimension_scores).map(([key, value]) => [key.replaceAll("_", " "), value] as const))}</div></div><h2>Claim-level evidence</h2>${claims.length ? `<table><thead><tr><th>Claim</th><th>Status / confidence / conflict</th><th>Evidence</th></tr></thead><tbody>${claims.map((claim) => `<tr><td>${esc(claim.claim_text)}</td><td>${esc(claim.status)} / ${esc(claim.confidence)} / ${esc(claim.conflict_status)}</td><td>${refs(claim.evidence_ids)}</td></tr>`).join("")}</tbody></table>` : "<p>No supplier-specific claim records are linked. Treat uncited fields according to their recorded uncertainty.</p>"}`,
+      }<p>${refs(s.packaging_and_logistics?.logistics_evidence_ids)}</p><h2>Dimension scores</h2>${rows(Object.entries(s.assessment.dimension_scores).map(([key, value]) => [key.replaceAll("_", " "), value] as const))}</div></div><h2>Claim-level evidence</h2>${claims.length ? `<table><thead><tr><th>Claim</th><th>Status / confidence / conflict</th><th>Evidence</th></tr></thead><tbody>${claims.map((claim) => `<tr><td>${esc(reportClaimText(claim))}</td><td>${esc(claim.status)} / ${esc(claim.confidence)} / ${esc(claim.conflict_status)}</td><td>${refs(claim.evidence_ids)}</td></tr>`).join("")}</tbody></table>` : "<p>No supplier-specific claim records are linked. Treat uncited fields according to their recorded uncertainty.</p>"}`,
       `dossier-${index}`,
     );
   });
@@ -467,7 +491,7 @@ export function generateConsultantLandscapeHtml(
                       ? linkedClaims
                           .map(
                             (claim) =>
-                              `[${claim.claim_id}] ${claim.claim_text}`,
+                              `[${claim.claim_id}] ${reportClaimText(claim)}`,
                           )
                           .join(" ")
                       : "Source retained; no published claim is attributed to this source."

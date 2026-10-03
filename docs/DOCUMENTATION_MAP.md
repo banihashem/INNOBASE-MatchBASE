@@ -1,5 +1,7 @@
 # Implementation documentation map
 
+MB-SEARCH-DIMENSIONS-002 L01 adds [Search dimensions](https://github.com/banihashem/INNOBASE-MatchBASE/blob/main/docs/SEARCH_DIMENSIONS.md). This active source contract connects the typed registry and private migration to Section 2 selection, approval/quotation authority, source-bound assessments and the English report. Update it when those interfaces or admission limits change.
+
 Activity: MB-UX-GOV-003 L01. Canonical local root: `C:/INNOBASE/MatchBASE/03_Implementation/INNOBASE-MatchBASE`. Product-state authority: `C:/INNOBASE/MatchBASE/PROJECT_START_HERE.md`. GitHub URLs below are absolute public code-document locations; local private authority is intentionally not uploaded.
 
 | Document family                                                                                            | Status / owner                                  | Relationship and update trigger                                                                                |

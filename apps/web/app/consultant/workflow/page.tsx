@@ -9,6 +9,7 @@ import type {
   ConsultantResearchOutputV3,
   SupplierEntityV3,
   ApprovedRequestSnapshotV3,
+  SearchDimensionConfiguration,
 } from "@matchbase/contracts";
 import { SupplierDossierModal } from "../../../components/consultant/SupplierDossierModal";
 
@@ -30,6 +31,7 @@ import { PreparationRecoveryNotice } from "../../../components/consultant/Prepar
 import { useConsultantReportDownloads } from "../../../components/consultant/useConsultantReportDownloads";
 import { ConsultantResultsSection } from "../../../components/consultant/ConsultantResultsSection";
 import { NewDraftTransitionModal } from "../../../components/consultant/NewDraftTransitionModal";
+import { SearchDimensionsPanel } from "../../../components/consultant/SearchDimensionsPanel";
 import {
   WorkflowStageTabs,
   useWorkflowStage,
@@ -140,6 +142,18 @@ export default function ConsultantWorkflowPage() {
   const [workflowProgress, setWorkflowProgress] = useState<any>(null);
   const [approvedSnapshot, setApprovedSnapshot] =
     useState<ApprovedRequestSnapshotV3 | null>(null);
+  const [searchDimensions, setSearchDimensions] =
+    useState<SearchDimensionConfiguration | null>(null);
+  const [searchDimensionRevision, setSearchDimensionRevision] = useState<
+    string | null
+  >(null);
+  const [searchDimensionsEditable, setSearchDimensionsEditable] =
+    useState(false);
+  const [searchDimensionsPending, setSearchDimensionsPending] = useState(false);
+  const dimensionsApprovalBlocked =
+    searchDimensionsPending ||
+    (searchDimensionsEditable &&
+      (!searchDimensions || !searchDimensionRevision));
   const [retryAction, setRetryAction] = useState<string | null>(null);
   const [promptApproved, setPromptApproved] = useState(false);
   const researchAvailable =
@@ -208,6 +222,12 @@ export default function ConsultantWorkflowPage() {
     }
     if (session.approved_request_revision?.canonical_snapshot)
       setApprovedSnapshot(session.approved_request_revision.canonical_snapshot);
+    if ("search_dimensions" in session) {
+      setSearchDimensions(session.search_dimensions ?? null);
+      setSearchDimensionRevision(session.search_dimension_revision ?? null);
+    }
+    if (typeof session.search_dimensions_editable === "boolean")
+      setSearchDimensionsEditable(session.search_dimensions_editable);
     if (session.state) setWorkflowState(session.state);
     setWorkflowProgress(session.progress ?? null);
     setWorkflowError(
@@ -646,6 +666,10 @@ export default function ConsultantWorkflowPage() {
       setStep1Fidelity(null);
       setPromptApproved(false);
       setApprovedSnapshot(null);
+      setSearchDimensions(null);
+      setSearchDimensionRevision(null);
+      setSearchDimensionsEditable(false);
+      setSearchDimensionsPending(false);
       setWorkflowProgress(null);
       setWorkflowError(null);
       setRetryAction(null);
@@ -1083,7 +1107,13 @@ export default function ConsultantWorkflowPage() {
 
   // Action 2: Approve Step 1 Interpretation (Propagates edit downstream - F01)
   async function handleApproveStep1() {
-    if (!runId || isFidelityValidating || step1Fidelity?.valid !== true) return;
+    if (
+      !runId ||
+      isFidelityValidating ||
+      step1Fidelity?.valid !== true ||
+      dimensionsApprovalBlocked
+    )
+      return;
     setWorkflowError(null);
     setIsLoading(true);
     try {
@@ -1093,6 +1123,7 @@ export default function ConsultantWorkflowPage() {
         body: JSON.stringify({
           action: "approve_step1",
           run_id: runId,
+          search_dimension_revision: searchDimensionRevision,
           edited_translation: step1Translation,
         }),
       });
@@ -1117,7 +1148,7 @@ export default function ConsultantWorkflowPage() {
 
   // Action 3: Approve Step 3 Prompt & Launch Research
   async function handleApproveStep3AndExecute() {
-    if (!runId || isLoading) return;
+    if (!runId || isLoading || dimensionsApprovalBlocked) return;
     setIsLoading(true);
     setWorkflowError(null);
     try {
@@ -1127,6 +1158,7 @@ export default function ConsultantWorkflowPage() {
         body: JSON.stringify({
           action: "approve_step3",
           run_id: runId,
+          search_dimension_revision: searchDimensionRevision,
           edited_prompt: step3Prompt,
         }),
       });
@@ -2076,6 +2108,15 @@ export default function ConsultantWorkflowPage() {
               </div>
 
               {!researchAvailable && workflowFeedback}
+              <SearchDimensionsPanel
+                key={runId}
+                runId={runId}
+                configuration={searchDimensions}
+                revision={searchDimensionRevision}
+                editable={searchDimensionsEditable && !isLoading}
+                onPendingChange={setSearchDimensionsPending}
+                onSaved={acceptProgress}
+              />
               {step1Translation && (
                 <InterpretationApprovalStep
                   runId={runId}
@@ -2094,6 +2135,7 @@ export default function ConsultantWorkflowPage() {
                     setValidationRetry((value) => value + 1)
                   }
                   handleApproveStep1={handleApproveStep1}
+                  dimensionsPending={dimensionsApprovalBlocked}
                 />
               )}
               {!step1Translation && workflowState !== "workflow_failed" && (
@@ -2279,6 +2321,7 @@ export default function ConsultantWorkflowPage() {
                       onClick={handleApproveStep3AndExecute}
                       disabled={
                         isLoading ||
+                        dimensionsApprovalBlocked ||
                         (workflowState !== "prep_step2_advisory_ready" &&
                           workflowState !==
                             "prep_step3_prompt_awaiting_approval" &&
@@ -2464,6 +2507,9 @@ export default function ConsultantWorkflowPage() {
           evidenceSources={output?.evidence_sources ?? []}
           claims={output?.claims ?? []}
           recentPrices={output?.price_research}
+          dimensionAssessment={output?.search_dimension_assessments?.find(
+            (entry) => entry.entity_id === selectedSupplier?.supplier_entity_id,
+          )}
           isOpen={isModalOpen}
           onClose={() => {
             setIsModalOpen(false);

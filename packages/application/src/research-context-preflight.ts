@@ -12,6 +12,8 @@ import {
 import { hydrateResearchContinuation } from "./research-review.js";
 import { LiveResearchError } from "./openrouter-model-policy.js";
 import { ApplicationFault } from "./types.js";
+import { assertSessionSearchDimensionPlan } from "./consultant-search-dimensions.js";
+import { renderSearchDimensionInstructions } from "@matchbase/contracts";
 
 /** The quote and worker must measure the same immutable buyer input. */
 export function consultantResearchInput(
@@ -27,11 +29,16 @@ export function consultantResearchInput(
       "MB-409-APPROVAL-REQUIRED",
       "Approve the request and research prompt before starting research.",
     );
+  assertSessionSearchDimensionPlan(session);
   return {
     product_requirement: session.intake.product_requirement,
     technical_compliance: session.intake.technical_compliance,
     order_profile: session.intake.order_profile,
-    deep_prompt: session.step3_deep_prompt.prompt_text,
+    deep_prompt:
+      session.step3_deep_prompt.prompt_text +
+      (session.search_dimension_plan
+        ? `\n\n${renderSearchDimensionInstructions(session.search_dimension_plan)}`
+        : ""),
     mandatory_requirements: session.step3_deep_prompt.discovery_criteria.length
       ? session.step3_deep_prompt.discovery_criteria
       : session.approved_request_revision.key_specifications,

@@ -13,6 +13,7 @@ interface InterpretationApprovalStepProps {
   onTranslationChange: (value: string) => void;
   onRetryValidation: () => void;
   handleApproveStep1: () => Promise<void>;
+  dimensionsPending?: boolean;
 }
 
 function evaluatedStatus(requirement: any, result: any): string {
@@ -42,6 +43,7 @@ export function InterpretationApprovalStep({
   onTranslationChange,
   onRetryValidation,
   handleApproveStep1,
+  dimensionsPending = false,
 }: InterpretationApprovalStepProps) {
   return (
     <div className="bg-slate-900/80 p-5 rounded-lg border border-slate-700">
@@ -355,21 +357,26 @@ export function InterpretationApprovalStep({
           onClick={handleApproveStep1}
           disabled={
             isLoading ||
+            dimensionsPending ||
             workflowState !== "prep_step1_awaiting_approval" ||
             isFidelityValidating ||
             step1Fidelity?.valid !== true
           }
           title={
-            step1Fidelity?.valid === false
-              ? "Review the flagged requirements or apply a suggested correction before approving."
-              : undefined
+            dimensionsPending
+              ? "Save your search dimensions before approving this interpretation."
+              : step1Fidelity?.valid === false
+                ? "Review the flagged requirements or apply a suggested correction before approving."
+                : undefined
           }
           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {workflowState === "prep_step1_awaiting_approval"
-            ? step1Fidelity?.valid === false
-              ? "Review flagged requirements"
-              : "Approve interpretation & continue"
+            ? dimensionsPending
+              ? "Save search dimensions to continue"
+              : step1Fidelity?.valid === false
+                ? "Review flagged requirements"
+                : "Approve interpretation & continue"
             : workflowState === "workflow_failed"
               ? "Approval unavailable while stopped"
               : "Approved \u2713"}

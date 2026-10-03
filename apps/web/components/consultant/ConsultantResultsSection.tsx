@@ -12,6 +12,10 @@ import {
 import "./consultant-results.css";
 import { ApprovedRequestSummary } from "./ApprovedRequestSummary";
 import { ResearchPricing, SupplierPriceSummary } from "./ResearchPricing";
+import {
+  SearchDimensionPlanSummary,
+  SearchDimensionResults,
+} from "./SearchDimensionResults";
 
 const filterControlClass =
   "min-h-11 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300";
@@ -541,6 +545,21 @@ export function ConsultantResultsSection({
         </details>
       )}
       <ApprovedRequestSummary snapshot={output.approved_request_snapshot} />
+      <SearchDimensionPlanSummary plan={output.search_dimension_plan} />
+      {output.search_dimension_plan &&
+        displayedSuppliers.map((supplier) => (
+          <div key={`dimensions-${supplier.supplier_entity_id}`}>
+            <h3 className="mb-2 text-sm font-semibold">
+              {supplier.legal_name}
+            </h3>
+            <SearchDimensionResults
+              assessment={output.search_dimension_assessments?.find(
+                (entry) => entry.entity_id === supplier.supplier_entity_id,
+              )}
+              claims={output.claims}
+            />
+          </div>
+        ))}
     </section>
   );
 }

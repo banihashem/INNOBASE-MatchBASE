@@ -76,6 +76,7 @@ export const MIGRATIONS: readonly MigrationDefinition[] = Object.freeze([
   Object.freeze({ id: "0025_private_evidence_category_scopes" }),
   Object.freeze({ id: "0026_public_corpus_reader_identity" }),
   Object.freeze({ id: "0027_service_classification_and_public_role_upgrade" }),
+  Object.freeze({ id: "0028_consultant_search_dimensions" }),
 ]);
 
 export const LATEST_MIGRATION_ID =

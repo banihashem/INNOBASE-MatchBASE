@@ -85,6 +85,7 @@ function main() {
       "deployment/local/*.test.mjs",
       "test/local-model/*.test.mjs",
       "test/incident-repair/*.test.mjs",
+      "test/security/*.test.mjs",
     ],
     environment,
   );

@@ -2,9 +2,13 @@ packages:
   - apps/*
   - packages/*
 
-# MB-UX-GOV-003 L01: security patches for transitive dependencies.
+# MB-UX-GOV-003 L01 and MB-SEC-DEPENDENCIES-001 L01: security patches for transitive dependencies.
 # Remove a pin only after every parent resolves a patched version naturally.
 overrides:
-  fast-uri: 3.1.6
+  fast-uri: 3.1.8
   js-yaml@>=4.0.0 <4.3.2: 4.3.2
   sharp: 0.35.4
+  undici@^8.9.0: 8.10.2
+
+patchedDependencies:
+  braces@3.0.3: patches/braces@3.0.3.patch

@@ -29,7 +29,7 @@ export default defineConfig({
     {
       name: "consultant-and-operations",
       testMatch:
-        /(?:consultant-experience|research-options|accessibility-helper|consultant-session|product-(?:admin-(?:entitlements|requests)|consultant-result|consultant-v2-uat))\.spec\.mjs/u,
+        /(?:consultant-experience|research-options|search-dimensions|accessibility-helper|consultant-session|product-(?:admin-(?:entitlements|requests)|consultant-result|consultant-v2-uat))\.spec\.mjs/u,
       use: {
         baseURL: "http://127.0.0.1:3010",
         serviceWorkers: "block",

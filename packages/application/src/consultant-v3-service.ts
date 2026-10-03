@@ -82,6 +82,7 @@ import {
   loadQuotedPrivateMemory,
 } from "./consultant-private-memory.js";
 import { withQuotedPublicMemory } from "./consultant-public-memory.js";
+import { buildSearchDimensionOutput } from "./search-dimension-output.js";
 
 export type ConsultantExecutionMode = "live" | "demonstration" | "hybrid";
 export interface ConsultantWorkflowProgress {
@@ -107,6 +108,10 @@ export interface ConsultantIntakeSubmission {
 }
 
 export interface WorkflowSession {
+  search_dimensions?: import("@matchbase/contracts").SearchDimensionConfiguration;
+  search_dimension_plan?: import("@matchbase/contracts").SearchDimensionPlan;
+  search_dimension_revision?: string | null;
+  search_dimensions_editable?: boolean;
   readonly draft_id?: string;
   readonly draft_version?: number;
   readonly session_id: string;
@@ -167,6 +172,7 @@ export interface WorkflowSession {
 }
 
 // In-memory active workflow session registry (keyed by run_id)
+import { freezeSearchDimensionPlan } from "./consultant-search-dimensions.js";
 const activeSessions = new Map<string, WorkflowSession>();
 
 function preparationGateway(
@@ -265,6 +271,13 @@ function mapSessionToRecord(
     execution_id: session.execution_id,
     last_checkpoint: session.last_checkpoint ?? session.state,
     workflow_metadata: {
+      ...(session.search_dimensions
+        ? {
+            search_dimensions: session.search_dimensions,
+            search_dimension_plan: session.search_dimension_plan,
+            search_dimension_revision: session.search_dimension_revision,
+          }
+        : {}),
       round_number: session.round_number,
       mode: session.mode,
       classification_id: session.classification_id,
@@ -300,6 +313,16 @@ function mapRecordToSession(
 
   return {
     session_id: record.session_id,
+    ...(metadata.search_dimensions
+      ? {
+          search_dimensions:
+            metadata.search_dimensions as import("@matchbase/contracts").SearchDimensionConfiguration,
+          search_dimension_plan:
+            metadata.search_dimension_plan as import("@matchbase/contracts").SearchDimensionPlan,
+          search_dimension_revision: metadata.search_dimension_revision as
+            string | null,
+        }
+      : {}),
     run_id: record.run_id,
     user_profile_id: record.user_profile_id,
     account_id: record.account_id,
@@ -671,10 +694,15 @@ export async function approveInterpretationStep(
   runId: string,
   editedTranslation?: string,
   db?: Queryable,
-  options?: { defer_generation?: boolean },
+  options?: {
+    defer_generation?: boolean;
+    transaction_session?: WorkflowSession;
+  },
 ): Promise<WorkflowSession> {
-  const session = activeSessions.get(runId);
+  const session = options?.transaction_session ?? activeSessions.get(runId);
   if (!session) throw new Error(`Workflow session ${runId} not found.`);
+  if (session.run_id !== runId)
+    throw new Error("Approval session identity mismatch.");
 
   if (editedTranslation !== undefined && !editedTranslation.trim()) {
     throw new ApplicationFault(
@@ -762,6 +790,12 @@ export async function approveInterpretationStep(
   };
 
   session.approved_request_revision = approvedRevision;
+  const approvedDimensionPlan = freezeSearchDimensionPlan(session);
+  if (approvedDimensionPlan)
+    session.approved_request_revision = {
+      ...approvedRevision,
+      search_dimension_plan: approvedDimensionPlan,
+    };
   session.approvals = [
     ...session.approvals,
     {
@@ -774,6 +808,7 @@ export async function approveInterpretationStep(
   session.state = "prep_step1_approved";
   session.last_checkpoint = session.state;
   if (db) await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
+  activeSessions.set(runId, session);
   if (options?.defer_generation) return session;
   return generateApprovedConsultantPreparation(runId, db);
 }
@@ -921,9 +956,12 @@ export async function approveDeepPromptStep(
   runId: string,
   editedPrompt?: string,
   db?: Queryable,
+  transactionSession?: WorkflowSession,
 ): Promise<WorkflowSession> {
-  const session = activeSessions.get(runId);
+  const session = transactionSession ?? activeSessions.get(runId);
   if (!session) throw new Error(`Workflow session ${runId} not found.`);
+  if (session.run_id !== runId)
+    throw new Error("Approval session identity mismatch.");
   if (editedPrompt !== undefined && !editedPrompt.trim()) {
     throw new ApplicationFault(
       422,
@@ -971,6 +1009,12 @@ export async function approveDeepPromptStep(
     };
   }
 
+  const approvedDimensionPlan = freezeSearchDimensionPlan(session);
+  if (approvedDimensionPlan && session.approved_request_revision)
+    session.approved_request_revision = {
+      ...session.approved_request_revision,
+      search_dimension_plan: approvedDimensionPlan,
+    };
   if (session.step3_deep_prompt) {
     session.step3_deep_prompt.is_approved = true;
   }
@@ -992,7 +1036,7 @@ export async function approveDeepPromptStep(
   if (db) {
     await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
   }
-
+  activeSessions.set(runId, session);
   return session;
 }
 
@@ -1208,6 +1252,9 @@ export async function executeConsultantWorkflowResearch(
   );
   output = {
     ...output,
+    ...(session.search_dimension_plan
+      ? buildSearchDimensionOutput(session.search_dimension_plan, output)
+      : {}),
     research_review: buildResearchReview(
       dualResult.continuation,
       output.supplier_candidates,

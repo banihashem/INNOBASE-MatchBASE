@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   mkdirSync,
@@ -185,6 +186,11 @@ test("accepts one post-hosted successor without a tracked identity edit", () => 
 test("fails closed when the immutable audit Git object is unavailable", () => {
   const emptyRepository = mkdtempSync(join(tmpdir(), "matchbase-s2-shallow-"));
   try {
+    // Establish a repository boundary even when TEMP is inside the source checkout.
+    const initialized = spawnSync("git", ["init", "--bare", emptyRepository], {
+      encoding: "utf8",
+    });
+    assert.equal(initialized.status, 0, initialized.stderr);
     assert.throws(
       () =>
         validateSlice2ExternalClosure(structuredClone(anchor), {

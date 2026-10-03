@@ -32,3 +32,4 @@ export * from "./consultant-private-memory-authority.js";
 export * from "./consultant-research-incidents.js";
 export * from "./consultant-public-corpus.js";
 export * from "./public-corpus-administration.js";
+export * from "./consultant-search-dimensions.js";

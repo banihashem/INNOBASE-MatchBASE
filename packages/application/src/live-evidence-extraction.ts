@@ -104,6 +104,7 @@ const indexSchema = objectSchema({
   summary: stringSchema,
 });
 interface ExtractionContext {
+  search_dimension_instructions?: string;
   on_index?: (index: CandidateIndex) => void;
   priority_names?: readonly string[];
   candidate_limit?: number | undefined;
@@ -655,6 +656,12 @@ export async function extractNativeDiscoveryPayload(
         `${extractionPolicy}\n${LIVE_FACT_FIELD_INSTRUCTIONS}\nReturn exactly one full-schema candidate record for each assigned_candidate_names entry, using that exact legal_name; no additional or duplicate candidates. The names and anchors only delimit this batch, never prove identity or facts. Read supplied page content directly: source quotations override research paraphrases. For each company use only its assigned_candidate_sources; never transfer another seller's product, price or contact to it. A manufacturer's datasheet alone does not establish a reseller's offering. Extract every published email, telephone, product specification, price, currency and stock limitation before marking those fields unknown. Distinguish a published listing price from an RFQ or stock commitment. Preserve every supported detail and all mandatory criteria; keep unknown fields unknown with empty proofs. Include only evidence relevant to this batch.`,
         {
           buyer_mandatory_criteria: baseInput.buyer_mandatory_criteria,
+          ...(context.search_dimension_instructions
+            ? {
+                search_dimension_questions:
+                  context.search_dimension_instructions,
+              }
+            : {}),
           native_citations: selectedCitations,
           assigned_candidate_sources: assignments,
           assigned_candidate_names: names,

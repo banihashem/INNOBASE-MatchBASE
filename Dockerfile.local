@@ -8,6 +8,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /workspace
 RUN corepack enable && corepack prepare pnpm@11.19.0 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches ./patches
 COPY apps/web/package.json apps/web/package.json
 COPY apps/dashboard/package.json apps/dashboard/package.json
 COPY packages/ai-evidence/package.json packages/ai-evidence/package.json
@@ -23,6 +24,9 @@ RUN pnpm exec playwright install --with-deps chromium
 
 FROM dependencies AS tested
 COPY . .
+# Security regression fixtures verify real Git index/blob bindings.
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
 RUN pnpm -r --filter './packages/**' build && pnpm run test:unit
 RUN node --test deployment/local/*.test.mjs
 RUN pnpm --filter @matchbase/dashboard build

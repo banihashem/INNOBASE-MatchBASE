@@ -13,6 +13,9 @@ import {
   getWorkflowSession,
   getOrRestoreWorkflowSession,
   assertConsultantOutputReadRights,
+  hydrateSearchDimensions,
+  assertSearchDimensionRevision,
+  saveConsultantSearchDimensions,
 } from "@matchbase/application";
 import {
   listConsultantWorkflowSessions,
@@ -27,6 +30,8 @@ import {
   listConsultantResearchSummaries,
   stopConsultantResearch,
   ExecutionIntegrityFault,
+  lockSearchDimensionSession,
+  inTransaction,
 } from "@matchbase/data";
 import { suggestInterpretationCorrection } from "@matchbase/application";
 import { validateStep1RequirementFidelity } from "@matchbase/contracts";
@@ -86,6 +91,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     if (
       [
         "approve_step1",
+        "save_search_dimensions",
         "approve_step3",
         "stop_research",
         "execute_research",
@@ -111,6 +117,25 @@ export async function POST(req: Request): Promise<NextResponse> {
         resourceKind:
           action === "stop_research" ? "research_history" : "run_detail",
       });
+    }
+
+    if (action === "save_search_dimensions") {
+      if (!("expected_revision" in body))
+        return NextResponse.json(
+          {
+            error: "Reload the request before saving dimensions.",
+            code: "MB-409-DIMENSIONS",
+          },
+          { status: 409 },
+        );
+      const session = await saveConsultantSearchDimensions(pool, {
+        account_id: context.accountId,
+        user_profile_id: context.userId,
+        run_id: body.run_id as string,
+        expected_revision: body.expected_revision,
+        configuration: body.configuration,
+      });
+      return NextResponse.json({ success: true, session });
     }
 
     // Action: Create New Independent Server Draft
@@ -288,7 +313,7 @@ export async function POST(req: Request): Promise<NextResponse> {
           draft: { draft_id: draftId, expected_version: draftVersion },
         },
       );
-
+      await hydrateSearchDimensions(pool, session);
       return NextResponse.json({ success: true, session });
     }
 
@@ -309,6 +334,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         context.userId,
         body.run_id,
       );
+      await hydrateSearchDimensions(pool, session);
       return NextResponse.json({ success: true, session });
     }
 
@@ -378,12 +404,32 @@ export async function POST(req: Request): Promise<NextResponse> {
       }
 
       try {
-        const session = await approveInterpretationStep(
-          run_id,
-          edited_translation,
-          pool,
-          { defer_generation: true },
-        );
+        const session = existingSession.step1_interpretation.is_approved
+          ? await approveInterpretationStep(run_id, edited_translation, pool, {
+              defer_generation: true,
+            })
+          : await inTransaction(pool, async (db) => {
+              await lockSearchDimensionSession(
+                db,
+                context.accountId,
+                context.userId,
+                run_id,
+              );
+              const current = (await getOrRestoreWorkflowSession(
+                db,
+                context.accountId,
+                run_id,
+              ))!;
+              assertSearchDimensionRevision(
+                current,
+                body.search_dimension_revision ?? null,
+              );
+              await hydrateSearchDimensions(db, current);
+              return approveInterpretationStep(run_id, edited_translation, db, {
+                defer_generation: true,
+                transaction_session: current,
+              });
+            });
         const job = await queueConsultantWorkflowStep(pool, run_id, "prepare");
         if (job.status === "queued")
           scheduleConsultantWorkflowAcceleration(() =>
@@ -433,7 +479,27 @@ export async function POST(req: Request): Promise<NextResponse> {
         );
       }
 
-      const session = await approveDeepPromptStep(run_id, edited_prompt, pool);
+      const session = existingSession.step3_deep_prompt?.is_approved
+        ? await approveDeepPromptStep(run_id, edited_prompt, pool)
+        : await inTransaction(pool, async (db) => {
+            await lockSearchDimensionSession(
+              db,
+              context.accountId,
+              context.userId,
+              run_id,
+            );
+            const current = (await getOrRestoreWorkflowSession(
+              db,
+              context.accountId,
+              run_id,
+            ))!;
+            assertSearchDimensionRevision(
+              current,
+              body.search_dimension_revision ?? null,
+            );
+            await hydrateSearchDimensions(db, current);
+            return approveDeepPromptStep(run_id, edited_prompt, db, current);
+          });
       return NextResponse.json({ success: true, session });
     }
 
@@ -831,6 +897,7 @@ export async function GET(req: Request): Promise<NextResponse> {
       authorized.runId,
     );
     if (session) {
+      await hydrateSearchDimensions(pool, session);
       let evidenceWithdrawn: string | undefined;
       if (session.output) {
         try {

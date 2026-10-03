@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   expired: vi.fn(),
   history: vi.fn(),
   incomplete: vi.fn(),
+  dimensions: vi.fn(),
 }));
 vi.mock("@matchbase/application", async (original) => ({
   ...(await original<Record<string, unknown>>()),
@@ -30,6 +31,8 @@ vi.mock("@matchbase/application", async (original) => ({
   getOrRestoreWorkflowSession: mocks.restore,
   suggestInterpretationCorrection: mocks.correction,
   assertConsultantOutputReadRights: mocks.rights,
+  hydrateSearchDimensions: async (_db: unknown, session: unknown) => session,
+  saveConsultantSearchDimensions: mocks.dimensions,
 }));
 vi.mock("@matchbase/data", async (original) => ({
   ...(await original<Record<string, unknown>>()),
@@ -73,6 +76,45 @@ const post = (body: Record<string, unknown>) =>
       headers: { "Content-Type": "application/json" },
     }),
   );
+
+describe("MB-SEARCH-DIMENSIONS-002 L01 dimension mutation admission", () => {
+  it("authorizes the run before saving and uses authenticated ownership", async () => {
+    mocks.dimensions.mockResolvedValueOnce({
+      run_id: runId,
+      search_dimension_revision: "saved",
+    });
+    const configuration = { profile_ids: ["core"] };
+    const result = await post({
+      action: "save_search_dimensions",
+      run_id: runId,
+      expected_revision: null,
+      configuration,
+      account_id: "attacker",
+      user_profile_id: "attacker",
+    });
+    expect(result.status).toBe(200);
+    expect(mocks.dimensions).toHaveBeenCalledWith(mocks.pool, {
+      account_id: "owner-account",
+      user_profile_id: "owner-user",
+      run_id: runId,
+      expected_revision: null,
+      configuration,
+    });
+    expect(mocks.authorize).toHaveBeenCalledWith(
+      expect.objectContaining({ runId, resourceKind: "run_detail" }),
+    );
+  });
+  it("rejects a stale-client payload without a revision before mutation", async () => {
+    mocks.dimensions.mockClear();
+    const result = await post({
+      action: "save_search_dimensions",
+      run_id: runId,
+      configuration: {},
+    });
+    expect(result.status).toBe(409);
+    expect(mocks.dimensions).not.toHaveBeenCalled();
+  });
+});
 
 describe("L12 correction preview admission", () => {
   it("refuses a correction when unsafe Origin/CSRF admission rejects it", async () => {

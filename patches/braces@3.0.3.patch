@@ -1,0 +1,221 @@
+diff --git a/lib/compile.js b/lib/compile.js
+index dce69beb90ece5c3b0ca234a949418f9f34eedbc..29be61588f981f36f8c493e46356559e6529d1f5 100644
+--- a/lib/compile.js
++++ b/lib/compile.js
+@@ -2,9 +2,14 @@
+ 
+ const fill = require('fill-range');
+ const utils = require('./utils');
++const { MAX_DEPTH } = require('./constants');
+ 
+ const compile = (ast, options = {}) => {
+-  const walk = (node, parent = {}) => {
++  utils.validateAst(ast);
++  const walk = (node, parent = {}, depth = 0) => {
++    if (depth > MAX_DEPTH) {
++      throw new RangeError(`Maximum pattern nesting depth (${MAX_DEPTH}) exceeded`);
++    }
+     const invalidBlock = utils.isInvalidBrace(parent);
+     const invalidNode = node.invalid === true && options.escapeInvalid === true;
+     const invalid = invalidBlock === true || invalidNode === true;
+@@ -47,7 +52,7 @@ const compile = (ast, options = {}) => {
+ 
+     if (node.nodes) {
+       for (const child of node.nodes) {
+-        output += walk(child, node);
++        output += walk(child, node, depth + 1);
+       }
+     }
+ 
+diff --git a/lib/constants.js b/lib/constants.js
+index 2bb3b8840382c56700869b3a9e1f958fcce01efd..e2d1b00f8238d303d179903d0fbfa11a7cef2cfc 100644
+--- a/lib/constants.js
++++ b/lib/constants.js
+@@ -2,6 +2,8 @@
+ 
+ module.exports = {
+   MAX_LENGTH: 10000,
++  MAX_DEPTH: 64,
++  MAX_NODES: 16384,
+ 
+   // Digits
+   CHAR_0: '0', /* 0 */
+diff --git a/lib/expand.js b/lib/expand.js
+index 35b2c41d6afdb8f0197959e26079f266e48370d3..c261294a883fb2600371125675539b67ba2d5fd5 100644
+--- a/lib/expand.js
++++ b/lib/expand.js
+@@ -3,6 +3,7 @@
+ const fill = require('fill-range');
+ const stringify = require('./stringify');
+ const utils = require('./utils');
++const { MAX_DEPTH } = require('./constants');
+ 
+ const append = (queue = '', stash = '', enclose = false) => {
+   const result = [];
+@@ -31,9 +32,13 @@ const append = (queue = '', stash = '', enclose = false) => {
+ };
+ 
+ const expand = (ast, options = {}) => {
++  utils.validateAst(ast);
+   const rangeLimit = options.rangeLimit === undefined ? 1000 : options.rangeLimit;
+ 
+-  const walk = (node, parent = {}) => {
++  const walk = (node, parent = {}, depth = 0) => {
++    if (depth > MAX_DEPTH) {
++      throw new RangeError(`Maximum pattern nesting depth (${MAX_DEPTH}) exceeded`);
++    }
+     node.queue = [];
+ 
+     let p = parent;
+@@ -100,7 +105,7 @@ const expand = (ast, options = {}) => {
+       }
+ 
+       if (child.nodes) {
+-        walk(child, node);
++        walk(child, node, depth + 1);
+       }
+     }
+ 
+diff --git a/lib/parse.js b/lib/parse.js
+index 3a6988e629f52aee6609dc5ec290a5e9ff47cecb..2e9d1cb0fe051634018daeed5d8c0d6acd70f96a 100644
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -8,6 +8,7 @@ const stringify = require('./stringify');
+ 
+ const {
+   MAX_LENGTH,
++  MAX_DEPTH,
+   CHAR_BACKSLASH, /* \ */
+   CHAR_BACKTICK, /* ` */
+   CHAR_COMMA, /* , */
+@@ -143,6 +144,9 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_LEFT_PARENTHESES) {
++      if (stack.length >= MAX_DEPTH) {
++        throw new RangeError(`Maximum pattern nesting depth (${MAX_DEPTH}) exceeded`);
++      }
+       block = push({ type: 'paren', nodes: [] });
+       stack.push(block);
+       push({ type: 'text', value });
+@@ -195,6 +199,9 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_LEFT_CURLY_BRACE) {
++      if (stack.length >= MAX_DEPTH) {
++        throw new RangeError(`Maximum pattern nesting depth (${MAX_DEPTH}) exceeded`);
++      }
+       depth++;
+ 
+       const dollar = prev.value && prev.value.slice(-1) === '$' || block.dollar === true;
+diff --git a/lib/stringify.js b/lib/stringify.js
+index 8bcf872c31894f81a8c64d9202fd607e4fd7ea2b..01d11d3666dc96a1cfacfc8ceedcd2a7323b5dc6 100644
+--- a/lib/stringify.js
++++ b/lib/stringify.js
+@@ -1,9 +1,14 @@
+ 'use strict';
+ 
+ const utils = require('./utils');
++const { MAX_DEPTH } = require('./constants');
+ 
+ module.exports = (ast, options = {}) => {
+-  const stringify = (node, parent = {}) => {
++  utils.validateAst(ast);
++  const stringify = (node, parent = {}, depth = 0) => {
++    if (depth > MAX_DEPTH) {
++      throw new RangeError(`Maximum pattern nesting depth (${MAX_DEPTH}) exceeded`);
++    }
+     const invalidBlock = options.escapeInvalid && utils.isInvalidBrace(parent);
+     const invalidNode = node.invalid === true && options.escapeInvalid === true;
+     let output = '';
+@@ -21,7 +26,7 @@ module.exports = (ast, options = {}) => {
+ 
+     if (node.nodes) {
+       for (const child of node.nodes) {
+-        output += stringify(child);
++        output += stringify(child, undefined, depth + 1);
+       }
+     }
+     return output;
+@@ -29,4 +34,3 @@ module.exports = (ast, options = {}) => {
+ 
+   return stringify(ast);
+ };
+-
+diff --git a/lib/utils.js b/lib/utils.js
+index d19311fe044ad5157624077670dc297e8b53da49..f069c5e097231c8d3fede6a13683818674e38ff1 100644
+--- a/lib/utils.js
++++ b/lib/utils.js
+@@ -1,5 +1,72 @@
+ 'use strict';
+ 
++const { MAX_DEPTH, MAX_NODES } = require('./constants');
++
++exports.validateAst = ast => {
++  const pending = [{ node: ast, depth: 0 }];
++  const seen = new Set();
++  let count = 0;
++
++  while (pending.length > 0) {
++    const { node, depth } = pending.pop();
++    if (!node || typeof node !== 'object') {
++      throw new TypeError('Expected a pattern AST node');
++    }
++    if (seen.has(node)) {
++      throw new RangeError('Cyclic or shared pattern AST');
++    }
++    if (depth > MAX_DEPTH) {
++      throw new RangeError(`Maximum pattern nesting depth (${MAX_DEPTH}) exceeded`);
++    }
++    if (++count > MAX_NODES) {
++      throw new RangeError(`Maximum pattern AST nodes (${MAX_NODES}) exceeded`);
++    }
++    seen.add(node);
++
++    for (const key of ['type', 'input', 'value']) {
++      if (node[key] !== undefined && typeof node[key] !== 'string') {
++        throw new TypeError(`Expected pattern AST ${key} string`);
++      }
++    }
++    for (const key of ['depth', 'ranges', 'commas']) {
++      if (node[key] !== undefined && (!Number.isSafeInteger(node[key]) || node[key] < 0)) {
++        throw new TypeError(`Expected pattern AST ${key} non-negative integer`);
++      }
++    }
++    for (const key of ['invalid', 'dollar', 'open', 'close', 'isOpen', 'isClose', 'escaped']) {
++      if (node[key] !== undefined && typeof node[key] !== 'boolean') {
++        throw new TypeError(`Expected pattern AST ${key} boolean`);
++      }
++    }
++
++    const parents = new Set([node]);
++    let parent = node.parent;
++    let hops = 0;
++    while (parent != null) {
++      if (typeof parent !== 'object' || parents.has(parent)) {
++        throw new RangeError('Cyclic pattern AST parent chain');
++      }
++      if (++hops > MAX_DEPTH) {
++        throw new RangeError(`Maximum pattern nesting depth (${MAX_DEPTH}) exceeded`);
++      }
++      parents.add(parent);
++      parent = parent.parent;
++    }
++
++    if (node.nodes !== undefined) {
++      if (!Array.isArray(node.nodes)) {
++        throw new TypeError('Expected pattern AST nodes array');
++      }
++      if (count + pending.length + node.nodes.length > MAX_NODES) {
++        throw new RangeError(`Maximum pattern AST nodes (${MAX_NODES}) exceeded`);
++      }
++      for (let i = node.nodes.length - 1; i >= 0; i--) {
++        pending.push({ node: node.nodes[i], depth: depth + 1 });
++      }
++    }
++  }
++};
++
+ exports.isInteger = num => {
+   if (typeof num === 'number') {
+     return Number.isInteger(num);

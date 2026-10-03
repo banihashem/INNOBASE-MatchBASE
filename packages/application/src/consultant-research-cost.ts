@@ -22,12 +22,16 @@ import {
 export function researchRequestHash(session: {
   approved_request_revision: unknown;
   step3_deep_prompt: unknown;
+  search_dimension_plan?: unknown;
 }) {
   return createHash("sha256")
     .update(
       JSON.stringify([
         session.approved_request_revision,
         session.step3_deep_prompt,
+        ...(session.search_dimension_plan
+          ? [session.search_dimension_plan]
+          : []),
       ]),
     )
     .digest("hex");

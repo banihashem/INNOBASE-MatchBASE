@@ -67,6 +67,7 @@ WORKDIR /workspace
 
 FROM toolchain AS dependencies
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches ./patches
 COPY apps/web/package.json apps/web/package.json
 COPY packages/ai-evidence/package.json packages/ai-evidence/package.json
 COPY packages/application/package.json packages/application/package.json

@@ -17,8 +17,11 @@ import {
 
 import { ApprovedRequestSummary } from "./ApprovedRequestSummary";
 import { SupplierPriceSummary } from "./ResearchPricing";
+import { SearchDimensionResults } from "./SearchDimensionResults";
 
 export interface SupplierDossierModalProps {
+  readonly dimensionAssessment?:
+    import("@matchbase/contracts").SearchDimensionAssessment | undefined;
   readonly supplier: SupplierEntityV3 | null;
   readonly approvedRequest?: ApprovedRequestSnapshotV3 | undefined;
   readonly evidenceSources?: readonly EvidenceSourceV3[];
@@ -36,6 +39,7 @@ export function SupplierDossierModal({
   evidenceSources = [],
   claims = [],
   recentPrices,
+  dimensionAssessment,
 }: SupplierDossierModalProps) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -670,6 +674,12 @@ export function SupplierDossierModal({
             <h4 className="font-semibold text-sm">Sources inspected</h4>
             {sources.length ? (
               <ul className="list-disc pl-5 text-xs space-y-2">
+                <li>
+                  <SearchDimensionResults
+                    assessment={dimensionAssessment}
+                    claims={claims}
+                  />
+                </li>
                 {sources.map((source) => (
                   <li key={source.evidence_id}>
                     <a

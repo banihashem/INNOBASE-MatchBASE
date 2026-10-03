@@ -127,5 +127,7 @@ describe("privacy and safe error boundaries", () => {
         await pool.end();
       }
     },
+    // Full-schema scans exercise fourteen real database passes, not a unit-only deadline.
+    30_000,
   );
 });

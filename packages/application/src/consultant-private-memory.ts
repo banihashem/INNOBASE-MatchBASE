@@ -179,7 +179,18 @@ async function lookup(db: Queryable, session: WorkflowSession) {
   const scope = privateResearchMemoryScope(session);
   return retrievePrivateEvidence(db, {
     ...scope,
-    query: session.step1_interpretation.product_name.trim().slice(0, 1000),
+    query: [
+      session.step1_interpretation.product_name,
+      ...(session.search_dimension_plan?.dimensions
+        .filter((entry) => entry.selection.active)
+        .map(
+          (entry) =>
+            `${entry.definition.label} ${entry.selection.expected === undefined ? "" : JSON.stringify(entry.selection.expected)}`,
+        ) ?? []),
+    ]
+      .join(" ")
+      .trim()
+      .slice(0, 1000),
     purpose: "discovery",
     limit: 40,
   });

@@ -36,6 +36,7 @@ export * from "./v3/approved-request.js";
 export * from "./v3/research-review.js";
 export * from "./v3/supplier-display.js";
 export * from "./v3/search-dimensions.js";
+export * from "./v3/research-discovery-quorum.js";
 export type {
   ResearchDepth,
   ResearchTier,

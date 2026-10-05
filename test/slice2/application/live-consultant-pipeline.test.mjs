@@ -1645,236 +1645,317 @@ test("MB-UX-QUALITY-001 L08 Ultra preserves four completed families without retr
   }
 });
 
-test("MB-UX-QUALITY-001 L15 Ultra preserves four completed families and skips a retained no-receipt privacy rejection", async () => {
-  const extraModels = [
-    ["anthropic/claude-sonnet-5", "anthropic", "Anthropic"],
-    ["deepseek/deepseek-v4-pro-0813", "ionstream", "Ionstream"],
-    ["x-ai/grok-4.20", "xai", "xAI"],
-  ];
-  const familyById = new Map(extraModels.map((entry) => [entry[0], entry]));
-  const parameters = ["max_tokens", "reasoning", "structured_outputs"];
-  const pricing = { prompt: "0.000001", completion: "0.000002" };
-  const fixtureFetch = globalThis.fetch;
-  dispatch = (body) =>
-    body.plugins?.length && body.model.startsWith("anthropic/")
-      ? Response.json(
-          {
-            error: {
-              code: 404,
-              message: "Account privacy policy has no compatible endpoint.",
-            },
-          },
-          { status: 404 },
-        )
-      : respond(discovery());
-  globalThis.fetch = async (target, options) => {
-    const address = String(target);
-    if (address.endsWith("/models/user")) {
-      const data = await (await fixtureFetch(target, options)).json();
-      data.data.push(
-        ...extraModels.map(([id]) => ({
-          id,
-          supported_parameters: parameters,
-        })),
-      );
-      return Response.json(data);
-    }
-    if (address.endsWith("/endpoints/zdr"))
-      return Response.json({
-        data: extraModels.map(([model_id, tag]) => ({ model_id, tag })),
-      });
-    if (address.endsWith("/endpoints")) {
-      const family = extraModels.find(([id]) =>
-        address.includes(`/models/${id}/`),
-      );
-      if (family) {
-        const [model_id, tag, provider_name] = family;
-        return Response.json({
-          data: {
-            endpoints: [
-              {
-                model_id,
-                tag,
-                provider_name,
-                status: 0,
-                pricing,
-                name: `${provider_name} | ${model_id}`,
-                supported_parameters: parameters,
+for (const rejectedFamilies of [
+  ["anthropic"],
+  ["anthropic", "x-ai"],
+  ["anthropic", "x-ai", "deepseek"],
+])
+  test(`MB-UX-QUALITY-002 L08 Ultra enforces viable quorum with ${rejectedFamilies.length} definitive rejected routes`, async () => {
+    const extraModels = [
+      ["anthropic/claude-sonnet-5", "anthropic", "Anthropic"],
+      ["deepseek/deepseek-v4-pro-0813", "ionstream", "Ionstream"],
+      ["x-ai/grok-4.20", "xai", "xAI"],
+    ];
+    const familyById = new Map(extraModels.map((entry) => [entry[0], entry]));
+    const parameters = ["max_tokens", "reasoning", "structured_outputs"];
+    const pricing = { prompt: "0.000001", completion: "0.000002" };
+    const fixtureFetch = globalThis.fetch;
+    const multipleRejected = rejectedFamilies.length >= 2;
+    const category = multipleRejected ? "billing" : "privacy";
+    const status = multipleRejected ? 402 : 404;
+    const expectedCalls =
+      5 +
+      2 * (5 - rejectedFamilies.length) +
+      (rejectedFamilies.length <= 2 ? 1 : 0);
+    const store = multipleRejected ? durableResearchStore() : undefined;
+    dispatch = (body) =>
+      body.plugins?.length &&
+      rejectedFamilies.includes(body.model.split("/")[0])
+        ? Response.json(
+            {
+              error: {
+                code: status,
+                message: multipleRejected
+                  ? "Payment required."
+                  : "Account privacy policy has no compatible endpoint.",
               },
-            ],
-          },
-        });
-      }
-    }
-    if (address.includes("/generation?")) {
-      const id = new URL(address).searchParams.get("id");
-      const family = extraModels.find(
-        ([model]) => id === `generation-${model}`,
-      );
-      if (family)
-        return Response.json({
-          data: {
+            },
+            { status },
+          )
+        : respond(discovery());
+    globalThis.fetch = async (target, options) => {
+      const address = String(target);
+      if (address.endsWith("/models/user")) {
+        const data = await (await fixtureFetch(target, options)).json();
+        data.data.push(
+          ...extraModels.map(([id]) => ({
             id,
-            model: family[0],
-            provider_name: family[2],
-            is_byok: false,
-            total_cost: 0.01,
-          },
+            supported_parameters: parameters,
+          })),
+        );
+        return Response.json(data);
+      }
+      if (address.endsWith("/endpoints/zdr"))
+        return Response.json({
+          data: extraModels.map(([model_id, tag]) => ({ model_id, tag })),
         });
+      if (address.endsWith("/endpoints")) {
+        const family = extraModels.find(([id]) =>
+          address.includes(`/models/${id}/`),
+        );
+        if (family) {
+          const [model_id, tag, provider_name] = family;
+          return Response.json({
+            data: {
+              endpoints: [
+                {
+                  model_id,
+                  tag,
+                  provider_name,
+                  status: 0,
+                  pricing,
+                  name: `${provider_name} | ${model_id}`,
+                  supported_parameters: parameters,
+                },
+              ],
+            },
+          });
+        }
+      }
+      if (address.includes("/generation?")) {
+        const id = new URL(address).searchParams.get("id");
+        const family = extraModels.find(
+          ([model]) => id === `generation-${model}`,
+        );
+        if (family)
+          return Response.json({
+            data: {
+              id,
+              model: family[0],
+              provider_name: family[2],
+              is_byok: false,
+              total_cost: 0.01,
+            },
+          });
+      }
+      const response = await fixtureFetch(target, options);
+      if (address.endsWith("/chat/completions")) {
+        const body = JSON.parse(options.body);
+        const family = familyById.get(body.model);
+        if (family) {
+          if (!response.ok) return response;
+          const envelope = await response.json();
+          envelope.id = `generation-${body.model}`;
+          envelope.model = body.model;
+          envelope.provider = family[2];
+          envelope.openrouter_metadata = { is_byok: false };
+          envelope.usage = {
+            prompt_tokens: 10,
+            completion_tokens: 20,
+            cost: 0.01,
+          };
+          return Response.json(envelope);
+        }
+      }
+      return response;
+    };
+    const researchModels = [
+      ...partialRound.research_models,
+      ...extraModels.map(([id]) => id),
+    ];
+    let reservations = 0;
+    const execution = executeDualLaneResearch(intake, {
+      mode: "live",
+      stage_store: store,
+      round_plan: {
+        ...partialRound,
+        research_models: researchModels,
+        search_engines: Object.fromEntries(
+          researchModels.map((id) => [
+            id,
+            familyById.has(id) ? "exa" : "native",
+          ]),
+        ),
+      },
+      automatic_recovery_attempts: 3,
+      approved_rates: extraModels.map(
+        ([model, provider, provider_display_name]) => ({
+          model,
+          provider,
+          provider_display_name,
+          billing_mode: "openrouter_credits",
+          input_usd_per_token: 0.000001,
+          output_usd_per_token: 0.000002,
+          request_usd: 0,
+          web_search_usd: 0,
+          reasoning: true,
+          source_url: `https://openrouter.ai/api/v1/models/${model}/endpoints`,
+        }),
+      ),
+      before_call: async () => {
+        assert.ok(
+          ++reservations <= expectedCalls,
+          "Only approved independent work can run",
+        );
+      },
+    });
+    if (rejectedFamilies.length > 2) {
+      await assert.rejects(execution, { code: "MB-502-LIVE-PROVIDER" });
+      assert.equal(requests.length, expectedCalls);
+      assert.equal(
+        requests.some(
+          (body) =>
+            body.response_format?.json_schema?.name ===
+            "matchbase_live_synthesis",
+        ),
+        false,
+      );
+      assert.equal(
+        [...store.records.values()].filter(
+          (record) =>
+            record.manifest.qualification === "received_unvalidated" &&
+            record.manifest.stage_kind.endsWith(":provider_response"),
+        ).length >= 2,
+        true,
+      );
+      return;
     }
-    const response = await fixtureFetch(target, options);
-    if (address.endsWith("/chat/completions")) {
-      const body = JSON.parse(options.body);
-      const family = familyById.get(body.model);
-      if (family) {
-        if (!response.ok) return response;
-        const envelope = await response.json();
-        envelope.id = `generation-${body.model}`;
-        envelope.model = body.model;
-        envelope.provider = family[2];
-        envelope.openrouter_metadata = { is_byok: false };
-        envelope.usage = {
-          prompt_tokens: 10,
-          completion_tokens: 20,
-          cost: 0.01,
-        };
-        return Response.json(envelope);
+    const result = await execution;
+    assert.equal(requests.length, expectedCalls);
+    assert.equal(reservations, expectedCalls);
+    assert.equal(
+      requests.filter(
+        (body) => body.plugins?.length && body.model.startsWith("anthropic/"),
+      ).length,
+      1,
+    );
+    assert.equal(result.candidates.length, 1);
+    assert.match(
+      result.synthesis_summary,
+      new RegExp(`rejected by its provider for ${category}`),
+    );
+    assert.match(result.synthesis_summary, /no automatic retry/);
+    assert.match(
+      result.synthesis_summary,
+      new RegExp(
+        `${5 - rejectedFamilies.length} of 5 approved discovery paths`,
+      ),
+    );
+    assert.doesNotMatch(JSON.stringify(result.claims), /ungrounded unfinished/);
+    for (const phase of multipleRejected
+      ? ["gemini", "openai", "deepseek"]
+      : ["gemini", "openai", "deepseek", "xai"])
+      assert.ok(
+        result.checkpoints.some(
+          (event) =>
+            event.phase === `discovery_${phase}_extraction_batch` &&
+            event.state === "completed",
+        ),
+      );
+    const failed = result.checkpoints.find(
+      (event) =>
+        event.phase === "discovery_anthropic" && event.state === "failed",
+    );
+    assert.equal(failed.provider_dispatch_rejected, true);
+    assert.equal(failed.provider_http_failure.category, category);
+    assert.equal(failed.recovery_scheduled, false);
+    assert.equal(failed.provider_receipt_received, false);
+    for (const [model] of extraModels
+      .slice(1)
+      .filter(([model]) => !rejectedFamilies.includes(model.split("/")[0]))) {
+      const actual = result.checkpoints.find(
+        (event) =>
+          event.requested_model === model && event.state === "completed",
+      );
+      assert.equal(actual.is_byok, false);
+      assert.equal(actual.cost_usd, 0.01);
+    }
+
+    requests = [];
+    reservations = 0;
+    const resumed = await executeDualLaneResearch(intake, {
+      mode: "live",
+      stage_store: store,
+      round_plan: {
+        ...partialRound,
+        research_models: researchModels,
+        search_engines: Object.fromEntries(
+          researchModels.map((id) => [
+            id,
+            familyById.has(id) ? "exa" : "native",
+          ]),
+        ),
+      },
+      automatic_recovery_attempts: 3,
+      approved_rates: extraModels.map(
+        ([model, provider, provider_display_name]) => ({
+          model,
+          provider,
+          provider_display_name,
+          billing_mode: "openrouter_credits",
+          input_usd_per_token: 0.000001,
+          output_usd_per_token: 0.000002,
+          request_usd: 0,
+          web_search_usd: 0,
+          reasoning: true,
+          source_url: `https://openrouter.ai/api/v1/models/${model}/endpoints`,
+        }),
+      ),
+      retained_provider_route_rejections: rejectedFamilies.map((family) => ({
+        model: extraModels.find(([model]) => model.startsWith(`${family}/`))[0],
+        phase: family === "x-ai" ? "discovery_xai" : "discovery_anthropic",
+        error: "The provider route definitively rejected the request.",
+        provider_http_failure: {
+          http_status: status,
+          request_format: "text",
+          category,
+        },
+      })),
+      before_call: async () => {
+        assert.ok(
+          ++reservations <= (multipleRejected ? 0 : 13),
+          "The retained rejection must not reserve a call",
+        );
+      },
+    });
+    assert.equal(requests.length, multipleRejected ? 0 : 13);
+    assert.equal(reservations, multipleRejected ? 0 : 13);
+    assert.equal(
+      requests.filter(
+        (body) => body.plugins?.length && body.model.startsWith("anthropic/"),
+      ).length,
+      0,
+    );
+    assert.match(
+      resumed.checkpoints.find(
+        (event) => event.phase === "discovery_partial_recovery",
+      ).message,
+      /Saved rejected routes were not dispatched again/,
+    );
+    assert.match(
+      resumed.synthesis_summary,
+      new RegExp(
+        `${5 - rejectedFamilies.length} of 5 approved discovery paths`,
+      ),
+    );
+    if (multipleRejected) {
+      assert.deepEqual(resumed.claims, result.claims);
+      assert.deepEqual(resumed.evidence_sources, result.evidence_sources);
+      assert.deepEqual(resumed.candidates, result.candidates);
+      const progress = result.checkpoints.find(
+        (event) => event.phase === "discovery_partial_recovery",
+      );
+      assert.equal(progress.dispatched, false);
+      assert.match(progress.message, /3 of 5/);
+      for (const phase of ["discovery_anthropic", "discovery_xai"]) {
+        const rejection = result.checkpoints.find(
+          (event) => event.phase === phase && event.state === "failed",
+        );
+        assert.equal(rejection.provider_http_failure.http_status, 402);
+        assert.equal(rejection.recovery_scheduled, false);
       }
     }
-    return response;
-  };
-  const researchModels = [
-    ...partialRound.research_models,
-    ...extraModels.map(([id]) => id),
-  ];
-  let reservations = 0;
-  const result = await executeDualLaneResearch(intake, {
-    mode: "live",
-    round_plan: {
-      ...partialRound,
-      research_models: researchModels,
-      search_engines: Object.fromEntries(
-        researchModels.map((id) => [id, familyById.has(id) ? "exa" : "native"]),
-      ),
-    },
-    automatic_recovery_attempts: 3,
-    approved_rates: extraModels.map(
-      ([model, provider, provider_display_name]) => ({
-        model,
-        provider,
-        provider_display_name,
-        billing_mode: "openrouter_credits",
-        input_usd_per_token: 0.000001,
-        output_usd_per_token: 0.000002,
-        request_usd: 0,
-        web_search_usd: 0,
-        reasoning: true,
-        source_url: `https://openrouter.ai/api/v1/models/${model}/endpoints`,
-      }),
-    ),
-    before_call: async () => {
-      assert.ok(++reservations <= 14, "Only approved independent work can run");
-    },
   });
-  assert.equal(requests.length, 14);
-  assert.equal(reservations, 14);
-  assert.equal(
-    requests.filter(
-      (body) => body.plugins?.length && body.model.startsWith("anthropic/"),
-    ).length,
-    1,
-  );
-  assert.equal(result.candidates.length, 1);
-  assert.match(
-    result.synthesis_summary,
-    /rejected by its provider for privacy/,
-  );
-  assert.match(result.synthesis_summary, /no automatic retry/);
-  assert.match(result.synthesis_summary, /4 of 5 approved discovery paths/);
-  assert.doesNotMatch(JSON.stringify(result.claims), /ungrounded unfinished/);
-  for (const phase of ["gemini", "openai", "deepseek", "xai"])
-    assert.ok(
-      result.checkpoints.some(
-        (event) =>
-          event.phase === `discovery_${phase}_extraction_batch` &&
-          event.state === "completed",
-      ),
-    );
-  const failed = result.checkpoints.find(
-    (event) =>
-      event.phase === "discovery_anthropic" && event.state === "failed",
-  );
-  assert.equal(failed.provider_dispatch_rejected, true);
-  assert.equal(failed.provider_http_failure.category, "privacy");
-  assert.equal(failed.recovery_scheduled, false);
-  assert.equal(failed.provider_receipt_received, false);
-  for (const [model] of extraModels.slice(1)) {
-    const actual = result.checkpoints.find(
-      (event) => event.requested_model === model && event.state === "completed",
-    );
-    assert.equal(actual.is_byok, false);
-    assert.equal(actual.cost_usd, 0.01);
-  }
-
-  requests = [];
-  reservations = 0;
-  const resumed = await executeDualLaneResearch(intake, {
-    mode: "live",
-    round_plan: {
-      ...partialRound,
-      research_models: researchModels,
-      search_engines: Object.fromEntries(
-        researchModels.map((id) => [id, familyById.has(id) ? "exa" : "native"]),
-      ),
-    },
-    automatic_recovery_attempts: 3,
-    approved_rates: extraModels.map(
-      ([model, provider, provider_display_name]) => ({
-        model,
-        provider,
-        provider_display_name,
-        billing_mode: "openrouter_credits",
-        input_usd_per_token: 0.000001,
-        output_usd_per_token: 0.000002,
-        request_usd: 0,
-        web_search_usd: 0,
-        reasoning: true,
-        source_url: `https://openrouter.ai/api/v1/models/${model}/endpoints`,
-      }),
-    ),
-    retained_provider_route_rejections: [
-      {
-        model: "anthropic/claude-sonnet-5",
-        phase: "discovery_anthropic",
-        error: "Account privacy policy has no compatible endpoint.",
-        provider_http_failure: {
-          http_status: 404,
-          request_format: "text",
-          category: "privacy",
-        },
-      },
-    ],
-    before_call: async () => {
-      assert.ok(
-        ++reservations <= 13,
-        "The retained rejection must not reserve a call",
-      );
-    },
-  });
-  assert.equal(requests.length, 13);
-  assert.equal(reservations, 13);
-  assert.equal(
-    requests.filter(
-      (body) => body.plugins?.length && body.model.startsWith("anthropic/"),
-    ).length,
-    0,
-  );
-  assert.match(
-    resumed.synthesis_summary,
-    /saved rejection was not dispatched again/,
-  );
-  assert.match(resumed.synthesis_summary, /4 of 5 approved discovery paths/);
-});
 
 test("MB-UX-QUALITY-001 L08 refused or unsupported native responses remain terminal despite a completed sibling", async () => {
   for (const finishReason of [

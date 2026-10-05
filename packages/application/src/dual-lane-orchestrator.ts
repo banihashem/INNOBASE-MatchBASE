@@ -3,6 +3,7 @@ import {
   UAE_WATER_HEATER_10_SUPPLIERS,
   GOLDEN_SCENARIO_V3_01,
   GOLDEN_SCENARIO_V3_02,
+  requiredResearchDiscoveryPaths,
   type SupplierEntityV3,
   type EvidenceSourceV3,
   type ClaimV3,
@@ -899,11 +900,7 @@ export async function executeDualLaneResearch(
             )),
       );
     const requiredIndependentPaths =
-      discovery.length <= 2
-        ? discovery.length
-        : discovery.length === 3
-          ? 2
-          : discovery.length - 1;
+      requiredResearchDiscoveryPaths(discoveryModels);
     const hasProviderRouteRejection = discovery.some(
       (entry, index) =>
         entry.status === "rejected" &&
@@ -946,12 +943,32 @@ export async function executeDualLaneResearch(
           ? `was rejected by its provider for ${
               (entry.reason as LiveResearchError).provider_http_failure!
                 .category
-            }; no response was used, no automatic retry or billing-mode change was attempted${retainedRouteRejections.has(`${discoveryPhases[index]}\u0000${discoveryModels[index]}`) ? ", and the saved rejection was not dispatched again" : ""}, and the route requires operator correction`
+            }; no response was used, no automatic retry or billing-mode change was attempted, and the route requires operator correction`
           : "could not complete within its approved allowance";
       coverageGaps.push(
         `Partial research coverage: ${response?.requested_model ?? response?.model ?? discoveryModels[index] ?? "An approved search path"} ${failureDescription}. ${successful.length} of ${discovery.length} approved discovery paths completed extraction. Only supported findings are included; independent cross-checking is incomplete. All recorded attempts count toward usage. Additional research requires a new estimate and approval.`,
       );
     }
+    const recoveryCheckpointId = randomUUID();
+    await callback.on_checkpoint?.({
+      checkpoint_id: recoveryCheckpointId,
+      request_id: recoveryCheckpointId,
+      phase: "discovery_partial_recovery",
+      stage: "independent_path_recovery",
+      loop: 1,
+      max_loops: 1,
+      state: "completed",
+      dispatched: false,
+      requested_model: "local-coverage-review",
+      model: "local-coverage-review",
+      request_hash: researchStageHash({ discoveryModels, coverageGaps }),
+      started_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+      native_web: false,
+      reasoning_effort: "unsupported",
+      evidence_urls: [],
+      message: `Continuing with ${successful.length} of ${discovery.length} approved discovery paths after source-bound extraction. Failed paths remain excluded; independent coverage is incomplete. Saved results and recorded costs are retained.${retainedRouteRejections.size ? " Saved rejected routes were not dispatched again." : ""}`,
+    });
   }
   const merge = async (
     payload: LiveDiscoveryPayload,

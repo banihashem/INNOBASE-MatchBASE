@@ -22,6 +22,7 @@ import {
   auditOpenRouterByok,
   getConfiguredProviderRoute,
   getApprovedProviderRoute,
+  requiresAnthropicByokZdr,
   OpenRouterByokError,
   type OpenRouterByokAudit,
 } from "./openrouter-byok-policy.js";
@@ -778,6 +779,27 @@ export async function callOpenRouterCompletion(
         }
     }
     signal.throwIfAborted();
+    // Re-evaluate server policy for each dispatch, including old approved quotes.
+    const anthropicZdrRequired = requiresAnthropicByokZdr(
+      params.model,
+      provider,
+      params.approved_rate?.billing_mode,
+    );
+    if (anthropicZdrRequired) {
+      const zdr = await getOpenRouterZdrEndpoints();
+      if (
+        ![...zdr].some(
+          (entry) =>
+            entry === `${params.model}:anthropic` ||
+            entry.startsWith(`${params.model}:anthropic/`),
+        )
+      )
+        throw new LiveResearchError(
+          "MB-409-ROUND-PRIVACY",
+          "The current Anthropic BYOK privacy policy no longer permits this route. Review a new estimate.",
+        );
+    }
+    signal.throwIfAborted();
     const supported = new Set(capabilities.supported_parameters);
     const tokenParameter = supported.has("max_completion_tokens")
       ? "max_completion_tokens"
@@ -829,7 +851,15 @@ export async function callOpenRouterCompletion(
           order: [provider],
           require_parameters: true,
           allow_fallbacks: false,
-          ...(credit ? { zdr: true } : {}),
+          // Enforce current policy upstream even when catalogue metadata is cached.
+          ...(credit ||
+          requiresAnthropicByokZdr(
+            params.model,
+            provider,
+            params.approved_rate?.billing_mode,
+          )
+            ? { zdr: true }
+            : {}),
         },
       }),
       signal,

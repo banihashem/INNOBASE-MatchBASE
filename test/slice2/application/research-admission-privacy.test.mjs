@@ -12,6 +12,7 @@ for (const cause of ["privacy", "mixed-pricing", "mixed-unknown"]) {
       MATCHBASE_PROVIDER_GOOGLE: "google-ai-studio",
       MATCHBASE_PROVIDER_OPENAI: "openai",
       MATCHBASE_PROVIDER_ANTHROPIC: "anthropic",
+      MATCHBASE_ANTHROPIC_BYOK_RETENTION_ALLOWED: "false",
       MATCHBASE_PROVIDER_DEEPSEEK: "",
       MATCHBASE_PROVIDER_XAI: "",
       MATCHBASE_MODEL_GEMINI: "google/gemini-3.8-flash",
@@ -109,6 +110,28 @@ for (const cause of ["privacy", "mixed-pricing", "mixed-unknown"]) {
       request_hash: "synthetic-approved-request",
       focus_requirements: [],
     };
+    if (cause === "privacy")
+      await t.test(
+        "MB-UX-QUALITY-002 L05 explicit opt-in quotes all five Ultra families while preserving Anthropic BYOK",
+        async () => {
+          process.env.MATCHBASE_ANTHROPIC_BYOK_RETENTION_ALLOWED = "true";
+          const { plan } = await buildResearchRoundPlan({
+            ...input,
+            research_tier: "ultra",
+          });
+          assert.equal(plan.research_tier, "ultra");
+          assert.deepEqual(
+            plan.research_models.map((id) => id.split("/")[0]),
+            ["google", "openai", "anthropic", "deepseek", "x-ai"],
+          );
+          const anthropic = plan.rates.find((rate) =>
+            rate.model.startsWith("anthropic/"),
+          );
+          assert.equal(anthropic.provider, "anthropic");
+          assert.equal(anthropic.billing_mode, "byok");
+          process.env.MATCHBASE_ANTHROPIC_BYOK_RETENTION_ALLOWED = "false";
+        },
+      );
     await assert.rejects(
       buildResearchRoundPlan({ ...input, research_tier: "ultra" }),
       (error) => {

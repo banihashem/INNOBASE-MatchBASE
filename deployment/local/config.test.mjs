@@ -28,6 +28,7 @@ test("MB-UX-QUALITY-001 L07 all five provider families and supported model overr
     MATCHBASE_PROVIDER_GOOGLE: "google-ai-studio",
     MATCHBASE_PROVIDER_OPENAI: "openai",
     MATCHBASE_PROVIDER_ANTHROPIC: "anthropic",
+    MATCHBASE_ANTHROPIC_BYOK_RETENTION_ALLOWED: "true",
     MATCHBASE_PROVIDER_DEEPSEEK: "deepseek",
     MATCHBASE_PROVIDER_XAI: "xai",
     MATCHBASE_PROVIDER_ROUTES: '{"deepseek":"deepseek"}',

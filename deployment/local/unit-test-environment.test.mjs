@@ -8,6 +8,7 @@ test("MB-UX-GOV-004 L01 unit tests ignore host runtime and provider configuratio
     DATABASE_URL: "postgresql://runtime-user-database",
     MATCHBASE_DATABASE_URL: "postgresql://runtime-user-database",
     MATCHBASE_PROVIDER_ANTHROPIC: "anthropic",
+    MATCHBASE_ANTHROPIC_BYOK_RETENTION_ALLOWED: "true",
     MATCHBASE_MODEL_SYNTHESIS: "provider/model",
     MATCHBASE_OPENROUTER_API_KEY: "must-not-reach-tests",
     MatchBase_Provider_OpenAi: "openai",

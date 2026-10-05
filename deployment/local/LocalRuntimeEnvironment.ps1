@@ -15,6 +15,7 @@ function Get-LocalRuntimeEnvironment {
         'MATCHBASE_PROVIDER_GOOGLE',
         'MATCHBASE_PROVIDER_OPENAI',
         'MATCHBASE_PROVIDER_ANTHROPIC',
+        'MATCHBASE_ANTHROPIC_BYOK_RETENTION_ALLOWED',
         'MATCHBASE_PROVIDER_DEEPSEEK',
         'MATCHBASE_PROVIDER_XAI',
         'MATCHBASE_PROVIDER_ROUTES',
@@ -33,7 +34,7 @@ function Get-LocalRuntimeEnvironment {
 
 function Get-LocalTestEnvironmentNames {
     param([string[]]$ExistingNames)
-    $required = @('DATABASE_URL', 'MATCHBASE_DATABASE_URL', 'MATCHBASE_CONSULTANT_TEST_DATABASE_URL', 'MATCHBASE_DISPOSABLE_TEST_DATABASE_URL', 'MATCHBASE_TEST_DATABASE_GUARD')
+    $required = @('DATABASE_URL', 'MATCHBASE_DATABASE_URL', 'MATCHBASE_CONSULTANT_TEST_DATABASE_URL', 'MATCHBASE_DISPOSABLE_TEST_DATABASE_URL', 'MATCHBASE_TEST_DATABASE_GUARD', 'MATCHBASE_ANTHROPIC_BYOK_RETENTION_ALLOWED')
     # Models must not make fixture tests inherit the operator's live selection.
     $inherited = @($ExistingNames | Where-Object { $_ -match 'DATABASE_URL|OPENROUTER|API_KEY|^PG(HOST|PORT|DATABASE|USER|PASSWORD|SERVICE|SERVICEFILE)$|^MATCHBASE_(PROVIDER|MODEL)_' })
     return @($required + $inherited | Select-Object -Unique)

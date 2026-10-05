@@ -93,6 +93,10 @@ function fixture(t, responses, selectedModel = model) {
   const parameters = ["structured_outputs", "max_tokens", "reasoning"];
   t.mock.method(globalThis, "fetch", async (target, options) => {
     const targetUrl = String(target);
+    if (targetUrl.endsWith("/endpoints/zdr"))
+      return Response.json({
+        data: [{ model_id: selectedModel, tag: "anthropic" }],
+      });
     if (targetUrl.endsWith("/models/user"))
       return Response.json({
         data: [...new Set([model, selectedModel])].map((id) => ({

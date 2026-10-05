@@ -7,7 +7,10 @@ import type {
   ResearchRoundPlan,
 } from "@matchbase/contracts";
 import { ResearchRoundFault } from "@matchbase/data";
-import { getConfiguredProviderRoute } from "./openrouter-byok-policy.js";
+import {
+  getConfiguredProviderRoute,
+  requiresAnthropicByokZdr,
+} from "./openrouter-byok-policy.js";
 import { normalizeResearchGaps } from "./research-gap-normalizer.js";
 import { progressiveResearchMethods } from "./progressive-research-policy.js";
 import {
@@ -310,7 +313,13 @@ export async function currentResearchModelRate(
       "MB-422-MODEL-PRICING",
       "No priced endpoint is available for the configured provider.",
     );
-  if (!credit && model.startsWith("anthropic/") && provider === "anthropic") {
+  if (
+    requiresAnthropicByokZdr(
+      model,
+      provider,
+      credit ? "openrouter_credits" : "byok",
+    )
+  ) {
     const zdr = await getOpenRouterZdrEndpoints();
     if (!endpoints.some((entry) => zdr.has(`${model}:${entry.tag}`)))
       throw new ResearchRoundFault(

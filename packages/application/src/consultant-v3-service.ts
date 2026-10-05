@@ -55,6 +55,7 @@ import {
   type NormalizedRequirement,
   type Step2AdvisoryResult,
   type ApprovedRequestRevision,
+  type Step1InterpretationResult,
 } from "./preparation-gateway.js";
 import {
   createRoundCallGuard,
@@ -71,9 +72,12 @@ import {
 } from "./research-review.js";
 import {
   LivePreparationModelGateway,
+  LIVE_STEP1_SCHEMA,
+  parseLiveStep1Interpretation,
   type PreparationCallOptions,
 } from "./live-preparation.js";
 import { LiveResearchError } from "./openrouter-model-policy.js";
+import { parseLiveJson } from "./live-json-schema.js";
 import { consultantResearchInput } from "./research-context-preflight.js";
 import { createDurableResearchContext } from "./consultant-execution-context.js";
 import { retainedProviderRouteRejections } from "./retained-provider-route-rejections.js";
@@ -511,12 +515,11 @@ async function interpretConsultantIntake(
   initialRecord: ConsultantWorkflowSessionRecord,
   submittedDraft?: { draft_id: string; draft_version: number },
 ): Promise<WorkflowSession> {
-  const { session_id, run_id } = initialRecord;
+  const { run_id } = initialRecord;
   const execution_id = initialRecord.execution_id!;
   const classification_id = String(
     initialRecord.workflow_metadata!.classification_id,
   );
-  const revision_id = String(initialRecord.draft_revision!.revision_id);
   const identity = {
     account_id: submission.account_id,
     user_profile_id: submission.user_profile_id,
@@ -579,7 +582,30 @@ async function interpretConsultantIntake(
       );
     });
 
-  const session: WorkflowSession = {
+  const session = materializeStep1Session(
+    initialRecord,
+    submission,
+    mode,
+    step1,
+    submittedDraft,
+  );
+  activeSessions.set(run_id, session);
+  if (db) await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
+  return session;
+}
+
+/** Fresh interpretation and offline recovery share the same human approval boundary. */
+function materializeStep1Session(
+  initialRecord: ConsultantWorkflowSessionRecord,
+  submission: ConsultantIntakeSubmission,
+  mode: ConsultantExecutionMode,
+  step1: Step1InterpretationResult,
+  submittedDraft?: { draft_id: string; draft_version: number },
+): WorkflowSession {
+  const { session_id, run_id } = initialRecord;
+  const execution_id = initialRecord.execution_id!;
+  const revision_id = String(initialRecord.draft_revision!.revision_id);
+  return {
     ...submittedDraft,
     session_id,
     run_id,
@@ -621,14 +647,390 @@ async function interpretConsultantIntake(
     output: null,
     last_checkpoint: "prep_step1_awaiting_approval",
   };
+}
 
-  activeSessions.set(run_id, session);
+export interface RetainedInterpretationRecoveryArgs {
+  readonly account_id: string;
+  readonly user_profile_id: string;
+  readonly run_id: string;
+  readonly source_execution_id: string;
+  readonly classification_id: string;
+  readonly source_event_id: string;
+  readonly expected_intake_hash: string;
+  readonly reason: string;
+  readonly corrections: readonly {
+    readonly requirement_index: number;
+    readonly source_box:
+      "product_requirement" | "technical_compliance" | "order_profile";
+    readonly expected_reference: string;
+    readonly replacement_reference: string;
+  }[];
+  readonly execute?: boolean;
+  readonly expected_recovery_hash?: string;
+}
 
-  if (db) {
-    await saveConsultantWorkflowSession(db, mapSessionToRecord(session));
-  }
+function rejectRetainedInterpretation(message: string): never {
+  throw new ApplicationFault(
+    409,
+    "retained-interpretation-recovery-unavailable",
+    "MB-409-INTERPRETATION-RECOVERY",
+    message,
+  );
+}
 
-  return session;
+function recoveryHash(value: unknown): string {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(value))
+    .digest("hex");
+}
+
+function isRetainableAuditText(value: string): boolean {
+  return !/\0|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/u.test(
+    value,
+  );
+}
+
+/**
+ * MB-UX-QUALITY-002 L01: operator-only offline repair of one invalid source anchor.
+ * Preview is read-only; execution requires its reviewed hash. This function never
+ * invokes a gateway, grants approval, creates a quote or enqueues downstream work.
+ */
+export async function recoverRetainedConsultantInterpretation(
+  db: ConnectionPool,
+  args: RetainedInterpretationRecoveryArgs,
+) {
+  if (
+    typeof args.reason !== "string" ||
+    !args.reason.trim() ||
+    args.reason.length > 2000 ||
+    !isRetainableAuditText(args.reason) ||
+    !/^[1-9]\d*$/.test(args.source_event_id) ||
+    !/^[a-f0-9]{64}$/.test(args.expected_intake_hash) ||
+    !Array.isArray(args.corrections) ||
+    args.corrections.length !== 1
+  )
+    rejectRetainedInterpretation(
+      "A reason, exact intake hash, receipt event and one explicit correction are required.",
+    );
+  const result = await inTransaction(db, async (client) => {
+    const rows = await client.query<
+      ConsultantWorkflowSessionRecord & {
+        original_failed_session: Record<string, unknown>;
+      }
+    >(
+      `SELECT s.*,to_jsonb(s) AS original_failed_session FROM consultant_workflow_session s
+       WHERE account_id=$1 AND user_profile_id=$2 AND run_id=$3 FOR UPDATE`,
+      [args.account_id, args.user_profile_id, args.run_id],
+    );
+    const locked = rows.rows[0];
+    if (!locked?.original_failed_session)
+      rejectRetainedInterpretation(
+        "The original failed session snapshot is unavailable.",
+      );
+    // Database JSON preserves full timestamp precision; pg Date decoding does not.
+    // Keep the typed row for workflow logic and bind this exact JSON to preview/audit.
+    const { original_failed_session: originalFailedSession, ...record } =
+      locked;
+    if (
+      !record ||
+      record.account_id !== args.account_id ||
+      record.user_profile_id !== args.user_profile_id ||
+      record.run_id !== args.run_id ||
+      record.execution_id !== args.source_execution_id ||
+      record.is_invalidated !== false ||
+      record.current_state !== "workflow_failed" ||
+      record.workflow_metadata?.retry_action !== "interpretation" ||
+      record.workflow_metadata?.mode !== "live" ||
+      record.workflow_metadata?.stopped_by_user === true ||
+      record.last_checkpoint === "user_cancelled" ||
+      record.approved_request_revision ||
+      record.advisory_output ||
+      record.deep_prompt_revision ||
+      (record.advisory_loop_records?.length ?? 0) !== 0 ||
+      (record.approvals?.length ?? 0) !== 0 ||
+      record.workflow_metadata?.advisory_version_id ||
+      record.workflow_metadata?.research_prompt_version_id ||
+      (
+        record.workflow_metadata?.step1_interpretation as
+          { is_approved?: unknown } | undefined
+      )?.is_approved === true ||
+      record.classification ||
+      record.workflow_metadata?.classification_id !== args.classification_id ||
+      !record.draft_revision?.revision_id
+    )
+      rejectRetainedInterpretation(
+        "The failed interpretation does not match the current unapproved owner, execution and classification.",
+      );
+    const intake =
+      record.original_intake as unknown as ConsultantIntakeSubmission;
+    const boxes = [
+      "product_requirement",
+      "technical_compliance",
+      "order_profile",
+    ] as const;
+    if (
+      intake.account_id !== args.account_id ||
+      intake.user_profile_id !== args.user_profile_id ||
+      boxes.some((box) => typeof intake[box] !== "string") ||
+      computeIntakeContentHash(
+        intake.product_requirement,
+        intake.technical_compliance,
+        intake.order_profile,
+      ) !== args.expected_intake_hash
+    )
+      rejectRetainedInterpretation(
+        "The original intake no longer matches the reviewed content hash.",
+      );
+    const snapshots = await client.query(
+      `SELECT * FROM consultant_intake_snapshot WHERE account_id=$1 AND user_profile_id=$2 AND run_id=$3`,
+      [args.account_id, args.user_profile_id, args.run_id],
+    );
+    const snapshot = snapshots.rows[0];
+    if (
+      snapshots.rows.length !== 1 ||
+      !snapshot ||
+      snapshot.content_hash !== args.expected_intake_hash ||
+      boxes.some((box) => snapshot[box] !== intake[box])
+    )
+      rejectRetainedInterpretation(
+        "The immutable submitted intake snapshot is missing or differs from this intake.",
+      );
+    const draft = await getConsultantDraftSessionByRunId(
+      client,
+      args.account_id,
+      args.run_id,
+    );
+    if (
+      draft &&
+      (draft.user_profile_id !== args.user_profile_id ||
+        draft.snapshot_id !== snapshot.snapshot_id ||
+        draft.status !== "submitted")
+    )
+      rejectRetainedInterpretation(
+        "The submitted draft no longer matches the original intake snapshot.",
+      );
+    const downstream = await client.query(
+      `SELECT 'job' AS kind FROM consultant_workflow_job WHERE account_id=$1 AND run_id=$2 AND status IN ('queued','running')
+       UNION ALL SELECT 'round' AS kind FROM consultant_research_round WHERE account_id=$1 AND run_id=$2
+       UNION ALL SELECT 'output' AS kind FROM consultant_output_v3 WHERE account_id=$1 AND run_id=$2`,
+      [args.account_id, args.run_id],
+    );
+    if (downstream.rows.length)
+      rejectRetainedInterpretation(
+        "Active work, a research quote or output prevents interpretation recovery.",
+      );
+    const eventRows = await client.query<{
+      event_id: string;
+      phase: string;
+      detail: Record<string, unknown>;
+    }>(
+      `SELECT event_id::text,phase,detail FROM consultant_workflow_event
+       WHERE account_id=$1 AND user_profile_id=$2 AND run_id=$3 AND execution_id=$4 AND classification_id=$5
+       ORDER BY event_id`,
+      [
+        args.account_id,
+        args.user_profile_id,
+        args.run_id,
+        args.source_execution_id,
+        args.classification_id,
+      ],
+    );
+    const source = eventRows.rows.find(
+      (event) => event.event_id === args.source_event_id,
+    );
+    const receipt = source?.detail;
+    if (
+      !source ||
+      source.phase !== "step1_translation" ||
+      !receipt ||
+      receipt.phase !== "step1_translation" ||
+      receipt.state !== "completed" ||
+      receipt.provider_receipt_received !== true ||
+      receipt.is_byok !== true ||
+      receipt.native_web !== false ||
+      receipt.response_truncated !== false ||
+      receipt.storage_content_safety ||
+      typeof receipt.response_content !== "string" ||
+      !receipt.response_content.trim() ||
+      typeof receipt.request_id !== "string" ||
+      !receipt.request_id ||
+      typeof receipt.request_hash !== "string" ||
+      !/^[a-f0-9]{64}$/.test(receipt.request_hash)
+    )
+      rejectRetainedInterpretation(
+        "A complete, untruncated and verified BYOK Step 1 receipt is required.",
+      );
+    const started = eventRows.rows.filter(
+      (event) =>
+        event.phase === "step1_translation" &&
+        event.detail.state === "started" &&
+        event.detail.request_id === receipt.request_id,
+    );
+    if (
+      started.length !== 1 ||
+      BigInt(started[0]!.event_id) >= BigInt(source.event_id) ||
+      started[0]!.detail.request_hash !== receipt.request_hash ||
+      started[0]!.detail.native_web !== false ||
+      !eventRows.rows.some(
+        (event) =>
+          BigInt(event.event_id) > BigInt(source.event_id) &&
+          event.phase === "failed" &&
+          event.detail.stage === "interpretation" &&
+          event.detail.code === "MB-422-LIVE-LINEAGE",
+      )
+    )
+      rejectRetainedInterpretation(
+        "The receipt lacks its matching started request and retained lineage failure.",
+      );
+
+    // Strict raw validation happens before correction; no schema repair is permitted.
+    const payload = parseLiveJson<{
+      explicit_requirements: {
+        source_box: (typeof boxes)[number];
+        source_text_reference: string;
+      }[];
+    }>(receipt.response_content, LIVE_STEP1_SCHEMA);
+    const correction = args.corrections[0]!;
+    if (
+      !correction ||
+      Object.keys(correction).sort().join(",") !==
+        "expected_reference,replacement_reference,requirement_index,source_box" ||
+      !Number.isInteger(correction.requirement_index) ||
+      correction.requirement_index < 0 ||
+      typeof correction.expected_reference !== "string" ||
+      typeof correction.replacement_reference !== "string" ||
+      !isRetainableAuditText(correction.expected_reference) ||
+      !isRetainableAuditText(correction.replacement_reference)
+    )
+      rejectRetainedInterpretation(
+        "Only an explicit source anchor correction is allowed; semantic payload edits are forbidden.",
+      );
+    const requirement =
+      payload.explicit_requirements[correction.requirement_index];
+    if (
+      !requirement ||
+      requirement.source_box !== correction.source_box ||
+      requirement.source_text_reference !== correction.expected_reference ||
+      (requirement.source_text_reference.trim() &&
+        intake[requirement.source_box].includes(
+          requirement.source_text_reference,
+        )) ||
+      !correction.replacement_reference.trim() ||
+      !intake[requirement.source_box].includes(correction.replacement_reference)
+    )
+      rejectRetainedInterpretation(
+        "The selected reference must be invalid and its replacement must occur literally in the same original source box.",
+      );
+    const beforeHash = recoveryHash(payload);
+    requirement.source_text_reference = correction.replacement_reference;
+    const correctedText = JSON.stringify(payload);
+    const afterHash = recoveryHash(payload);
+    const step1 = parseLiveStep1Interpretation(
+      correctedText,
+      {
+        product_requirement: intake.product_requirement,
+        technical_compliance: intake.technical_compliance,
+        order_profile: intake.order_profile,
+      },
+      {
+        requirement_ids: Array.from({ length: 120 }, () => crypto.randomUUID()),
+        ledger_id: crypto.randomUUID(),
+        classification_id: args.classification_id,
+        assigned_at: new Date().toISOString(),
+      },
+    );
+    const recoveryHashValue = recoveryHash({
+      record: originalFailedSession,
+      snapshot,
+      draft,
+      source,
+      started: started[0],
+      corrections: args.corrections,
+      reason: args.reason,
+      before_hash: beforeHash,
+      after_hash: afterHash,
+    });
+    const summary = {
+      executed: false,
+      run_id: args.run_id,
+      source_execution_id: args.source_execution_id,
+      source_event_id: args.source_event_id,
+      expected_intake_hash: args.expected_intake_hash,
+      recovery_hash: recoveryHashValue,
+      before_payload_hash: beforeHash,
+      after_payload_hash: afterHash,
+      correction_count: 1,
+      requirement_count: step1.explicit_requirements.length,
+      additional_provider_calls: 0,
+      next_state: "prep_step1_awaiting_approval",
+    };
+    if (args.execute !== true) return { summary, session: null };
+    if (args.expected_recovery_hash !== recoveryHashValue)
+      rejectRetainedInterpretation(
+        "Execution requires the unchanged recovery hash from a reviewed preview.",
+      );
+    const executionId = crypto.randomUUID();
+    const session = materializeStep1Session(
+      { ...record, execution_id: executionId },
+      intake,
+      "live",
+      step1,
+      draft
+        ? { draft_id: draft.draft_id, draft_version: draft.draft_version }
+        : undefined,
+    );
+    const recoveredRecord = mapSessionToRecord(session);
+    await appendConsultantWorkflowEvent(
+      client,
+      {
+        account_id: args.account_id,
+        user_profile_id: args.user_profile_id,
+        run_id: args.run_id,
+        execution_id: executionId,
+        classification_id: args.classification_id,
+      },
+      "step1_retained_interpretation_recovery",
+      {
+        activity: "MB-UX-QUALITY-002 L01",
+        state: "completed",
+        source_execution_id: args.source_execution_id,
+        source_event_id: args.source_event_id,
+        source_request_hash: receipt.request_hash,
+        source_response_sha256: crypto
+          .createHash("sha256")
+          .update(receipt.response_content)
+          .digest("hex"),
+        before_payload_hash: beforeHash,
+        after_payload_hash: afterHash,
+        recovery_hash: recoveryHashValue,
+        corrections: args.corrections,
+        reason: args.reason,
+        original_failed_session: originalFailedSession,
+        additional_provider_calls: 0,
+        human_approval_required: true,
+      },
+    );
+    await saveConsultantWorkflowSession(client, {
+      ...record,
+      ...recoveredRecord,
+      workflow_metadata: {
+        ...record.workflow_metadata,
+        ...recoveredRecord.workflow_metadata,
+        retained_interpretation_recovery: {
+          source_execution_id: args.source_execution_id,
+          source_event_id: args.source_event_id,
+          recovery_hash: recoveryHashValue,
+        },
+      },
+    });
+    return {
+      summary: { ...summary, executed: true, execution_id: executionId },
+      session,
+    };
+  });
+  if (result.session) activeSessions.set(args.run_id, result.session);
+  return result.summary;
 }
 
 /** An explicit retry retains the original run and intake, with a fresh execution ID. */

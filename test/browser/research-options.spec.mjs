@@ -203,6 +203,7 @@ async function intercept(page, options = {}) {
     const reply = (json, status = 200) => route.fulfill({ status, json });
     if (url.pathname === "/api/v1/me")
       return reply({
+        subject: { account_id: "account-fixture", user_id: "user-fixture" },
         tier: "consultant",
         display_name: "Research Options Test",
         email: "fixture@example.com",

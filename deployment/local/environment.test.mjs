@@ -124,6 +124,7 @@ test(
       MATCHBASE_PROVIDER_GOOGLE = 'google-ai-studio'
       MATCHBASE_PROVIDER_OPENAI = 'openai'
       MATCHBASE_PROVIDER_ANTHROPIC = 'anthropic'
+      MATCHBASE_ANTHROPIC_BYOK_RETENTION_ALLOWED = 'true'
       MATCHBASE_PROVIDER_DEEPSEEK = 'ignored-process-route'
       MATCHBASE_PROVIDER_XAI = 'xai'
       MATCHBASE_PROVIDER_ROUTES = '{}'
@@ -146,6 +147,10 @@ test(
       "google/gemini-user-choice",
     );
     assert.equal(result.runtime.MATCHBASE_PROVIDER_DEEPSEEK, "deepseek");
+    assert.equal(
+      result.runtime.MATCHBASE_ANTHROPIC_BYOK_RETENTION_ALLOWED,
+      "true",
+    );
     assert.equal(
       result.runtime.MATCHBASE_MODEL_OPENAI,
       "openai/qualified-model",
@@ -191,6 +196,27 @@ test(
 );
 
 test(
+  "MB-UX-QUALITY-002 L05 persisted retention revocation overrides a stale process opt-in",
+  {
+    skip: shell
+      ? false
+      : "PowerShell is unavailable; host qualification executes this boundary",
+  },
+  () => {
+    const runtime = evaluateHelper(`
+    $reader = {
+      param($name, $target)
+      if ($name -ne 'MATCHBASE_ANTHROPIC_BYOK_RETENTION_ALLOWED') { return $null }
+      if ($target -eq 'User') { return 'false' }
+      return 'true'
+    }
+    Get-LocalRuntimeEnvironment -ReadEnvironment $reader | ConvertTo-Json -Compress
+  `);
+    assert.equal(runtime.MATCHBASE_ANTHROPIC_BYOK_RETENTION_ALLOWED, "false");
+  },
+);
+
+test(
   "MB-UX-QUALITY-001 L07 Build isolation removes every model override and provider setting while preserving ordinary process settings",
   {
     skip: shell
@@ -207,6 +233,7 @@ test(
       "MATCHBASE_PROVIDER_GOOGLE",
       "MATCHBASE_PROVIDER_OPENAI",
       "MATCHBASE_PROVIDER_ANTHROPIC",
+      "MATCHBASE_ANTHROPIC_BYOK_RETENTION_ALLOWED",
       "MATCHBASE_PROVIDER_DEEPSEEK",
       "MATCHBASE_PROVIDER_XAI",
       "MATCHBASE_PROVIDER_ROUTES",

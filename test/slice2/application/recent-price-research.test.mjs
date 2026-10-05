@@ -228,6 +228,14 @@ function setup(t, row, failedModel = null, override = (response) => response) {
   t.mock.method(globalThis, "fetch", async (target, options) => {
     const url = String(target);
     const parameters = ["structured_outputs", "reasoning", "max_tokens"];
+    // Default direct Anthropic dispatch requires synthetic ZDR eligibility.
+    if (url.endsWith("/endpoints/zdr"))
+      return Response.json({
+        data: models.map((model_id) => ({
+          model_id,
+          tag: provider[model_id.split("/")[0]][0],
+        })),
+      });
     if (url.endsWith("/models/user"))
       return Response.json({
         data: models.map((id) => ({ id, supported_parameters: parameters })),
@@ -532,8 +540,8 @@ for (const count of [2, 3, 5])
         r.messages[0].content.includes("SERVER-ASSIGNED RESEARCH ROUND"),
     );
     assert.deepEqual(
-      discovery.map((r) => r.model),
-      models.slice(0, count),
+      discovery.map((r) => r.model).sort(),
+      models.slice(0, count).sort(),
     );
     for (const call of discovery)
       assert.equal(

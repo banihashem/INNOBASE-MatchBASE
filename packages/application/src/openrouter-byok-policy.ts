@@ -37,6 +37,20 @@ const PROVIDER_NAMES: Readonly<Record<string, readonly string[]>> = {
   xai: ["xAI", "xAI (Grok)", "SpaceXAI"],
 };
 
+/** MB-UX-QUALITY-002 L05: an explicit retention exception is not a ZDR agreement. */
+export function requiresAnthropicByokZdr(
+  model: string,
+  provider: string,
+  billingMode: ResearchModelRate["billing_mode"] = "byok",
+): boolean {
+  return (
+    model.startsWith("anthropic/") &&
+    provider === "anthropic" &&
+    billingMode !== "openrouter_credits" &&
+    process.env.MATCHBASE_ANTHROPIC_BYOK_RETENTION_ALLOWED !== "true"
+  );
+}
+
 export function getConfiguredProviderRoute(model: string): string {
   let extra: unknown;
   try {

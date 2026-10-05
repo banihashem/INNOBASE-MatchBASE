@@ -525,7 +525,40 @@ export async function loadResearchStage(
       ],
     );
     const row = result.rows[0];
-    if (!row) return null;
+    if (!row) {
+      // An index is unique per lane/loop. A mismatched or expired historical
+      // index is not permission to pay for the same extraction again. Batches
+      // share a stage kind, so they must not use this uniqueness guard.
+      if (
+        /^(?:discovery_[a-z0-9_-]+|verification)_extraction_index:\d+:extraction(?:_evidence_v1)?$/u.test(
+          manifest.stage_kind,
+        )
+      ) {
+        const retained = await client.query(
+          `SELECT 1 FROM consultant_research_stage WHERE account_id=$1 AND run_id=$2
+           AND execution_id=$3 AND user_profile_id=$4 AND classification_id=$5
+           AND manifest->>'stage_kind' IN ($6,$7) LIMIT 1`,
+          [
+            identity.account_id,
+            identity.run_id,
+            identity.execution_id,
+            identity.user_profile_id,
+            identity.classification_id,
+            manifest.stage_kind,
+            manifest.stage_kind.replace(
+              /:extraction(?:_evidence_v1)?$/u,
+              ":extraction",
+            ),
+          ],
+        );
+        if (retained.rows.length)
+          fail(
+            "MB-409-EXTRACTION-REPLAY",
+            "Saved extraction input changed or expired. Automatic paid replay is blocked; saved results are retained for technical recovery.",
+          );
+      }
+      return null;
+    }
     if (
       hashResearchAuthority(row.result) !== row.result_sha256 ||
       hashResearchAuthority(row.manifest) !== hashResearchAuthority(manifest)

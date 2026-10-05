@@ -63,6 +63,7 @@ import {
 } from "./live-evidence-extraction.js";
 import {
   researchCitationInventory,
+  researchExtractionCitationInventory,
   selectResearchSourceExcerpt,
 } from "./research-source-context.js";
 import { normalizeResearchGaps } from "./research-gap-normalizer.js";
@@ -284,6 +285,7 @@ export async function executeDualLaneResearch(
   const retrieved = new Map<string, RetrievedPrimaryEvidence | null>(
     options.continuation?.retrieved,
   );
+  const inheritedRetrievals = new Map(retrieved);
   const entityIds = new Map<string, string>(options.continuation?.entity_ids);
   const roster = new Map<string, LiveCandidateRecord>(
     options.continuation?.roster.map(([key, candidate]) => [
@@ -594,16 +596,23 @@ export async function executeDualLaneResearch(
     nativeResults.set(phase, result);
     await retrieveCitedSources(result, loop);
     // Retrieval enriches extraction only; the provider response/usage remains immutable.
-    const authorityCitations = researchCitationInventory(
+    const extractionSources = new Map(inheritedRetrievals);
+    for (const citation of [
+      ...(result.citations ?? []),
+      ...methodResults.flatMap((entry) => entry.citations ?? []),
+    ])
+      extractionSources.set(citation.url, retrieved.get(citation.url) ?? null);
+    const authorityCitations = researchExtractionCitationInventory(
       result.citations ?? [],
       [
         ...(options.continuation?.native_citations ?? []),
         ...methodResults.flatMap((entry) => entry.citations ?? []),
       ],
-      retrieved,
+      inheritedRetrievals,
+      extractionSources,
     );
     const extractionCitations = authorityCitations.flatMap((citation) => {
-      const actual = retrieved.get(citation.url);
+      const actual = extractionSources.get(citation.url);
       if (!actual) return [citation];
       const content = selectResearchSourceExcerpt(
         actual.text,

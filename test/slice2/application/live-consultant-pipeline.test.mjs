@@ -2360,3 +2360,185 @@ test("MB-ARCH-IMPLEMENT-001 L02 private memory guides fresh discovery without in
     ),
   );
 });
+
+test("MB-UX-QUALITY-002 L08 R1 disjoint concurrent sources survive reversed completion and interruption without paid extraction replay", async () => {
+  const request = { ...intake, target_supplier_count: 2 };
+  let releaseOpenAI;
+  const googleIndexed = new Promise((resolve) => {
+    releaseOpenAI = resolve;
+  });
+  let firstPass = true;
+  const lanes = [
+    {
+      family: "google",
+      name: "Acme Industrial",
+      host: "verified-manufacturer.com",
+    },
+    {
+      family: "openai",
+      name: "Beta Industrial",
+      host: "verified-second-manufacturer.com",
+    },
+  ];
+  const payload = (lane) => {
+    const sourceUrl = `https://${lane.host}/products`;
+    const sourceQuote = `${lane.name} manufactures stainless steel process pumps.`;
+    const value = discovery();
+    const item = value.candidates[0];
+    item.legal_name = lane.name;
+    item.website = `https://${lane.host}`;
+    for (const field of ["identity", "product"])
+      item[field] = { ...proof, source_urls: [sourceUrl], quote: sourceQuote };
+    item.constraints[0] = {
+      ...item.constraints[0],
+      source_urls: [sourceUrl],
+      quote: sourceQuote,
+    };
+    value.evidence = [
+      {
+        ...value.evidence[0],
+        url: sourceUrl,
+        publisher: lane.name,
+        excerpt: sourceQuote,
+      },
+    ];
+    return value;
+  };
+  dispatch = async (body) => {
+    const input = JSON.parse(body.messages[1].content);
+    const lane = !body.response_format
+      ? lanes.find((lane) => body.model.startsWith(`${lane.family}/`))
+      : (lanes.find((lane) =>
+          (input.assigned_candidate_names ?? []).includes(lane.name),
+        ) ?? lanes[0]);
+    if (firstPass && !body.response_format && lane.family === "openai")
+      await googleIndexed;
+    return respond(
+      payload(lane),
+      ["products", "about"].map((path) => ({
+        type: "url_citation",
+        url_citation: {
+          url: `https://${lane.host}/${path}`,
+          title: lane.name,
+          content: `${lane.name} manufactures stainless steel process pumps.`,
+        },
+      })),
+    );
+  };
+  const fixtureFetch = globalThis.fetch;
+  globalThis.fetch = async (target, options) => {
+    const response = await fixtureFetch(target, options);
+    if (String(target).endsWith("/chat/completions")) {
+      const body = JSON.parse(options.body);
+      if (
+        body.response_format?.json_schema?.name ===
+        "matchbase_native_candidate_index"
+      ) {
+        const input = JSON.parse(body.messages[1].content);
+        const lane = lanes.find((lane) =>
+          input.native_research_notes.includes(lane.name),
+        );
+        const envelope = await response.json();
+        envelope.choices[0].message.content = JSON.stringify({
+          candidates: [
+            {
+              legal_name: lane.name,
+              anchor_quote: `${lane.name} manufactures stainless steel process pumps.`,
+              source_urls: [`https://${lane.host}/products`],
+            },
+          ],
+          remaining_gaps: [],
+          evidence_exhausted: true,
+          summary: "Synthetic evidence index",
+        });
+        return Response.json(envelope);
+      }
+    }
+    return response;
+  };
+  let interrupt = true;
+  const store = durableResearchStore((manifest) => {
+    if (manifest.stage_kind.startsWith("discovery_gemini_extraction_index:"))
+      releaseOpenAI();
+    if (manifest.qualification === "validated_synthesis_input" && interrupt) {
+      interrupt = false;
+      throw new Error("Interrupted after evidence assembly");
+    }
+  });
+  let sourceRequests = 0;
+  const options = {
+    mode: "live",
+    round_plan: partialRound,
+    stage_store: store,
+    source_retriever: async (sourceUrl) => {
+      sourceRequests++;
+      const lane = lanes.find((lane) => sourceUrl.includes(lane.host));
+      const text = `${lane.name} manufactures stainless steel process pumps.`;
+      return {
+        url: sourceUrl,
+        text,
+        content_sha256: createHash("sha256").update(text).digest("hex"),
+        retrieved_at: "2026-10-01T00:00:00Z",
+      };
+    },
+  };
+  await assert.rejects(
+    executeDualLaneResearch(request, options),
+    /Interrupted after evidence assembly/,
+  );
+  firstPass = false;
+  const completedRequests = requests.length;
+  const extractionsBefore = requests.filter((body) =>
+    /matchbase_native/.test(body.response_format?.json_schema?.name ?? ""),
+  ).length;
+  assert.equal(extractionsBefore, 4);
+  assert.equal(sourceRequests, 4);
+  const originalRecords = structuredClone([...store.records]);
+  assert.ok(JSON.stringify(originalRecords).includes("Beta Industrial"));
+  let releaseGoogle;
+  const openAIReused = new Promise((resolve) => {
+    releaseGoogle = resolve;
+  });
+  const load = store.load;
+  store.load = async (manifest) => {
+    if (manifest.stage_kind === "discovery_gemini:1:provider_response")
+      await openAIReused;
+    return load(manifest);
+  };
+  const resumed = await executeDualLaneResearch(request, {
+    ...options,
+    on_checkpoint: async (event) => {
+      if (
+        event.phase === "discovery_openai_extraction_index_reused" ||
+        (event.phase === "discovery_openai_extraction_index" &&
+          event.state === "completed")
+      )
+        releaseGoogle();
+    },
+  });
+  assert.equal(
+    requests.length,
+    completedRequests + 1,
+    "Only the previously unexecuted synthesis may run",
+  );
+  assert.equal(
+    requests.filter((body) =>
+      /matchbase_native/.test(body.response_format?.json_schema?.name ?? ""),
+    ).length,
+    extractionsBefore,
+  );
+  assert.equal(
+    sourceRequests,
+    4,
+    "Saved source receipts are not fetched again",
+  );
+  assert.deepEqual(
+    resumed.candidates.map((item) => item.legal_name).sort(),
+    lanes.map((lane) => lane.name).sort(),
+  );
+  for (const [key, record] of originalRecords)
+    assert.deepEqual(store.records.get(key), record);
+  const count = requests.length;
+  await executeDualLaneResearch(request, options);
+  assert.equal(requests.length, count, "Completed synthesis is also reused");
+});

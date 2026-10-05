@@ -1,6 +1,16 @@
 import { randomUUID } from "node:crypto";
+import {
+  requiredResearchDiscoveryPaths,
+  researchDiscoveryPhase,
+} from "@matchbase/contracts";
+import { hashResearchAuthority } from "./consultant-execution-integrity.js";
+import { matchesResearchAuthorityHash } from "./consultant-research-authority.js";
 import { serializeWorkflowEventDetail } from "./workflow-event-json.js";
-import { assertResearchOutputRights } from "./consultant-output-rights.js";
+import {
+  assertResearchOutputRights,
+  assertRetainedParentAuthority,
+} from "./consultant-output-rights.js";
+import { assertQuotedPrivateMemoryAuthority } from "./consultant-private-memory-authority.js";
 import { assertLogicalRequestRunFence } from "./consultant-research-renewal.js";
 import {
   inTransaction,
@@ -356,8 +366,12 @@ export async function resumeFailedConsultantResearchExecution(
       last_checkpoint: string | null;
       is_invalidated: boolean;
       classification_id: string | null;
+      approved_request_revision: unknown;
+      deep_prompt_revision: { is_approved?: boolean } | null;
+      workflow_metadata: Record<string, unknown> | null;
     }>(
       `SELECT user_profile_id,execution_id,current_state,last_checkpoint,is_invalidated,
+       approved_request_revision,deep_prompt_revision,workflow_metadata,
        COALESCE(classification->>'classification_id',workflow_metadata->>'classification_id') AS classification_id
        FROM consultant_workflow_session WHERE account_id=$1 AND run_id=$2 FOR UPDATE`,
       [accountId, runId],
@@ -390,9 +404,12 @@ export async function resumeFailedConsultantResearchExecution(
       return deny();
     const rounds = await db.query<{
       round_id: string;
+      user_profile_id: string;
+      classification_id: string;
       status: string;
       approved_at: Date | null;
       plan: {
+        request_hash?: string;
         research_models?: unknown;
         research_tier?: unknown;
         max_calls?: unknown;
@@ -404,7 +421,7 @@ export async function resumeFailedConsultantResearchExecution(
       };
       output: unknown;
     }>(
-      `SELECT round_id,status,approved_at,plan,output FROM consultant_research_round
+      `SELECT round_id,user_profile_id,classification_id,status,approved_at,plan,output FROM consultant_research_round
        WHERE account_id=$1 AND run_id=$2 AND execution_id=$3 FOR UPDATE`,
       [accountId, runId, executionId],
     );
@@ -426,6 +443,14 @@ export async function resumeFailedConsultantResearchExecution(
     );
     if (
       !round ||
+      round.user_profile_id !== session.user_profile_id ||
+      round.classification_id !== session.classification_id ||
+      session.deep_prompt_revision?.is_approved !== true ||
+      !matchesResearchAuthorityHash(plan?.request_hash ?? "", {
+        approved_request_revision: session.approved_request_revision,
+        deep_prompt_revision: session.deep_prompt_revision,
+        search_dimension_plan: session.workflow_metadata?.search_dimension_plan,
+      }) ||
       !["approved", "failed"].includes(round.status) ||
       round.output !== null ||
       plan?.execution_recovery?.version !== "durable.v1" ||
@@ -447,17 +472,33 @@ export async function resumeFailedConsultantResearchExecution(
       [accountId, runId, job.job_id],
     );
     if (active.rows.length) return deny();
+    const approvalHash = hashResearchAuthority(plan);
     const attemptState = await db.query<{
       consumed: number;
       unknown: number;
+      invalid_identity: number;
+      received_models: string[];
       rejected_models: string[];
     }>(
       `SELECT count(*) FILTER(WHERE outcome<>'not_dispatched')::integer AS consumed,
        count(*) FILTER(WHERE provider_outcome='unknown' AND outcome<>'not_dispatched')::integer AS unknown,
+       count(*) FILTER(WHERE user_profile_id<>$4 OR classification_id<>$5 OR job_id<>$6 OR round_id<>$7 OR approval_sha256<>$8)::integer AS invalid_identity,
+       COALESCE(array_agg(DISTINCT model) FILTER(WHERE outcome='completed' AND provider_outcome='received'
+         AND phase=('discovery_' || CASE split_part(model,'/',1)
+           WHEN 'google' THEN 'gemini' WHEN 'x-ai' THEN 'xai' ELSE split_part(model,'/',1) END)),'{}') AS received_models,
        COALESCE(array_agg(DISTINCT model) FILTER(
          WHERE provider_outcome='rejected' AND phase ~ '^discovery_[a-z0-9_-]+$'),'{}') AS rejected_models
        FROM consultant_research_attempt WHERE account_id=$1 AND run_id=$2 AND execution_id=$3`,
-      [accountId, runId, executionId],
+      [
+        accountId,
+        runId,
+        executionId,
+        session.user_profile_id,
+        session.classification_id,
+        job.job_id,
+        round.round_id,
+        approvalHash,
+      ],
     );
     const attempts = attemptState.rows[0]!;
     const orphanCalls = await db.query(
@@ -467,23 +508,54 @@ export async function resumeFailedConsultantResearchExecution(
       [accountId, runId, executionId],
     );
     const stages = await db.query<{
-      completed_models: string[];
-      retained_stages: number;
-      legacy_extraction_stages: number;
+      user_profile_id: string;
+      classification_id: string;
+      job_id: string;
+      round_id: string;
+      manifest: Record<string, unknown>;
+      manifest_sha256: string;
+      result: Record<string, unknown>;
+      result_sha256: string;
+      expires_at: Date;
     }>(
-      `SELECT COALESCE(array_agg(DISTINCT result->>'requested_model') FILTER(
-         WHERE manifest->>'stage_kind' ~ '^discovery_[a-z0-9_-]+:1:provider_response$'
-           AND result->>'requested_model' IS NOT NULL),'{}') AS completed_models,
-       count(*)::integer AS retained_stages,
-       count(*) FILTER(WHERE manifest->>'stage_kind' ~ '^discovery_[a-z0-9_-]+:1:extraction$')::integer
-         AS legacy_extraction_stages
-       FROM consultant_research_stage WHERE account_id=$1 AND run_id=$2 AND execution_id=$3
-         AND expires_at>clock_timestamp()`,
+      `SELECT user_profile_id,classification_id,job_id,round_id,manifest,manifest_sha256,result,result_sha256,expires_at
+       FROM consultant_research_stage WHERE account_id=$1 AND run_id=$2 AND execution_id=$3`,
       [accountId, runId, executionId],
     );
-    const completedModels = stages.rows[0]!.completed_models.filter((model) =>
-      models.includes(model),
-    );
+    // Admission is not publication: every reused stage still passes its current
+    // schema/source validator under the renewed lease before contributing evidence.
+    if (
+      stages.rows.some(
+        (stage) =>
+          stage.user_profile_id !== session.user_profile_id ||
+          stage.classification_id !== session.classification_id ||
+          stage.job_id !== job.job_id ||
+          stage.round_id !== round.round_id ||
+          stage.expires_at.getTime() <= Date.now() ||
+          stage.manifest.approval_sha256 !== approvalHash ||
+          hashResearchAuthority(stage.manifest) !== stage.manifest_sha256 ||
+          hashResearchAuthority(stage.result) !== stage.result_sha256 ||
+          /^discovery_[a-z0-9_-]+:1:extraction$/u.test(
+            String(stage.manifest.stage_kind),
+          ),
+      )
+    )
+      return deny();
+    const completedModels = [
+      ...new Set(
+        stages.rows.flatMap((stage) => {
+          const model = stage.result.requested_model;
+          return typeof model === "string" &&
+            models.includes(model) &&
+            attempts.received_models.includes(model) &&
+            stage.manifest.qualification === "received_unvalidated" &&
+            stage.manifest.stage_kind ===
+              `${researchDiscoveryPhase(model)}:1:provider_response`
+            ? [model]
+            : [];
+        }),
+      ),
+    ];
     const rejectedModels = attempts.rejected_models.filter((model) =>
       models.includes(model),
     );
@@ -491,23 +563,30 @@ export async function resumeFailedConsultantResearchExecution(
       db,
       job,
     );
-    const retainedRejectedModels = routeEvents.map(
-      (event) => event.detail.requested_model as string,
-    );
-    const required = models.length === 3 ? 2 : models.length - 1;
+    const retainedRejectedModels = [
+      ...new Set(
+        routeEvents.map((event) => event.detail.requested_model as string),
+      ),
+    ];
+    const required = requiredResearchDiscoveryPaths(models);
     if (
       attempts.unknown !== 0 ||
+      attempts.invalid_identity !== 0 ||
       orphanCalls.rows.length ||
-      stages.rows[0]!.legacy_extraction_stages !== 0 ||
       attempts.consumed >= maxCalls ||
       completedModels.length < required ||
-      rejectedModels.length !== 1 ||
-      retainedRejectedModels.length !== 1 ||
-      retainedRejectedModels[0] !== rejectedModels[0] ||
-      completedModels.includes(rejectedModels[0]!) ||
+      rejectedModels.length < 1 ||
+      retainedRejectedModels.length !== rejectedModels.length ||
+      rejectedModels.some(
+        (model) =>
+          !retainedRejectedModels.includes(model) ||
+          completedModels.includes(model),
+      ) ||
       completedModels.length + rejectedModels.length < models.length
     )
       return deny();
+    await assertRetainedParentAuthority(db, job, round.plan);
+    await assertQuotedPrivateMemoryAuthority(db, job, round.plan);
     const assessment: FailedResearchResumeAssessment = {
       job_id: job.job_id,
       round_id: round.round_id,
@@ -515,7 +594,7 @@ export async function resumeFailedConsultantResearchExecution(
       approved_models: models.length,
       completed_models: completedModels.length,
       rejected_models: rejectedModels.length,
-      retained_stages: stages.rows[0]!.retained_stages,
+      retained_stages: stages.rows.length,
       consumed_attempts: attempts.consumed,
       max_calls: maxCalls,
       resume_count: job.resume_count ?? 0,
@@ -538,8 +617,7 @@ export async function resumeFailedConsultantResearchExecution(
       phase: "resuming_saved_stages",
       loop: 1,
       max_loops: 1,
-      message:
-        "Resuming the approved execution from saved model results. A definitively rejected route will not be sent again.",
+      message: `Resuming ${completedModels.length} of ${models.length} approved discovery paths from saved results for revalidation. ${rejectedModels.length} definitively rejected routes will not be sent again. Coverage remains incomplete.`,
       updated_at: new Date().toISOString(),
     };
     await db.query(
@@ -563,7 +641,7 @@ export async function resumeFailedConsultantResearchExecution(
       activity: "MB-UX-QUALITY-001 L15",
       completed_models: completedModels.length,
       rejected_models: rejectedModels.length,
-      retained_stages: stages.rows[0]!.retained_stages,
+      retained_stages: stages.rows.length,
       provider_calls_added: 0,
     });
     return assessment;

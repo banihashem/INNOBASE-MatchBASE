@@ -6,7 +6,7 @@ import type {
   ResearchModelRate,
   ResearchRoundPlan,
 } from "@matchbase/contracts";
-import { ResearchRoundFault } from "@matchbase/data";
+import { ResearchRoundFault, researchAuthorityHash } from "@matchbase/data";
 import {
   getConfiguredProviderRoute,
   requiresAnthropicByokZdr,
@@ -27,17 +27,11 @@ export function researchRequestHash(session: {
   step3_deep_prompt: unknown;
   search_dimension_plan?: unknown;
 }) {
-  return createHash("sha256")
-    .update(
-      JSON.stringify([
-        session.approved_request_revision,
-        session.step3_deep_prompt,
-        ...(session.search_dimension_plan
-          ? [session.search_dimension_plan]
-          : []),
-      ]),
-    )
-    .digest("hex");
+  return researchAuthorityHash({
+    approved_request_revision: session.approved_request_revision,
+    deep_prompt_revision: session.step3_deep_prompt,
+    search_dimension_plan: session.search_dimension_plan,
+  });
 }
 const validCost = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v) && v >= 0;

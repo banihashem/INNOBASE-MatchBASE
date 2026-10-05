@@ -22,6 +22,7 @@ import {
   finishConsultantWorkflowJob,
   getLogicalResearchHistory,
   hashResearchAuthority,
+  researchAuthorityHash,
   inTransaction,
   invalidatePrivateEvidenceObservation,
   listInvalidEvidenceDerivatives,
@@ -315,7 +316,7 @@ async function retainedParentFixture(t, memory = "empty") {
       s.identity.user_profile_id,
       s.identity.run_id,
       id,
-      plan.request_hash,
+      researchAuthorityHash(saved),
     );
     const job = await claimConsultantWorkflowJob(s.pool, approval.job.job_id);
     const next = { ...s.identity, execution_id: approval.execution_id };

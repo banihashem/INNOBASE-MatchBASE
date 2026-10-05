@@ -1,4 +1,8 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import {
+  matchesResearchAuthorityHash,
+  researchAuthorityHash,
+} from "./consultant-research-authority.js";
 import { assertLogicalRequestFence } from "./consultant-research-renewal.js";
 import { assertQuotedPrivateMemoryAuthority } from "./consultant-private-memory-authority.js";
 import { assertRetainedParentAuthority } from "./consultant-output-rights.js";
@@ -251,17 +255,14 @@ export async function approveResearchQuote(
     const expiresAt = new Date(quote.plan.expires_at).getTime();
     if (!Number.isFinite(expiresAt) || expiresAt <= Date.now())
       conflict("This estimate expired. Refresh the estimate before approving.");
-    const lockedHash = createHash("sha256")
-      .update(
-        JSON.stringify([
-          session.approved_request_revision,
-          session.deep_prompt_revision,
-        ]),
-      )
-      .digest("hex");
+    const lockedSource = {
+      approved_request_revision: session.approved_request_revision,
+      deep_prompt_revision: session.deep_prompt_revision,
+      search_dimension_plan: session.workflow_metadata?.search_dimension_plan,
+    };
     if (
-      quote.plan.request_hash !== lockedHash ||
-      currentHash !== lockedHash ||
+      !matchesResearchAuthorityHash(quote.plan.request_hash, lockedSource) ||
+      currentHash !== researchAuthorityHash(lockedSource) ||
       !session.deep_prompt_revision?.is_approved
     )
       conflict("The approved request changed. Refresh the estimate.");

@@ -12,6 +12,7 @@ import {
   inTransaction,
   listResearchRounds,
   migrateUp,
+  researchAuthorityHash,
   saveConsultantWorkflowSession,
   saveResearchQuote,
   stopConsultantResearch,
@@ -117,7 +118,12 @@ async function fixture(t) {
       state.identity.user_profile_id,
       state.identity.run_id,
       quote,
-      requestHash,
+      // Retain historical quote hashes while supplying current canonical authority.
+      researchAuthorityHash({
+        approved_request_revision: session.approved_request_revision,
+        deep_prompt_revision: session.deep_prompt_revision,
+        search_dimension_plan: session.workflow_metadata?.search_dimension_plan,
+      }),
     );
   state.snapshot = (executionId, round) => ({
     output: {

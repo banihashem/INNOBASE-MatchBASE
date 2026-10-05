@@ -1,4 +1,8 @@
 import { createHash } from "node:crypto";
+import {
+  matchesResearchAuthorityHash,
+  researchAuthorityHash,
+} from "./consultant-research-authority.js";
 import { inTransaction, type ConnectionPool } from "./database.js";
 import { assertLogicalRequestFence } from "./consultant-research-renewal.js";
 import {
@@ -167,15 +171,17 @@ export async function recoverApprovedFocusStage(
       reject(
         "The completed parent checkpoint is unavailable or is no longer current.",
       );
-    const sourceHash = hash([
-      session.approved_request_revision,
-      session.deep_prompt_revision,
-    ]);
+    const source = {
+      approved_request_revision: session.approved_request_revision,
+      deep_prompt_revision: session.deep_prompt_revision,
+      search_dimension_plan: session.workflow_metadata?.search_dimension_plan,
+    };
+    const sourceHash = researchAuthorityHash(source);
     if (
       !session.deep_prompt_revision?.is_approved ||
       !session.approved_request_revision ||
-      round.plan.request_hash !== sourceHash ||
-      parent.plan.request_hash !== sourceHash ||
+      !matchesResearchAuthorityHash(round.plan.request_hash, source) ||
+      !matchesResearchAuthorityHash(parent.plan.request_hash, source) ||
       !session.approvals?.some((approval) => approval.step === "step1") ||
       !session.approvals?.some((approval) => approval.step === "step3")
     )

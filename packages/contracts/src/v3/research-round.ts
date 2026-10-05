@@ -99,6 +99,7 @@ export interface ResearchRoundPlan {
   expires_at: string;
   rates: ResearchModelRate[];
   assumptions: string[];
+  /** Versioned canonical authority, or a retained historical SHA-256 authority. */
   request_hash: string;
   parent_round_id: string | null;
   mode: "live" | "demonstration";

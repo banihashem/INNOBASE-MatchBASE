@@ -17,6 +17,7 @@ export default defineConfig({
       "src/consultant-pdf-route.test.ts",
       "src/consultant-workflow-submission.test.ts",
       "src/research-tier-route.test.ts",
+      "src/research-authority.postgres.test.ts",
       "src/research-history-route.test.ts",
       "src/profile-evidence-route.test.ts",
       "src/canonicalization-runtime.test.ts",

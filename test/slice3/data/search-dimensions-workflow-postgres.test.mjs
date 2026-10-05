@@ -7,6 +7,7 @@ import {
   lockSearchDimensionSession,
   migrateUp,
   saveConsultantWorkflowSession,
+  matchesResearchAuthorityHash,
 } from "../../../packages/data/dist/index.js";
 import {
   approveDeepPromptStep,
@@ -177,16 +178,24 @@ const database = process.env.MATCHBASE_CONSULTANT_TEST_DATABASE_URL;
       approved_request_revision: { revision_id: "retained" },
       step3_deep_prompt: { prompt_text: "Retained approved prompt" },
     };
-    assert.equal(
+    const retainedHash = createHash("sha256")
+      .update(
+        JSON.stringify([
+          legacy.approved_request_revision,
+          legacy.step3_deep_prompt,
+        ]),
+      )
+      .digest("hex");
+    assert.match(
       researchRequestHash(legacy),
-      createHash("sha256")
-        .update(
-          JSON.stringify([
-            legacy.approved_request_revision,
-            legacy.step3_deep_prompt,
-          ]),
-        )
-        .digest("hex"),
+      /^research-authority\.v2:[a-f0-9]{64}$/,
+    );
+    assert.equal(
+      matchesResearchAuthorityHash(retainedHash, {
+        approved_request_revision: legacy.approved_request_revision,
+        deep_prompt_revision: legacy.step3_deep_prompt,
+      }),
+      true,
     );
   },
 );

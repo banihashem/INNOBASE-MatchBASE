@@ -9,6 +9,7 @@ import {
   readConsultantProviderRouteRejectionEvents,
   recordConsultantProviderCall,
   recoverApprovedFocusStage,
+  researchAuthorityHash,
   saveConsultantWorkflowSession,
   summarizeResearchExecutionAllowance,
 } from "../../../packages/data/dist/index.js";
@@ -84,7 +85,7 @@ test("L05 operator CLI defaults to dry-run and requires an explicit reviewed sna
 
 const database = process.env.MATCHBASE_CONSULTANT_TEST_DATABASE_URL;
 const dbTest = database ? test : test.skip;
-async function fixture(t) {
+async function fixture(t, authority = {}) {
   const db = createPool({ connectionString: database, max: 5 });
   const identity = Object.fromEntries(
     [
@@ -149,6 +150,9 @@ async function fixture(t) {
       classification_id: identity.classification_id,
       error: "Saved output limit",
       retry_action: "research",
+      ...(authority.dimensions
+        ? { search_dimension_plan: authority.dimensions }
+        : {}),
     },
   });
   const session = (
@@ -162,10 +166,18 @@ async function fixture(t) {
       JSON.stringify([
         session.approved_request_revision,
         session.deep_prompt_revision,
+        ...(authority.dimensions
+          ? [session.workflow_metadata.search_dimension_plan]
+          : []),
       ]),
     )
     .digest("hex");
   const parentId = randomUUID();
+  const canonical = researchAuthorityHash({
+    approved_request_revision: session.approved_request_revision,
+    deep_prompt_revision: session.deep_prompt_revision,
+    search_dimension_plan: session.workflow_metadata.search_dimension_plan,
+  });
   const plan = {
     version: "research-round.v1",
     round_number: 2,
@@ -178,7 +190,7 @@ async function fixture(t) {
     automatic_recovery_attempts: 3,
     max_calls: 24,
     max_output_tokens_per_call: 20000,
-    request_hash: sourceHash,
+    request_hash: authority.child === "canonical" ? canonical : sourceHash,
     parent_round_id: parentId,
     rates: [
       { model: "openai/test-model", provider: "openai", billing_mode: "byok" },
@@ -193,7 +205,12 @@ async function fixture(t) {
       identity.user_profile_id,
       identity.run_id,
       identity.classification_id,
-      JSON.stringify({ ...plan, round_number: 1, parent_round_id: null }),
+      JSON.stringify({
+        ...plan,
+        round_number: 1,
+        parent_round_id: null,
+        request_hash: authority.parent === "canonical" ? canonical : sourceHash,
+      }),
       randomUUID(),
       JSON.stringify({ supplier_candidates: [{ name: "Saved supplier" }] }),
       JSON.stringify({
@@ -272,6 +289,62 @@ async function fixture(t) {
   };
   return { db, identity, parentId, job, fail, snapshot };
 }
+
+for (const [parent, child] of [
+  ["legacy", "legacy"],
+  ["legacy", "canonical"],
+  ["canonical", "legacy"],
+  ["canonical", "canonical"],
+]) {
+  dbTest(
+    `MB-UX-QUALITY-002 L06 dimension-bound ${parent} parent and ${child} child preserve historical approval during recovery`,
+    async (t) => {
+      const f = await fixture(t, {
+        parent,
+        child,
+        dimensions: { version: "synthetic", regions: ["A", "B"] },
+      });
+      const before = await f.snapshot();
+      const review = await recoverApprovedFocusStage(f.db, f.identity);
+      assert.equal(review.executed, false);
+      const recovered = await recoverApprovedFocusStage(f.db, f.identity, {
+        execute: true,
+        expected_snapshot_hash: review.snapshot_hash,
+      });
+      assert.equal(recovered.executed, true);
+      const after = await f.snapshot();
+      const plans = (state) =>
+        state.consultant_research_round.map(({ record }) => ({
+          id: record.round_id,
+          plan: record.plan,
+          approved_at: record.approved_at,
+          execution_id: record.execution_id,
+        }));
+      assert.deepEqual(plans(after), plans(before));
+      assert.deepEqual(
+        after.consultant_provider_call,
+        before.consultant_provider_call,
+      );
+    },
+  );
+}
+
+dbTest(
+  "MB-UX-QUALITY-002 L06 recovery refuses legacy two-field authority when dimensions are later present",
+  async (t) => {
+    const f = await fixture(t);
+    await f.db.query(
+      "UPDATE consultant_workflow_session SET workflow_metadata=workflow_metadata || $2::jsonb WHERE run_id=$1",
+      [
+        f.identity.run_id,
+        JSON.stringify({ search_dimension_plan: { regions: ["A"] } }),
+      ],
+    );
+    await assert.rejects(recoverApprovedFocusStage(f.db, f.identity), {
+      code: "MB-409-FOCUS-RECOVERY",
+    });
+  },
+);
 
 dbTest(
   "L05 reviewed focus recovery requeues exactly one same-execution job and preserves approval, source and old failure",

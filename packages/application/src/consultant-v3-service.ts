@@ -278,9 +278,11 @@ function mapSessionToRecord(
       ...(session.search_dimensions
         ? {
             search_dimensions: session.search_dimensions,
-            search_dimension_plan: session.search_dimension_plan,
             search_dimension_revision: session.search_dimension_revision,
           }
+        : {}),
+      ...(session.search_dimension_plan
+        ? { search_dimension_plan: session.search_dimension_plan }
         : {}),
       round_number: session.round_number,
       mode: session.mode,
@@ -321,10 +323,14 @@ function mapRecordToSession(
       ? {
           search_dimensions:
             metadata.search_dimensions as import("@matchbase/contracts").SearchDimensionConfiguration,
-          search_dimension_plan:
-            metadata.search_dimension_plan as import("@matchbase/contracts").SearchDimensionPlan,
           search_dimension_revision: metadata.search_dimension_revision as
             string | null,
+        }
+      : {}),
+    ...(metadata.search_dimension_plan
+      ? {
+          search_dimension_plan:
+            metadata.search_dimension_plan as import("@matchbase/contracts").SearchDimensionPlan,
         }
       : {}),
     run_id: record.run_id,

@@ -1,3 +1,4 @@
+import { useWorkflowSession } from "./WorkflowSessionRecovery";
 import { useState } from "react";
 import type { ConsultantResearchOutputV3 } from "@matchbase/contracts";
 
@@ -7,6 +8,7 @@ export function useConsultantReportDownloads(
   triggerToast: (message: string) => void,
   reportUrl?: string,
 ) {
+  const { request: fetch } = useWorkflowSession();
   const [isPdfDownloading, setIsPdfDownloading] = useState(false);
   // Action 5: JSON Export with toast confirmation (F14)
   function handleJsonExport() {

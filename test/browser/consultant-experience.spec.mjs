@@ -12,8 +12,7 @@ const draftId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const executionId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const sessionIdentity = {
   tier: "consultant",
-  user_id: "ui-fixture-user",
-  account_id: "ui-fixture-account",
+  subject: { user_id: "ui-fixture-user", account_id: "ui-fixture-account" },
   email: "consultant@example.com",
   display_name: "Browser Test Consultant",
   csrf_token: "synthetic-csrf",

@@ -1,5 +1,10 @@
 "use client";
 import { workflowMutationHeaders } from "../../../components/consultant/workflow-request";
+import { readWorkflowIdentity } from "../../../components/consultant/session-identity";
+import {
+  WorkflowSessionRecovery,
+  useWorkflowSession,
+} from "../../../components/consultant/WorkflowSessionRecovery";
 import { ConsultantShell } from "../../../components/consultant/ConsultantShell";
 import "../../../components/consultant/workflow-experience.css";
 
@@ -61,6 +66,20 @@ const DEMONSTRATION_EXAMPLES = {
 };
 
 export default function ConsultantWorkflowPage() {
+  return (
+    <WorkflowSessionRecovery>
+      <ConsultantWorkflow />
+    </WorkflowSessionRecovery>
+  );
+}
+
+function ConsultantWorkflow() {
+  const {
+    request: fetch,
+    automaticRequest,
+    automaticWorkPaused,
+    recovery,
+  } = useWorkflowSession();
   // Intake Inputs (Empty by default - F12)
   const [productRequirement, setProductRequirement] = useState("");
   const [technicalCompliance, setTechnicalCompliance] = useState("");
@@ -247,6 +266,68 @@ export default function ConsultantWorkflowPage() {
     if (typeof session.step3_deep_prompt?.is_approved === "boolean")
       setPromptApproved(session.step3_deep_prompt.is_approved);
   }
+  useEffect(() => {
+    if (recovery?.draft && !recovery.session && !draftId && !runId) {
+      const draft = recovery.draft;
+      if (draft.current_run_id) {
+        void loadExistingSession(draft.current_run_id);
+        return;
+      }
+      // Only an unhydrated page may adopt saved fields and the saved version.
+      // An already open draft retains its local edits and concurrency version.
+      updateDraftId(draft.draft_id);
+      updateDraftVersion(draft.draft_version ?? 1);
+      setProductRequirement(
+        draft.draft_data?.productRequirement ??
+          draft.draft_data?.product_requirement ??
+          "",
+      );
+      setTechnicalCompliance(
+        draft.draft_data?.technicalCompliance ??
+          draft.draft_data?.technical_compliance ??
+          "",
+      );
+      setOrderProfile(
+        draft.draft_data?.orderProfile ?? draft.draft_data?.order_profile ?? "",
+      );
+      sessionStorage.setItem("matchbase_active_draft_id", draft.draft_id);
+      setHydrationState("hydrated");
+      setWorkflowError(null);
+      setConnectionError(null);
+      return;
+    }
+    if (!recovery?.session || (runId && recovery.session.run_id !== runId))
+      return;
+    const session = recovery.session;
+    if (!runId) {
+      // Identity may have loaded just before the first saved-run read expired.
+      setRunId(session.run_id);
+      setHydrationState("hydrated");
+      const restoredDraftId = recovery.draft?.draft_id ?? session.draft_id;
+      if (restoredDraftId) updateDraftId(restoredDraftId);
+      setProductRequirement(session.intake?.product_requirement ?? "");
+      setTechnicalCompliance(session.intake?.technical_compliance ?? "");
+      setOrderProfile(session.intake?.order_profile ?? "");
+    }
+    const keepTranslation =
+      workflowState === "prep_step1_awaiting_approval" &&
+      session.state === workflowState;
+    const keepPrompt =
+      workflowState === "prep_step3_prompt_awaiting_approval" &&
+      session.state === workflowState;
+    acceptProgress(session);
+    if (keepTranslation) {
+      setStep1Translation(step1Translation);
+      if (
+        step1Translation !== session.step1_interpretation?.english_translation
+      )
+        setStep1Fidelity(null);
+    }
+    if (keepPrompt) setStep3Prompt(step3Prompt);
+    if (session.output) setOutput(session.output);
+    setConnectionError(null);
+    // A recovery snapshot is applied once. Local edits never trigger reconciliation.
+  }, [recovery]);
   const [hydrationState, setHydrationState] = useState<
     | "unresolved"
     | "loading"
@@ -347,7 +428,11 @@ export default function ConsultantWorkflowPage() {
           setUserSession(null);
           return;
         }
-        const data = await res.json();
+        const data = readWorkflowIdentity(await res.json());
+        if (!data) {
+          setUserSession(null);
+          return;
+        }
         if (
           initialUserIdRef.current &&
           data.user_id !== initialUserIdRef.current
@@ -404,7 +489,7 @@ export default function ConsultantWorkflowPage() {
       setCoherenceError(null);
       setConflictState(null);
       setStep1Fidelity(null);
-      void handleCreateNewDraft();
+      void handleCreateNewDraft(true);
       return;
     }
 
@@ -421,7 +506,7 @@ export default function ConsultantWorkflowPage() {
       if (storedDraftId) {
         void loadExistingDraft(storedDraftId);
       } else {
-        void handleCreateNewDraft();
+        void handleCreateNewDraft(true);
       }
     }
   }, []);
@@ -434,6 +519,7 @@ export default function ConsultantWorkflowPage() {
   function saveDraftSnapshot(
     snapshot: typeof intakeRef.current,
     id = draftIdRef.current,
+    automatic = false,
   ): Promise<void> {
     const fingerprint = JSON.stringify(snapshot);
     const operation = draftSaveQueueRef.current
@@ -448,17 +534,20 @@ export default function ConsultantWorkflowPage() {
         )
           return;
         const version = draftVersionRef.current;
-        const res = await fetch("/api/v1/consultant/workflow", {
-          method: "POST",
-          headers: workflowMutationHeaders(),
-          body: JSON.stringify({
-            action: "save_draft",
-            draft_id: id,
-            draft_version: version,
-            expected_version: version,
-            draft_data: snapshot,
-          }),
-        });
+        const res = await (automatic ? automaticRequest : fetch)(
+          "/api/v1/consultant/workflow",
+          {
+            method: "POST",
+            headers: workflowMutationHeaders(),
+            body: JSON.stringify({
+              action: "save_draft",
+              draft_id: id,
+              draft_version: version,
+              expected_version: version,
+              draft_data: snapshot,
+            }),
+          },
+        );
         const data = await res.json().catch(() => ({}));
         if (id !== draftIdRef.current) return;
         if (res.status === 409) {
@@ -496,6 +585,7 @@ export default function ConsultantWorkflowPage() {
   useEffect(() => {
     draftConflictRef.current = Boolean(conflictState);
     if (
+      automaticWorkPaused ||
       !userSession ||
       !["consultant", "admin"].includes(userSession.tier) ||
       hydrationState !== "hydrated" ||
@@ -533,7 +623,7 @@ export default function ConsultantWorkflowPage() {
         draftConflictRef.current
       )
         return;
-      void saveDraftSnapshot(snapshot, draftId).catch((error) => {
+      void saveDraftSnapshot(snapshot, draftId, true).catch((error) => {
         setDraftStatus("idle");
         setWorkflowError(error.message);
       });
@@ -546,6 +636,7 @@ export default function ConsultantWorkflowPage() {
     runId,
     draftId,
     userSession,
+    automaticWorkPaused,
     hydrationState,
     conflictState,
     showNewDraftModal,
@@ -692,15 +783,22 @@ export default function ConsultantWorkflowPage() {
     }
   }
 
-  async function handleCreateNewDraft() {
+  async function handleCreateNewDraft(automatic = false) {
+    if (automatic && automaticWorkPaused) {
+      setHydrationState("error");
+      return;
+    }
     setHydrationState("unresolved");
     setWorkflowError(null);
     try {
-      const res = await fetch("/api/v1/consultant/workflow", {
-        method: "POST",
-        headers: workflowMutationHeaders(),
-        body: JSON.stringify({ action: "create_draft" }),
-      });
+      const res = await (automatic ? automaticRequest : fetch)(
+        "/api/v1/consultant/workflow",
+        {
+          method: "POST",
+          headers: workflowMutationHeaders(),
+          body: JSON.stringify({ action: "create_draft" }),
+        },
+      );
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.draft_id) {
@@ -733,6 +831,7 @@ export default function ConsultantWorkflowPage() {
         `/api/v1/consultant/workflow?draft_id=${encodeURIComponent(targetDraftId)}`,
         { cache: "no-store" },
       );
+      if (res.status === 401) return;
       if (res.ok) {
         const data = await res.json();
         if (data.draft) {
@@ -771,7 +870,7 @@ export default function ConsultantWorkflowPage() {
     } catch (err) {
       console.error("Failed to load draft:", err);
     }
-    await handleCreateNewDraft();
+    await handleCreateNewDraft(true);
   }
 
   async function handleAbandonDraft(idToAbandon: string) {

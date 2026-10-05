@@ -1,3 +1,4 @@
+import { useWorkflowSession } from "./WorkflowSessionRecovery";
 import { useEffect, useRef, useState } from "react";
 
 interface Correction {
@@ -33,6 +34,7 @@ export function InterpretationCorrectionPanel({
   disabled: boolean;
   onApply: (text: string) => void;
 }) {
+  const { request: fetch } = useWorkflowSession();
   const [proposal, setProposal] = useState<Correction | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

@@ -1,5 +1,6 @@
 import { workflowMutationHeaders } from "./workflow-request";
 import { useEffect, useRef, useState } from "react";
+import { useWorkflowSession } from "./WorkflowSessionRecovery";
 
 interface Step1FidelityOptions {
   workflowState: string;
@@ -18,6 +19,7 @@ export function useStep1Fidelity({
   orderProfile,
   setWorkflowError,
 }: Step1FidelityOptions) {
+  const { automaticRequest: fetch, automaticWorkPaused } = useWorkflowSession();
   const [step1Fidelity, setStep1Fidelity] = useState<any>(null);
   const [isFidelityValidating, setIsFidelityValidating] = useState(false);
   const [validationRetry, setValidationRetry] = useState(0);
@@ -27,17 +29,25 @@ export function useStep1Fidelity({
   );
   // Dynamic Step 1 requirement fidelity revalidation on human edits
   useEffect(() => {
-    if (workflowState !== "prep_step1_awaiting_approval" || !step1Translation) {
+    // Editable content needs a current result even while paused. Read-only
+    // approved interpretations retain their persisted fidelity evidence.
+    if (workflowState === "prep_step1_awaiting_approval")
+      setStep1Fidelity(null);
+    const sequence = ++validationSequenceRef.current;
+    if (
+      automaticWorkPaused ||
+      workflowState !== "prep_step1_awaiting_approval" ||
+      !step1Translation
+    ) {
+      setIsFidelityValidating(false);
       return;
     }
-    const sequence = ++validationSequenceRef.current;
     const controller = new AbortController();
     setIsFidelityValidating(true);
     if (revalidateTimeoutRef.current) {
       clearTimeout(revalidateTimeoutRef.current);
     }
     revalidateTimeoutRef.current = setTimeout(async () => {
-      setStep1Fidelity(null);
       try {
         const res = await fetch("/api/v1/consultant/workflow", {
           method: "POST",
@@ -100,6 +110,7 @@ export function useStep1Fidelity({
     technicalCompliance,
     orderProfile,
     validationRetry,
+    automaticWorkPaused,
   ]);
 
   return {

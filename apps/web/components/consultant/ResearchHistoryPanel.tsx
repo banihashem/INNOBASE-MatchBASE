@@ -1,4 +1,5 @@
 "use client";
+import { useWorkflowSession } from "./WorkflowSessionRecovery";
 import { useEffect, useRef, useState } from "react";
 
 // MB-ARCH-IMPLEMENT-001 L02: history inspection never starts paid research.
@@ -73,6 +74,7 @@ export function ResearchHistoryPanel({
   active?: boolean;
   onRenewed?: (runId: string) => void;
 }) {
+  const { request: fetch } = useWorkflowSession();
   const [view, setView] = useState<HistoryView | null>(null);
   const [loading, setLoading] = useState(false);
   const [renewing, setRenewing] = useState(false);

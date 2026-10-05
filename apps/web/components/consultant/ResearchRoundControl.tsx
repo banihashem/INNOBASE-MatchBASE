@@ -3,12 +3,14 @@ import { useWorkflowSession } from "./WorkflowSessionRecovery";
 import {
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import { ResearchReviewPanel } from "./ResearchReviewPanel";
 import { ResearchHistoryPanel } from "./ResearchHistoryPanel";
+import { errorMessage } from "./workflow-response";
 import type {
   ConsultantResearchOutputV3,
   ResearchCostSummary,
@@ -103,12 +105,23 @@ export function ResearchRoundControl({
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [costReadPending, setCostReadPending] = useState(false);
+  const [errorFocusRequest, setErrorFocusRequest] = useState(0);
+  const errorNoticeId = useId();
+  const errorNoticeRef = useRef<HTMLDivElement>(null);
+  const costReadSequence = useRef(0);
   const visibleError = error || loadError;
   const [notice, setNotice] = useState("");
   const focusPanel = useRef<HTMLDetailsElement>(null);
   const focusInput = useRef<HTMLTextAreaElement>(null);
   const restoredQuoteForRun = useRef<string | null>(null);
+  useEffect(() => {
+    if (!errorFocusRequest) return;
+    if (focusPanel.current) focusPanel.current.open = true;
+    errorNoticeRef.current?.focus();
+  }, [errorFocusRequest]);
   useEffect(() => {
     if (!focusRequest || !focusPanel.current) return;
     focusPanel.current.open = true;
@@ -117,6 +130,11 @@ export function ResearchRoundControl({
     )?.focus();
   }, [focusRequest]);
   useEffect(() => {
+    costReadSequence.current += 1;
+    setOverview(null);
+    setLoadError("");
+    setError("");
+    setErrorCode("");
     setQuestion("");
     setLeadIds([]);
     setQuote(null);
@@ -124,6 +142,9 @@ export function ResearchRoundControl({
     setChoices([]);
     setModel("");
     restoredQuoteForRun.current = null;
+    return () => {
+      costReadSequence.current += 1;
+    };
   }, [runId]);
   const modelChoicesEnabled =
     Boolean(overview) && overview!.next_round >= 2 && overview!.next_round <= 5;
@@ -157,28 +178,53 @@ export function ResearchRoundControl({
   }, [runId, modelChoicesEnabled, choicesRetry, automaticWorkPaused]);
   const refresh = useCallback(
     async (signal?: AbortSignal) => {
-      const response = await fetch(
-        `${endpoint}?run_id=${encodeURIComponent(runId)}`,
-        { cache: "no-store", ...(signal ? { signal } : {}) },
-      );
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error ?? "Cost records are unavailable.");
-      if (
-        !Array.isArray(data.rounds) ||
-        !data.costs ||
-        typeof data.next_round !== "number"
-      )
-        throw new Error(
-          "Cost records are unavailable. Research has not started.",
+      const sequence = ++costReadSequence.current;
+      try {
+        const response = await fetch(
+          `${endpoint}?run_id=${encodeURIComponent(runId)}`,
+          { cache: "no-store", ...(signal ? { signal } : {}) },
         );
-      if (!signal?.aborted) {
-        setOverview(data);
-        setLoadError("");
+        const data = await response.json();
+        if (sequence !== costReadSequence.current || signal?.aborted) return;
+        if (!response.ok)
+          throw new Error(errorMessage(data, "Cost records are unavailable."));
+        if (
+          !Array.isArray(data.rounds) ||
+          !data.costs ||
+          typeof data.next_round !== "number"
+        )
+          throw new Error(
+            "Cost records are unavailable. Research has not started.",
+          );
+        if (!signal?.aborted) {
+          setOverview(data);
+          setLoadError("");
+        }
+      } catch (failure) {
+        if (sequence !== costReadSequence.current || signal?.aborted) return;
+        throw failure;
       }
     },
     [runId],
   );
+  async function loadCosts() {
+    if (costReadPending) return;
+    setCostReadPending(true);
+    setLoadError("");
+    try {
+      // Explicit read only: session recovery keeps automatic work paused.
+      await refresh();
+    } catch (failure) {
+      setLoadError(
+        failure instanceof Error
+          ? failure.message
+          : "Cost records are unavailable.",
+      );
+      setErrorFocusRequest((value) => value + 1);
+    } finally {
+      setCostReadPending(false);
+    }
+  }
   useEffect(() => {
     if (automaticWorkPaused) return;
     const controller = new AbortController();
@@ -223,6 +269,7 @@ export function ResearchRoundControl({
     if (busy) return;
     setBusy(true);
     setError("");
+    setErrorCode("");
     setNotice("");
     try {
       const csrf =
@@ -257,8 +304,10 @@ export function ResearchRoundControl({
         }),
       });
       const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error ?? "This round could not start.");
+      if (!response.ok) {
+        setErrorCode(typeof data.code === "string" ? data.code : "");
+        throw new Error(errorMessage(data, "This round could not start."));
+      }
       if (action === "quote") {
         setQuote(data);
         setChoices(data.choices);
@@ -274,6 +323,7 @@ export function ResearchRoundControl({
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Research request failed.");
+      setErrorFocusRequest((value) => value + 1);
     } finally {
       setBusy(false);
     }
@@ -399,6 +449,26 @@ export function ResearchRoundControl({
   };
   const button =
     "rounded-md border border-sky-400 bg-sky-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
+  const errorNotice = visibleError && (
+    <div
+      id={errorNoticeId}
+      ref={errorNoticeRef}
+      role="alert"
+      tabIndex={-1}
+      className="text-amber-200 space-y-2 rounded border border-amber-700 p-3"
+    >
+      <p>
+        {errorCode === "MB-422-RESEARCH-TIER-PRIVACY" ||
+        !/MB-\d|execution.?id|HTTP \d|SQL|provider/i.test(visibleError)
+          ? visibleError
+          : "This action could not be completed. Your saved research is retained. Check the current progress before trying again."}
+      </p>
+      <details className="text-xs">
+        <summary className="cursor-pointer">Support details</summary>
+        <p className="break-words mt-2">{visibleError}</p>
+      </details>
+    </div>
+  );
   return (
     <section
       aria-labelledby="round-cost-heading"
@@ -461,9 +531,27 @@ export function ResearchRoundControl({
         <p role="status">
           {visibleError
             ? "Recorded costs are currently unavailable."
-            : "Loading recorded costs…"}
+            : automaticWorkPaused && !costReadPending
+              ? "Cost refresh is paused. Load the saved cost records to review this round."
+              : "Loading recorded costs…"}
         </p>
       )}
+      {(!overview || loadError) && (
+        <button
+          type="button"
+          className={button}
+          disabled={costReadPending}
+          aria-describedby={visibleError ? errorNoticeId : undefined}
+          onClick={() => void loadCosts()}
+        >
+          {costReadPending
+            ? "Loading research costs…"
+            : loadError
+              ? "Retry loading costs"
+              : "Load research costs"}
+        </button>
+      )}
+      {(!overview || active || next > 5) && errorNotice}
       {hasResults && (
         <nav
           aria-label="Research results navigation"
@@ -605,7 +693,11 @@ export function ResearchRoundControl({
                   </details>
                 )}
               {next === 1 && (
-                <fieldset disabled={busy} className="space-y-3">
+                <fieldset
+                  disabled={busy}
+                  aria-describedby={visibleError ? errorNoticeId : undefined}
+                  className="space-y-3"
+                >
                   <legend className="font-semibold">
                     First-round research coverage
                   </legend>
@@ -799,6 +891,7 @@ export function ResearchRoundControl({
               <button
                 type="button"
                 disabled={busy}
+                aria-describedby={visibleError ? errorNoticeId : undefined}
                 className={button}
                 onClick={() => void request("quote")}
               >
@@ -808,6 +901,7 @@ export function ResearchRoundControl({
                     ? "Refresh estimate"
                     : "Get cost estimate · no research starts"}
               </button>
+              {errorNotice}
               {quote && (
                 <div className="border border-sky-700 rounded-lg p-4 space-y-3">
                   <h4 className="font-bold">
@@ -1073,19 +1167,6 @@ export function ResearchRoundControl({
         <p role="status" className="text-sky-200">
           {notice}
         </p>
-      )}
-      {visibleError && (
-        <div className="text-amber-200 space-y-2">
-          <p role="alert">
-            {/MB-\d|execution.?id|HTTP \d|SQL|provider/i.test(visibleError)
-              ? "This action could not be completed. Your saved research is retained. Check the current progress before trying again."
-              : visibleError}
-          </p>
-          <details className="text-xs">
-            <summary className="cursor-pointer">Support details</summary>
-            <p className="break-words mt-2">{visibleError}</p>
-          </details>
-        </div>
       )}
     </section>
   );

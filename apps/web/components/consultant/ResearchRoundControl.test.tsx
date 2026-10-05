@@ -8,6 +8,10 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ResearchRoundControl } from "./ResearchRoundControl";
+import {
+  WorkflowSessionRecovery,
+  useWorkflowSession,
+} from "./WorkflowSessionRecovery";
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -41,6 +45,206 @@ const plan = {
   max_output_tokens_per_call: 12000,
   assumptions: ["No automatic next round"],
 };
+it("MB-UX-QUALITY-002 L04 focuses a privacy refusal beside the estimate and changes coverage only on explicit selection", async () => {
+  const posts: Record<string, unknown>[] = [];
+  const onStarted = vi.fn();
+  const message =
+    "Ultra requires all five model families. The configured Anthropic BYOK route is blocked by the current privacy policy. Select another available coverage option and request a new estimate. Billing and privacy settings are unchanged; no research has started.";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url: string, options?: RequestInit) => {
+      if (options?.body) {
+        const body = JSON.parse(String(options.body));
+        posts.push(body);
+        if (body.research_tier === "ultra")
+          return Response.json(
+            { code: "MB-422-RESEARCH-TIER-PRIVACY", error: message },
+            { status: 422 },
+          );
+        return Response.json({
+          quote_id: "explicit-default-quote",
+          plan,
+          choices: [],
+        });
+      }
+      return Response.json({ costs, rounds: [], next_round: 1 });
+    }),
+  );
+  render(
+    <ResearchRoundControl
+      runId="run"
+      workflowState="prep_step3_prompt_approved"
+      onStarted={onStarted}
+      onPreview={vi.fn()}
+    />,
+  );
+  const ultra = await screen.findByRole("radio", { name: /Ultra/ });
+  fireEvent.click(ultra);
+  const estimate = screen.getByRole("button", { name: /Get cost estimate/ });
+  fireEvent.click(estimate);
+  const alert = await screen.findByRole("alert");
+  await waitFor(() => expect(document.activeElement).toBe(alert));
+  expect(alert).toHaveTextContent(message);
+  expect(estimate.nextElementSibling).toBe(alert);
+  expect(estimate).toHaveAttribute("aria-describedby", alert.id);
+  expect(
+    screen.getByRole("group", { name: /research coverage/i }),
+  ).toHaveAttribute("aria-describedby", alert.id);
+  expect(ultra).toBeChecked();
+  expect(posts).toHaveLength(1);
+  expect(onStarted).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("radio", { name: /Default/ }));
+  expect(posts).toHaveLength(1);
+  fireEvent.click(estimate);
+  await screen.findByRole("button", { name: /Approve.*start/i });
+  expect(posts.map((body) => [body.action, body.research_tier])).toEqual([
+    ["quote", "ultra"],
+    ["quote", "default"],
+  ]);
+  expect(onStarted).not.toHaveBeenCalled();
+});
+
+it("MB-UX-QUALITY-002 L04 manually reads costs after sign-in without resuming automatic checks or issuing a POST", async () => {
+  function RecoveryProbe() {
+    const session = useWorkflowSession();
+    return (
+      <button
+        onClick={async () => {
+          await session.request("/api/v1/me");
+          await session.request("/expire");
+        }}
+      >
+        Expire session
+      </button>
+    );
+  }
+  let costsAvailable = false;
+  let costReads = 0;
+  const fetchMock = vi.fn(async (url: string, options?: RequestInit) => {
+    expect(options?.method ?? "GET").toBe("GET");
+    if (url === "/api/v1/me")
+      return Response.json({
+        subject: { account_id: "owner", user_id: "user" },
+        tier: "consultant",
+      });
+    if (url === "/expire")
+      return Response.json({ error: "Session required" }, { status: 401 });
+    if (url.includes("research-rounds")) {
+      costReads++;
+      if (!costsAvailable)
+        return Response.json(
+          { error: "Cost records temporarily unavailable" },
+          { status: 503 },
+        );
+      return Response.json({ costs, rounds: [], next_round: 1 });
+    }
+    return Response.json({});
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  window.history.replaceState({}, "", "/consultant/workflow");
+  render(
+    <WorkflowSessionRecovery>
+      <RecoveryProbe />
+      <ResearchRoundControl
+        runId="run"
+        workflowState="prep_step3_prompt_approved"
+        onStarted={vi.fn()}
+        onPreview={vi.fn()}
+      />
+    </WorkflowSessionRecovery>,
+  );
+  await screen.findByRole("button", { name: "Retry loading costs" });
+  fireEvent.click(screen.getByRole("button", { name: "Expire session" }));
+  await screen.findByRole("heading", { name: "Sign in again to continue" });
+  fireEvent.click(screen.getByRole("button", { name: "Check sign-in" }));
+  await screen.findByRole("button", {
+    name: "Resume automatic checks and draft saving",
+  });
+  const pausedReads = costReads;
+  costsAvailable = true;
+  fireEvent.click(screen.getByRole("button", { name: "Retry loading costs" }));
+  await screen.findByRole("button", { name: /Get cost estimate/ });
+  expect(costReads).toBe(pausedReads + 1);
+  expect(
+    screen.getByRole("button", {
+      name: "Resume automatic checks and draft saving",
+    }),
+  ).toBeVisible();
+  vi.useFakeTimers();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60_000);
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect(costReads).toBe(pausedReads + 1);
+});
+it("MB-UX-QUALITY-002 L04 ignores a superseded failed cost read after an explicit successful read", async () => {
+  let rejectOldRead!: (reason: Error) => void;
+  let reads = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string, options?: RequestInit) => {
+      expect(options?.method ?? "GET").toBe("GET");
+      if (url.includes("research-rounds") && ++reads === 1)
+        return new Promise<Response>((_resolve, reject) => {
+          rejectOldRead = reject;
+        });
+      return Promise.resolve(
+        Response.json({ costs, rounds: [], next_round: 1 }),
+      );
+    }),
+  );
+  render(
+    <ResearchRoundControl
+      runId="run"
+      workflowState="prep_step3_prompt_approved"
+      onStarted={vi.fn()}
+      onPreview={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Load research costs" }));
+  await screen.findByRole("button", { name: /Get cost estimate/ });
+  await act(async () => {
+    rejectOldRead(new Error("Obsolete failed read"));
+  });
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Retry loading costs" }),
+  ).not.toBeInTheDocument();
+});
+
+it("MB-UX-QUALITY-002 L04 routes an explicit cost-read 401 through session recovery without a mutation", async () => {
+  let reads = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url: string, options?: RequestInit) => {
+      expect(options?.method ?? "GET").toBe("GET");
+      reads++;
+      return Response.json(
+        { error: "Unavailable" },
+        { status: reads === 1 ? 503 : 401 },
+      );
+    }),
+  );
+  render(
+    <WorkflowSessionRecovery>
+      <ResearchRoundControl
+        runId="run"
+        workflowState="prep_step3_prompt_approved"
+        onStarted={vi.fn()}
+        onPreview={vi.fn()}
+      />
+    </WorkflowSessionRecovery>,
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Retry loading costs" }),
+  );
+  await screen.findByRole("heading", { name: "Sign in again to continue" });
+  expect(reads).toBe(2);
+  expect(
+    screen.queryByRole("button", { name: /Get cost estimate/ }),
+  ).not.toBeInTheDocument();
+});
+
 const researchReview = {
   version: "research-review.v1",
   round_number: 1,

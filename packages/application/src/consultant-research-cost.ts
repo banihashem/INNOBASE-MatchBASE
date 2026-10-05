@@ -367,7 +367,7 @@ export function researchModelSuitability(model: string): number {
   if (model.startsWith("x-ai/grok-4")) return 40;
   return 0;
 }
-export async function researchModelChoices(
+async function discoverResearchModelChoices(
   options: { for_followup?: boolean } = {},
 ) {
   const configured = getConfiguredLiveModels();
@@ -408,12 +408,33 @@ export async function researchModelChoices(
     ]),
   ];
   const results = await Promise.allSettled(ids.map(currentResearchModelRate));
-  return results.flatMap((r) =>
-    r.status === "fulfilled" &&
-    (!options.for_followup || r.value.structured_outputs === true)
-      ? [r.value]
-      : [],
-  );
+  return {
+    choices: results.flatMap((r) =>
+      r.status === "fulfilled" &&
+      (!options.for_followup || r.value.structured_outputs === true)
+        ? [r.value]
+        : [],
+    ),
+    // Preserve admission reasons without exposing provider response bodies.
+    failures: results.flatMap((result, index) =>
+      result.status === "rejected"
+        ? [
+            {
+              model: ids[index]!,
+              code:
+                result.reason instanceof ResearchRoundFault
+                  ? result.reason.code
+                  : null,
+            },
+          ]
+        : [],
+    ),
+  };
+}
+export async function researchModelChoices(
+  options: { for_followup?: boolean } = {},
+) {
+  return (await discoverResearchModelChoices(options)).choices;
 }
 /** Configuration visibility only; a configured route does not establish key health or pricing. */
 export function configuredResearchTierAvailability(): Record<
@@ -479,10 +500,13 @@ export async function buildResearchRoundPlan(input: {
       "MB-422-RESEARCH-TIER",
       "Select a supported research tier.",
     );
-  const choices =
+  const discovery =
     input.mode === "demonstration"
-      ? []
-      : await researchModelChoices({ for_followup: input.round_number > 1 });
+      ? { choices: [], failures: [] }
+      : await discoverResearchModelChoices({
+          for_followup: input.round_number > 1,
+        });
+  const { choices } = discovery;
   const configured = getConfiguredLiveModels();
   const ordered = choices
     .filter((c) => c.structured_outputs !== false)
@@ -570,12 +594,25 @@ export async function buildResearchRoundPlan(input: {
     } else {
       for (const family of requiredExtraFamilies) {
         const extra = ranked.find((r) => r.model.startsWith(`${family}/`));
-        if (!extra)
+        if (!extra) {
+          const failures = discovery.failures.filter((failure) =>
+            failure.model.startsWith(`${family}/`),
+          );
+          if (
+            failures.length &&
+            failures.every((failure) => failure.code === "MB-422-MODEL-PRIVACY")
+          )
+            throw new ResearchRoundFault(
+              422,
+              "MB-422-RESEARCH-TIER-PRIVACY",
+              `Ultra requires all five model families. The configured ${family === "anthropic" ? "Anthropic" : family} BYOK route is blocked by the current privacy policy. Select another available coverage option and request a new estimate. Billing and privacy settings are unchanged; no research has started.`,
+            );
           throw new ResearchRoundFault(
             422,
             "MB-422-RESEARCH-TIER-UNAVAILABLE",
             `Ultra research requires all five families. The ${family} family has no eligible priced BYOK or OpenRouter-credit route. No reduced tier or research was started.`,
           );
+        }
         research.push(extra.model);
       }
     }

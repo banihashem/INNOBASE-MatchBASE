@@ -139,6 +139,34 @@ afterEach(() => {
 });
 
 describe("research tier HTTP approval boundary", () => {
+  it("MB-UX-QUALITY-002 L04 returns the privacy admission cause without saving a quote or scheduling research", async () => {
+    const message =
+      "The configured Anthropic BYOK route is blocked by the current privacy policy.";
+    mocks.plan.mockRejectedValue(
+      new mocks.Fault(422, "MB-422-RESEARCH-TIER-PRIVACY", message),
+    );
+    const response = await post({
+      action: "quote",
+      research_tier: "ultra",
+      depth: "simple",
+    });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      code: "MB-422-RESEARCH-TIER-PRIVACY",
+      error: message,
+    });
+    for (const operation of [
+      mocks.save,
+      mocks.approve,
+      mocks.worker,
+      mocks.after,
+      mocks.preflight,
+      mocks.memoryQuote,
+      mocks.publicMemoryQuote,
+    ])
+      expect(operation).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it("MB-ARCH-IMPLEMENT-001 L02 withdrawn results retain costs and round history without source content", async () => {
     mocks.rounds.mockResolvedValue([
       {

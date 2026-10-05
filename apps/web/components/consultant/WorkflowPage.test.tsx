@@ -91,8 +91,7 @@ beforeEach(() => {
       if (String(url) === "/api/v1/me")
         return response({
           tier: "consultant",
-          user_id: "user",
-          account_id: "account",
+          subject: { user_id: "user", account_id: "account" },
         });
       const body = options?.body ? JSON.parse(String(options.body)) : {};
       requests.push(body);
@@ -177,8 +176,7 @@ describe("MB-UX-QUALITY-001 L05 intake readiness", () => {
         session.resolve(
           response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           }),
         );
       const acknowledgeDraft = () =>
@@ -228,8 +226,7 @@ describe("MB-UX-QUALITY-001 L05 intake readiness", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         const body = JSON.parse(String(options?.body));
         requests.push(body);
@@ -283,8 +280,7 @@ describe("MB-UX-QUALITY-001 L05 intake readiness", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         if (url.includes("incomplete=true")) return response({ items: [] });
         if (url.includes("active_draft=true"))
@@ -358,8 +354,7 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         if (String(url).startsWith("/api/v1/consultant/research-rounds"))
           return response(roundOverview);
@@ -405,8 +400,7 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         if (String(url).startsWith("/api/v1/consultant/research-rounds"))
           return response(roundOverview);
@@ -451,8 +445,7 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         if (String(url).startsWith("/api/v1/consultant/research-rounds"))
           return response(roundOverview);
@@ -537,8 +530,7 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         if (!options?.method) {
           if (++reads > 1) return stalePoll.promise;
@@ -725,8 +717,7 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         if (!options?.method) return response({ session });
         const body = JSON.parse(String(options.body));
@@ -846,8 +837,7 @@ describe("MB-UX-LIVE-001 L03 stage gates", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         if (!options?.method) return response({ session });
         const body = JSON.parse(String(options.body));
@@ -1117,8 +1107,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         if (!options?.method) {
           if (!queued)
@@ -1332,8 +1321,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         if (!options?.method)
           return response({
@@ -1415,8 +1403,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         expect(options?.method).toBeUndefined();
         reads += 1;
@@ -1499,8 +1486,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         if (url.includes("research-rounds")) {
           if (url.includes("round_id=")) return response({ output: oldOutput });
@@ -1610,8 +1596,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
       if (url === "/api/v1/me")
         return response({
           tier: "consultant",
-          user_id: "user",
-          account_id: "account",
+          subject: { user_id: "user", account_id: "account" },
         });
       if (url.includes("research-rounds")) {
         if (url.includes("round_id="))
@@ -1705,8 +1690,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         if (!options?.method)
           return response({
@@ -1903,8 +1887,7 @@ describe("MB-UX-LIVE-001 L01 draft transitions", () => {
         if (url === "/api/v1/me")
           return response({
             tier: "consultant",
-            user_id: "user",
-            account_id: "account",
+            subject: { user_id: "user", account_id: "account" },
           });
         if (!options?.method)
           return response({

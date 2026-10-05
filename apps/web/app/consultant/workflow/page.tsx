@@ -1,5 +1,6 @@
 "use client";
 import { workflowMutationHeaders } from "../../../components/consultant/workflow-request";
+import { readWorkflowIdentity } from "../../../components/consultant/session-identity";
 import {
   WorkflowSessionRecovery,
   useWorkflowSession,
@@ -427,7 +428,11 @@ function ConsultantWorkflow() {
           setUserSession(null);
           return;
         }
-        const data = await res.json();
+        const data = readWorkflowIdentity(await res.json());
+        if (!data) {
+          setUserSession(null);
+          return;
+        }
         if (
           initialUserIdRef.current &&
           data.user_id !== initialUserIdRef.current

@@ -8,8 +8,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import {
+  readWorkflowIdentity,
+  type WorkflowIdentity,
+} from "./session-identity";
 
-type Identity = { account_id: string; user_id: string; tier: string };
 type Recovery = { session?: any; draft?: any };
 type SessionControl = {
   request: typeof fetch;
@@ -46,7 +49,7 @@ function sessionRequired() {
 
 /** MB-UX-QUALITY-002 L02: reauthenticate without replaying a rejected action. */
 export function WorkflowSessionRecovery({ children }: { children: ReactNode }) {
-  const identity = useRef<Identity | null>(null);
+  const identity = useRef<WorkflowIdentity | null>(null);
   const blocked = useRef(false);
   const automaticPaused = useRef(false);
   const generation = useRef(0);
@@ -63,13 +66,8 @@ export function WorkflowSessionRecovery({ children }: { children: ReactNode }) {
     const response = await nativeRequest(input, init);
     if (started !== generation.current) return sessionRequired();
     if (String(input) === "/api/v1/me" && response.ok) {
-      const data = await response.clone().json();
-      if (
-        !identity.current &&
-        typeof data.account_id === "string" &&
-        typeof data.user_id === "string"
-      )
-        identity.current = data;
+      const data = readWorkflowIdentity(await response.clone().json());
+      if (!identity.current && data) identity.current = data;
     }
     if (response.status === 401) {
       blocked.current = true;
@@ -115,12 +113,8 @@ export function WorkflowSessionRecovery({ children }: { children: ReactNode }) {
         throw new Error(
           "Sign-in could not be verified. Your edits remain in this tab.",
         );
-      const current: Identity = await response.json();
-      if (
-        !current.account_id ||
-        !current.user_id ||
-        !["consultant", "admin"].includes(current.tier)
-      )
+      const current = readWorkflowIdentity(await response.json());
+      if (!current || !["consultant", "admin"].includes(current.tier))
         throw new Error(
           "Consultant access is required. Your original workspace remains locked.",
         );

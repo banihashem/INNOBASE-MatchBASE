@@ -47,8 +47,7 @@ test("MB-UX-LIVE-001 L01: accepted asynchronous stages keep polling with retry_a
       return route.fulfill({
         json: {
           tier: "consultant",
-          user_id: "ui-test-user",
-          account_id: "ui-test-account",
+          subject: { user_id: "ui-test-user", account_id: "ui-test-account" },
         },
       });
     if (url.pathname !== "/api/v1/consultant/workflow")
@@ -249,8 +248,7 @@ test("MB-UX-LIVE-001 L01: Save & New waits for the latest three-box snapshot", a
       return route.fulfill({
         json: {
           tier: "consultant",
-          user_id: "ui-test-user",
-          account_id: "ui-test-account",
+          subject: { user_id: "ui-test-user", account_id: "ui-test-account" },
         },
       });
     if (url.pathname !== "/api/v1/consultant/workflow")

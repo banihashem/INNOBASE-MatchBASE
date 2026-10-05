@@ -7,14 +7,15 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ConsultantWorkflowPage from "../../app/consultant/workflow/page";
+import { MatchBaseApplication } from "@matchbase/application";
+import { readWorkflowIdentity } from "./session-identity";
 import {
   WorkflowSessionRecovery,
   useWorkflowSession,
 } from "./WorkflowSessionRecovery";
 
 const original = {
-  account_id: "account-a",
-  user_id: "user-a",
+  subject: { account_id: "account-a", user_id: "user-a" },
   tier: "consultant",
 };
 const saved = {
@@ -29,7 +30,7 @@ const saved = {
 function json(data: unknown, status = 200) {
   return Response.json(data, { status });
 }
-let identity: typeof original;
+let identity: unknown;
 let authenticated: boolean;
 let rejectApproval: boolean;
 let approvalFailure: number | "network";
@@ -130,6 +131,123 @@ async function expireWithEdits() {
 }
 
 describe("MB-UX-QUALITY-002 L02 session recovery", () => {
+  it("MB-UX-QUALITY-002 L03 recovers with the actual application me projection and retains unsaved edits", async () => {
+    const pool = {
+      query: vi.fn(async () => ({
+        rows: [],
+        rowCount: 0,
+        command: "SELECT",
+        oid: 0,
+        fields: [],
+      })),
+      connect: vi.fn(async () => {
+        throw new Error(
+          "This projection test must not open a database connection",
+        );
+      }),
+      end: vi.fn(async () => {}),
+    };
+    const canonicalizer = {
+      capabilityId: "CAP-TRANSLATE" as const,
+      canonicalize: vi.fn(async () => {
+        throw new Error("No inference is permitted");
+      }),
+    };
+    const application = new MatchBaseApplication({
+      pool,
+      canonicalizer,
+      privacyKey: new Uint8Array(32).fill(1),
+    });
+    identity = await application.me({
+      accountId: "account-a",
+      userId: "user-a",
+      tier: "consultant",
+      adminSubRoles: [],
+      correlationId: "identity-contract",
+      deploymentId: "test",
+    });
+    expect(identity).toMatchObject(original);
+    expect(identity).not.toHaveProperty("account_id");
+    expect(identity).not.toHaveProperty("user_id");
+    await expireWithEdits();
+    fireEvent.click(screen.getByRole("button", { name: "Check sign-in" }));
+    await screen.findByText(/Sign-in restored/);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Editable research plan")).toHaveValue(
+        "My unsaved English plan",
+      ),
+    );
+    expect(mutations).toHaveLength(1);
+    expect(canonicalizer.canonicalize).not.toHaveBeenCalled();
+    expect(pool.connect).not.toHaveBeenCalled();
+  });
+
+  for (const malformed of [
+    null,
+    [],
+    {},
+    { tier: "consultant", account_id: "account-a", user_id: "user-a" },
+    { tier: "consultant", subject: null },
+    { tier: "consultant", subject: [] },
+    { tier: "consultant", subject: { account_id: "", user_id: "user-a" } },
+    { tier: "consultant", subject: { account_id: "account-a", user_id: " " } },
+    { tier: "consultant", subject: { account_id: 42, user_id: "user-a" } },
+    { tier: "consultant", subject: { account_id: "account-a", user_id: {} } },
+    { tier: "unknown", subject: original.subject },
+    { tier: "standard", subject: original.subject },
+  ]) {
+    it(`MB-UX-QUALITY-002 L03 rejects malformed or unentitled recovery identity ${JSON.stringify(malformed)}`, async () => {
+      await expireWithEdits();
+      identity = malformed;
+      const count = reads.length;
+      fireEvent.click(screen.getByRole("button", { name: "Check sign-in" }));
+      await screen.findByText(
+        "Consultant access is required. Your original workspace remains locked.",
+      );
+      expect(reads).toHaveLength(count);
+      expect(mutations).toHaveLength(1);
+      expect(
+        screen.queryByRole("button", { name: /Approve plan & review cost/ }),
+      ).not.toBeInTheDocument();
+    });
+  }
+
+  it("MB-UX-QUALITY-002 L03 does not replace a malformed nested subject with unrelated flat IDs", () => {
+    expect(
+      readWorkflowIdentity({
+        tier: "consultant",
+        subject: { account_id: "", user_id: "" },
+        account_id: "account-a",
+        user_id: "user-a",
+      }),
+    ).toBeNull();
+    expect(
+      readWorkflowIdentity({
+        ...original,
+        account_id: "account-b",
+        user_id: "user-b",
+      }),
+    ).toEqual({ ...original.subject, tier: "consultant" });
+  });
+
+  for (const malformed of [
+    null,
+    { tier: "consultant" },
+    { tier: "consultant", subject: { account_id: "account-a", user_id: 42 } },
+  ]) {
+    it(`MB-UX-QUALITY-002 L03 refuses initial workflow access for malformed identity ${JSON.stringify(malformed)}`, async () => {
+      identity = malformed;
+      render(<ConsultantWorkflowPage />);
+      await screen.findByRole("heading", {
+        name: "Consultant Access Required",
+      });
+      expect(
+        screen.queryByRole("textbox", { name: "Editable research plan" }),
+      ).not.toBeInTheDocument();
+      expect(mutations).toHaveLength(0);
+    });
+  }
+
   it("discards a response dispatched before the session was locked", async () => {
     let finish!: (response: Response) => void;
     const pending = new Promise<Response>((resolve) => {
@@ -235,7 +353,7 @@ describe("MB-UX-QUALITY-002 L02 session recovery", () => {
   for (const changed of [{ user_id: "user-b" }, { account_id: "account-b" }]) {
     it(`refuses recovery for a changed ${Object.keys(changed)[0]} before reading saved private work`, async () => {
       await expireWithEdits();
-      identity = { ...identity, ...changed };
+      identity = { ...original, subject: { ...original.subject, ...changed } };
       const count = reads.length;
       fireEvent.click(screen.getByRole("button", { name: "Check sign-in" }));
       await screen.findByText(/A different account is signed in/);

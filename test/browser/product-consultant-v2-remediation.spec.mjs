@@ -9,8 +9,10 @@ function setupConsultantMocks(page) {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          account_id: "a9442670-2db5-447f-8fb4-c71f6e16a893",
-          user_id: "2efd403d-823e-4b3f-9fe8-fe3f800c460e",
+          subject: {
+            account_id: "a9442670-2db5-447f-8fb4-c71f6e16a893",
+            user_id: "2efd403d-823e-4b3f-9fe8-fe3f800c460e",
+          },
           display_name: "Synthetic Consultant",
           tier: "consultant",
           quota: { limit: 20, used: 1, remaining: 19, next_capacity_at: null },
@@ -185,8 +187,10 @@ test.describe("MB-UX-REM-001 Remediation Verification Suite (F01 - F08)", () => 
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          account_id: "standard-user-account",
-          user_id: "standard-user-id",
+          subject: {
+            account_id: "standard-user-account",
+            user_id: "standard-user-id",
+          },
           display_name: "Standard Tier User",
           tier: "standard",
           quota: { limit: 5, used: 1, remaining: 4, next_capacity_at: null },

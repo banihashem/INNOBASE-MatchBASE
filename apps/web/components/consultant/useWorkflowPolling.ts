@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { ConsultantResearchOutputV3 } from "@matchbase/contracts";
 import { errorMessage } from "./workflow-response";
 import { resultReady } from "./workflow-status";
+import { useWorkflowSession } from "./WorkflowSessionRecovery";
 
 interface WorkflowPollingOptions {
   runId: string | null;
@@ -17,10 +18,12 @@ export function useWorkflowPolling({
   workflowState,
   ...handlers
 }: WorkflowPollingOptions) {
+  const { automaticRequest: fetch, automaticWorkPaused } = useWorkflowSession();
   const callbacks = useRef(handlers);
   callbacks.current = handlers;
   useEffect(() => {
     if (
+      automaticWorkPaused ||
       !runId ||
       workflowState === "workflow_failed" ||
       workflowState === "invalidated" ||
@@ -78,5 +81,5 @@ export function useWorkflowPolling({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [runId, workflowState]);
+  }, [runId, workflowState, automaticWorkPaused]);
 }

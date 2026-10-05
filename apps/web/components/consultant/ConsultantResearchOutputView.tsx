@@ -1,3 +1,4 @@
+import { useWorkflowSession } from "./WorkflowSessionRecovery";
 import { useState, type RefObject } from "react";
 import {
   type ConsultantResearchOutputV2,
@@ -16,6 +17,7 @@ export function ConsultantResearchOutputView({
   headingRef?: RefObject<HTMLHeadingElement | null> | undefined;
   artifactDownload?: ResultArtifactDownload | null | undefined;
 }) {
+  const { request: fetch } = useWorkflowSession();
   const [isPdfDownloading, setIsPdfDownloading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
 

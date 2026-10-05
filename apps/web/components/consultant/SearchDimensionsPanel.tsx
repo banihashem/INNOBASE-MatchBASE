@@ -1,5 +1,6 @@
 "use client";
 
+import { useWorkflowSession } from "./WorkflowSessionRecovery";
 import { useEffect, useMemo, useState } from "react";
 import {
   getSearchDimensionRegistry,
@@ -88,6 +89,7 @@ export function SearchDimensionsPanel({
   onPendingChange,
   onSaved,
 }: SearchDimensionsPanelProps) {
+  const { request: fetch } = useWorkflowSession();
   const [draft, setDraft] = useState<SearchDimensionConfiguration | null>(
     configuration,
   );

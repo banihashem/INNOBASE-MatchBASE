@@ -1,4 +1,5 @@
 "use client";
+import { useWorkflowSession } from "./WorkflowSessionRecovery";
 import { workflowMutationHeaders } from "./workflow-request";
 import { useRef, useState } from "react";
 
@@ -12,6 +13,7 @@ export function StopResearchButton({
   executionId: string;
   onStopped: (session: any) => void;
 }) {
+  const { request: fetch } = useWorkflowSession();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);

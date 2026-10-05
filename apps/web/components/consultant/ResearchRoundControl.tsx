@@ -1,4 +1,5 @@
 "use client";
+import { useWorkflowSession } from "./WorkflowSessionRecovery";
 import {
   useCallback,
   useEffect,
@@ -84,6 +85,7 @@ export function ResearchRoundControl({
     latest?: boolean,
   ) => void;
 }) {
+  const { request: fetch, automaticWorkPaused } = useWorkflowSession();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [choices, setChoices] = useState<ResearchModelRate[]>([]);
@@ -126,7 +128,7 @@ export function ResearchRoundControl({
   const modelChoicesEnabled =
     Boolean(overview) && overview!.next_round >= 2 && overview!.next_round <= 5;
   useEffect(() => {
-    if (!modelChoicesEnabled) return;
+    if (automaticWorkPaused || !modelChoicesEnabled) return;
     const controller = new AbortController();
     setChoicesLoading(true);
     setChoicesError("");
@@ -152,7 +154,7 @@ export function ResearchRoundControl({
       }
     })();
     return () => controller.abort();
-  }, [runId, modelChoicesEnabled, choicesRetry]);
+  }, [runId, modelChoicesEnabled, choicesRetry, automaticWorkPaused]);
   const refresh = useCallback(
     async (signal?: AbortSignal) => {
       const response = await fetch(
@@ -178,6 +180,7 @@ export function ResearchRoundControl({
     [runId],
   );
   useEffect(() => {
+    if (automaticWorkPaused) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     let reading = false;
@@ -215,7 +218,7 @@ export function ResearchRoundControl({
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [refresh, workflowState]);
+  }, [refresh, workflowState, automaticWorkPaused]);
   async function request(action: "quote" | "approve") {
     if (busy) return;
     setBusy(true);

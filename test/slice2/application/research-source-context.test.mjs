@@ -2,10 +2,69 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   researchCitationInventory,
+  researchExtractionCitationInventory,
   candidateSourceCitations,
   selectResearchSourceExcerpt,
   prioritizeSourceBackedCandidates,
 } from "../../../packages/application/dist/research-source-context.js";
+
+test("L08 R1 extraction dependencies retain inherited and approved-method sources without sibling arrival order", () => {
+  const own = {
+    url: "https://own.example/products",
+    title: "Own",
+    content: "Own evidence",
+  };
+  const method = {
+    url: "https://registry.example/company",
+    title: "Approved registry",
+    content: "Registry evidence",
+  };
+  const inherited = new Map([
+    [
+      "https://prior.example/price",
+      { text: "Historical price, original date" },
+    ],
+  ]);
+  const shared = new Map([
+    ["https://sibling.example/products", { text: "Sibling evidence" }],
+    [own.url, { text: "Own page" }],
+    ...inherited,
+    [method.url, { text: "Registry page" }],
+  ]);
+  const before = structuredClone([...shared]);
+  const first = researchExtractionCitationInventory(
+    [own],
+    [method],
+    inherited,
+    shared,
+  );
+  const reversed = new Map([...shared].reverse());
+  reversed.set("https://later-sibling.example/", { text: "Later evidence" });
+  assert.deepEqual(
+    researchExtractionCitationInventory([own], [method], inherited, reversed),
+    first,
+  );
+  assert.deepEqual(
+    first.map((source) => source.url),
+    [own.url, "https://prior.example/price", method.url].sort(),
+  );
+  assert.deepEqual(
+    first.find((source) => source.url === own.url),
+    own,
+  );
+  assert.deepEqual(
+    first.find((source) => source.url === method.url),
+    method,
+  );
+  assert.deepEqual([...shared], before);
+  assert.equal(
+    researchCitationInventory([own], [method], shared).some(
+      (source) => source.url === "https://sibling.example/products",
+    ),
+    true,
+    "Final source inventory remains complete",
+  );
+});
 
 test("L04 grounded late leads precede empty names before the extraction cap without changing evidence", () => {
   const empty = Array.from({ length: 10 }, (_, i) => ({

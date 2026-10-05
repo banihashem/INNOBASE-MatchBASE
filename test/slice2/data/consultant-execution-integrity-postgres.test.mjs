@@ -549,6 +549,135 @@ dbTest(
 );
 
 dbTest(
+  "MB-UX-QUALITY-002 L08 R1 exact extraction index replay retains scope and blocks changed or historical inputs",
+  async (t) => {
+    const s = await fixture(t);
+    const manifest = s.manifest({
+      stage_kind: "discovery_gemini_extraction_index:1:extraction_evidence_v1",
+    });
+    const result = { parsed: { candidates: ["Synthetic supplier"] } };
+    assert.equal(
+      await loadResearchStage(s.pool, s.identity, s.fence, manifest),
+      null,
+    );
+    await commitResearchStage(s.pool, s.identity, s.fence, manifest, result);
+    assert.deepEqual(
+      (await loadResearchStage(s.pool, s.identity, s.fence, manifest)).result,
+      result,
+    );
+    for (const change of [
+      { input_sha256: hashResearchAuthority("changed evidence") },
+      { policy_sha256: hashResearchAuthority("changed policy") },
+      { validator_version: "changed.v2" },
+    ])
+      await assert.rejects(
+        loadResearchStage(s.pool, s.identity, s.fence, {
+          ...manifest,
+          ...change,
+        }),
+        { code: "MB-409-EXTRACTION-REPLAY" },
+      );
+    for (const key of [
+      "account_id",
+      "user_profile_id",
+      "run_id",
+      "execution_id",
+      "classification_id",
+    ])
+      await assert.rejects(
+        loadResearchStage(
+          s.pool,
+          { ...s.identity, [key]: randomUUID() },
+          s.fence,
+          manifest,
+        ),
+        { code: "execution-lease-lost" },
+      );
+    await assert.rejects(
+      loadResearchStage(s.pool, s.identity, s.fence, {
+        ...manifest,
+        approval_sha256: hashResearchAuthority("changed approval"),
+      }),
+      { code: "MB-409-EXECUTION-AUTHORITY" },
+    );
+    // A distinct lane or verification loop is genuinely new work; batch kinds are not unique.
+    for (const stage_kind of [
+      "discovery_openai_extraction_index:1:extraction_evidence_v1",
+      "verification_extraction_index:2:extraction_evidence_v1",
+      "discovery_gemini_extraction_batch:1:extraction_evidence_v1",
+    ])
+      assert.equal(
+        await loadResearchStage(s.pool, s.identity, s.fence, {
+          ...manifest,
+          stage_kind,
+        }),
+        null,
+      );
+    const legacy = {
+      ...manifest,
+      stage_kind: "verification_extraction_index:1:extraction",
+    };
+    await commitResearchStage(s.pool, s.identity, s.fence, legacy, result);
+    assert.deepEqual(
+      (await loadResearchStage(s.pool, s.identity, s.fence, legacy)).result,
+      result,
+    );
+    await assert.rejects(
+      loadResearchStage(s.pool, s.identity, s.fence, {
+        ...legacy,
+        stage_kind: "verification_extraction_index:1:extraction_evidence_v1",
+      }),
+      { code: "MB-409-EXTRACTION-REPLAY" },
+    );
+    const attempts = await s.pool.query(
+      "SELECT count(*)::int AS count FROM consultant_research_attempt WHERE account_id=$1",
+      [s.identity.account_id],
+    );
+    assert.equal(attempts.rows[0].count, 0);
+  },
+);
+
+dbTest(
+  "MB-UX-QUALITY-002 L08 R1 expired or corrupt extraction receipts never become a paid cache miss",
+  async (t) => {
+    const s = await fixture(t);
+    const manifest = s.manifest({
+      stage_kind: "discovery_gemini_extraction_index:1:extraction_evidence_v1",
+    });
+    await commitResearchStage(s.pool, s.identity, s.fence, manifest, {
+      parsed: "synthetic",
+    });
+    const saved = (
+      await s.pool.query(
+        "SELECT * FROM consultant_research_stage WHERE account_id=$1",
+        [s.identity.account_id],
+      )
+    ).rows[0];
+    // Owned fixture only: insert damaged historical records without weakening immutable UPDATE protection.
+    async function replace(changes) {
+      await s.pool.query(
+        "DELETE FROM consultant_research_stage WHERE stage_id=$1",
+        [saved.stage_id],
+      );
+      await s.pool.query(
+        "INSERT INTO consultant_research_stage SELECT * FROM jsonb_populate_record(NULL::consultant_research_stage,$1::jsonb)",
+        [JSON.stringify({ ...saved, ...changes })],
+      );
+    }
+    await replace({ result: { parsed: "tampered" } });
+    await assert.rejects(
+      loadResearchStage(s.pool, s.identity, s.fence, manifest),
+      { code: "MB-409-EXECUTION-MANIFEST" },
+    );
+    await replace({ expires_at: new Date(Date.now() - 1000).toISOString() });
+    await assert.rejects(
+      loadResearchStage(s.pool, s.identity, s.fence, manifest),
+      { code: "MB-409-EXTRACTION-REPLAY" },
+    );
+  },
+);
+
+dbTest(
   "transport receipt remains explicitly unvalidated and expiry cannot extend approval",
   async (t) => {
     const s = await fixture(t);

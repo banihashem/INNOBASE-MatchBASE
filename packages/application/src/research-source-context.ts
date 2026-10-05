@@ -23,6 +23,35 @@ export function researchCitationInventory(
   return [...inventory.values()];
 }
 
+/** L08 R1: paid extraction must not depend on unrelated sibling arrival order. */
+export function researchExtractionCitationInventory(
+  current: readonly OpenRouterCitation[],
+  retained: readonly OpenRouterCitation[],
+  inherited: ReadonlyMap<string, RetrievedPrimaryEvidence | null>,
+  retrieved: ReadonlyMap<string, RetrievedPrimaryEvidence | null>,
+): OpenRouterCitation[] {
+  const dependencies = new Set([
+    ...inherited.keys(),
+    ...retained.map((source) => source.url),
+    ...current.map((source) => source.url),
+  ]);
+  const pages = new Map(
+    [...dependencies]
+      .sort()
+      .map(
+        (url) =>
+          [
+            url,
+            (retrieved.has(url) ? retrieved.get(url) : inherited.get(url)) ??
+              null,
+          ] as const,
+      ),
+  );
+  return researchCitationInventory(current, retained, pages).sort((a, b) =>
+    a.url < b.url ? -1 : a.url > b.url ? 1 : 0,
+  );
+}
+
 /** Each excerpt is a separate literal passage; separators cannot prove a fact. */
 export function selectResearchSourceExcerpt(
   text: string,

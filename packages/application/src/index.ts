@@ -42,3 +42,5 @@ export * from "./consultant-public-memory.js";
 export * from "./interpretation-correction.js";
 export { getResearchRoundReview } from "./research-review.js";
 export { preflightResearchRoundContext } from "./research-context-preflight.js";
+
+export * from "./consultant-narrative-intake.js";

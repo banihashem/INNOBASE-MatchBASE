@@ -149,6 +149,7 @@ function fixture() {
     }
     if (sql.includes("SELECT * FROM consultant_draft_session"))
       return { rows: [structuredClone(state.draft)] };
+    if (sql.includes("UPDATE consultant_narrative_intake")) return { rows: [] };
     if (sql.includes("INSERT INTO consultant_workflow_event"))
       return { rows: [] };
     throw new Error(`Unexpected isolated query: ${sql.slice(0, 100)}`);

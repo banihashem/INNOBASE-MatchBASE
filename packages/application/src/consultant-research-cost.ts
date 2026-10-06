@@ -121,7 +121,8 @@ export function summarizeResearchCosts(
     result.openrouter_charge_usd += platform ?? 0;
     result.byok_upstream_usd += upstream ?? 0;
     result.recorded_total_usd += amount;
-    if (/step1|advisory|prompt/.test(phase)) result.preparation_usd += amount;
+    if (/step1|advisory|prompt|narrative_intake/.test(phase))
+      result.preparation_usd += amount;
     else result.research_usd += amount;
     result.unpriced_calls += Number(missing);
     const execution = result.by_execution[execution_id] ?? {

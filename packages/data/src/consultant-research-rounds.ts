@@ -482,7 +482,11 @@ export async function readConsultantCostEvents(
     `SELECT execution_id,phase,detail FROM consultant_provider_call WHERE account_id=$1 AND run_id=$2
     UNION ALL SELECT e.execution_id,e.phase,e.detail FROM consultant_workflow_event e WHERE e.account_id=$1 AND e.run_id=$2
     AND e.detail ? 'request_id' AND e.detail->>'model'<>'http-primary-source'
-    AND NOT EXISTS(SELECT 1 FROM consultant_provider_call c WHERE c.request_id::text=e.detail->>'request_id')`,
+    AND NOT EXISTS(SELECT 1 FROM consultant_provider_call c WHERE c.request_id::text=e.detail->>'request_id')
+    UNION ALL SELECT n.operation_id AS execution_id,'narrative_intake' AS phase,r.value AS detail
+      FROM consultant_narrative_intake n CROSS JOIN LATERAL jsonb_each(n.receipts) r
+      JOIN consultant_draft_session d ON d.draft_id=n.draft_id AND d.account_id=n.account_id AND d.user_profile_id=n.user_profile_id AND d.current_run_id=n.run_id
+      WHERE n.account_id=$1 AND n.run_id=$2`,
     [accountId, runId],
   );
   return result.rows;

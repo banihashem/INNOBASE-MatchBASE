@@ -203,6 +203,9 @@ describe("MB-UX-QUALITY-001 L05 intake readiness", () => {
       await waitFor(() =>
         expect(screen.getByLabelText("Product Requirement")).toBeEnabled(),
       );
+      fireEvent.change(screen.getByRole("combobox", { name: "Industry" }), {
+        target: { value: "general" },
+      });
       for (const control of controls()) expect(control).toBeEnabled();
       expect(
         screen.getByRole("button", { name: "Resume Research" }),

@@ -279,6 +279,7 @@ test("MB-UX-LIVE-001 L01: Save & New waits for the latest three-box snapshot", a
     });
   });
   await page.goto("/consultant/workflow?mode=new");
+  await page.getByLabel("Industry", { exact: true }).selectOption("general");
   await expect(page).toHaveURL(/draft_id=ui-draft-1/);
   const product = page.getByLabel("Product Requirement", { exact: true });
   const technical = page.getByLabel("Technical, Quality & Trade Requirements", {

@@ -34,6 +34,11 @@ import { useStep1Fidelity } from "../../../components/consultant/useStep1Fidelit
 import { InterpretationApprovalStep } from "../../../components/consultant/InterpretationApprovalStep";
 import { PreparationRecoveryNotice } from "../../../components/consultant/PreparationRecoveryNotice";
 import { useConsultantReportDownloads } from "../../../components/consultant/useConsultantReportDownloads";
+import {
+  NarrativeIntakePanel,
+  type NarrativeOperation,
+} from "../../../components/consultant/NarrativeIntakePanel";
+import type { NarrativeMapping } from "@matchbase/contracts";
 import { ConsultantResultsSection } from "../../../components/consultant/ConsultantResultsSection";
 import { NewDraftTransitionModal } from "../../../components/consultant/NewDraftTransitionModal";
 import { SearchDimensionsPanel } from "../../../components/consultant/SearchDimensionsPanel";
@@ -84,6 +89,31 @@ function ConsultantWorkflow() {
   const [productRequirement, setProductRequirement] = useState("");
   const [technicalCompliance, setTechnicalCompliance] = useState("");
   const [orderProfile, setOrderProfile] = useState("");
+
+  const [industry, setIndustry] = useState("");
+  const [originalNarrative, setOriginalNarrative] = useState("");
+  const [narrativeBusy, setNarrativeBusy] = useState(false);
+  const [manualFields, setManualFields] = useState(false);
+  function restoreIntakeContext(data: any) {
+    setIndustry(
+      data?.industry === "logistics" || data?.industry === "general"
+        ? data.industry
+        : "",
+    );
+    setOriginalNarrative(
+      typeof data?.originalNarrative === "string" ? data.originalNarrative : "",
+    );
+    setManualFields(
+      Boolean(
+        data?.productRequirement ||
+        data?.product_requirement ||
+        data?.technicalCompliance ||
+        data?.technical_compliance ||
+        data?.orderProfile ||
+        data?.order_profile,
+      ),
+    );
+  }
 
   // Popover Visibility States
   const [showPopover1, setShowPopover1] = useState(false);
@@ -153,8 +183,16 @@ function ConsultantWorkflow() {
     productRequirement,
     technicalCompliance,
     orderProfile,
+    industry,
+    originalNarrative,
   });
-  intakeRef.current = { productRequirement, technicalCompliance, orderProfile };
+  intakeRef.current = {
+    productRequirement,
+    technicalCompliance,
+    orderProfile,
+    industry,
+    originalNarrative,
+  };
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [activity, setActivity] = useState<ActivityStep[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -275,6 +313,7 @@ function ConsultantWorkflow() {
       }
       // Only an unhydrated page may adopt saved fields and the saved version.
       // An already open draft retains its local edits and concurrency version.
+      restoreIntakeContext(draft.draft_data);
       updateDraftId(draft.draft_id);
       updateDraftVersion(draft.draft_version ?? 1);
       setProductRequirement(
@@ -303,6 +342,7 @@ function ConsultantWorkflow() {
       // Identity may have loaded just before the first saved-run read expired.
       setRunId(session.run_id);
       setHydrationState("hydrated");
+      restoreIntakeContext(recovery.draft?.draft_data);
       const restoredDraftId = recovery.draft?.draft_id ?? session.draft_id;
       if (restoredDraftId) updateDraftId(restoredDraftId);
       setProductRequirement(session.intake?.product_requirement ?? "");
@@ -345,7 +385,11 @@ function ConsultantWorkflow() {
     hydrationState === "hydrated" &&
     Boolean(draftId || runId);
   const intakeControlsDisabled =
-    !intakeReady || isLoading || isSavingNewDraft || Boolean(runId);
+    !intakeReady ||
+    isLoading ||
+    narrativeBusy ||
+    isSavingNewDraft ||
+    Boolean(runId);
   const initializingRequest = sessionLoading || hydrationState === "unresolved";
   const draftInitializationFailed =
     !runId && !draftId && hydrationState === "error";
@@ -379,6 +423,8 @@ function ConsultantWorkflow() {
       productRequirement: string;
       technicalCompliance: string;
       orderProfile: string;
+      industry: string;
+      originalNarrative: string;
     };
   } | null>(null);
   const [activeDrafts, setActiveDrafts] = useState<any[]>([]);
@@ -511,6 +557,67 @@ function ConsultantWorkflow() {
     }
   }, []);
 
+  function applyNarrativeProposal(mapping: NarrativeMapping) {
+    const unresolved = mapping.units
+      .filter((unit) => mapping.unresolved_unit_ids.includes(unit.id))
+      .map((unit) => unit.text)
+      .join("");
+    setProductRequirement(mapping.boxes.productRequirement + unresolved);
+    setTechnicalCompliance(mapping.boxes.technicalCompliance);
+    setOrderProfile(mapping.boxes.orderProfile);
+    setManualFields(true);
+  }
+  async function submitNarrative(): Promise<NarrativeOperation> {
+    if (intakeControlsDisabled)
+      throw new Error("Wait for the current draft to be ready.");
+    clearAutosaveTimer();
+    setNarrativeBusy(true);
+    const id = draftIdRef.current;
+    const source = originalNarrative;
+    const before = JSON.stringify(intakeRef.current);
+    try {
+      await saveDraftSnapshot({ ...intakeRef.current });
+      const response = await fetch("/api/v1/consultant/workflow", {
+        method: "POST",
+        headers: workflowMutationHeaders(),
+        body: JSON.stringify({
+          action: "submit_narrative",
+          draft_id: id,
+          expected_version: draftVersionRef.current,
+          authorize_preparation: true,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.operation)
+        throw new Error(
+          errorMessage(
+            data,
+            "Preparation outcome is unavailable. Your source is saved. Reload to inspect its status; do not repeat the call.",
+          ),
+        );
+      if (
+        id !== draftIdRef.current ||
+        source !== intakeRef.current.originalNarrative
+      )
+        throw new Error(
+          "The draft changed while preparation completed. Reload its saved proposal.",
+        );
+      if (
+        data.operation.proposal &&
+        data.operation.narrative === source &&
+        before === JSON.stringify(intakeRef.current) &&
+        !productRequirement &&
+        !technicalCompliance &&
+        !orderProfile
+      )
+        applyNarrativeProposal(data.operation.proposal);
+      else setManualFields(true);
+      return data.operation;
+    } finally {
+      setNarrativeBusy(false);
+    }
+  }
+
   function clearAutosaveTimer() {
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = null;
@@ -594,10 +701,17 @@ function ConsultantWorkflow() {
       conflictState ||
       isCloningDraftRef.current ||
       showNewDraftModal ||
-      isSavingNewDraft
+      isSavingNewDraft ||
+      narrativeBusy
     )
       return;
-    const snapshot = { productRequirement, technicalCompliance, orderProfile };
+    const snapshot = {
+      productRequirement,
+      technicalCompliance,
+      orderProfile,
+      industry,
+      originalNarrative,
+    };
     const fingerprint = JSON.stringify(snapshot);
     if (
       lastSavedDraftRef.current?.id === draftId &&
@@ -610,6 +724,8 @@ function ConsultantWorkflow() {
       !productRequirement &&
       !technicalCompliance &&
       !orderProfile &&
+      !industry &&
+      !originalNarrative &&
       !lastSavedDraftRef.current
     )
       return;
@@ -633,6 +749,9 @@ function ConsultantWorkflow() {
     productRequirement,
     technicalCompliance,
     orderProfile,
+    industry,
+    originalNarrative,
+    narrativeBusy,
     runId,
     draftId,
     userSession,
@@ -764,9 +883,15 @@ function ConsultantWorkflow() {
       setWorkflowProgress(null);
       setWorkflowError(null);
       setRetryAction(null);
-      setProductRequirement(draft.draft_data.productRequirement ?? "");
+      restoreIntakeContext(draft.draft_data);
+      setProductRequirement(
+        draft.draft_data.productRequirement ??
+          draft.draft_data.product_requirement ??
+          "",
+      );
       setTechnicalCompliance(draft.draft_data.technicalCompliance ?? "");
       setOrderProfile(draft.draft_data.orderProfile ?? "");
+      restoreIntakeContext(draft.draft_data);
       updateDraftId(draft.draft_id);
       updateDraftVersion(draft.draft_version ?? 1);
       setHydrationState("hydrated");
@@ -840,6 +965,7 @@ function ConsultantWorkflow() {
             await loadExistingSession(d.current_run_id);
             return;
           }
+          restoreIntakeContext(d.draft_data);
           updateDraftId(d.draft_id);
           updateDraftVersion(d.draft_version ?? 1);
           if (d.draft_data) {
@@ -927,6 +1053,7 @@ function ConsultantWorkflow() {
         const data = await res.json();
         if (data.session) {
           const s = data.session;
+          restoreIntakeContext(data.draft?.draft_data);
           if (viewedRoundRef.current?.runId !== targetRunId)
             setOutput(s.output ?? null);
           setPromptApproved(s.step3_deep_prompt?.is_approved === true);
@@ -979,7 +1106,8 @@ function ConsultantWorkflow() {
   }
 
   async function executeStartNewBlankDraft(saveCurrent = false) {
-    if (transitionRef.current || isLoading || activeRunLocked) return;
+    if (transitionRef.current || isLoading || narrativeBusy || activeRunLocked)
+      return;
     transitionRef.current = true;
     setIsSavingNewDraft(true);
     setNewDraftError(null);
@@ -1007,7 +1135,10 @@ function ConsultantWorkflow() {
         );
       updateDraftId(data.draft_id);
       updateDraftVersion(data.draft_version ?? 1);
+      restoreIntakeContext(null);
       const blank = {
+        industry: "",
+        originalNarrative: "",
         productRequirement: "",
         technicalCompliance: "",
         orderProfile: "",
@@ -1063,7 +1194,8 @@ function ConsultantWorkflow() {
     await executeStartNewBlankDraft(false);
   }
   async function handleStartNew() {
-    if (transitionRef.current || isLoading || activeRunLocked) return;
+    if (transitionRef.current || isLoading || narrativeBusy || activeRunLocked)
+      return;
     clearAutosaveTimer();
     const snapshot = intakeRef.current;
     const hasContent = Object.values(snapshot).some(
@@ -1684,6 +1816,36 @@ function ConsultantWorkflow() {
           )}
 
           {/* ========================================================= */}
+          {stage === 1 && (
+            <NarrativeIntakePanel
+              draftId={draftId}
+              industry={industry}
+              narrative={originalNarrative}
+              disabled={intakeControlsDisabled}
+              busy={narrativeBusy}
+              onIndustry={setIndustry}
+              onNarrative={setOriginalNarrative}
+              onSubmit={submitNarrative}
+              onApply={applyNarrativeProposal}
+              onManual={() => {
+                setManualFields(true);
+                if (
+                  !productRequirement &&
+                  !technicalCompliance &&
+                  !orderProfile
+                )
+                  setProductRequirement(originalNarrative);
+              }}
+            />
+          )}
+          {!industry &&
+            (productRequirement || technicalCompliance || orderProfile) &&
+            stage === 1 && (
+              <p className="text-sm text-slate-300">
+                Historical request: industry was not recorded. Its existing
+                fields remain available.
+              </p>
+            )}
           <WorkflowStageTabs
             stage={stage}
             onChange={setStage}
@@ -1713,7 +1875,18 @@ function ConsultantWorkflow() {
             id="workflow-panel-1"
             role="tabpanel"
             aria-labelledby="workflow-tab-1"
-            hidden={stage !== 1}
+            hidden={
+              stage !== 1 ||
+              (intakeReady &&
+                !(
+                  runId ||
+                  industry === "general" ||
+                  manualFields ||
+                  productRequirement ||
+                  technicalCompliance ||
+                  orderProfile
+                ))
+            }
             tabIndex={0}
             className="bg-slate-800/60 rounded-xl border border-slate-700 p-6 shadow-lg backdrop-blur"
           >
@@ -2060,7 +2233,7 @@ function ConsultantWorkflow() {
                       }}
                       className={`w-full bg-slate-950 border ${isBox2Conflicted ? "border-rose-500 ring-2 ring-rose-500/40" : "border-slate-700"} rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500`}
                       placeholder="Enter regulatory, quality, and compliance requirements..."
-                      required
+                      required={industry !== "logistics"}
                     />
                   </div>
 
@@ -2129,7 +2302,7 @@ function ConsultantWorkflow() {
                       }}
                       className={`w-full bg-slate-950 border ${isBox3Conflicted ? "border-rose-500 ring-2 ring-rose-500/40" : "border-slate-700"} rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500`}
                       placeholder="Enter order volume, delivery terms, port, and commercial criteria..."
-                      required
+                      required={industry !== "logistics"}
                     />
                   </div>
 
@@ -2537,6 +2710,7 @@ function ConsultantWorkflow() {
                 >
                   {output && (
                     <ConsultantResultsSection
+                      industry={industry}
                       key={`${output.research_run_id}:${output.execution_id}`}
                       output={output}
                       suppliers={suppliers}
@@ -2601,6 +2775,8 @@ function ConsultantWorkflow() {
 
         {/* Supplier Dossier Modal / Drawer */}
         <SupplierDossierModal
+          output={output}
+          industry={industry}
           supplier={selectedSupplier}
           approvedRequest={output?.approved_request_snapshot}
           evidenceSources={output?.evidence_sources ?? []}
@@ -2961,6 +3137,8 @@ function ConsultantWorkflow() {
                         body: JSON.stringify({
                           action: "clone_draft",
                           draft_data: {
+                            industry: unsaved.industry,
+                            originalNarrative: unsaved.originalNarrative,
                             productRequirement: unsaved.productRequirement,
                             technicalCompliance: unsaved.technicalCompliance,
                             orderProfile: unsaved.orderProfile,
@@ -2970,6 +3148,7 @@ function ConsultantWorkflow() {
                       });
                       const d = await res.json();
                       if (d.success && d.draft_id) {
+                        restoreIntakeContext(unsaved);
                         updateDraftId(d.draft_id);
                         updateDraftVersion(d.draft_version ?? 1);
                         sessionStorage.setItem(

@@ -4,6 +4,8 @@ import {
   ApplicationFault,
   authorizeConsultantRunResourceRead,
   submitConsultantIntake,
+  submitNarrativeIntake,
+  narrativeIntakeView,
   retryConsultantIntakeInterpretation,
   approveInterpretationStep,
   approveDeepPromptStep,
@@ -20,6 +22,8 @@ import {
 import {
   listConsultantWorkflowSessions,
   createConsultantDraftSession,
+  readNarrativeIntake,
+  editableConsultantDraftData,
   getConsultantDraftSessionById,
   saveConsultantDraftSession,
   listActiveConsultantDraftSessions,
@@ -138,6 +142,68 @@ export async function POST(req: Request): Promise<NextResponse> {
       return NextResponse.json({ success: true, session });
     }
 
+    if (action === "submit_narrative" || action === "read_narrative") {
+      if (
+        typeof body.draft_id !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          body.draft_id,
+        )
+      )
+        return NextResponse.json(
+          { error: "A saved draft is required." },
+          { status: 400 },
+        );
+      const owned = await getConsultantDraftSessionById(
+        pool,
+        context.accountId,
+        context.userId,
+        body.draft_id,
+      );
+      if (!owned)
+        return NextResponse.json(
+          { error: "Draft not found." },
+          { status: 404 },
+        );
+      if (action === "read_narrative")
+        return NextResponse.json({
+          success: true,
+          operation: narrativeIntakeView(
+            await readNarrativeIntake(
+              pool,
+              context.accountId,
+              context.userId,
+              body.draft_id,
+            ),
+          ),
+        });
+      if (
+        body.authorize_preparation !== true ||
+        !Number.isSafeInteger(body.expected_version) ||
+        Number(body.expected_version) < 1
+      )
+        return NextResponse.json(
+          {
+            error:
+              "Explicit preparation authorization and the current draft version are required.",
+          },
+          { status: 400 },
+        );
+      const operation = await submitNarrativeIntake(
+        pool,
+        {
+          account_id: context.accountId,
+          user_profile_id: context.userId,
+          draft_id: body.draft_id,
+          expected_version: Number(body.expected_version),
+        },
+        { signal: req.signal },
+      );
+      return NextResponse.json({
+        success: true,
+        operation: narrativeIntakeView(operation),
+      });
+    }
+
     // Action: Create New Independent Server Draft
     if (action === "create_draft") {
       const created = await createConsultantDraftSession(
@@ -154,7 +220,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
     // Action: Clone Conflicting Draft as New Independent Draft Atomically (N03)
     if (action === "clone_draft") {
-      const draft_data = (body.draft_data as Record<string, unknown>) || {};
+      const draft_data = editableConsultantDraftData(body.draft_data);
       const newDraftId = crypto.randomUUID();
       const saved = await saveConsultantDraftSession(
         pool,
@@ -205,7 +271,7 @@ export async function POST(req: Request): Promise<NextResponse> {
           : typeof body.draft_version === "number"
             ? body.draft_version
             : undefined;
-      const draft_data = (body.draft_data as Record<string, unknown>) || {};
+      const draft_data = editableConsultantDraftData(body.draft_data);
 
       const saved = await saveConsultantDraftSession(
         pool,

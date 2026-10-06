@@ -17,9 +17,16 @@ import {
 
 import { ApprovedRequestSummary } from "./ApprovedRequestSummary";
 import { SupplierPriceSummary } from "./ResearchPricing";
+import {
+  isLogisticsOutput,
+  LogisticsSupplierFacts,
+} from "./LogisticsDashboard";
 import { SearchDimensionResults } from "./SearchDimensionResults";
 
 export interface SupplierDossierModalProps {
+  readonly output?:
+    import("@matchbase/contracts").ConsultantResearchOutputV3 | null;
+  readonly industry?: string;
   readonly dimensionAssessment?:
     import("@matchbase/contracts").SearchDimensionAssessment | undefined;
   readonly supplier: SupplierEntityV3 | null;
@@ -33,6 +40,8 @@ export interface SupplierDossierModalProps {
 
 export function SupplierDossierModal({
   supplier,
+  output,
+  industry,
   isOpen,
   onClose,
   approvedRequest,
@@ -62,7 +71,7 @@ export function SupplierDossierModal({
       if (event.key !== "Tab") return;
       const items = Array.from(
         dialogRef.current?.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), a[href], [tabindex="0"]',
+          'button:not([disabled]), a[href], summary, input:not([disabled]), [tabindex="0"]',
         ) ?? [],
       );
       const first = items[0];
@@ -96,8 +105,17 @@ export function SupplierDossierModal({
     (Boolean(supplier.website) &&
       (supplier.website!.includes("matchbase.internal") ||
         supplier.website!.includes("example.internal")));
+  const logistics = output
+    ? isLogisticsOutput(output, industry)
+    : Boolean(
+        dimensionAssessment?.dimensions.some((row) =>
+          row.dimension_id.startsWith("logistics."),
+        ),
+      );
   const isDirect =
-    !isIllustrative && supplier.manufacturer_status === "direct_manufacturer";
+    !logistics &&
+    !isIllustrative &&
+    supplier.manufacturer_status === "direct_manufacturer";
   const supplierClaims = claims.filter(
     (claim) => claim.supplier_entity_id === supplier.supplier_entity_id,
   );
@@ -167,9 +185,11 @@ export function SupplierDossierModal({
               >
                 {isIllustrative
                   ? "Illustrative Profile"
-                  : isDirect
-                    ? "Direct Manufacturer"
-                    : "Supplier Profile"}
+                  : logistics
+                    ? "Logistics Provider Profile"
+                    : isDirect
+                      ? "Direct Manufacturer"
+                      : "Supplier Profile"}
               </span>
             </div>
             <h2
@@ -364,7 +384,9 @@ export function SupplierDossierModal({
                     assessment.dimension_scores.compliance_certification_fit,
                 },
                 {
-                  label: "Volume & Capacity Fit (15%)",
+                  label: logistics
+                    ? "Legacy volume/capacity score (15%)"
+                    : "Volume & Capacity Fit (15%)",
                   score: assessment.dimension_scores.volume_capacity_fit,
                 },
                 {
@@ -440,7 +462,9 @@ export function SupplierDossierModal({
 
             <div className="border border-slate-200 rounded-lg p-4">
               <h4 className="font-bold text-slate-800 mb-2">
-                Commercial Terms & Capacity
+                {logistics
+                  ? "Recorded commercial terms"
+                  : "Commercial Terms & Capacity"}
               </h4>
               <SupplierPriceSummary
                 supplier={supplier}
@@ -451,7 +475,11 @@ export function SupplierDossierModal({
               />
               <div className="text-sm space-y-1.5">
                 <div className="flex justify-between border-b border-slate-100 py-0.5">
-                  <span className="text-slate-500">Production Capacity:</span>
+                  <span className="text-slate-500">
+                    {logistics
+                      ? "Legacy capacity field (not freight availability):"
+                      : "Production Capacity:"}
+                  </span>
                   <span className="font-medium text-slate-800">
                     {displaySupplierText(
                       supplier.commercial.production_capacity,
@@ -460,7 +488,9 @@ export function SupplierDossierModal({
                 </div>
                 <div className="flex justify-between border-b border-slate-100 py-0.5">
                   <span className="text-slate-500">
-                    Minimum Order Quantity (MOQ):
+                    {logistics
+                      ? "Legacy minimum quantity field:"
+                      : "Minimum Order Quantity (MOQ):"}
                   </span>
                   <span className="font-medium text-slate-800">
                     {displaySupplierText(supplier.commercial.moq)}
@@ -495,6 +525,11 @@ export function SupplierDossierModal({
             </div>
           </div>
 
+          {logistics && output && (
+            <div className="rounded-lg bg-slate-900 p-4 text-white">
+              <LogisticsSupplierFacts output={output} supplier={supplier} />
+            </div>
+          )}
           {assessment.mandatory_constraint_results.length > 0 && (
             <section className="border border-slate-200 rounded-lg p-4 space-y-3">
               <h3 className="font-bold">Mandatory Constraint Assessment</h3>

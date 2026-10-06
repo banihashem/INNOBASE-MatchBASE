@@ -10,6 +10,11 @@ import {
   getSupplierWebsite,
 } from "@matchbase/contracts";
 import "./consultant-results.css";
+import {
+  isLogisticsOutput,
+  LogisticsDashboard,
+  LogisticsSupplierFacts,
+} from "./LogisticsDashboard";
 import { ApprovedRequestSummary } from "./ApprovedRequestSummary";
 import { ResearchPricing, SupplierPriceSummary } from "./ResearchPricing";
 import {
@@ -21,6 +26,7 @@ const filterControlClass =
   "min-h-11 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300";
 
 interface ConsultantResultsSectionProps {
+  industry?: string;
   output: ConsultantResearchOutputV3;
   suppliers: readonly SupplierEntityV3[];
   visibleSuppliers: readonly SupplierEntityV3[];
@@ -34,6 +40,7 @@ interface ConsultantResultsSectionProps {
 }
 
 export function ConsultantResultsSection({
+  industry,
   output,
   suppliers,
   visibleSuppliers,
@@ -45,6 +52,7 @@ export function ConsultantResultsSection({
   handleRevealMore,
   onSelectSupplier,
 }: ConsultantResultsSectionProps) {
+  const logistics = isLogisticsOutput(output, industry);
   const filterId = useId();
   const searchInput = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
@@ -210,6 +218,9 @@ export function ConsultantResultsSection({
         </div>
       </div>
 
+      {logistics && (
+        <LogisticsDashboard output={output} suppliers={suppliers} />
+      )}
       {materialLimits.length > 0 && (
         <div
           className="space-y-2 border-l-2 border-amber-400 pl-3 text-sm text-amber-100"
@@ -356,6 +367,7 @@ export function ConsultantResultsSection({
             supp.legal_name.includes("[Illustrative]") ||
             supp.candidate_id.startsWith("cand-demo-");
           const isDirectRoute =
+            !logistics &&
             !isIllustrative &&
             supp.manufacturer_status === "direct_manufacturer";
           return (
@@ -381,9 +393,11 @@ export function ConsultantResultsSection({
                       >
                         {isIllustrative
                           ? "Illustrative Profile"
-                          : isDirectRoute
-                            ? "Direct Manufacturer"
-                            : "Supplier Profile"}
+                          : logistics
+                            ? "Logistics Provider Profile"
+                            : isDirectRoute
+                              ? "Direct Manufacturer"
+                              : "Supplier Profile"}
                       </span>
                     </div>
                     <h3 className="text-base font-bold text-white">
@@ -408,6 +422,9 @@ export function ConsultantResultsSection({
                   </div>
                 </div>
 
+                {logistics && (
+                  <LogisticsSupplierFacts output={output} supplier={supp} />
+                )}
                 {/* Details row */}
                 <div className="supplier-key-facts text-sm space-y-1 my-3 bg-slate-800/60 p-2.5 rounded border border-slate-700/60">
                   <div className="flex justify-between">
@@ -416,13 +433,19 @@ export function ConsultantResultsSection({
                       {location.value}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Capacity &amp; MOQ:</span>
-                    <span className="text-slate-200 text-right break-words">
-                      {displaySupplierText(supp.commercial.production_capacity)}{" "}
-                      &bull; {displaySupplierText(supp.commercial.moq)}
-                    </span>
-                  </div>
+                  {!logistics && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">
+                        Capacity &amp; MOQ:
+                      </span>
+                      <span className="text-slate-200 text-right break-words">
+                        {displaySupplierText(
+                          supp.commercial.production_capacity,
+                        )}{" "}
+                        &bull; {displaySupplierText(supp.commercial.moq)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-slate-400">
                       {isIllustrative ? "Fixture ID:" : "Website:"}

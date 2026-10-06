@@ -214,6 +214,7 @@ postgresTest(
       );
 
       for (const migration of [
+        "0029_consultant_narrative_intake",
         "0028_consultant_search_dimensions",
         "0027_service_classification_and_public_role_upgrade",
         "0026_public_corpus_reader_identity",

@@ -45,3 +45,5 @@ export type {
   ResearchRoundView,
   ResearchCostSummary,
 } from "./v3/research-round.js";
+
+export * from "./v3/narrative-intake.js";

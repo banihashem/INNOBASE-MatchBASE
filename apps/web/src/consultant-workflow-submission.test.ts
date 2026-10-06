@@ -5,6 +5,9 @@ import { ExecutionIntegrityFault } from "@matchbase/data";
 
 const mocks = vi.hoisted(() => ({
   submit: vi.fn(),
+  narrative: vi.fn(),
+  ownedDraft: vi.fn(),
+  narrativeRead: vi.fn(),
   retry: vi.fn(),
   pool: {},
   after: vi.fn(),
@@ -27,6 +30,7 @@ vi.mock("@matchbase/application", async (original) => ({
   authorizeConsultantRunResourceRead: mocks.authorize,
   queueConsultantWorkflowStep: mocks.queue,
   submitConsultantIntake: mocks.submit,
+  submitNarrativeIntake: mocks.narrative,
   retryConsultantIntakeInterpretation: mocks.retry,
   getOrRestoreWorkflowSession: mocks.restore,
   suggestInterpretationCorrection: mocks.correction,
@@ -37,6 +41,8 @@ vi.mock("@matchbase/application", async (original) => ({
 vi.mock("@matchbase/data", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   stopConsultantResearch: mocks.stop,
+  getConsultantDraftSessionById: mocks.ownedDraft,
+  readNarrativeIntake: mocks.narrativeRead,
   getConsultantDraftSessionByRunId: mocks.drafts,
   getConsultantWorkflowActivity: mocks.activity,
   failExpiredConsultantWorkflowJobs: mocks.expired,
@@ -629,5 +635,61 @@ describe("MB-ARCH-IMPLEMENT-001 L02 private workflow serving", () => {
       20,
       "owner-user",
     );
+  });
+});
+
+describe("MB-UX-LOGISTICS-001 L01 narrative admission", () => {
+  it("rejects another profile's draft before any preparation", async () => {
+    mocks.narrative.mockClear();
+    mocks.ownedDraft.mockResolvedValueOnce(null);
+    const result = await post({
+      action: "submit_narrative",
+      draft_id: draftId,
+      expected_version: 2,
+      authorize_preparation: true,
+    });
+    expect(result.status).toBe(404);
+    expect(mocks.narrative).not.toHaveBeenCalled();
+  });
+  it("requires explicit bounded preparation authorization", async () => {
+    mocks.narrative.mockClear();
+    mocks.ownedDraft.mockResolvedValueOnce({ draft_id: draftId });
+    const result = await post({
+      action: "submit_narrative",
+      draft_id: draftId,
+      expected_version: 2,
+    });
+    expect(result.status).toBe(400);
+    expect(mocks.narrative).not.toHaveBeenCalled();
+  });
+  it("uses authenticated identity and server-owned receipt summaries", async () => {
+    mocks.ownedDraft.mockResolvedValueOnce({ draft_id: draftId });
+    mocks.narrative.mockResolvedValueOnce({
+      operation_id: "operation",
+      receipts: {},
+      status: "failed",
+      error: "Manual review",
+    });
+    const result = await post({
+      action: "submit_narrative",
+      draft_id: draftId,
+      expected_version: 2,
+      authorize_preparation: true,
+      account_id: "forged",
+      user_profile_id: "forged",
+      receipts: { cost_usd: -100 },
+    });
+    expect(result.status).toBe(200);
+    expect(mocks.narrative).toHaveBeenLastCalledWith(
+      mocks.pool,
+      {
+        account_id: "owner-account",
+        user_profile_id: "owner-user",
+        draft_id: draftId,
+        expected_version: 2,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect((await result.json()).operation.cost_summary.complete).toBe(false);
   });
 });

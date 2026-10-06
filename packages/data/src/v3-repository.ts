@@ -934,6 +934,7 @@ export async function admitConsultantDraftSubmission(
       code: "MB-404-DRAFT",
     });
   const draftData = {
+    ...existing.draft_data,
     product_requirement: snapshot.product_requirement,
     technical_compliance: snapshot.technical_compliance,
     order_profile: snapshot.order_profile,
@@ -999,6 +1000,15 @@ export async function admitConsultantDraftSubmission(
         code: "MB-409-DRAFT-CONFLICT",
       },
     );
+  await db.query(
+    "UPDATE consultant_narrative_intake SET run_id=$4 WHERE draft_id=$1 AND account_id=$2 AND user_profile_id=$3 AND run_id IS NULL",
+    [
+      input.draft_id,
+      snapshot.account_id,
+      snapshot.user_profile_id,
+      snapshot.run_id,
+    ],
+  );
   return {
     replay: false,
     run_id: snapshot.run_id,

@@ -740,8 +740,9 @@ test("MB-UX-QUALITY-001 L05 intake stays disabled through held JavaScript and dr
   try {
     await page.goto("/consultant/workflow?mode=new", { waitUntil: "commit" });
     await expect.poll(() => heldScripts).toBeGreaterThan(0);
+    await expect(page.getByLabel("Industry", { exact: true })).toBeDisabled();
     for (const control of controls()) await expect(control).toBeDisabled();
-    await expect(page.getByText("Preparing your request form…")).toBeVisible();
+    await expect(page.getByLabel("Industry", { exact: true })).toBeVisible();
     expect(mock.actions).toEqual([]);
     releaseScripts();
     await expect
@@ -751,10 +752,12 @@ test("MB-UX-QUALITY-001 L05 intake stays disabled through held JavaScript and dr
             .length,
       )
       .toBe(1);
+    await expect(page.getByLabel("Industry", { exact: true })).toBeDisabled();
     for (const control of controls()) await expect(control).toBeDisabled();
     await expect(page).toHaveURL(/mode=new/);
     releaseDraft();
     await expect(page).toHaveURL(new RegExp(`draft_id=${draftId}$`));
+    await page.getByLabel("Industry", { exact: true }).selectOption("general");
     for (const control of controls()) await expect(control).toBeEnabled();
     await expect(page.getByText("Preparing your request form…")).toHaveCount(0);
     const values = [
@@ -796,6 +799,7 @@ test("DEV-004 L01 three-box request through explicit approvals, progress, 20 sup
 }) => {
   const mock = await mockExperience(page);
   await page.goto("/consultant/workflow?mode=new");
+  await page.getByLabel("Industry", { exact: true }).selectOption("general");
   await expect(page).toHaveURL(new RegExp(`draft_id=${draftId}$`));
   await page
     .getByLabel("Product Requirement", { exact: true })
@@ -961,6 +965,7 @@ test("DEV-004 L01 mobile dashboard, saved reports and supplier dossier have no p
     await checkView(page, `mobile ${heading}`);
   }
   await page.goto("/consultant/workflow?mode=new");
+  await page.getByLabel("Industry", { exact: true }).selectOption("general");
   await expect(
     page.getByLabel("Product Requirement", { exact: true }),
   ).toBeVisible();

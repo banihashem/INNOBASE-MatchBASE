@@ -47,9 +47,9 @@ export const sourcePins = Object.freeze({
   "patches/braces@3.0.3.patch":
     "2e009478d42176867620d40a15ba687ee53b283df866152f5ed2ed4f9fd2580f",
   "pnpm-lock.yaml":
-    "805811f3c6608f9db6d933222e3c4c29dc74766efbc64ec750df769ab6620b4c",
+    "72ca6d86db8c5be46d5d390c11511aaa4348bdfc3843082464b1636c0c0da551",
   "pnpm-workspace.yaml":
-    "1b51a755cb267469cddd47fa5fdd98c605c23e17f2f1d6f898dce3f832fa6b84",
+    "8cf568fc77014da46027d31f59d2468461df6594af3a34e30f0d0ba9b2497fbc",
   "test/security/braces-patch.test.mjs":
     "cd62e1ee53d1317647a5edee6e0f0154ffd75870d6e358295e94c6216b502840",
 });
@@ -77,7 +77,7 @@ export const installedPins = Object.freeze({
 // pnpm 11.19.0's native serialization from the qualified frozen installation.
 // The independently pinned repository lock uses Prettier's YAML serialization.
 export const installedLockPin =
-  "5514fe5e7dda3bc7523b108587446c8f3cc991d15193a89ccbec1cab4cfcd48d";
+  "9bac9fcdbe9821e85d895993d96a0ec18c97f54f81880579671ccd62356a1ead";
 const regressionPath = "test/security/braces-patch.test.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");

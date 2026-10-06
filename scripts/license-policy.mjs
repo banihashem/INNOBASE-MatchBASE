@@ -35,6 +35,7 @@ const reviewedPackageLicenses = new Map([
     new Set([
       "@img/sharp-libvips-linux-x64@1.3.2",
       "@img/sharp-libvips-linux-x64@1.3.3",
+      "@img/sharp-libvips-linux-x64@1.3.4",
     ]),
   ],
 ]);

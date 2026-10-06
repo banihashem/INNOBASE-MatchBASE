@@ -794,9 +794,9 @@ test("Step1 uses a real structured translation call and rejects invented source 
     product_category: "Process equipment",
     product_name: "Industrial pump",
     explicit_requirements: Object.entries(original).map(
-      ([source_box, value]) => ({
+      ([source_box, value], index) => ({
         source_box,
-        source_text_reference: value,
+        source_reference_id: index + 1,
         normalized_value: value,
         requirement_level: "mandatory",
         comparison_operator: "requires",
@@ -831,11 +831,16 @@ test("Step1 uses a real structured translation call and rejects invented source 
   assert.equal(requests[0].plugins, undefined);
   assert.equal(interpretation.ledger.requirements.length, 3);
   assert.equal(interpretation.classification.confidence, "low");
-  payload.explicit_requirements[0].source_text_reference =
-    "This phrase never appeared";
+  assert.deepEqual(
+    interpretation.explicit_requirements.map(
+      (entry) => entry.source_text_reference,
+    ),
+    Object.values(original),
+  );
+  payload.explicit_requirements[0].source_reference_id = 999;
   await assert.rejects(
     gateway.extractAndInterpret(original),
-    /MB-422-LIVE-LINEAGE/,
+    /MB-422-LIVE-SCHEMA/,
   );
 });
 test("model-written excerpt and proof cannot self-verify without retrieved source content", async () => {

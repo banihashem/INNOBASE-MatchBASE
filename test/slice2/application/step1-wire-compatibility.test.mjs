@@ -5,10 +5,11 @@ import test from "node:test";
 import {
   LIVE_STEP1_SCHEMA,
   LivePreparationModelGateway,
+  parseLiveStep1Interpretation,
 } from "../../../packages/application/dist/live-preparation.js";
 import { runLiveCompletion } from "../../../packages/application/dist/openrouter-model-policy.js";
 
-const scope = "MB-UX-QUALITY-002 L09";
+const scope = "MB-UX-QUALITY-002 L10";
 const model = "openai/gpt-5.2";
 const intake = {
   product_requirement:
@@ -57,8 +58,8 @@ function payload(source = intake) {
 }
 
 // A deliberately restricted endpoint contract, not a claim about the production
-// rejection's unretained wording or all GPT-5.2 endpoints. R1 models the
-// case-specific singleton-enum hypothesis; actual endpoint qualification is separate.
+// rejection's unretained wording or all GPT-5.2 endpoints. Newline string-enum
+// rejection is a conditional hypothesis; actual endpoint qualification is separate.
 function admitStructuralSchema(schema) {
   const supported = new Set([
     "type",
@@ -74,13 +75,21 @@ function admitStructuralSchema(schema) {
       throw new Error(`Unsupported schema keyword: ${keyword}`);
   }
   if (Object.hasOwn(schema, "enum")) {
-    if (!Array.isArray(schema.enum) || schema.enum.length < 2)
-      throw new Error("Singleton schema enums are not permitted");
+    if (
+      !Array.isArray(schema.enum) ||
+      schema.enum.some(
+        (value) =>
+          typeof value === "string" && /[\r\n\u2028\u2029]/u.test(value),
+      )
+    )
+      throw new Error("Newline string enum literals are not permitted");
   }
   if (Object.hasOwn(schema, "const")) {
     assert.equal(schema.type, "string");
     assert.equal(typeof schema.const, "string");
     assert.equal(Object.hasOwn(schema, "enum"), false);
+    if (/[\r\n\u2028\u2029]/u.test(schema.const))
+      throw new Error("Newline string const literals are not permitted");
   }
   if (schema.type === "object") {
     assert.equal(schema.additionalProperties, false);
@@ -92,6 +101,20 @@ function admitStructuralSchema(schema) {
       admitStructuralSchema(child);
   }
   if (schema.type === "array") admitStructuralSchema(schema.items);
+}
+function wirePayload(canonical, catalogue) {
+  return {
+    ...canonical,
+    explicit_requirements: canonical.explicit_requirements.map(
+      ({ source_text_reference, ...requirement }) => ({
+        ...requirement,
+        source_reference_id:
+          catalogue.find(
+            (entry) => entry.source_text_reference === source_text_reference,
+          )?.source_reference_id ?? 999,
+      }),
+    ),
+  };
 }
 const runtimeName = (name) =>
   /^(MATCHBASE_|OPENROUTER_|DATABASE_URL$|PG(?:HOST|PORT|USER|PASSWORD|DATABASE|SERVICE|SERVICEFILE|PASSFILE|OPTIONS)$|OPENAI_API_KEY$|GOOGLE_API_KEY$|GEMINI_API_KEY$)/u.test(
@@ -113,6 +136,11 @@ async function endpoint(t, source = intake) {
     guards: [],
     response: payload(source),
     reject: false,
+    responseWire: null,
+    raw: null,
+    beforeRespond: async () => {},
+    replies: [],
+    addresses: [],
   };
   const errors = [];
   const parameters = ["structured_outputs", "reasoning", "max_tokens"];
@@ -165,6 +193,16 @@ async function endpoint(t, source = intake) {
         });
       }
       state.statuses.push(200);
+      await state.beforeRespond(body);
+      const catalogue =
+        JSON.parse(body.messages.at(-1).content).reference_catalog ?? [];
+      const canonical =
+        typeof state.response === "function"
+          ? state.response(body)
+          : state.response;
+      const reply = state.responseWire ?? wirePayload(canonical, catalogue);
+      const content = state.raw ?? JSON.stringify(reply);
+      state.replies.push(content);
       return send(200, {
         id: randomUUID(),
         model,
@@ -177,7 +215,7 @@ async function endpoint(t, source = intake) {
         choices: [
           {
             finish_reason: "stop",
-            message: { content: JSON.stringify(state.response) },
+            message: { content },
           },
         ],
         usage: {
@@ -200,6 +238,7 @@ async function endpoint(t, source = intake) {
   const transport = globalThis.fetch;
   t.mock.method(globalThis, "fetch", (target, options) => {
     const url = new URL(String(target));
+    state.addresses.push(String(target));
     assert.equal(
       url.origin,
       "https://openrouter.ai",
@@ -242,14 +281,28 @@ test(`${scope} actual Step1 wire passes a structural-only HTTP endpoint without 
   assert.equal(f.requests.length, 1);
   const request = f.requests[0];
   const schema = request.response_format.json_schema.schema;
+  const catalogue = JSON.parse(request.messages[1].content).reference_catalog;
   assert.deepEqual(
-    schema.properties.explicit_requirements.items.properties
-      .source_text_reference.enum,
+    catalogue.map((entry) => entry.source_text_reference),
     [
       source.product_requirement,
       "  حمل به Lekki؛ مسیر معکوس نه.",
       "20.5 tonnes per container.  ",
     ],
+  );
+  assert.deepEqual(
+    schema.properties.explicit_requirements.items.properties
+      .source_reference_id,
+    { type: "integer", enum: [1, 2, 3] },
+  );
+  assert.equal(
+    schema.properties.explicit_requirements.items.properties
+      .source_text_reference,
+    undefined,
+  );
+  assert.equal(
+    request.response_format.json_schema.name,
+    "matchbase_step1_reference_ids_v1",
   );
   assert.deepEqual(
     schema.properties.explicit_requirements.items.properties.value.type,
@@ -326,8 +379,15 @@ test(`${scope} remaining HTTP schema rejection stays terminal after exactly one 
   assert.equal(f.events.filter((event) => event.state === "failed").length, 1);
 });
 
-test(`${scope} R1 singleton enum rejection over HTTP is avoided by the same exact literal const`, async (t) => {
-  const f = await endpoint(t);
+test(`${scope} four-line five-reference wire rejects newline enums over HTTP and decodes the full original box from an ID`, async (t) => {
+  const source = {
+    ...intake,
+    product_requirement:
+      "Cargo machinery.\nQingdao to Lekki.\n20.5 tonnes per shipment.\nNo reverse lane; A OR B",
+  };
+  assert.equal(source.product_requirement.length, 84);
+  assert.equal(source.product_requirement.split("\n").length, 4);
+  const f = await endpoint(t, source);
   const canonicalBefore = JSON.stringify(LIVE_STEP1_SCHEMA);
   // Reconstruct the qualified pre-R1 structural wire, not the older bounded schema.
   const previous = structuredClone(LIVE_STEP1_SCHEMA);
@@ -340,13 +400,17 @@ test(`${scope} R1 singleton enum rejection over HTTP is avoided by the same exac
   delete oldProperties.normalized_value.minLength;
   oldProperties.source_text_reference = {
     type: "string",
-    enum: [intake.product_requirement],
+    enum: [
+      source.product_requirement,
+      ...source.product_requirement.split("\n"),
+    ],
   };
+  assert.equal(Buffer.byteLength(JSON.stringify(previous)), 2275);
   await assert.rejects(
     runLiveCompletion(
       {
         model,
-        messages: [{ role: "user", content: JSON.stringify(intake) }],
+        messages: [{ role: "user", content: JSON.stringify(source) }],
         response_format: {
           type: "json_schema",
           json_schema: {
@@ -373,25 +437,28 @@ test(`${scope} R1 singleton enum rejection over HTTP is avoided by the same exac
       .provider_receipt_received,
     false,
   );
-  const result = await f.gateway.extractAndInterpret(intake);
+  const result = await f.gateway.extractAndInterpret(source);
   assert.deepEqual(f.statuses, [400, 200]);
   const corrected = f.requests[1].response_format.json_schema.schema;
-  oldProperties.source_text_reference = {
-    type: "string",
-    const: intake.product_requirement,
+  delete oldProperties.source_text_reference;
+  oldProperties.source_reference_id = {
+    type: "integer",
+    enum: [1, 2, 3, 4, 5],
   };
+  previous.properties.explicit_requirements.items.required =
+    Object.keys(oldProperties);
   assert.deepEqual(
     corrected,
     previous,
-    "Only the singleton reference representation changes",
+    "Only the reference field and its required name change",
   );
   assert.equal(
     result.explicit_requirements[0].source_text_reference,
-    intake.product_requirement,
+    source.product_requirement,
   );
   assert.equal(
     result.ledger.requirements[0].source_span_or_reference,
-    intake.product_requirement,
+    source.product_requirement,
   );
   assert.equal(JSON.stringify(LIVE_STEP1_SCHEMA), canonicalBefore);
   assert.equal(f.requests[1].max_tokens, 16000);
@@ -401,12 +468,12 @@ test(`${scope} R1 singleton enum rejection over HTTP is avoided by the same exac
   ]);
   assert.match(
     f.requests[1].messages[0].content,
-    /match a supplied schema reference verbatim/,
+    /Select each source_reference_id from the supplied reference_catalog/,
   );
   assert.doesNotMatch(f.requests[1].messages[0].content, /schema enum/);
 });
 
-test(`${scope} R1 singleton const preserves mixed-script bytes and deduplicated source-box identity`, async (t) => {
+test(`${scope} numeric singleton preserves mixed-script bytes and deduplicated source-box identity`, async (t) => {
   const literal =
     "  حمل Qingdao → Lekki؛ 20.5 tonnes; no reverse lane; A OR B.  ";
   const f = await endpoint(t);
@@ -426,8 +493,8 @@ test(`${scope} R1 singleton const preserves mixed-script bytes and deduplicated 
     const result = await f.gateway.extractAndInterpret(source);
     assert.deepEqual(
       f.requests.at(-1).response_format.json_schema.schema.properties
-        .explicit_requirements.items.properties.source_text_reference,
-      { type: "string", const: literal },
+        .explicit_requirements.items.properties.source_reference_id,
+      { type: "integer", enum: [1] },
     );
     assert.deepEqual(
       result.explicit_requirements.map((requirement) => requirement.source_box),
@@ -442,7 +509,7 @@ test(`${scope} R1 singleton const preserves mixed-script bytes and deduplicated 
   assert.deepEqual(f.statuses, [200, 200, 200, 200]);
 });
 
-test(`${scope} R1 multiple source references retain enum and reject a reference belonging to another populated box`, async (t) => {
+test(`${scope} numeric references reject a reference belonging to another populated box`, async (t) => {
   const source = {
     ...intake,
     technical_compliance: "Use covered equipment; no open deck.",
@@ -453,8 +520,8 @@ test(`${scope} R1 multiple source references retain enum and reject a reference 
   assert.equal(result.explicit_requirements.length, 3);
   assert.deepEqual(
     f.requests[0].response_format.json_schema.schema.properties
-      .explicit_requirements.items.properties.source_text_reference,
-    { type: "string", enum: Object.values(source) },
+      .explicit_requirements.items.properties.source_reference_id,
+    { type: "integer", enum: [1, 2, 3] },
   );
   f.response = payload(source);
   f.response.explicit_requirements[0].source_text_reference =
@@ -518,7 +585,7 @@ test(`${scope} permissive HTTP response cannot bypass canonical bounds, required
       "unknown reference",
       (p) =>
         (p.explicit_requirements[0].source_text_reference = "invented source"),
-      "MB-422-LIVE-LINEAGE",
+      "MB-422-LIVE-SCHEMA",
     ],
     [
       "malformed reference",
@@ -562,4 +629,298 @@ test(`${scope} permissive HTTP response cannot bypass canonical bounds, required
   );
   const result = await f.gateway.extractAndInterpret(intake);
   assert.equal(result.explicit_requirements.length, 120);
+});
+
+test(`${scope} malformed numeric wire is rejected after a retained raw receipt without another dispatch`, async (t) => {
+  const f = await endpoint(t);
+  const valid = wirePayload(payload(), [
+    {
+      source_reference_id: 1,
+      source_text_reference: intake.product_requirement,
+    },
+  ]);
+  const cases = [
+    ...[
+      0,
+      -1,
+      2,
+      999,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+      "1",
+      null,
+      true,
+      {},
+      [],
+    ].map((id) => [
+      `invalid ID ${JSON.stringify(id)}`,
+      (value) => {
+        value.explicit_requirements[0].source_reference_id = id;
+      },
+    ]),
+    [
+      "missing ID",
+      (value) => {
+        delete value.explicit_requirements[0].source_reference_id;
+      },
+    ],
+    [
+      "old string instead of ID",
+      (value) => {
+        delete value.explicit_requirements[0].source_reference_id;
+        value.explicit_requirements[0].source_text_reference =
+          intake.product_requirement;
+      },
+    ],
+    [
+      "both fields",
+      (value) => {
+        value.explicit_requirements[0].source_text_reference =
+          intake.product_requirement;
+      },
+    ],
+    [
+      "extra field",
+      (value) => {
+        value.explicit_requirements[0].source_box_override = "order_profile";
+      },
+    ],
+  ];
+  for (const [label, mutate] of cases) {
+    f.responseWire = structuredClone(valid);
+    mutate(f.responseWire);
+    const before = f.requests.length;
+    await assert.rejects(
+      f.gateway.extractAndInterpret(intake),
+      { code: "MB-422-LIVE-SCHEMA" },
+      label,
+    );
+    assert.equal(f.requests.length, before + 1, label);
+    const receipt = f.events.findLast((event) => event.state === "completed");
+    assert.equal(receipt.response_content, JSON.stringify(f.responseWire));
+    assert.equal(receipt.response_content, f.replies.at(-1));
+    assert.equal(receipt.provider_receipt_received, true);
+    assert.equal(receipt.cost_usd, 0.01);
+    assert.equal(receipt.upstream_inference_cost, 0.02);
+  }
+  for (const raw of [
+    "{",
+    "[]",
+    '{"explicit_requirements":[{"source_reference_id":1e999}]}',
+  ]) {
+    f.raw = raw;
+    await assert.rejects(f.gateway.extractAndInterpret(intake), {
+      code: "MB-422-LIVE-SCHEMA",
+    });
+    assert.equal(
+      f.events.findLast((event) => event.state === "completed")
+        .response_content,
+      raw,
+    );
+  }
+  assert.equal(f.requests.length, cases.length + 3);
+  assert.ok(f.statuses.every((status) => status === 200));
+});
+
+test(`${scope} all admitted line endings and full boxes round-trip without modifying historical string replay`, async (t) => {
+  const source = {
+    ...intake,
+    product_requirement:
+      "  حمل 🚢 Qingdao → Lekki.\r\n20.5 tonnes; A OR B.\rNo reverse lane.\n20.5 tonnes; A OR B.\u2028Keep words exact.\u2029  Last line.  ",
+  };
+  const expected = [
+    source.product_requirement,
+    "  حمل 🚢 Qingdao → Lekki.",
+    "20.5 tonnes; A OR B.",
+    "No reverse lane.",
+    "Keep words exact.",
+    "  Last line.  ",
+  ];
+  const f = await endpoint(t, source);
+  const originalPayload = payload(source);
+  f.response = {
+    ...originalPayload,
+    explicit_requirements: expected.map((text) => ({
+      ...originalPayload.explicit_requirements[0],
+      source_text_reference: text,
+    })),
+  };
+  const result = await f.gateway.extractAndInterpret(source);
+  const envelope = JSON.parse(f.requests[0].messages[1].content);
+  assert.deepEqual(envelope.original_intake, source);
+  assert.equal(envelope.reference_catalog_version, "step1-source-ids.v1");
+  assert.deepEqual(
+    envelope.reference_catalog.map((entry) => entry.source_text_reference),
+    expected,
+  );
+  assert.deepEqual(
+    envelope.reference_catalog.map((entry) => entry.source_boxes),
+    expected.map(() => ["product_requirement"]),
+  );
+  assert.deepEqual(
+    result.explicit_requirements.map((entry) => entry.source_text_reference),
+    expected,
+  );
+  assert.deepEqual(
+    result.ledger.requirements.map((entry) => entry.source_span_or_reference),
+    expected,
+  );
+  const ids = {
+    requirement_ids: result.explicit_requirements.map(
+      (entry) => entry.requirement_id,
+    ),
+    ledger_id: result.ledger.ledger_id,
+    classification_id: result.classification.classification_id,
+    assigned_at: result.classification.assigned_at,
+  };
+  assert.deepEqual(
+    parseLiveStep1Interpretation(JSON.stringify(f.response), source, ids),
+    result,
+  );
+  const historical = structuredClone(f.response);
+  historical.explicit_requirements[0].source_text_reference = "Qingdao → Lekki";
+  assert.equal(
+    parseLiveStep1Interpretation(JSON.stringify(historical), source, ids)
+      .explicit_requirements[0].source_text_reference,
+    "Qingdao → Lekki",
+  );
+  assert.throws(
+    () => parseLiveStep1Interpretation(f.replies[0], source, ids),
+    { code: "MB-422-LIVE-SCHEMA" },
+    "Historical canonical recovery must not silently accept numeric wire receipts",
+  );
+  assert.equal(f.requests.length, 1);
+});
+
+test(`${scope} source-box coverage and exact catalogue membership are stricter than substring coincidence`, async (t) => {
+  const source = {
+    ...intake,
+    technical_compliance: "covered equipment",
+    order_profile: "Use covered equipment for shipment.",
+  };
+  const f = await endpoint(t, source);
+  f.response.explicit_requirements.pop();
+  await assert.rejects(f.gateway.extractAndInterpret(source), {
+    code: "MB-422-LIVE-LINEAGE",
+  });
+  f.response = payload(source);
+  f.response.explicit_requirements[2].source_text_reference =
+    source.technical_compliance;
+  await assert.rejects(
+    f.gateway.extractAndInterpret(source),
+    { code: "MB-422-LIVE-LINEAGE" },
+    "A substring in another box is not an admitted whole-box or line for that box",
+  );
+  assert.equal(f.requests.length, 2);
+});
+
+test(`${scope} snapshot and catalogue are request-local across mutation and opposite completion order`, async (t) => {
+  const sourceA = {
+    ...intake,
+    product_requirement: "Original A.\nNo substitution.",
+  };
+  const preservedA = structuredClone(sourceA);
+  const sourceB = {
+    ...intake,
+    product_requirement: "Independent B.\nDo not reuse A.",
+  };
+  const f = await endpoint(t);
+  let enteredA;
+  let releaseA;
+  const receivedA = new Promise((resolve) => {
+    enteredA = resolve;
+  });
+  const holdA = new Promise((resolve) => {
+    releaseA = resolve;
+  });
+  f.beforeRespond = async (body) => {
+    if (
+      JSON.parse(body.messages[1].content).original_intake
+        .product_requirement === preservedA.product_requirement
+    ) {
+      enteredA();
+      await holdA;
+    }
+  };
+  f.response = (body) =>
+    payload(JSON.parse(body.messages[1].content).original_intake);
+  const pendingA = f.gateway.extractAndInterpret(sourceA);
+  await receivedA;
+  sourceA.product_requirement = "Mutated after dispatch.";
+  sourceA.order_profile = "Injected order.";
+  const resultB = await f.gateway.extractAndInterpret(sourceB);
+  releaseA();
+  const resultA = await pendingA;
+  assert.equal(
+    resultA.explicit_requirements[0].source_text_reference,
+    preservedA.product_requirement,
+  );
+  assert.equal(
+    resultB.explicit_requirements[0].source_text_reference,
+    sourceB.product_requirement,
+  );
+  assert.equal(resultA.explicit_requirements.length, 1);
+  assert.equal(
+    resultA.ledger.requirements[0].source_text,
+    preservedA.product_requirement,
+  );
+  assert.notEqual(resultA.ledger.intake_hash, resultB.ledger.intake_hash);
+  assert.equal(f.requests.length, 2);
+  const envelopes = f.requests.map((request) =>
+    JSON.parse(request.messages[1].content),
+  );
+  assert.deepEqual(
+    envelopes.map((value) =>
+      value.reference_catalog.map((entry) => entry.source_reference_id),
+    ),
+    [
+      [1, 2, 3],
+      [1, 2, 3],
+    ],
+  );
+  assert.deepEqual(envelopes[0].original_intake, preservedA);
+});
+
+test(`${scope} complete encoded catalogue capacity and reference limits fail before capability access`, async (t) => {
+  const f = await endpoint(t);
+  const catalogueOverflow = {
+    ...intake,
+    product_requirement: "x".repeat(79000),
+  };
+  assert.ok(
+    Buffer.byteLength(JSON.stringify(catalogueOverflow)) + 512 < 160000,
+  );
+  for (const source of [
+    { ...intake, product_requirement: " \r\n \u2028 " },
+    { ...intake, product_requirement: "x".repeat(160000) },
+    catalogueOverflow,
+    {
+      ...intake,
+      product_requirement: Array.from(
+        { length: 240 },
+        (_, i) => `Line ${i}`,
+      ).join("\n"),
+    },
+  ]) {
+    await assert.rejects(f.gateway.extractAndInterpret(source), {
+      code: "MB-422-PREPARATION-INPUT",
+    });
+    assert.equal(f.addresses.length, 0);
+  }
+  const boundary = {
+    ...intake,
+    product_requirement: Array.from(
+      { length: 239 },
+      (_, i) => `Line ${i}`,
+    ).join("\n"),
+  };
+  f.response = payload(boundary);
+  await f.gateway.extractAndInterpret(boundary);
+  const request = f.requests[0];
+  assert.equal(
+    JSON.parse(request.messages[1].content).reference_catalog.length,
+    240,
+  );
+  assert.ok(Buffer.byteLength(JSON.stringify(request)) + 512 < 160000);
+  assert.equal(request.max_tokens, 16000);
 });

@@ -28,7 +28,7 @@ test("accepts only the reviewed Linux libvips package and locked version", () =>
       "LGPL-3.0-or-later": [
         {
           name: "@img/sharp-libvips-linux-x64",
-          versions: ["1.3.2", "1.3.3"],
+          versions: ["1.3.2", "1.3.3", "1.3.4"],
         },
       ],
     }),
@@ -39,7 +39,7 @@ test("accepts only the reviewed Linux libvips package and locked version", () =>
 test("rejects a different package or version under the conditional license", () => {
   for (const entry of [
     { name: "unreviewed-package", versions: ["1.3.2"] },
-    { name: "@img/sharp-libvips-linux-x64", versions: ["1.3.4"] },
+    { name: "@img/sharp-libvips-linux-x64", versions: ["1.3.5"] },
   ]) {
     assert.throws(
       () =>

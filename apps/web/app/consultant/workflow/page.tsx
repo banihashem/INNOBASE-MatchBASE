@@ -139,6 +139,13 @@ function ConsultantWorkflow() {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const [draftStatus, setDraftStatus] = useState<"idle" | "saving" | "saved">(
     "idle",
@@ -148,8 +155,12 @@ function ConsultantWorkflow() {
   );
 
   function triggerToast(msg: string) {
+    if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
+    toastTimerRef.current = setTimeout(() => {
+      toastTimerRef.current = null;
+      setToastMessage(null);
+    }, 4000);
   }
 
   // Session & Entitlement State

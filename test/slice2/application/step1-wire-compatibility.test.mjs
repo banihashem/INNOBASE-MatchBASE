@@ -57,7 +57,8 @@ function payload(source = intake) {
 }
 
 // A deliberately restricted endpoint contract, not a claim about the production
-// rejection's unretained keyword or all GPT-5.2 endpoints.
+// rejection's unretained wording or all GPT-5.2 endpoints. R1 models the
+// case-specific singleton-enum hypothesis; actual endpoint qualification is separate.
 function admitStructuralSchema(schema) {
   const supported = new Set([
     "type",
@@ -65,11 +66,21 @@ function admitStructuralSchema(schema) {
     "required",
     "additionalProperties",
     "enum",
+    "const",
     "items",
   ]);
   for (const keyword of Object.keys(schema)) {
     if (!supported.has(keyword))
       throw new Error(`Unsupported schema keyword: ${keyword}`);
+  }
+  if (Object.hasOwn(schema, "enum")) {
+    if (!Array.isArray(schema.enum) || schema.enum.length < 2)
+      throw new Error("Singleton schema enums are not permitted");
+  }
+  if (Object.hasOwn(schema, "const")) {
+    assert.equal(schema.type, "string");
+    assert.equal(typeof schema.const, "string");
+    assert.equal(Object.hasOwn(schema, "enum"), false);
   }
   if (schema.type === "object") {
     assert.equal(schema.additionalProperties, false);
@@ -315,6 +326,150 @@ test(`${scope} remaining HTTP schema rejection stays terminal after exactly one 
   assert.equal(f.events.filter((event) => event.state === "failed").length, 1);
 });
 
+test(`${scope} R1 singleton enum rejection over HTTP is avoided by the same exact literal const`, async (t) => {
+  const f = await endpoint(t);
+  const canonicalBefore = JSON.stringify(LIVE_STEP1_SCHEMA);
+  // Reconstruct the qualified pre-R1 structural wire, not the older bounded schema.
+  const previous = structuredClone(LIVE_STEP1_SCHEMA);
+  delete previous.properties.english_translation.minLength;
+  delete previous.properties.product_name.minLength;
+  delete previous.properties.explicit_requirements.minItems;
+  delete previous.properties.explicit_requirements.maxItems;
+  const oldProperties =
+    previous.properties.explicit_requirements.items.properties;
+  delete oldProperties.normalized_value.minLength;
+  oldProperties.source_text_reference = {
+    type: "string",
+    enum: [intake.product_requirement],
+  };
+  await assert.rejects(
+    runLiveCompletion(
+      {
+        model,
+        messages: [{ role: "user", content: JSON.stringify(intake) }],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "matchbase_step1",
+            strict: true,
+            schema: previous,
+          },
+        },
+        max_tokens: 16000,
+      },
+      { phase: "step1_translation", loop: 1 },
+      f.options,
+    ),
+    { code: "MB-502-LIVE-PROVIDER" },
+  );
+  assert.deepEqual(f.statuses, [400]);
+  assert.equal(
+    f.requests.length,
+    1,
+    "Definitive rejection cannot trigger a second dispatch",
+  );
+  assert.equal(
+    f.events.find((event) => event.state === "failed")
+      .provider_receipt_received,
+    false,
+  );
+  const result = await f.gateway.extractAndInterpret(intake);
+  assert.deepEqual(f.statuses, [400, 200]);
+  const corrected = f.requests[1].response_format.json_schema.schema;
+  oldProperties.source_text_reference = {
+    type: "string",
+    const: intake.product_requirement,
+  };
+  assert.deepEqual(
+    corrected,
+    previous,
+    "Only the singleton reference representation changes",
+  );
+  assert.equal(
+    result.explicit_requirements[0].source_text_reference,
+    intake.product_requirement,
+  );
+  assert.equal(
+    result.ledger.requirements[0].source_span_or_reference,
+    intake.product_requirement,
+  );
+  assert.equal(JSON.stringify(LIVE_STEP1_SCHEMA), canonicalBefore);
+  assert.equal(f.requests[1].max_tokens, 16000);
+  assert.deepEqual(f.guards, [
+    [model, false],
+    [model, false],
+  ]);
+  assert.match(
+    f.requests[1].messages[0].content,
+    /match a supplied schema reference verbatim/,
+  );
+  assert.doesNotMatch(f.requests[1].messages[0].content, /schema enum/);
+});
+
+test(`${scope} R1 singleton const preserves mixed-script bytes and deduplicated source-box identity`, async (t) => {
+  const literal =
+    "  حمل Qingdao → Lekki؛ 20.5 tonnes; no reverse lane; A OR B.  ";
+  const f = await endpoint(t);
+  for (const selected of [
+    ["product_requirement"],
+    ["technical_compliance"],
+    ["order_profile"],
+    ["product_requirement", "technical_compliance", "order_profile"],
+  ]) {
+    const source = Object.fromEntries(
+      Object.keys(intake).map((box) => [
+        box,
+        selected.includes(box) ? literal : "",
+      ]),
+    );
+    f.response = payload(source);
+    const result = await f.gateway.extractAndInterpret(source);
+    assert.deepEqual(
+      f.requests.at(-1).response_format.json_schema.schema.properties
+        .explicit_requirements.items.properties.source_text_reference,
+      { type: "string", const: literal },
+    );
+    assert.deepEqual(
+      result.explicit_requirements.map((requirement) => requirement.source_box),
+      selected,
+    );
+    assert.ok(
+      result.explicit_requirements.every(
+        (requirement) => requirement.source_text_reference === literal,
+      ),
+    );
+  }
+  assert.deepEqual(f.statuses, [200, 200, 200, 200]);
+});
+
+test(`${scope} R1 multiple source references retain enum and reject a reference belonging to another populated box`, async (t) => {
+  const source = {
+    ...intake,
+    technical_compliance: "Use covered equipment; no open deck.",
+    order_profile: "One shipment, 20.5 tonnes.",
+  };
+  const f = await endpoint(t, source);
+  const result = await f.gateway.extractAndInterpret(source);
+  assert.equal(result.explicit_requirements.length, 3);
+  assert.deepEqual(
+    f.requests[0].response_format.json_schema.schema.properties
+      .explicit_requirements.items.properties.source_text_reference,
+    { type: "string", enum: Object.values(source) },
+  );
+  f.response = payload(source);
+  f.response.explicit_requirements[0].source_text_reference =
+    source.technical_compliance;
+  await assert.rejects(f.gateway.extractAndInterpret(source), {
+    code: "MB-422-LIVE-LINEAGE",
+  });
+  assert.deepEqual(
+    f.statuses,
+    [200, 200],
+    "A permissive response cannot bypass source-box ownership",
+  );
+  assert.equal(f.requests.length, 2, "No billed repair loop");
+});
+
 test(`${scope} permissive HTTP response cannot bypass canonical bounds, required keys, extra fields or source lineage`, async (t) => {
   const f = await endpoint(t);
   const cases = [
@@ -364,6 +519,11 @@ test(`${scope} permissive HTTP response cannot bypass canonical bounds, required
       (p) =>
         (p.explicit_requirements[0].source_text_reference = "invented source"),
       "MB-422-LIVE-LINEAGE",
+    ],
+    [
+      "malformed reference",
+      (p) => (p.explicit_requirements[0].source_text_reference = null),
+      "MB-422-LIVE-SCHEMA",
     ],
     [
       "wrong source box",

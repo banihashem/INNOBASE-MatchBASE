@@ -110,6 +110,19 @@ function fixture(t, result = payload()) {
     assert.equal(address, "https://openrouter.ai/api/v1/chat/completions");
     const body = JSON.parse(options.body);
     requests.push(body);
+    const catalogue = JSON.parse(body.messages[1].content).reference_catalog;
+    const wireResult = {
+      ...result,
+      explicit_requirements: result.explicit_requirements.map(
+        ({ source_text_reference, ...requirement }) => ({
+          ...requirement,
+          source_reference_id:
+            catalogue.find(
+              (entry) => entry.source_text_reference === source_text_reference,
+            )?.source_reference_id ?? 999,
+        }),
+      ),
+    };
     return Response.json({
       id: randomUUID(),
       model: body.model,
@@ -128,7 +141,10 @@ function fixture(t, result = payload()) {
         },
       },
       choices: [
-        { finish_reason: "stop", message: { content: JSON.stringify(result) } },
+        {
+          finish_reason: "stop",
+          message: { content: JSON.stringify(wireResult) },
+        },
       ],
       usage: {
         prompt_tokens: 20,
@@ -151,9 +167,9 @@ test("MB-UX-QUALITY-002 L01 wire references preserve source typos, whitespace an
   const result = await f.gateway.extractAndInterpret(source);
   assert.equal(f.requests.length, 1);
   const request = f.requests[0];
-  const references =
-    request.response_format.json_schema.schema.properties.explicit_requirements
-      .items.properties.source_text_reference.enum;
+  const references = JSON.parse(
+    request.messages[1].content,
+  ).reference_catalog.map((entry) => entry.source_text_reference);
   assert.deepEqual(references, [
     source.product_requirement,
     source.technical_compliance,
@@ -286,13 +302,13 @@ test("MB-UX-QUALITY-002 L01 offline replay retains schema and translation reject
   );
 });
 
-test("MB-UX-QUALITY-002 L01 unmatched provider references fail after one call without automatic billing retries", async (t) => {
+test("MB-UX-QUALITY-002 L10 unmatched provider reference IDs fail after one call without automatic billing retries", async (t) => {
   const retained = payload();
   retained.explicit_requirements[1].source_text_reference =
     "Material: polished steel.";
   const f = fixture(t, retained);
   await assert.rejects(f.gateway.extractAndInterpret(source), {
-    code: "MB-422-LIVE-LINEAGE",
+    code: "MB-422-LIVE-SCHEMA",
   });
   assert.equal(f.requests.length, 1);
 });

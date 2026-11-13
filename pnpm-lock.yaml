@@ -9,7 +9,7 @@ overrides:
   js-yaml@>=4.0.0 <4.3.2: 4.3.2
   sharp: 0.35.5
   source-map-js: 1.2.2
-  undici@^8.9.0: 8.10.2
+  undici@^8.9.0: 8.12.2
 
 patchedDependencies:
   braces@3.0.3: 2e009478d42176867620d40a15ba687ee53b283df866152f5ed2ed4f9fd2580f
@@ -40,7 +40,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7))
+        version: 4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7))
 
   apps/dashboard:
     dependencies:
@@ -56,7 +56,7 @@ importers:
         version: 10.4.1
       "@testing-library/jest-dom":
         specifier: 7.0.1
-        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7)))
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7)))
       "@testing-library/react":
         specifier: 16.3.2
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -68,7 +68,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       "@vitejs/plugin-react":
         specifier: 6.0.5
-        version: 6.0.5(vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7))
+        version: 6.0.5(vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7))
       axe-core:
         specifier: 4.13.0
         version: 4.13.0
@@ -79,11 +79,11 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
       vite:
-        specifier: 8.2.1
-        version: 8.2.1(@types/node@24.13.3)(jiti@1.21.7)
+        specifier: 8.2.4
+        version: 8.2.4(@types/node@24.13.3)(jiti@1.21.7)
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7))
+        version: 4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7))
 
   apps/web:
     dependencies:
@@ -109,8 +109,8 @@ importers:
         specifier: 1.1.16
         version: 1.1.16(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       next:
-        specifier: 16.3.6
-        version: 16.3.6(@playwright/test@1.62.1)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: 16.4.1
+        version: 16.4.1(@playwright/test@1.62.1)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -123,7 +123,7 @@ importers:
         version: 10.4.1
       "@testing-library/jest-dom":
         specifier: 7.0.1
-        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7)))
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7)))
       "@testing-library/react":
         specifier: 16.3.2
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -138,7 +138,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       "@vitejs/plugin-react":
         specifier: 6.0.5
-        version: 6.0.5(vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7))
+        version: 6.0.5(vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7))
       autoprefixer:
         specifier: 10.5.5
         version: 10.5.5(postcss@8.5.28)
@@ -159,7 +159,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7))
+        version: 4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7))
 
   packages/ai-evidence:
     dependencies:
@@ -192,8 +192,8 @@ importers:
         specifier: workspace:*
         version: link:../security
       undici:
-        specifier: 7.29.1
-        version: 7.29.1
+        specifier: 7.30.1
+        version: 7.30.1
     devDependencies:
       "@types/node":
         specifier: 24.13.3
@@ -703,83 +703,83 @@ packages:
         integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==,
       }
 
-  "@next/env@16.3.6":
+  "@next/env@16.4.1":
     resolution:
       {
-        integrity: sha512-x9Vblze1EbtltQYnNH38xCPWU3TVfBd1eXqA3+w9+BTpedkkdNpAaltXlGQ/nsc1+E0mVTNrtcbX3GoO09zeLQ==,
+        integrity: sha512-5sUUrrSvs/2/2LnLoesybMGx12EtPB46fdZ6RhAw0XDGSPxU2LFyQBB7yuEiOFFJPKmBY6+q2jTr1/AMbnp0/g==,
       }
 
-  "@next/swc-darwin-arm64@16.3.6":
+  "@next/swc-darwin-arm64@16.4.1":
     resolution:
       {
-        integrity: sha512-E/7GEqaUkt8mk/T8v9lAnrhzR06kdq1ZBkC12F8tAMkdIadwNp3H1KqHynDHrpcTlGCUdq/qu6vUL2aYVyYBdw==,
+        integrity: sha512-U+hQ5Gj3fpzf4fveTIF3dpUFYhaSW8vHhdAnbiIomzXzg7boreYFgBqprepXFtW4sw+aTttiNmg0gew/iFNhbg==,
       }
     engines: { node: ">= 10" }
     cpu: [arm64]
     os: [darwin]
 
-  "@next/swc-darwin-x64@16.3.6":
+  "@next/swc-darwin-x64@16.4.1":
     resolution:
       {
-        integrity: sha512-yBE893/nDWTlaiBD1p+qgt7NUen4U5R6FXyH0s67Npq1S3E0cVSef1WIXC2xBRgQvwAvJq6DnS6Y6PrY0cy4Ew==,
+        integrity: sha512-/hqC3V1XLUjhMASf/WridKdO9FXoEgN3HBWmtKbj00MPgnltutfraWJ3bYTpCRIgEIpbjJyOVLpYgAhh/BkdcQ==,
       }
     engines: { node: ">= 10" }
     cpu: [x64]
     os: [darwin]
 
-  "@next/swc-linux-arm64-gnu@16.3.6":
+  "@next/swc-linux-arm64-gnu@16.4.1":
     resolution:
       {
-        integrity: sha512-KJDpjBqBPYlvkivmyrp+Qys6k/7ksbqGQvRVc6ZEGfR+cjQxx+nUkJaWmNZJsmoOrqYNbaXByF8wa0lBwDhB3Q==,
+        integrity: sha512-GHzncHbcaS9g95kcvTNtKQW3aCLoR+xc3Jm7qrkpk1R+D2BjMHIPyvQGRPKCdMX95BsH/421jBUK06q9tEwzjw==,
       }
     engines: { node: ">= 10" }
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  "@next/swc-linux-arm64-musl@16.3.6":
+  "@next/swc-linux-arm64-musl@16.4.1":
     resolution:
       {
-        integrity: sha512-mqNg2K+hvWskSRb/QM+Ix412DvBsuSF0XV+frTSw5vmoucNnIlynFwKYew8D01bfATErMOM7Bujrf0BA5DRKFA==,
+        integrity: sha512-1SuJyDxW/PR9dHJat/ZRgcYLhuSZ+1psP4DlKb2tKIuXbjygqpLrJWRSq+onZQBv8LcmU67EIrmb6c3XTaJLjw==,
       }
     engines: { node: ">= 10" }
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  "@next/swc-linux-x64-gnu@16.3.6":
+  "@next/swc-linux-x64-gnu@16.4.1":
     resolution:
       {
-        integrity: sha512-nFncBNGAYouRHjRVaITs9beZRfhX4ssVwpnvPIAbkZVH6LtGoAVlH4bJ8Cnf9SOo9bsXgPFer/GdHtEE3JNOkw==,
+        integrity: sha512-Istng1hMGp9TGO4lUqeKLd70MPN/OOkucVTP2Nmj+gLkwBgmPqUw8CJYBCC7nbl/B/23bBCcjCI5Hsh6hazC1A==,
       }
     engines: { node: ">= 10" }
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  "@next/swc-linux-x64-musl@16.3.6":
+  "@next/swc-linux-x64-musl@16.4.1":
     resolution:
       {
-        integrity: sha512-5Mf3cHDGR/Iz0ng2Bj3zUR3p5QS9YK3Hn2QiAfavFmyF48zwThAjpFoiTKNIcOHLYS4zEk+gzyJ/9deQ2ZB8yQ==,
+        integrity: sha512-aSC9wMNiZRRFVpPkPWBzRwLQxIGm/CiQcXyFF1XNcgodb+uMxdk7aSSGGpDXCbnvZdf4itjHxpOd5h7i7zaiYw==,
       }
     engines: { node: ">= 10" }
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  "@next/swc-win32-arm64-msvc@16.3.6":
+  "@next/swc-win32-arm64-msvc@16.4.1":
     resolution:
       {
-        integrity: sha512-0jkJy0C2kbrJWTk4YLa3xk80pVBpx8FCHJym7CnUfDAXe/FWv5qT7SQJbR0KuemyxaEDlEx5WT4VQJoTW+/9Qw==,
+        integrity: sha512-t/myvwFDlypMUjRvbBf8qLPyuaB0iXYYdBtwMt6DM6f+60wtGr4bSYholdPqNeV5VUXZhrpMwfza829kmhS3iA==,
       }
     engines: { node: ">= 10" }
     cpu: [arm64]
     os: [win32]
 
-  "@next/swc-win32-x64-msvc@16.3.6":
+  "@next/swc-win32-x64-msvc@16.4.1":
     resolution:
       {
-        integrity: sha512-/YXjI1e5OXcZ7YpxRwgP/1jAV/SBKTzeVKqN2mk7mLpcICsyn3Gl5+dIfDTJp70M0ccMhyMMRso4v6mPDCGepg==,
+        integrity: sha512-6ICqPo9awCkrtYNPhwkx1uU7rlFWrZRrIboDHS2LU+jv088UBYQtmJ25h6pCp27/+FZjF6BQ4Te4ErugyMeuBg==,
       }
     engines: { node: ">= 10" }
     cpu: [x64]
@@ -2514,10 +2514,10 @@ packages:
     engines: { node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1 }
     hasBin: true
 
-  next@16.3.6:
+  next@16.4.1:
     resolution:
       {
-        integrity: sha512-L+otWM/aQbYTx98aZhgEoMb4bZAXx1YVW4UMA/vuCyCoWG5HJyZUili8QAkqzrcC+5///tsz3s0M+SlyB5bLMw==,
+        integrity: sha512-uc657V62E34fOI6W5NtG9IzwsPcms0Z60grz2MJGtglgD+pTFnNt4Yw2PzaU622tfX4vhrDgLZzicE2YlhI20Q==,
       }
     engines: { node: ">=20.9.0" }
     hasBin: true
@@ -3346,17 +3346,17 @@ packages:
         integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==,
       }
 
-  undici@7.29.1:
+  undici@7.30.1:
     resolution:
       {
-        integrity: sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==,
+        integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==,
       }
     engines: { node: ">=20.18.1" }
 
-  undici@8.10.2:
+  undici@8.12.2:
     resolution:
       {
-        integrity: sha512-/y4/bH9YNU5hi9NIrpOuvGXFcxrj3CMrV+/AYpowAYTpHn8gX/XPFjNy766FPoYY0miQhdW977JFWKGNhBdwyQ==,
+        integrity: sha512-XtuDWVdqTLr3NAxm2ly9/hU6kUsJOgGh1RASzMBbsw6aWCOaQzHdW+QQDfdERjfJ2V5vL5pRPa4RetO9UfivDg==,
       }
     engines: { node: ">=22.19.0" }
 
@@ -3395,16 +3395,16 @@ packages:
       }
     engines: { node: ">=4" }
 
-  vite@8.2.1:
+  vite@8.2.4:
     resolution:
       {
-        integrity: sha512-EU/eS7BH3XROHh2YnBefjM6DBKA6ZeMZEYQbj7NLWg5wHYlhB8B/Mayd5XsgWq+NFYccDOTemRpdETWR6Ka/lw==,
+        integrity: sha512-lfauXnrf2x0p+UoA+wXh0dgFWnUjCyG6Js95KBkgaCwUU9k0DAHI4W6Q0WCx+h+5g+Alce1y4Zi2QjjK0UvGBw==,
       }
     engines: { node: ^20.19.0 || >=22.12.0 }
     hasBin: true
     peerDependencies:
       "@types/node": ^20.19.0 || >=22.12.0
-      "@vitejs/devtools": ^0.4.0
+      "@vitejs/devtools": ^0.4.0 || ^0.5.0
       esbuild: ^0.27.0 || ^0.28.0
       jiti: ">=1.21.0"
       less: ^4.0.0
@@ -3747,30 +3747,30 @@ snapshots:
       "@jridgewell/resolve-uri": 3.1.2
       "@jridgewell/sourcemap-codec": 1.5.5
 
-  "@next/env@16.3.6": {}
+  "@next/env@16.4.1": {}
 
-  "@next/swc-darwin-arm64@16.3.6":
+  "@next/swc-darwin-arm64@16.4.1":
     optional: true
 
-  "@next/swc-darwin-x64@16.3.6":
+  "@next/swc-darwin-x64@16.4.1":
     optional: true
 
-  "@next/swc-linux-arm64-gnu@16.3.6":
+  "@next/swc-linux-arm64-gnu@16.4.1":
     optional: true
 
-  "@next/swc-linux-arm64-musl@16.3.6":
+  "@next/swc-linux-arm64-musl@16.4.1":
     optional: true
 
-  "@next/swc-linux-x64-gnu@16.3.6":
+  "@next/swc-linux-x64-gnu@16.4.1":
     optional: true
 
-  "@next/swc-linux-x64-musl@16.3.6":
+  "@next/swc-linux-x64-musl@16.4.1":
     optional: true
 
-  "@next/swc-win32-arm64-msvc@16.3.6":
+  "@next/swc-win32-arm64-msvc@16.4.1":
     optional: true
 
-  "@next/swc-win32-x64-msvc@16.3.6":
+  "@next/swc-win32-x64-msvc@16.4.1":
     optional: true
 
   "@nodelib/fs.scandir@2.1.5":
@@ -4033,7 +4033,7 @@ snapshots:
       picocolors: 1.1.1
       pretty-format: 27.5.1
 
-  "@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7)))":
+  "@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7)))":
     dependencies:
       "@adobe/css-tools": 4.5.0
       "@testing-library/dom": 10.4.1
@@ -4043,7 +4043,7 @@ snapshots:
       picocolors: 1.1.1
       redent: 3.0.0
     optionalDependencies:
-      vitest: 4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7))
+      vitest: 4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7))
 
   "@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)":
     dependencies:
@@ -4178,10 +4178,10 @@ snapshots:
   "@typescript/typescript-win32-x64@7.0.2":
     optional: true
 
-  "@vitejs/plugin-react@6.0.5(vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7))":
+  "@vitejs/plugin-react@6.0.5(vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7))":
     dependencies:
       "@rolldown/pluginutils": 1.0.1
-      vite: 8.2.1(@types/node@24.13.3)(jiti@1.21.7)
+      vite: 8.2.4(@types/node@24.13.3)(jiti@1.21.7)
 
   "@vitest/expect@4.1.11":
     dependencies:
@@ -4192,13 +4192,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.1
 
-  "@vitest/mocker@4.1.11(vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7))":
+  "@vitest/mocker@4.1.11(vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7))":
     dependencies:
       "@vitest/spy": 4.1.11
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.2.1(@types/node@24.13.3)(jiti@1.21.7)
+      vite: 8.2.4(@types/node@24.13.3)(jiti@1.21.7)
 
   "@vitest/pretty-format@4.1.11":
     dependencies:
@@ -4514,7 +4514,7 @@ snapshots:
       saxes: 6.0.0
       symbol-tree: 3.2.4
       tough-cookie: 6.0.2
-      undici: 8.10.2
+      undici: 8.12.2
       w3c-xmlserializer: 5.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0
@@ -4613,9 +4613,9 @@ snapshots:
 
   nanoid@3.3.18: {}
 
-  next@16.3.6(@playwright/test@1.62.1)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  next@16.4.1(@playwright/test@1.62.1)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
-      "@next/env": 16.3.6
+      "@next/env": 16.4.1
       "@swc/helpers": 0.5.23
       baseline-browser-mapping: 2.11.21
       caniuse-lite: 1.0.30001810
@@ -4624,14 +4624,14 @@ snapshots:
       react-dom: 19.2.8(react@19.2.8)
       styled-jsx: 5.1.6(react@19.2.8)
     optionalDependencies:
-      "@next/swc-darwin-arm64": 16.3.6
-      "@next/swc-darwin-x64": 16.3.6
-      "@next/swc-linux-arm64-gnu": 16.3.6
-      "@next/swc-linux-arm64-musl": 16.3.6
-      "@next/swc-linux-x64-gnu": 16.3.6
-      "@next/swc-linux-x64-musl": 16.3.6
-      "@next/swc-win32-arm64-msvc": 16.3.6
-      "@next/swc-win32-x64-msvc": 16.3.6
+      "@next/swc-darwin-arm64": 16.4.1
+      "@next/swc-darwin-x64": 16.4.1
+      "@next/swc-linux-arm64-gnu": 16.4.1
+      "@next/swc-linux-arm64-musl": 16.4.1
+      "@next/swc-linux-x64-gnu": 16.4.1
+      "@next/swc-linux-x64-musl": 16.4.1
+      "@next/swc-win32-arm64-msvc": 16.4.1
+      "@next/swc-win32-x64-msvc": 16.4.1
       "@playwright/test": 1.62.1
       sharp: 0.35.5(@types/node@24.13.3)
     transitivePeerDependencies:
@@ -5160,9 +5160,9 @@ snapshots:
 
   undici-types@7.18.2: {}
 
-  undici@7.29.1: {}
+  undici@7.30.1: {}
 
-  undici@8.10.2: {}
+  undici@8.12.2: {}
 
   unicorn-magic@0.4.0: {}
 
@@ -5181,7 +5181,7 @@ snapshots:
 
   version-range@4.15.0: {}
 
-  vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7):
+  vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -5193,10 +5193,10 @@ snapshots:
       fsevents: 2.3.3
       jiti: 1.21.7
 
-  vitest@4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7)):
+  vitest@4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7)):
     dependencies:
       "@vitest/expect": 4.1.11
-      "@vitest/mocker": 4.1.11(vite@8.2.1(@types/node@24.13.3)(jiti@1.21.7))
+      "@vitest/mocker": 4.1.11(vite@8.2.4(@types/node@24.13.3)(jiti@1.21.7))
       "@vitest/pretty-format": 4.1.11
       "@vitest/runner": 4.1.11
       "@vitest/snapshot": 4.1.11
@@ -5213,7 +5213,7 @@ snapshots:
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.1
-      vite: 8.2.1(@types/node@24.13.3)(jiti@1.21.7)
+      vite: 8.2.4(@types/node@24.13.3)(jiti@1.21.7)
       why-is-node-running: 2.3.0
     optionalDependencies:
       "@types/node": 24.13.3

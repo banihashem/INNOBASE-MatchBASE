@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -93,8 +93,53 @@ test("exact package start cold-boots the owned standalone HTML, static, and API 
   const swcHelperPath = standaloneRequire.resolve(
     "@swc/helpers/_/_interop_require_default",
   );
+  const helperRoot = join(standaloneWebRoot, "node_modules", "@swc", "helpers");
+  assert.equal(
+    standaloneRequire.resolve("@swc/helpers/package.json"),
+    join(helperRoot, "package.json"),
+  );
+  // MB-SEC-DEPENDENCIES-001 L04: Node 24 can select the module-sync export.
+  assert.ok(
+    [
+      join(helperRoot, "esm", "_interop_require_default.js"),
+      join(helperRoot, "cjs", "_interop_require_default.cjs"),
+    ].includes(swcHelperPath),
+    `Unexpected standalone helper resolution: ${swcHelperPath}`,
+  );
+  const helper = standaloneRequire("@swc/helpers/_/_interop_require_default");
+  const ordinaryModule = { value: "standalone-fixture" };
+  const esModule = { __esModule: true, default: "standalone-fixture" };
+  assert.equal(helper._(ordinaryModule).default, ordinaryModule);
+  assert.equal(helper._(esModule), esModule);
+
+  const commonJsFallback = spawnSync(
+    process.execPath,
+    [
+      "--no-experimental-require-module",
+      "--input-type=module",
+      "-e",
+      `import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+const require = createRequire(process.argv[1]);
+const helper = require("@swc/helpers/_/_interop_require_default");
+const ordinary = { value: "standalone-fixture" };
+const esm = { __esModule: true, default: "standalone-fixture" };
+assert.equal(helper._(ordinary).default, ordinary);
+assert.equal(helper._(esm), esm);
+process.stdout.write(require.resolve("@swc/helpers/_/_interop_require_default"));`,
+      join(standaloneWebRoot, "package.json"),
+    ],
+    { encoding: "utf8", timeout: 10000, shell: false },
+  );
+  assert.equal(commonJsFallback.error, undefined);
+  assert.equal(commonJsFallback.signal, null);
+  assert.equal(commonJsFallback.status, 0, commonJsFallback.stderr);
+  assert.equal(
+    commonJsFallback.stdout,
+    join(helperRoot, "cjs", "_interop_require_default.cjs"),
+  );
   assert.match(
-    swcHelperPath,
+    commonJsFallback.stdout,
     /@swc[\\/]helpers[\\/]cjs[\\/]_interop_require_default\.cjs$/u,
   );
 

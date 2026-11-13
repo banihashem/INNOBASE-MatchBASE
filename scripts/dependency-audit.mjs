@@ -23,15 +23,15 @@ export const sourcePins = Object.freeze({
     "46a8595eebc71f2b069459f4a91418b8fe37861de4f2d33d55790221e4e77f9f",
   ".npmrc": "12a6922c64f54920e90f12b4208627df1c65f98a512930dde309518fb1dbb809",
   "apps/dashboard/package.json":
-    "46a021ef1ca3b56a0f452401457243399824bdf3dcfeeeda4a2ccc6332563def",
+    "70e9137df359ab72d2dfb9d312c160e2eb9efd0d8a37adc7dce33ca53c4063a5",
   "apps/web/package.json":
-    "58b7743621b55b390e9df62be4a3ed86c87d4675e7f967df6948d994d38c623e",
+    "3f31457e6b5c54a5450ebe79580932c84dc146190ce63595934231d5175eda52",
   "package.json":
     "193222bb063d7f19e6403747a14bc90ac47aef9331d54cf9fb91480510395d62",
   "packages/ai-evidence/package.json":
     "59982a3674987c21152f0c97870a99da8de507bd87b00f0106406abace6a7196",
   "packages/application/package.json":
-    "97a6291e61dfaf750fb241b19533b36645d03fba6ef537b55a81148c9ed6efab",
+    "716e819ae03bf4897299a5927fa3e043f825af8c84e243e3074bf86e8c150cce",
   "packages/artifact-indexer/package.json":
     "70b3b68f6b160e48d57c9b3c7def15d78f3c494659f8cb486307aba476408f45",
   "packages/auth/package.json":
@@ -47,9 +47,9 @@ export const sourcePins = Object.freeze({
   "patches/braces@3.0.3.patch":
     "2e009478d42176867620d40a15ba687ee53b283df866152f5ed2ed4f9fd2580f",
   "pnpm-lock.yaml":
-    "72ca6d86db8c5be46d5d390c11511aaa4348bdfc3843082464b1636c0c0da551",
+    "78b9c347f7ff26fa2fc1cdb38efe48b6432b9c2e68b4f6568a3d321df44d6ca2",
   "pnpm-workspace.yaml":
-    "8cf568fc77014da46027d31f59d2468461df6594af3a34e30f0d0ba9b2497fbc",
+    "ac96c45d0b09367ca767d70853da223e921b053e0b6a82e0de16ab2fc6dccefc",
   "test/security/braces-patch.test.mjs":
     "cd62e1ee53d1317647a5edee6e0f0154ffd75870d6e358295e94c6216b502840",
 });
@@ -77,7 +77,7 @@ export const installedPins = Object.freeze({
 // pnpm 11.19.0's native serialization from the qualified frozen installation.
 // The independently pinned repository lock uses Prettier's YAML serialization.
 export const installedLockPin =
-  "9bac9fcdbe9821e85d895993d96a0ec18c97f54f81880579671ccd62356a1ead";
+  "3ef73bfb6e5d93937b0a909766a7cb6fdff2910654480ed9622183bf2c950898";
 const regressionPath = "test/security/braces-patch.test.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");

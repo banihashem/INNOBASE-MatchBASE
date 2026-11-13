@@ -59,6 +59,9 @@ export function pinnedPnpmCommand(argumentsList, source = process.env) {
     environment: {
       ...isolatedCommandEnvironment(source),
       npm_execpath: entry,
+      // pnpm 11.19.0 sets this exact sentinel for scripts after checking dependencies.
+      // Restore its nested-run policy without accepting inherited pnpm configuration.
+      pnpm_config_verify_deps_before_run: "false",
       NEXT_TELEMETRY_DISABLED: "1",
     },
   };

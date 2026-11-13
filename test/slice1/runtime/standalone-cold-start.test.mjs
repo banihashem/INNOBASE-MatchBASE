@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import test from "node:test";
 import {
   admissionFixture,
@@ -69,7 +70,7 @@ function exactStartCommand() {
   return pinnedPnpmCommand(["--filter", "@matchbase/web", "run", "start"]);
 }
 
-test("standalone fixture strips inherited credentials and denies outbound services", () => {
+test("standalone fixture strips inherited credentials and denies outbound services", async () => {
   const environment = standaloneFixtureEnvironment(`sha256:${"a".repeat(64)}`, {
     PATH: process.env.PATH,
     OPENROUTER_API_KEY: "inherited-provider-fixture",
@@ -116,6 +117,67 @@ await assert.rejects(fetch("https://example.invalid"), denied);
   );
   assert.equal(result.error, undefined);
   assert.equal(result.status, 0, result.stderr);
+
+  // R1: a nested command runs the already-installed graph and cannot trigger install.
+  const fixture = await mkdtemp(join(tmpdir(), "matchbase-pnpm-nested-"));
+  try {
+    await writeFile(
+      join(fixture, "package.json"),
+      JSON.stringify({
+        name: "standalone-nested-fixture",
+        private: true,
+        dependencies: { "is-number": "7.0.0" },
+        scripts: { probe: "node probe.mjs" },
+      }),
+    );
+    await writeFile(
+      join(fixture, "probe.mjs"),
+      'process.stdout.write("NESTED_SCRIPT_EXECUTED");\n',
+    );
+    await writeFile(join(fixture, "pnpm-workspace.yaml"), "packages:\n  - .\n");
+    const nested = pinnedPnpmCommand(["--dir", fixture, "run", "probe"], {
+      ...process.env,
+      pnpm_config_verify_deps_before_run: "install",
+      npm_config_registry: "https://untrusted.invalid",
+    });
+    assert.equal(
+      nested.environment.pnpm_config_verify_deps_before_run,
+      "false",
+    );
+    assert.equal(nested.environment.npm_config_registry, undefined);
+    assert.equal(environment.pnpm_config_verify_deps_before_run, undefined);
+    const probe = (env) =>
+      spawnSync(nested.command, nested.arguments, {
+        cwd: fixture,
+        env,
+        encoding: "utf8",
+        timeout: 10000,
+      });
+    // The control confirms this fixture is stale; error mode refuses without installing.
+    const control = probe({
+      ...nested.environment,
+      pnpm_config_verify_deps_before_run: "error",
+    });
+    assert.equal(control.error, undefined);
+    assert.notEqual(control.status, 0);
+    assert.match(
+      control.stdout + control.stderr,
+      /ERR_PNPM_VERIFY_DEPS_BEFORE_RUN/u,
+    );
+    assert.doesNotMatch(control.stdout, /NESTED_SCRIPT_EXECUTED/u);
+    const executed = probe(nested.environment);
+    assert.equal(executed.error, undefined);
+    assert.equal(executed.status, 0, executed.stdout + executed.stderr);
+    assert.match(executed.stdout, /NESTED_SCRIPT_EXECUTED/u);
+    assert.deepEqual((await readdir(fixture)).sort(), [
+      "package.json",
+      "pnpm-workspace.yaml",
+      "probe.mjs",
+    ]);
+  } finally {
+    assert.equal(resolve(fixture, ".."), resolve(tmpdir()));
+    await rm(fixture, { recursive: true, force: false });
+  }
 });
 
 test("exact package start cold-boots the owned standalone HTML, static, and API server", async (t) => {
@@ -195,11 +257,18 @@ process.stdout.write(require.resolve("@swc/helpers/_/_interop_require_default"))
     /@swc[\\/]helpers[\\/]cjs[\\/]_interop_require_default\.cjs$/u,
   );
 
-  const { command, arguments: commandArguments } = exactStartCommand();
+  const {
+    command,
+    arguments: commandArguments,
+    environment: commandEnvironment,
+  } = exactStartCommand();
   const deploymentId = `sha256:${createHash("sha256").update(`standalone-cold-owned-${process.pid}-${Date.now()}`).digest("hex")}`;
   const child = spawn(command, commandArguments, {
     cwd: repositoryRoot,
-    env: standaloneFixtureEnvironment(deploymentId),
+    env: {
+      ...commandEnvironment,
+      ...standaloneFixtureEnvironment(deploymentId),
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   child.stdout.setEncoding("utf8");
